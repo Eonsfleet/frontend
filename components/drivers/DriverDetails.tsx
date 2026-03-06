@@ -39,7 +39,7 @@ export function DriverDetails({ driver }: DriverDetailsProps) {
                             <InfoField icon={Phone} label="Phone Number" value={driver.attributes.phone_number || 'N/A'} />
                             <InfoField icon={Calendar} label="Joined Date" value={driver.attributes.joined_date ? format(new Date(driver.attributes.joined_date), 'MMMM d, yyyy') : 'N/A'} />
                             <InfoField icon={Calendar} label="Date of Birth" value={driver.attributes.date_of_birth || 'N/A'} />
-                            <InfoField icon={ShieldCheck} label="Role" value={driver.attributes.role.replace('_', ' ')} />
+                            <InfoField icon={ShieldCheck} label="Role" value={String(Array.isArray(driver.attributes.role) ? driver.attributes.role[0] : driver.attributes.role).replace('_', ' ')} />
                         </div>
                     </CardContent>
                 </Card>

@@ -1,14 +1,25 @@
 'use client'
+import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard, Car, Users, Route, MapPin, Wrench,
     AlertTriangle, Fuel, BarChart3, CreditCard, Bell,
-    Webhook, Store, Settings, Lock
+    Webhook, Store, Settings, Lock, Menu
 } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
 import { useSubscription } from '@/hooks/useSubscription'
 import { cn } from '@/lib/utils'
+import { useUIStore } from '@/store/uiStore'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useQuery } from '@tanstack/react-query'
+import * as notificationApi from '@/lib/api/notifications'
+import { Button } from '@/components/ui/button'
 
 const NAV_SECTIONS = [
     {
@@ -52,53 +63,151 @@ export default function Sidebar() {
     const pathname = usePathname()
     const { can } = usePermission()
     const { hasModule } = useSubscription()
+    const { isSidebarCollapsed, toggleSidebar } = useUIStore()
+
+    // Fetch notifications for the badge
+    const { data: inboxData } = useQuery({
+        queryKey: ['notifications', 'inbox'],
+        queryFn: () => notificationApi.getInbox({ unread_only: true }),
+        refetchInterval: 30000, // Sync every 30s
+    })
+
+    const unreadCount = inboxData?.data?.notifications?.filter(n => !n.read_at).length || 0
 
     return (
-        <aside className="w-64 border-r bg-white flex flex-col h-full">
-            <div className="h-16 flex items-center gap-2 px-5 border-b">
-                <div className="h-7 w-7 rounded-lg bg-blue-600" />
-                <span className="font-semibold text-gray-900">EonsFleet</span>
-            </div>
-            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-                {NAV_SECTIONS.map((section) => {
-                    const visibleItems = section.items.filter(({ permission }) =>
-                        !permission || can(permission)
-                    )
-                    if (visibleItems.length === 0) return null
-                    return (
-                        <div key={section.label}>
-                            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                                {section.label}
-                            </p>
-                            <div className="space-y-0.5">
-                                {visibleItems.map(({ href, label, icon: Icon, module }) => {
-                                    const isLocked = module && !hasModule(module as any)
-                                    const isActive = pathname === href || pathname.startsWith(href + '/')
-                                    return (
-                                        <Link
-                                            key={href}
-                                            href={href}
-                                            className={cn(
-                                                'flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                                isActive
-                                                    ? 'bg-blue-50 text-blue-700'
-                                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                                                isLocked && 'opacity-60'
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-2.5">
-                                                <Icon className="h-4 w-4 shrink-0" />
-                                                {label}
-                                            </div>
-                                            {isLocked && <Lock className="h-3 w-3 text-gray-400" />}
-                                        </Link>
-                                    )
-                                })}
+        <TooltipProvider delayDuration={0}>
+            <aside className={cn(
+                "border-r bg-white flex flex-col h-full transition-all duration-300 ease-in-out z-50 shrink-0 relative shadow-sm",
+                isSidebarCollapsed ? "w-20" : "w-64"
+            )}>
+                {/* Floating Toggle Button */}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleSidebar}
+                    className={cn(
+                        "absolute -right-4 top-4 h-8 w-8 rounded-full border border-slate-200 bg-white shadow-md z-50 text-slate-400 hover:text-blue-600 transition-all",
+                        isSidebarCollapsed ? "rotate-180" : "rotate-0"
+                    )}
+                >
+                    <Menu className="w-4 h-4" />
+                </Button>
+
+                <div className={cn(
+                    "h-16 flex items-center border-b shrink-0 transition-all px-5",
+                    isSidebarCollapsed ? "justify-center px-0" : "gap-3"
+                )}>
+                    <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                        <div className="w-4 h-4 bg-white rounded-sm rotate-45" />
+                    </div>
+                    {!isSidebarCollapsed && (
+                        <span className="font-black text-slate-900 tracking-tighter text-lg animate-in fade-in slide-in-from-left-2">
+                            EonsFleet
+                        </span>
+                    )}
+                </div>
+
+                <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 scrollbar-none">
+                    {NAV_SECTIONS.map((section) => {
+                        const visibleItems = section.items.filter(({ permission }) =>
+                            !permission || can(permission)
+                        )
+                        if (visibleItems.length === 0) return null
+                        return (
+                            <div key={section.label}>
+                                {!isSidebarCollapsed ? (
+                                    <p className="mb-3 px-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-in fade-in">
+                                        {section.label}
+                                    </p>
+                                ) : (
+                                    <div className="h-px bg-slate-100 mb-6 mx-2" />
+                                )}
+                                <div className="space-y-1">
+                                    {visibleItems.map(({ href, label, icon: Icon, module }) => {
+                                        const isLocked = module && !hasModule(module as any)
+                                        const isActive = pathname === href || pathname.startsWith(href + '/')
+                                        const isNotifications = label === 'Notifications'
+
+                                        const itemContent = (
+                                            <Link
+                                                href={href}
+                                                className={cn(
+                                                    'flex items-center rounded-xl transition-all duration-200 group relative',
+                                                    isSidebarCollapsed ? 'justify-center h-12 w-12 mx-auto' : 'px-4 py-2.5 justify-between',
+                                                    isActive
+                                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                                                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+                                                    isLocked && 'opacity-40 cursor-not-allowed grayscale'
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-3.5">
+                                                    <Icon className={cn(
+                                                        "h-5 w-5 shrink-0 transition-transform group-hover:scale-110",
+                                                        isActive ? "text-white" : "text-slate-400 group-hover:text-blue-500"
+                                                    )} />
+                                                    {!isSidebarCollapsed && (
+                                                        <span className="font-bold text-[13px] tracking-tight">{label}</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Badge Integration */}
+                                                {!isLocked && (
+                                                    <>
+                                                        {isNotifications && unreadCount > 0 && (
+                                                            <div className={cn(
+                                                                "flex h-5 items-center justify-center rounded-full text-[10px] font-black px-1.5",
+                                                                isActive ? "bg-white text-blue-600" : "bg-rose-500 text-white shadow-sm shadow-rose-200",
+                                                                isSidebarCollapsed && "absolute top-1 right-1 h-2 w-2 p-0 border border-white"
+                                                            )}>
+                                                                {!isSidebarCollapsed && unreadCount}
+                                                            </div>
+                                                        )}
+                                                        {!isNotifications && isLocked && (
+                                                            <Lock className="h-3.5 w-3.5 text-slate-300" />
+                                                        )}
+                                                    </>
+                                                )}
+                                            </Link>
+                                        )
+
+                                        if (isSidebarCollapsed) {
+                                            return (
+                                                <Tooltip key={href}>
+                                                    <TooltipTrigger asChild>
+                                                        {itemContent}
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="right" sideOffset={15} className="bg-slate-900 border-none text-white px-3 py-1.5 font-bold text-xs ring-4 ring-slate-900/10">
+                                                        {label} {isLocked ? '(LOCKED)' : ''}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )
+                                        }
+
+                                        return <React.Fragment key={href}>{itemContent}</React.Fragment>
+                                    })}
+                                </div>
                             </div>
+                        )
+                    })}
+                </nav>
+
+                <div className="p-4 border-t border-slate-50">
+                    <div className={cn(
+                        "flex items-center gap-3 p-2 rounded-xl border border-transparent transition-all",
+                        !isSidebarCollapsed && "hover:bg-slate-50"
+                    )}>
+                        <div className="h-9 w-9 rounded-full bg-slate-100 shrink-0 overflow-hidden border-2 border-white shadow-sm">
+                            <img src="/api/placeholder/100/100" alt="User" />
                         </div>
-                    )
-                })}
-            </nav>
-        </aside>
+                        {!isSidebarCollapsed && (
+                            <div className="min-w-0">
+                                <p className="text-xs font-black text-slate-900 truncate">Suleiman Musa</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Fleet Admin</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </aside>
+        </TooltipProvider>
     )
 }

@@ -1,0 +1,262 @@
+'use client'
+
+import React, { useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useAuthStore } from '@/store/authStore'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import { toast } from 'sonner'
+import { Loader2, UserCircle, Upload, Shield, Calendar, Phone } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { format } from 'date-fns'
+
+const profileSchema = z.object({
+    first_name: z.string().min(2, 'Required'),
+    last_name: z.string().min(2, 'Required'),
+    phone_number: z.string().optional(),
+})
+
+type ProfileFormValues = z.infer<typeof profileSchema>
+
+const passwordSchema = z.object({
+    current_password: z.string().min(6, 'Required'),
+    new_password: z.string().min(8, 'Minimum 8 characters'),
+    confirm_password: z.string().min(8, 'Minimum 8 characters'),
+}).refine(data => data.new_password === data.confirm_password, {
+    message: "Passwords don't match",
+    path: ['confirm_password'],
+});
+
+type PasswordFormValues = z.infer<typeof passwordSchema>
+
+export default function ProfilePage() {
+    const { user, updateUser } = useAuthStore()
+    const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            toast.promise(
+                new Promise((resolve) => {
+                    setTimeout(() => {
+                        const objectUrl = URL.createObjectURL(file)
+                        updateUser({
+                            attributes: { ...user!.attributes, avatar: objectUrl }
+                        })
+                        resolve(true)
+                    }, 1500)
+                }),
+                {
+                    loading: 'Uploading new avatar...',
+                    success: 'Avatar updated successfully',
+                    error: 'Failed to upload image'
+                }
+            )
+        }
+    }
+
+    const {
+        register,
+        handleSubmit,
+        reset,
+        formState: { errors, isDirty, isSubmitting }
+    } = useForm<ProfileFormValues>({
+        resolver: zodResolver(profileSchema),
+        defaultValues: {
+            first_name: '',
+            last_name: '',
+            phone_number: ''
+        }
+    })
+
+    const {
+        register: registerObj,
+        handleSubmit: handleSubmitPassword,
+        reset: resetPassword,
+        formState: { errors: passwordErrors, isSubmitting: isSubmittingPassword }
+    } = useForm<PasswordFormValues>({
+        resolver: zodResolver(passwordSchema)
+    })
+
+    useEffect(() => {
+        if (user) {
+            reset({
+                first_name: user.attributes.first_name || '',
+                last_name: user.attributes.last_name || '',
+                phone_number: user.attributes.phone_number || '',
+            })
+        }
+    }, [user, reset])
+
+    const onSubmitProfile = async (data: ProfileFormValues) => {
+        // Mock API call to update profile
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                updateUser({
+                    attributes: {
+                        ...user!.attributes,
+                        ...data,
+                        full_name: `${data.first_name} ${data.last_name}`
+                    }
+                })
+                toast.success('Profile updated successfully')
+                reset(data) // Reset dirty state
+                resolve(true)
+            }, 800)
+        })
+    }
+
+    const onSubmitPassword = async (data: PasswordFormValues) => {
+        // Mock API call
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                toast.success('Password changed securely')
+                resetPassword()
+                resolve(true)
+            }, 1000)
+        })
+    }
+
+    if (!user) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
+
+    const userRoleStr = String(Array.isArray(user.attributes.role) ? user.attributes.role[0] : user.attributes.role)
+
+    return (
+        <div className="max-w-4xl mx-auto p-6 lg:p-8 space-y-8">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Personal Profile</h1>
+                <p className="text-slate-500 mt-1">Manage your identity, avatar, and security credentials.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {/* Left Column - Meta */}
+                <div className="col-span-1 space-y-6">
+                    <Card className="shadow-sm border-slate-200 text-center overflow-hidden">
+                        <div className="h-24 bg-gradient-to-r from-indigo-500 to-purple-500" />
+                        <CardContent className="px-6 pb-6 relative pt-0">
+                            <div
+                                className="mx-auto w-24 h-24 bg-white rounded-full border-4 border-white shadow-sm flex items-center justify-center -mt-12 mb-4 overflow-hidden relative group cursor-pointer"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {user.attributes.avatar ? (
+                                    <img src={user.attributes.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-500 text-3xl font-bold uppercase">
+                                        {user.attributes.first_name?.[0]}{user.attributes.last_name?.[0]}
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center text-white transition-all">
+                                    <Upload className="w-6 h-6" />
+                                </div>
+                                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-900">{user.attributes.full_name}</h2>
+                            <p className="text-sm text-slate-500 mb-3">{user.attributes.email}</p>
+                            <Badge variant="secondary" className="capitalize bg-indigo-50 text-indigo-700">
+                                {userRoleStr.replace('_', ' ')}
+                            </Badge>
+                        </CardContent>
+                        <div className="bg-slate-50 border-t border-slate-100 p-4 divide-y divide-slate-200 text-sm">
+                            <div className="flex justify-between py-2 text-slate-600">
+                                <span className="flex items-center gap-1.5 min-w-0 text-slate-500"><Shield className="w-4 h-4" /> ID</span>
+                                <span className="font-mono text-xs">{user.id.substring(0, 8)}</span>
+                            </div>
+                            <div className="flex justify-between py-2 text-slate-600">
+                                <span className="flex items-center gap-1.5 min-w-0 text-slate-500"><Calendar className="w-4 h-4" /> Joined</span>
+                                <span className="font-medium text-xs">{user.attributes.joined_date ? format(new Date(user.attributes.joined_date), 'MMM dd, yyyy') : 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* Right Column - Forms */}
+                <div className="col-span-1 md:col-span-2 space-y-6">
+
+                    {/* General Info */}
+                    <Card className="shadow-sm border-slate-200">
+                        <CardHeader className="border-b border-slate-100 bg-slate-50 pb-4">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <UserCircle className="w-5 h-5 text-indigo-500" /> Identity Details
+                            </CardTitle>
+                        </CardHeader>
+                        <form onSubmit={handleSubmit(onSubmitProfile)}>
+                            <CardContent className="p-6 space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="first_name">First Name</Label>
+                                        <Input id="first_name" {...register('first_name')} />
+                                        {errors.first_name && <p className="text-xs text-red-500 mt-1">{errors.first_name.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="last_name">Last Name</Label>
+                                        <Input id="last_name" {...register('last_name')} />
+                                        {errors.last_name && <p className="text-xs text-red-500 mt-1">{errors.last_name.message}</p>}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="email">Email Address <span className="text-xs text-slate-400 font-normal ml-1">(Managed by Administrator)</span></Label>
+                                    <Input id="email" value={user.attributes.email} disabled className="bg-slate-50 text-slate-500" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="phone_number">Phone Number</Label>
+                                    <div className="relative">
+                                        <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <Input id="phone_number" {...register('phone_number')} className="pl-9" placeholder="+1 (555) 000-0000" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex justify-end">
+                                <Button type="submit" disabled={!isDirty || isSubmitting}>
+                                    {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    Save Profile
+                                </Button>
+                            </CardFooter>
+                        </form>
+                    </Card>
+
+                    {/* Security */}
+                    <Card className="shadow-sm border-slate-200 border-l-4 border-l-amber-400">
+                        <CardHeader className="border-b border-slate-100 bg-white pb-4">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Shield className="w-5 h-5 text-amber-500" /> Security
+                            </CardTitle>
+                            <CardDescription>Update your password to keep your account secure.</CardDescription>
+                        </CardHeader>
+                        <form onSubmit={handleSubmitPassword(onSubmitPassword)}>
+                            <CardContent className="p-6 space-y-4">
+                                <div className="space-y-2 max-w-sm">
+                                    <Label>Current Password</Label>
+                                    <Input type="password" {...registerObj('current_password')} />
+                                    {passwordErrors.current_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.current_password.message}</p>}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl pt-2 border-t border-slate-100">
+                                    <div className="space-y-2">
+                                        <Label>New Password</Label>
+                                        <Input type="password" {...registerObj('new_password')} />
+                                        {passwordErrors.new_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.new_password.message}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Confirm Password</Label>
+                                        <Input type="password" {...registerObj('confirm_password')} />
+                                        {passwordErrors.confirm_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.confirm_password.message}</p>}
+                                    </div>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="bg-white px-6 pb-6 pt-0 flex justify-start">
+                                <Button type="submit" variant="secondary" disabled={isSubmittingPassword}>
+                                    {isSubmittingPassword && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    Update Password
+                                </Button>
+                            </CardFooter>
+                        </form>
+                    </Card>
+
+                </div>
+            </div>
+        </div>
+    )
+}

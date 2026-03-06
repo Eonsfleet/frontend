@@ -12,7 +12,7 @@ export interface UserProfile {
         avatar: string | null
         last_login: string | null
         status: string
-        role: Role
+        role: Role | Role[]
         joined_date: string | null
     }
     relationships: {
@@ -181,3 +181,107 @@ export interface MaintenanceAlert {
         vehicle: { data: { id: string, type: 'vehicles' } }
     }
 }
+
+export interface Geofence {
+    id: string
+    attributes: {
+        name: string
+        description: string | null
+        type: 'polygon' | 'circle'
+        alert_type: 'enter' | 'exit' | 'both'
+        coordinates: any // GeoJSON or custom format
+        radius?: number // Required if type is circle
+        is_active: boolean
+        schedule: any | null
+    }
+    relationships: {
+        vehicles?: { data: { id: string; type: 'vehicles' }[] }
+    }
+}
+
+export type IncidentStatus =
+    | 'reported'
+    | 'investigating'
+    | 'action_required'
+    | 'action_taken'
+    | 'pending_resolution'
+    | 'resolved'
+    | 'closed'
+    | 'cancelled'
+    | 'escalated'
+    | 'dismissed'
+
+export interface Incident {
+    id: string
+    attributes: {
+        reference_number: string
+        type: string
+        status: IncidentStatus
+        priority: 'low' | 'medium' | 'high' | 'critical'
+        description: string
+        location: { lat: number; lng: number; address?: string } | null
+        reported_at: string
+        resolved_at: string | null
+    }
+    relationships: {
+        vehicle?: { data: { id: string; type: 'vehicles' } }
+        driver?: { data: { id: string; type: 'users' } }
+        reported_by?: { data: { id: string; type: 'users' } }
+        assignee?: { data: { id: string; type: 'users' } }
+    }
+}
+
+export type FuelExpenseStatus = 'pending' | 'approved' | 'rejected'
+export type FuelSource = 'manual' | 'card_integration'
+
+export interface FuelExpense {
+    id: string
+    attributes: {
+        date: string
+        volume_liters: number
+        cost: number
+        odometer_reading: number | null
+        status: FuelExpenseStatus
+        source: FuelSource
+        notes: string | null
+        rejection_reason?: string | null
+        card_transaction_id?: string | null
+    }
+    relationships: {
+        vehicle: { data: { id: string; type: 'vehicles' } }
+        driver: { data: { id: string; type: 'users' } }
+        vendor?: { data: { id: string; type: 'vendors' } }
+        approved_by?: { data: { id: string; type: 'users' } }
+    }
+}
+
+export interface FuelCardProvider {
+    id: string
+    attributes: {
+        name: string
+        provider_type: 'ovh' | 'total' | 'generic_csv'
+        api_key_configured: boolean
+        last_sync_at: string | null
+        auto_sync_enabled: boolean
+        status: 'active' | 'inactive' | 'error'
+    }
+}
+
+export interface FuelReconciliationDiscrepancy {
+    id: string
+    attributes: {
+        transaction_date: string
+        reported_volume: number
+        card_billed_volume: number
+        reported_cost: number
+        card_billed_cost: number
+        variance_percentage: number
+        status: 'flagged' | 'disputed' | 'resolved'
+    }
+    relationships: {
+        expense: { data: { id: string; type: 'fuel_expenses' } }
+        card_transaction: { data: { id: string; type: 'fuel_card_transactions' } }
+    }
+}
+
+

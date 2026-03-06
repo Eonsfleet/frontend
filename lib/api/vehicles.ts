@@ -58,6 +58,11 @@ export const deassignDriver = async (vehicleId: string | number): Promise<{ mess
     return response.data
 }
 
+export const getCurrentLocation = async (vehicleId: string | number): Promise<{ data: { lat: number; lng: number; speed: number; heading: number; timestamp: string; status: string } }> => {
+    const response = await apiClient.get(`/vehicles/${vehicleId}/location/current`)
+    return response.data
+}
+
 export const assignDevice = async (vehicleId: string | number, deviceId: string | number): Promise<{ message: string }> => {
     const response = await apiClient.put<{ message: string }>(`/vehicles/${vehicleId}/assign-device`, { device_id: deviceId })
     return response.data

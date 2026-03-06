@@ -66,7 +66,8 @@ export function usePermission() {
 
     const can = (permission: Permission): boolean => {
         if (!role) return false
-        const perms = ROLE_PERMISSIONS[role] as readonly string[]
+        const roleStr = Array.isArray(role) ? role[0] : role
+        const perms = ROLE_PERMISSIONS[roleStr as keyof typeof ROLE_PERMISSIONS] as readonly string[] || []
         if (perms.includes('*')) return true
         return perms.includes(permission)
     }

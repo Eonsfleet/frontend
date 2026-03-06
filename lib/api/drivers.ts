@@ -17,8 +17,8 @@ export interface DriverListResponse {
 }
 
 export const getDrivers = async (params: ListDriversParams): Promise<Paginated<UserProfile>> => {
-    const response = await apiClient.get<DriverListResponse>('/users', {
-        params: { ...params, role: 'driver' }
+    const response = await apiClient.get<DriverListResponse>('/users/role/driver', {
+        params
     })
     return {
         data: response.data.data.users,
