@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
@@ -8,13 +8,22 @@ import { getOrganizationSubscription } from '@/lib/api/billing'
 import AppShell from '@/components/layout/AppShell'
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
+    const [mounted, setMounted] = useState(false)
     const router = useRouter()
     const { token } = useAuthStore()
     const setSubscription = useSubscriptionStore((s) => s.setSubscription)
 
     useEffect(() => {
-        if (!token) router.replace('/login')
-    }, [token, router])
+        setMounted(true)
+    }, [])
+
+    useEffect(() => {
+        if (mounted && !token) {
+            // Delete cookie to break infinite redirect loop with middleware
+            document.cookie = 'ef-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+            router.replace('/login')
+        }
+    }, [mounted, token, router])
 
     const { data: sub } = useQuery({
         queryKey: ['org-subscription'],
@@ -34,7 +43,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         }
     }, [sub, setSubscription])
 
-    if (!token) return null
+    if (!mounted || !token) return null
 
     return <AppShell>{children}</AppShell>
 }
