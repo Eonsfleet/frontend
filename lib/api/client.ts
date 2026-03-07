@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
+import Cookies from 'js-cookie'
 
 const apiClient = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -30,7 +31,7 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401 && !original._retry) {
             original._retry = true
             try {
-                const { refreshToken, setAuth, clearAuth } = useAuthStore.getState()
+                const { refreshToken, setAuth } = useAuthStore.getState()
                 if (!refreshToken) throw new Error('No refresh token')
                 const { data } = await axios.post(
                     `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
@@ -45,10 +46,19 @@ apiClient.interceptors.response.use(
                     payload.user,
                     payload.user.relationships.organization
                 )
+
+                // SYNC COOKIE FOR MIDDLEWARE
+                Cookies.set('ef-token', payload.access_token, {
+                    expires: new Date(payload.expires_at),
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'lax'
+                })
+
                 original.headers.Authorization = `Bearer ${payload.access_token}`
                 return apiClient(original)
             } catch {
                 useAuthStore.getState().clearAuth()
+                Cookies.remove('ef-token')
                 if (typeof window !== 'undefined') {
                     window.location.href = '/login'
                 }

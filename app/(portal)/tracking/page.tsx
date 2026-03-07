@@ -113,7 +113,13 @@ export default function TrackingPage() {
             await Promise.all(visibleVehicles.map(async (v) => {
                 try {
                     const res = await vehicleApi.getCurrentLocation(v.id)
-                    locMap[v.id] = res.data
+                    const { location } = res.data
+                    locMap[v.id] = {
+                        ...location,
+                        lat: location.latitude,
+                        lng: location.longitude,
+                        timestamp: new Date().toISOString()
+                    }
                 } catch (e) { }
             }))
             setLocations(prev => ({ ...prev, ...locMap }))
@@ -140,6 +146,8 @@ export default function TrackingPage() {
                     ...prev,
                     [data.vehicle_id]: {
                         ...data.location,
+                        lat: data.location.latitude || data.location.lat,
+                        lng: data.location.longitude || data.location.lng,
                         timestamp: new Date().toISOString()
                     }
                 }))
@@ -620,6 +628,91 @@ export default function TrackingPage() {
                                         </div>
                                         <span className="text-xs font-mono font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md truncate max-w-[150px]">{selectedVehicle.attributes.tracker_id}</span>
                                     </div>
+
+                                    {/* New Metadata Fields */}
+                                    {locations[selectedVehicle.id]?.metadata && (
+                                        <>
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-orange-100/50 text-orange-600 group-hover:bg-orange-100 transition-colors">
+                                                        <Activity className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Ignition Status</span>
+                                                </div>
+                                                <Badge className={cn(
+                                                    "px-2 h-5 text-[9px] font-black uppercase tracking-widest border-0",
+                                                    locations[selectedVehicle.id].metadata.ignition === 'on' ? "bg-emerald-500 text-white" : "bg-slate-400 text-white"
+                                                )}>
+                                                    {locations[selectedVehicle.id].metadata.ignition || 'OFF'}
+                                                </Badge>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-blue-100/50 text-blue-600 group-hover:bg-blue-100 transition-colors">
+                                                        <Activity className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Vibration/Movement</span>
+                                                </div>
+                                                <Badge className={cn(
+                                                    "px-2 h-5 text-[9px] font-black uppercase tracking-widest border-0",
+                                                    locations[selectedVehicle.id].metadata.movement === 'on' ? "bg-emerald-500 text-white" : "bg-slate-400 text-white"
+                                                )}>
+                                                    {locations[selectedVehicle.id].metadata.movement || 'OFF'}
+                                                </Badge>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-rose-100/50 text-rose-600 group-hover:bg-rose-100 transition-colors">
+                                                        <Activity className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Engine RPM</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.engine_rpm || 'N/A'}</span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-orange-100/50 text-orange-600 group-hover:bg-orange-100 transition-colors">
+                                                        <Activity className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Engine Temp</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.engine_temperature || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">°C</span></span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-emerald-100/50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                                                        <ShieldCheck className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Battery Voltage</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.battery_voltage || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">V</span></span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-indigo-100/50 text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                                                        <Info className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Door Status</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{locations[selectedVehicle.id].metadata.door_status || 'N/A'}</span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-blue-100/50 text-blue-600 group-hover:bg-blue-100 transition-colors">
+                                                        <Navigation className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Trip Distance</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.trip_odometer || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">KM</span></span>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="pt-10 mt-10 border-t border-slate-100">

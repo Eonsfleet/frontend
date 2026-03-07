@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Vehicle } from '@/types'
-import { MoreHorizontal, Eye, Edit, Trash2, UserPlus } from 'lucide-react'
+import { MoreHorizontal, Eye, Edit, Trash2, UserPlus, LayoutGrid, Cpu } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -46,6 +46,8 @@ interface VehicleTableProps {
     data: Vehicle[]
     isLoading?: boolean
     onAssign?: (vehicle: Vehicle) => void
+    onAssignCluster?: (vehicle: Vehicle) => void
+    onAssignTracker?: (vehicle: Vehicle) => void
     onEdit?: (vehicle: Vehicle) => void
     pagination?: {
         current: number
@@ -59,6 +61,8 @@ export function VehicleTable({
     data,
     isLoading,
     onAssign,
+    onAssignCluster,
+    onAssignTracker,
     onEdit,
     pagination,
     onPageChange
@@ -121,11 +125,27 @@ export function VehicleTable({
             cell: ({ row }) => <span className="text-sm text-slate-600">{(row.original.attributes.total_odometer ?? 0).toLocaleString()} km</span>,
         },
         {
+            header: 'Cluster',
+            cell: ({ row }) => {
+                const cluster = row.original.relationships?.cluster?.data
+                return (
+                    <span className="text-xs text-slate-500 font-medium">
+                        {cluster?.name || 'Unassigned'}
+                    </span>
+                )
+            },
+        },
+        {
             header: 'Tracker',
             cell: ({ row }) => (
-                <span className="text-xs text-slate-500 font-mono">
-                    {row.original.attributes.device_id || 'No tracker'}
-                </span>
+                <div className="flex flex-col">
+                    <span className="text-xs text-slate-900 font-mono">
+                        {row.original.attributes.tracker_id || 'No tracker'}
+                    </span>
+                    {row.original.attributes.device_id && (
+                        <span className="text-[10px] text-slate-400">ID: {row.original.attributes.device_id}</span>
+                    )}
+                </div>
             ),
         },
         {
@@ -158,6 +178,12 @@ export function VehicleTable({
                                 <DropdownMenuItem onClick={() => onAssign?.(vehicle)}>
                                     <UserPlus className="mr-2 h-4 w-4" /> Assign Driver
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onAssignCluster?.(vehicle)}>
+                                    <LayoutGrid className="mr-2 h-4 w-4" /> Assign Cluster
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onAssignTracker?.(vehicle)}>
+                                    <Cpu className="mr-2 h-4 w-4" /> Assign Tracker
+                                </DropdownMenuItem>
                             </PermissionGate>
                             <DropdownMenuSeparator />
                             <PermissionGate permission="vehicles:delete">
@@ -170,7 +196,7 @@ export function VehicleTable({
                 )
             },
         },
-    ], [onAssign])
+    ], [onAssign, onAssignCluster, onAssignTracker, onEdit])
 
     const table = useReactTable({
         data,

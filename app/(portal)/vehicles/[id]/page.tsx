@@ -6,18 +6,36 @@ import { useQuery } from '@tanstack/react-query'
 import { getVehicleById } from '@/lib/api/vehicles'
 import { VehicleDetails } from '@/components/vehicles/VehicleDetails'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, Edit, Trash2 } from 'lucide-react'
+import { ChevronLeft, Edit, Trash2, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { VehicleModal } from '@/components/vehicles/VehicleModal'
+import { updateVehicle } from '@/lib/api/vehicles'
+import { toast } from 'sonner'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 
 export default function VehicleDetailPage() {
     const params = useParams()
     const router = useRouter()
     const id = params.id as string
+    const queryClient = useQueryClient()
+    const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
 
     const { data: response, isLoading, error } = useQuery({
         queryKey: ['vehicle', id],
         queryFn: () => getVehicleById(id),
         enabled: !!id,
+    })
+
+    const { mutate: doUpdate, isPending: isUpdating } = useMutation({
+        mutationFn: (data: any) => updateVehicle(id, data),
+        onSuccess: () => {
+            toast.success('Vehicle updated successfully')
+            queryClient.invalidateQueries({ queryKey: ['vehicle', id] })
+            setIsEditModalOpen(false)
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || 'Failed to update vehicle')
+        }
     })
 
     if (isLoading) {
@@ -67,7 +85,11 @@ export default function VehicleDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="border-slate-200 text-slate-600 hover:bg-white">
+                    <Button
+                        variant="outline"
+                        className="border-slate-200 text-slate-600 hover:bg-white"
+                        onClick={() => setIsEditModalOpen(true)}
+                    >
                         <Edit className="mr-2 h-4 w-4" /> Edit
                     </Button>
                     <Button variant="outline" className="text-rose-600 border-rose-100 hover:bg-rose-50 hover:text-rose-700">
@@ -77,6 +99,14 @@ export default function VehicleDetailPage() {
             </div>
 
             <VehicleDetails vehicle={vehicle} />
+
+            <VehicleModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                initialData={vehicle}
+                onSubmit={(data) => doUpdate(data)}
+                isLoading={isUpdating}
+            />
         </div>
     )
 }

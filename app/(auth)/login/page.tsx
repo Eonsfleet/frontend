@@ -55,7 +55,7 @@ export default function LoginPage() {
 
             Cookies.set('ef-token', payload.access_token, {
                 expires: new Date(payload.expires_at),
-                secure: true,
+                secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax'
             })
             router.push('/dashboard')

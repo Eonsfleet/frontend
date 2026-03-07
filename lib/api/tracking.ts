@@ -35,3 +35,8 @@ export const getDeviceStatus = async (deviceIdent: string) => {
     const res = await apiClient.get(`/tracker/${deviceIdent}`)
     return res.data
 }
+
+export const getDevices = async (params?: any): Promise<{ data: { devices: any[], pagination: any } }> => {
+    const res = await apiClient.get('/devices', { params })
+    return res.data
+}

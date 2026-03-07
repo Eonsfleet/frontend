@@ -84,7 +84,19 @@ export interface VehicleAttributes {
     color: string
     fuel_type: string
     status: 'active' | 'inactive' | 'in_transit' | 'maintenance'
-    year: string
+    year: string | number
+    type?: string
+    odometer_when_join?: number
+    gvm?: number
+    fuel_capacity?: number
+    fuel_capacity_unit?: string
+    fuel_sensor_conversion_factor?: number
+    tire_psi?: {
+        front_left: number
+        front_right: number
+        rear_left: number
+        rear_right: number
+    }
     organization: string
     organization_id: number
     in_transit: any | null
@@ -94,7 +106,11 @@ export interface VehicleAttributes {
 export interface Vehicle {
     id: string
     attributes: VehicleAttributes
-    relationships: any[]
+    relationships: {
+        driver?: { data: { id: string; type: 'users'; name?: string } }
+        cluster?: { data: { id: string; type: 'clusters'; name?: string } }
+        device?: { data: { id: string; type: 'devices'; serial_number?: string } }
+    }
 }
 
 export interface TripAttributes {

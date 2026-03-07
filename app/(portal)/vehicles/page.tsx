@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { useQuery } from '@tanstack/react-query'
 import { getVehicles } from '@/lib/api/vehicles'
 import { AssignDriverDialog } from '@/components/vehicles/AssignDriverDialog'
+import { AssignClusterDialog } from '@/components/vehicles/AssignClusterDialog'
+import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
 import { Vehicle } from '@/types'
 
@@ -15,6 +17,8 @@ export default function VehiclesPage() {
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
     const [assignVehicle, setAssignVehicle] = React.useState<Vehicle | null>(null)
+    const [assignClusterVehicle, setAssignClusterVehicle] = React.useState<Vehicle | null>(null)
+    const [assignTrackerVehicle, setAssignTrackerVehicle] = React.useState<Vehicle | null>(null)
     const [isVehicleModalOpen, setIsVehicleModalOpen] = React.useState(false)
     const [editingVehicle, setEditingVehicle] = React.useState<Vehicle | null>(null)
 
@@ -69,6 +73,8 @@ export default function VehiclesPage() {
                 data={data?.data || []}
                 isLoading={isLoading}
                 onAssign={setAssignVehicle}
+                onAssignCluster={setAssignClusterVehicle}
+                onAssignTracker={setAssignTrackerVehicle}
                 onEdit={handleEdit}
                 pagination={data?.pagination}
                 onPageChange={setPage}
@@ -80,6 +86,24 @@ export default function VehiclesPage() {
                     vehicleReg={assignVehicle.attributes.registration_number}
                     isOpen={!!assignVehicle}
                     onClose={() => setAssignVehicle(null)}
+                />
+            )}
+
+            {assignClusterVehicle && (
+                <AssignClusterDialog
+                    vehicleId={assignClusterVehicle.id}
+                    vehicleReg={assignClusterVehicle.attributes.registration_number}
+                    isOpen={!!assignClusterVehicle}
+                    onClose={() => setAssignClusterVehicle(null)}
+                />
+            )}
+
+            {assignTrackerVehicle && (
+                <AssignTrackerDialog
+                    vehicleId={assignTrackerVehicle.id}
+                    vehicleReg={assignTrackerVehicle.attributes.registration_number}
+                    isOpen={!!assignTrackerVehicle}
+                    onClose={() => setAssignTrackerVehicle(null)}
                 />
             )}
 
