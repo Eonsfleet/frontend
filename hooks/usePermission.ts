@@ -5,7 +5,7 @@ export const ROLE_PERMISSIONS = {
 
     fleet_manager: [
         'vehicles:read', 'vehicles:write', 'vehicles:delete', 'vehicles:assign',
-        'drivers:read', 'drivers:performance',
+        'drivers:read', 'drivers:write', 'drivers:performance',
         'trips:read', 'trips:write',
         'tracking:read',
         'maintenance:read', 'maintenance:write',

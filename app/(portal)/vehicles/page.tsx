@@ -12,10 +12,12 @@ import { AssignClusterDialog } from '@/components/vehicles/AssignClusterDialog'
 import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
 import { Vehicle } from '@/types'
+import { VehicleFiltersComponent, VehicleFilters } from '@/components/vehicles/VehicleFilters'
 
 export default function VehiclesPage() {
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
+    const [filters, setFilters] = React.useState<VehicleFilters>({})
     const [assignVehicle, setAssignVehicle] = React.useState<Vehicle | null>(null)
     const [assignClusterVehicle, setAssignClusterVehicle] = React.useState<Vehicle | null>(null)
     const [assignTrackerVehicle, setAssignTrackerVehicle] = React.useState<Vehicle | null>(null)
@@ -23,12 +25,17 @@ export default function VehiclesPage() {
     const [editingVehicle, setEditingVehicle] = React.useState<Vehicle | null>(null)
 
     const { data, isLoading } = useQuery({
-        queryKey: ['vehicles', search, page],
-        queryFn: () => getVehicles({ q: search, page }),
+        queryKey: ['vehicles', search, page, filters],
+        queryFn: () => getVehicles({ q: search, page, ...filters }),
     })
 
     const handleSearch = (val: string) => {
         setSearch(val)
+        setPage(1)
+    }
+
+    const handleFiltersChange = (newFilters: VehicleFilters) => {
+        setFilters(newFilters)
         setPage(1)
     }
 
@@ -64,9 +71,7 @@ export default function VehiclesPage() {
                         onChange={(e) => handleSearch(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" className="w-full sm:w-auto text-slate-600 border-slate-200 h-10">
-                    <Filter className="mr-2 h-4 w-4" /> Filters
-                </Button>
+                <VehicleFiltersComponent filters={filters} onFiltersChange={handleFiltersChange} />
             </div>
 
             <VehicleTable

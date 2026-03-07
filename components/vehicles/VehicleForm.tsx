@@ -62,7 +62,7 @@ interface VehicleFormProps {
 
 export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: VehicleFormProps) {
     const form = useForm<VehicleFormValues>({
-        resolver: zodResolver(vehicleSchema),
+        resolver: zodResolver(vehicleSchema) as any,
         defaultValues: initialData ? {
             registration_number: initialData.attributes.registration_number,
             make: initialData.attributes.make,

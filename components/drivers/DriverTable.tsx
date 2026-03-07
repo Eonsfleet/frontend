@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { PermissionGate } from '@/components/shared/PermissionGate'
 
 import {
     Pagination,
@@ -41,9 +42,13 @@ import {
     PaginationPrevious,
 } from '@/components/ui/pagination'
 
+import { useQuery } from '@tanstack/react-query'
+import { getDrivers, getDriverCurrentVehicle } from '@/lib/api/drivers'
+
 interface DriverTableProps {
     data: UserProfile[]
     isLoading?: boolean
+    onAssignVehicle?: (driver: UserProfile) => void
     pagination?: {
         current: number
         lastPage: number
@@ -52,116 +57,138 @@ interface DriverTableProps {
     onPageChange?: (page: number) => void
 }
 
-export const columns: ColumnDef<UserProfile>[] = [
-    {
-        header: 'Name',
-        cell: ({ row }) => (
-            <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-sm font-bold text-blue-600">
-                    {row.original.attributes.first_name[0]}{row.original.attributes.last_name[0]}
-                </div>
-                <div className="flex flex-col">
-                    <span className="font-semibold text-slate-900">{row.original.attributes.full_name}</span>
-                    <span className="text-xs text-slate-500">ID: {row.original.attributes.employee_id || 'N/A'}</span>
-                </div>
-            </div>
-        ),
-    },
-    {
-        header: 'Email',
-        cell: ({ row }) => (
-            <div className="flex items-center gap-2 text-slate-600">
-                <Mail className="h-3.5 w-3.5" />
-                <span className="text-sm">{row.original.attributes.email}</span>
-            </div>
-        ),
-    },
-    {
-        accessorKey: 'attributes.status',
-        header: 'Status',
-        cell: ({ row }) => {
-            const status = row.original.attributes.status
-            let variant: 'default' | 'secondary' | 'destructive' | 'outline' = 'outline'
 
-            switch (status) {
-                case 'active':
-                    variant = 'default'
-                    break
-                case 'suspended':
-                    variant = 'destructive'
-                    break
-                case 'inactive':
-                    variant = 'outline'
-                    break
-            }
+function DriverVehicleCell({ driverId }: { driverId: string | number }) {
+    const { data: response, isLoading } = useQuery({
+        queryKey: ['driver-vehicle', driverId],
+        queryFn: () => getDriverCurrentVehicle(driverId),
+        staleTime: 5 * 60 * 1000,
+    })
 
-            return (
-                <Badge variant={variant} className="capitalize">
-                    {status}
-                </Badge>
-            )
-        },
-    },
-    {
-        header: 'Assigned Vehicle',
-        cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-slate-400" />
-                <span className="text-sm text-slate-900">TRK-402</span> {/* Mock for now as relationships might need more API data */}
-            </div>
-        ),
-    },
-    {
-        header: 'Last Login',
-        cell: ({ row }) => (
-            <span className="text-xs text-slate-500">
-                {row.original.attributes.last_login
-                    ? format(new Date(row.original.attributes.last_login), 'MMM d, h:mm a')
-                    : 'Never'}
+    if (isLoading) {
+        return <div className="h-4 w-20 bg-slate-100 animate-pulse rounded" />
+    }
+
+    const vehicle = response?.data?.attributes
+
+    return (
+        <div className="flex items-center gap-2">
+            <Truck className="h-4 w-4 text-slate-400" />
+            <span className="text-sm text-slate-900">
+                {vehicle?.registration_number || 'No vehicle'}
             </span>
-        ),
-    },
-    {
-        id: 'actions',
-        cell: ({ row }) => {
-            const driver = row.original
-
-            return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem asChild>
-                            <Link href={`/drivers/${driver.id}`}>
-                                <Eye className="mr-2 h-4 w-4" /> View Profile
-                            </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                            <Truck className="mr-2 h-4 w-4" /> Assign Vehicle
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
-                            <Trash2 className="mr-2 h-4 w-4" /> Deactivate
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )
-        },
-    },
-]
+        </div>
+    )
+}
 
 export function DriverTable({
     data,
     isLoading,
+    onAssignVehicle,
     pagination,
     onPageChange
 }: DriverTableProps) {
+    const columns = React.useMemo<ColumnDef<UserProfile>[]>(() => [
+        {
+            header: 'Name',
+            cell: ({ row }) => (
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-sm font-bold text-blue-600">
+                        {row.original.attributes.first_name[0]}{row.original.attributes.last_name[0]}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900">{row.original.attributes.full_name}</span>
+                        <span className="text-xs text-slate-500">ID: {row.original.attributes.employee_id || 'N/A'}</span>
+                    </div>
+                </div>
+            ),
+        },
+        {
+            header: 'Email',
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2 text-slate-600">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span className="text-sm">{row.original.attributes.email}</span>
+                </div>
+            ),
+        },
+        {
+            accessorKey: 'attributes.status',
+            header: 'Status',
+            cell: ({ row }) => {
+                const status = row.original.attributes.status
+                let variant: 'default' | 'secondary' | 'destructive' | 'outline' = 'outline'
+
+                switch (status) {
+                    case 'active':
+                        variant = 'default'
+                        break
+                    case 'suspended':
+                        variant = 'destructive'
+                        break
+                    case 'inactive':
+                        variant = 'outline'
+                        break
+                }
+
+                return (
+                    <Badge variant={variant} className="capitalize">
+                        {status}
+                    </Badge>
+                )
+            },
+        },
+        {
+            header: 'Assigned Vehicle',
+            cell: ({ row }) => <DriverVehicleCell driverId={row.original.id} />,
+        },
+        {
+            header: 'Last Login',
+            cell: ({ row }) => (
+                <span className="text-xs text-slate-500">
+                    {row.original.attributes.last_login
+                        ? format(new Date(row.original.attributes.last_login), 'MMM d, h:mm a')
+                        : 'Never'}
+                </span>
+            ),
+        },
+
+        {
+            id: 'actions',
+            cell: ({ row }) => {
+                const driver = row.original
+
+                return (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                                <Link href={`/drivers/${driver.id}`}>
+                                    <Eye className="mr-2 h-4 w-4" /> View Profile
+                                </Link>
+                            </DropdownMenuItem>
+                            <PermissionGate permission="drivers:write">
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => onAssignVehicle?.(driver)}>
+                                    <Truck className="mr-2 h-4 w-4" /> Assign Vehicle
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
+                                    <Trash2 className="mr-2 h-4 w-4" /> Deactivate
+                                </DropdownMenuItem>
+                            </PermissionGate>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )
+            },
+        },
+    ], [onAssignVehicle])
     const table = useReactTable({
         data,
         columns,

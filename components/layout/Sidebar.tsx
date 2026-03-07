@@ -72,7 +72,7 @@ export default function Sidebar() {
         refetchInterval: 30000, // Sync every 30s
     })
 
-    const unreadCount = inboxData?.data?.notifications?.filter(n => !n.read_at).length || 0
+    const unreadCount = inboxData?.data?.notifications?.filter(n => !n.attributes.read_at).length || 0
 
     return (
         <TooltipProvider delayDuration={0}>

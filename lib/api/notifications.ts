@@ -3,10 +3,15 @@ import { Paginated } from '@/types'
 
 export interface Notification {
     id: string
-    type: string
-    data: any // Dynamic payload based on event
-    read_at: string | null
-    created_at: string
+    attributes: {
+        type: string
+        subject: string
+        body: string
+        data: any
+        is_read: boolean
+        read_at: string | null
+        created_at: string
+    }
 }
 
 export interface NotificationInboxResponse {

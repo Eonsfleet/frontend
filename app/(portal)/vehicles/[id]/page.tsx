@@ -104,8 +104,6 @@ export default function VehicleDetailPage() {
                 isOpen={isEditModalOpen}
                 onClose={() => setIsEditModalOpen(false)}
                 initialData={vehicle}
-                onSubmit={(data) => doUpdate(data)}
-                isLoading={isUpdating}
             />
         </div>
     )

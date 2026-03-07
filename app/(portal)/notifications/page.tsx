@@ -81,7 +81,7 @@ export default function NotificationsPage() {
                                 size="sm"
                                 className="h-8 text-xs"
                                 onClick={() => markAllReadMutation.mutate()}
-                                disabled={markAllReadMutation.isPending || !inboxData?.data?.notifications?.length || inboxData.data.notifications.every(n => n.read_at)}
+                                disabled={markAllReadMutation.isPending || !inboxData?.data?.notifications?.length || inboxData.data.notifications.every(n => n.attributes.is_read)}
                             >
                                 {markAllReadMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2 text-emerald-600" />}
                                 Mark all as read
@@ -100,26 +100,26 @@ export default function NotificationsPage() {
                                     {inboxData?.data?.notifications?.map((notification) => (
                                         <div
                                             key={notification.id}
-                                            className={`p-4 flex gap-4 transition-colors ${!notification.read_at ? 'bg-indigo-50/30' : 'bg-white hover:bg-slate-50'}`}
-                                            onClick={() => !notification.read_at && markReadMutation.mutate(notification.id)}
+                                            className={`p-4 flex gap-4 transition-colors ${!notification.attributes.is_read ? 'bg-indigo-50/30' : 'bg-white hover:bg-slate-50'}`}
+                                            onClick={() => !notification.attributes.is_read && markReadMutation.mutate(notification.id)}
                                         >
                                             <div className="shrink-0 mt-1">
-                                                {getIcon(notification.type)}
+                                                {getIcon(notification.attributes.type)}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <p className={`text-sm ${!notification.read_at ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
-                                                        {notification.data.message || notification.type.replace('_', ' ')}
+                                                    <p className={`text-sm ${!notification.attributes.is_read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                                                        {notification.attributes.data.message || notification.attributes.subject || notification.attributes.type.replace('_', ' ')}
                                                     </p>
                                                     <span className="text-[11px] text-slate-400 whitespace-nowrap">
-                                                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                                                        {formatDistanceToNow(new Date(notification.attributes.created_at), { addSuffix: true })}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                                                    {notification.data.description || 'System generated event.'}
+                                                    {notification.attributes.body || notification.attributes.data.description || 'System generated event.'}
                                                 </p>
                                             </div>
-                                            {!notification.read_at && (
+                                            {!notification.attributes.is_read && (
                                                 <div className="shrink-0 flex items-center">
                                                     <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
                                                 </div>

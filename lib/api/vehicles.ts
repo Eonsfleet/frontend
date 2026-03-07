@@ -6,6 +6,12 @@ export interface ListVehiclesParams {
     per_page?: number
     q?: string
     status?: string
+    make?: string
+    model?: string
+    year?: string | number
+    fuel_type?: string
+    body_type?: string
+    type?: string
 }
 
 export interface VehicleListResponse {

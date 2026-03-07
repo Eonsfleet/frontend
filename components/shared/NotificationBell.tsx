@@ -25,7 +25,7 @@ export function NotificationBell() {
     })
 
     const notifications = inboxData?.data?.notifications || []
-    const unreadCount = notifications.filter(n => !n.read_at).length
+    const unreadCount = notifications.filter(n => !n.attributes.is_read).length
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -59,13 +59,13 @@ export function NotificationBell() {
                             {notifications.slice(0, 5).map(n => (
                                 <div
                                     key={n.id}
-                                    className={`p-3 text-sm flex gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${!n.read_at ? 'bg-indigo-50/20' : ''}`}
-                                    onClick={() => !n.read_at && markReadMutation.mutate(n.id)}
+                                    className={`p-3 text-sm flex gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${!n.attributes.is_read ? 'bg-indigo-50/20' : ''}`}
+                                    onClick={() => !n.attributes.is_read && markReadMutation.mutate(n.id)}
                                 >
                                     <div className="mt-0.5"><div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 shrink-0"></div></div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-slate-800 line-clamp-2 leading-tight">New <span className="font-semibold">{n.type}</span> event registered in the system.</p>
-                                        <p className="text-[10px] text-slate-400 mt-1">{formatDistanceToNow(new Date(n.created_at))} ago</p>
+                                        <p className="text-slate-800 line-clamp-2 leading-tight">New <span className="font-semibold">{n.attributes.type}</span> event registered in the system.</p>
+                                        <p className="text-[10px] text-slate-400 mt-1">{formatDistanceToNow(new Date(n.attributes.created_at))} ago</p>
                                     </div>
                                 </div>
                             ))}

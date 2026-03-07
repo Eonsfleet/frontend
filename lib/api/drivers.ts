@@ -44,3 +44,9 @@ export const updateDriver = async (id: string | number, data: any): Promise<{ da
 export const deleteDriver = async (id: string | number): Promise<void> => {
     await apiClient.delete(`/users/${id}`)
 }
+
+export const getDriverCurrentVehicle = async (driverId: string | number): Promise<{ data: any }> => {
+    const response = await apiClient.get(`/drivers/${driverId}/current-vehicle`)
+    return response.data
+}
+

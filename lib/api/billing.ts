@@ -20,6 +20,6 @@ export interface SubscriptionResponse {
 }
 
 export const getOrganizationSubscription = async (): Promise<OrganizationSubscription> => {
-    const response = await apiClient.get<SubscriptionResponse>('/subscriptions/organization')
+    const response = await apiClient.get<SubscriptionResponse>('/subscriptions/organization/current')
     return response.data.data
 }

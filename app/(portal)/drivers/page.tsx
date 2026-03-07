@@ -3,14 +3,20 @@
 import React from 'react'
 import { DriverTable } from '@/components/drivers/DriverTable'
 import { Button } from '@/components/ui/button'
-import { UserPlus, Search, Filter } from 'lucide-react'
+import { Search, Filter } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { AddDriverDialog } from '@/components/drivers/AddDriverDialog'
 import { useQuery } from '@tanstack/react-query'
 import { getDrivers } from '@/lib/api/drivers'
+import { PermissionGate } from '@/components/shared/PermissionGate'
+import { AssignVehicleDialog } from '@/components/drivers/AssignVehicleDialog'
+import { UserProfile } from '@/types'
 
 export default function DriversPage() {
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
+    const [selectedDriver, setSelectedDriver] = React.useState<UserProfile | null>(null)
+    const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false)
 
     const { data, isLoading } = useQuery({
         queryKey: ['drivers', search, page],
@@ -22,6 +28,11 @@ export default function DriversPage() {
         setPage(1)
     }
 
+    const handleAssignVehicle = (driver: UserProfile) => {
+        setSelectedDriver(driver)
+        setIsAssignModalOpen(true)
+    }
+
     return (
         <div className="p-8 space-y-8 bg-slate-50 min-h-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -29,9 +40,7 @@ export default function DriversPage() {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Drivers</h1>
                     <p className="text-slate-500 mt-1">Manage driver registry, performance, and vehicle assignments.</p>
                 </div>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                    <UserPlus className="mr-2 h-4 w-4" /> Add Driver
-                </Button>
+                <AddDriverDialog />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -54,7 +63,20 @@ export default function DriversPage() {
                 isLoading={isLoading}
                 pagination={data?.pagination}
                 onPageChange={setPage}
+                onAssignVehicle={handleAssignVehicle}
             />
+
+            {selectedDriver && (
+                <AssignVehicleDialog
+                    isOpen={isAssignModalOpen}
+                    onClose={() => {
+                        setIsAssignModalOpen(false)
+                        setSelectedDriver(null)
+                    }}
+                    driverId={selectedDriver.id}
+                    driverName={selectedDriver.attributes.full_name}
+                />
+            )}
         </div>
     )
 }
