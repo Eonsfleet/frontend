@@ -25,6 +25,19 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
+import dynamic from 'next/dynamic'
+
+const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false })
+const TileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false })
+const Marker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false })
+const Polyline = dynamic(() => import('react-leaflet').then(mod => mod.Polyline), { ssr: false })
+const useMap = typeof window !== 'undefined' ? require('react-leaflet').useMap : () => null
+
+const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+const MAPBOX_STYLE = 'mapbox/dark-v11'
+const TILE_URL = MAPBOX_ACCESS_TOKEN
+    ? `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/{z}/{x}/{y}?access_token=${MAPBOX_ACCESS_TOKEN}`
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 
 interface MovementData {
     lat: number;
@@ -97,6 +110,17 @@ export default function PlaybackPage() {
         vehicles.find(v => String(v.id) === String(selectedVehicleId)),
         [vehicles, selectedVehicleId]
     )
+
+    const MapController = ({ movements }: { movements: MovementData[] }) => {
+        const map = useMap()
+        useEffect(() => {
+            if (movements.length > 0) {
+                const bounds = movements.map(m => [m.lat, m.lng] as [number, number])
+                map.fitBounds(bounds, { padding: [50, 50] })
+            }
+        }, [movements.length])
+        return null
+    }
 
     return (
         <div className="h-screen flex overflow-hidden bg-slate-900">
@@ -221,47 +245,32 @@ export default function PlaybackPage() {
 
             {/* Map Environment Card */}
             <div className="flex-1 relative bg-slate-200 overflow-hidden">
-                <div className="absolute inset-0 bg-[#f1f2f3] bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:20px_20px] opacity-40" />
-
-                {/* Simulated playback path */}
-                {movements.length > 2 && (
-                    <div className="absolute inset-0 pointer-events-none">
-                        {/* Placeholder for SVG flight path / route */}
-                        <svg className="w-full h-full opacity-30">
-                            <polyline
-                                fill="none"
-                                stroke="#3b82f6"
-                                strokeWidth="4"
-                                strokeDasharray="8,8"
-                                points={movements.map((m: MovementData, i: number) => `${50 + (m.lng - 3.37) * 400},${50 + (6.52 - m.lat) * 400}`).join(' ')}
-                                className="transition-all duration-500"
-                            />
-                        </svg>
-                    </div>
-                )}
-
-                {/* Animated Vehicle Node */}
-                {currentMovement && (
-                    <div
-                        className="absolute transition-all duration-500 ease-linear z-10"
-                        style={{
-                            top: `${50 + (6.52 - currentMovement.lat) * 400}%`,
-                            left: `${50 + (currentMovement.lng - 3.37) * 400}%`
-                        }}
+                {typeof window !== 'undefined' && (
+                    <MapContainer
+                        center={[6.5244, 3.3792]}
+                        zoom={12}
+                        className="h-full w-full z-10"
+                        zoomControl={false}
                     >
-                        <div className="relative flex flex-col items-center">
-                            <div className="px-2 py-1 bg-white shadow-xl rounded-md border border-slate-200 mb-2 whitespace-nowrap">
-                                <span className="text-[10px] font-black text-slate-900">{selectedVehicle?.attributes.registration_number}</span>
-                            </div>
-                            <div className="p-1 px bg-blue-600 rounded-full shadow-2xl border-4 border-white">
-                                <Truck
-                                    className="w-5 h-5 text-white"
-                                    style={{ transform: `rotate(${currentMovement.heading}deg)` }}
-                                />
-                            </div>
-                            <div className="absolute -inset-1 rounded-full border border-blue-400 animate-pulse" />
-                        </div>
-                    </div>
+                        <TileLayer url={TILE_URL} attribution='&copy; Mapbox' />
+                        <MapController movements={movements} />
+
+                        {movements.length > 1 && (
+                            <Polyline
+                                positions={movements.map(m => [m.lat, m.lng])}
+                                color="#3b82f6"
+                                weight={4}
+                                opacity={0.6}
+                                dashArray="10, 10"
+                            />
+                        )}
+
+                        {currentMovement && (
+                            <Marker position={[currentMovement.lat, currentMovement.lng]}>
+                                {/* Custom icon could be added here for better rotation visualization */}
+                            </Marker>
+                        )}
+                    </MapContainer>
                 )}
 
                 {/* Dynamic Content Control Layer */}
@@ -416,6 +425,24 @@ export default function PlaybackPage() {
                     </Card>
                 </div>
             </div>
+
+            <style jsx global>{`
+                .leaflet-container {
+                    background: #f8fafc !important;
+                }
+                .custom-popup .leaflet-popup-content-wrapper {
+                    border-radius: 12px;
+                    padding: 0;
+                    overflow: hidden;
+                    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+                }
+                .custom-popup .leaflet-popup-content {
+                    margin: 0;
+                }
+                .custom-popup .leaflet-popup-tip {
+                    background: white;
+                }
+            `}</style>
         </div>
     )
 }

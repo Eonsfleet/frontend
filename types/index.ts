@@ -79,6 +79,7 @@ export interface VehicleAttributes {
     registration_number: string
     display_number: string
     device_id: string | null
+    tracker_id?: string | null
     body_type: string
     color: string
     fuel_type: string
