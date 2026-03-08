@@ -26,19 +26,19 @@ const NAV_SECTIONS = [
         label: 'Operations',
         items: [
             { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: null, module: null },
-            { href: '/vehicles', label: 'Vehicles', icon: Car, permission: 'vehicles:read', module: null },
-            { href: '/drivers', label: 'Drivers', icon: Users, permission: 'drivers:read', module: null },
-            { href: '/trips', label: 'Trips', icon: Route, permission: 'trips:read', module: null },
-            { href: '/tracking', label: 'Live Tracking', icon: MapPin, permission: 'tracking:read', module: null },
+            { href: '/vehicles', label: 'Vehicles', icon: Car, permission: 'vehicles:read', module: 'vehicles' },
+            { href: '/drivers', label: 'Drivers', icon: Users, permission: 'drivers:read', module: 'drivers' },
+            { href: '/trips', label: 'Trips', icon: Route, permission: 'trips:read', module: 'trips' },
+            { href: '/tracking', label: 'Live Tracking', icon: MapPin, permission: 'tracking:read', module: 'geofence' },
         ],
     },
     {
         label: 'Fleet Health',
         items: [
-            { href: '/maintenance', label: 'Maintenance', icon: Wrench, permission: 'maintenance:read', module: null },
-            { href: '/geofences', label: 'Geofences', icon: MapPin, permission: null, module: 'geofencing' },
+            { href: '/maintenance', label: 'Maintenance', icon: Wrench, permission: 'maintenance:read', module: 'maintenance' },
+            { href: '/geofences', label: 'Geofences', icon: MapPin, permission: null, module: 'geofence' },
             { href: '/incidents', label: 'Incidents', icon: AlertTriangle, permission: null, module: 'incidents' },
-            { href: '/fuel', label: 'Fuel', icon: Fuel, permission: null, module: 'fuel_management' },
+            { href: '/fuel', label: 'Fuel', icon: Fuel, permission: null, module: 'fuel' },
         ],
     },
     {
@@ -51,9 +51,9 @@ const NAV_SECTIONS = [
         label: 'Account',
         items: [
             { href: '/billing', label: 'Billing', icon: CreditCard, permission: 'billing:read', module: null },
-            { href: '/notifications', label: 'Notifications', icon: Bell, permission: 'notifications:read', module: null },
+            { href: '/notifications', label: 'Notifications', icon: Bell, permission: 'notifications:read', module: 'notifications' },
             { href: '/webhooks', label: 'Webhooks', icon: Webhook, permission: null, module: 'webhooks' },
-            { href: '/vendors', label: 'Vendors', icon: Store, permission: 'vendors:read', module: null },
+            { href: '/vendors', label: 'Vendors', icon: Store, permission: 'vendors:read', module: 'vendors' },
             { href: '/settings', label: 'Settings', icon: Settings, permission: null, module: null },
         ],
     },
@@ -62,7 +62,7 @@ const NAV_SECTIONS = [
 export default function Sidebar() {
     const pathname = usePathname()
     const { can } = usePermission()
-    const { hasModule } = useSubscription()
+    const { hasCapability } = useSubscription()
     const { isSidebarCollapsed, toggleSidebar } = useUIStore()
 
     // Fetch notifications for the badge
@@ -124,7 +124,7 @@ export default function Sidebar() {
                                 )}
                                 <div className="space-y-1">
                                     {visibleItems.map(({ href, label, icon: Icon, module }) => {
-                                        const isLocked = module && !hasModule(module as any)
+                                        const isLocked = module && !hasCapability(module as any)
                                         const isActive = !isLocked && (pathname === href || pathname.startsWith(href + '/'))
                                         const isNotifications = label === 'Notifications'
 

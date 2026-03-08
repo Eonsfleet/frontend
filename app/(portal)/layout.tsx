@@ -37,7 +37,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             setSubscription(
                 sub.plan?.tier ?? null,
                 sub.plan?.name ?? null,
-                sub.enabled_modules ?? [],
+                sub.capabilities,
                 sub.dunning_stage ?? null
             )
         }

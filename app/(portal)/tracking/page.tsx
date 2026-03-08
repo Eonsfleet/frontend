@@ -99,7 +99,7 @@ export default function TrackingPage() {
     const { data: geofenceData } = useQuery({
         queryKey: ['geofences'],
         queryFn: () => geofenceApi.getGeofences(),
-        enabled: hasModule('geofencing') || true, // Enabled for testing
+        enabled: hasModule('geofence') || true, // Enabled for testing
     })
 
     const geofences = geofenceData?.data?.geofences || []

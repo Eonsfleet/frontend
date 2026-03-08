@@ -2,14 +2,14 @@
 
 import React from 'react'
 import { useSubscription } from '@/hooks/useSubscription'
-import { GatedModule, PlanTier } from '@/store/subscriptionStore'
+import { Capability, PlanTier } from '@/store/subscriptionStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ShieldAlert, Rocket } from 'lucide-react'
 import Link from 'next/link'
 
 interface UpgradeGateProps {
-    module: GatedModule
+    module: Capability
     featureName: string
     description: string
     requiredPlan?: PlanTier
@@ -23,9 +23,9 @@ export function UpgradeGate({
     requiredPlan = 'growth',
     children
 }: UpgradeGateProps) {
-    const { hasModule } = useSubscription()
+    const { hasCapability } = useSubscription()
 
-    if (hasModule(module)) {
+    if (hasCapability(module)) {
         return <>{children}</>
     }
 

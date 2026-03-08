@@ -4,7 +4,7 @@ import { GeofenceList } from '@/components/geofencing/GeofenceList'
 export default function GeofencesPage() {
     return (
         <UpgradeGate
-            module="geofencing"
+            module="geofence"
             featureName="Geofencing"
             description="Create virtual boundaries and receive alerts when vehicles enter or exit defined zones."
             requiredPlan="growth"

@@ -6,20 +6,24 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Building2, Users, Shield, Key, Network, UserCircle } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useSubscription } from '@/hooks/useSubscription'
+
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const { user } = useAuthStore()
 
+    const { hasCapability } = useSubscription()
     const userRole = user?.attributes?.role
     const isAdmin = Array.isArray(userRole) ? userRole.includes('administrator') : userRole === 'administrator'
 
+
     const navItems = [
-        { name: 'My Profile', href: '/profile', icon: UserCircle, show: true }, // Ideally outside this layout, but grouping for local logic
+        { name: 'My Profile', href: '/profile', icon: UserCircle, show: true },
         { name: 'Organization', href: '/settings', icon: Building2, show: true },
         { name: 'User Management', href: '/settings/users', icon: Users, show: true },
         { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true },
-        { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin },
+        { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' },
         { name: 'Developer API Keys', href: '/settings/api-keys', icon: Key, show: isAdmin },
     ]
 
@@ -44,20 +48,26 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
                         <nav className="space-y-1.5 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
                             {navItems.filter(i => i.show).map((item) => {
-                                const isActive = pathname === item.href
+                                const isLocked = (item as any).capability && !hasCapability((item as any).capability)
+                                const isActive = !isLocked && pathname === item.href
+
                                 return (
                                     <Link
                                         key={item.name}
-                                        href={item.href}
-                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group whitespace-nowrap lg:whitespace-normal
+                                        href={isLocked ? '/billing' : item.href}
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group whitespace-nowrap lg:whitespace-normal
                                             ${isActive
                                                 ? 'bg-slate-100 text-slate-900 font-semibold shadow-sm border border-slate-200'
                                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                                             }
+                                            ${isLocked ? 'opacity-60 grayscale' : ''}
                                         `}
                                     >
-                                        <item.icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                                        {item.name}
+                                        <div className="flex items-center gap-3">
+                                            <item.icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                                            {item.name}
+                                        </div>
+                                        {isLocked && <Shield className="h-3 w-3 text-amber-600 animate-pulse" />}
                                     </Link>
                                 )
                             })}

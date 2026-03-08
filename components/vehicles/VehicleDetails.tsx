@@ -466,7 +466,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 </TabsContent>
                 <TabsContent value="fuel" className="outline-none">
                     <UpgradeGate
-                        module="fuel_management"
+                        module="fuel"
                         featureName="Fuel Intelligence"
                         description="Monitor fuel levels, consumption trends and theft anomalies in real-time."
                     >
