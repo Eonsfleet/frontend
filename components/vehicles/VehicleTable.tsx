@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Vehicle } from '@/types'
-import { MoreHorizontal, Eye, Edit, Trash2, UserPlus, LayoutGrid, Cpu } from 'lucide-react'
+import { MoreHorizontal, Eye, Edit, Trash2, UserPlus, LayoutGrid, Cpu, Fuel } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -116,7 +116,14 @@ export function VehicleTable({
             cell: ({ row }) => (
                 <div className="flex flex-col">
                     <span className="text-xs font-medium text-slate-700">{row.original.attributes.body_type}</span>
-                    <span className="text-[10px] text-slate-500 uppercase">{row.original.attributes.fuel_type}</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-500 uppercase">{row.original.attributes.fuel_type}</span>
+                        {row.original.attributes.fuel_sensor_conversion_factor && row.original.attributes.fuel_sensor_conversion_factor > 0 && (
+                            <div className="h-3.5 w-3.5 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100" title="Fuel Monitoring Supported">
+                                <Fuel className="h-2 w-2 text-emerald-600" />
+                            </div>
+                        )}
+                    </div>
                 </div>
             ),
         },

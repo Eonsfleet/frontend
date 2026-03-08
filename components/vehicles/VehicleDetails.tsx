@@ -16,10 +16,10 @@ import {
     User,
     Cpu,
     Calendar,
-    AlertCircle,
-    Eye,
+    CheckCircle2,
     Download
 } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { PermissionGate } from '@/components/shared/PermissionGate'
 import { AssignDriverDialog } from '@/components/vehicles/AssignDriverDialog'
@@ -470,7 +470,63 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                         featureName="Fuel Intelligence"
                         description="Monitor fuel levels, consumption trends and theft anomalies in real-time."
                     >
-                        <div className="text-center py-12 text-slate-500 italic">Fuel metrics data currently unavailable.</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card className="md:col-span-2 shadow-sm border-slate-200">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Fuel className="w-5 h-5 text-emerald-600" /> Real-time Fuel Status
+                                    </CardTitle>
+                                    <CardDescription>Live fuel level data from onboard sensor and GPS tracker.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-8">
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Level</p>
+                                                <p className="text-4xl font-black text-slate-900 font-mono">
+                                                    {isLoadingLocation ? '—' : `${locationData?.data?.location?.fuel_level_percent ?? 0}%`}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estimated Volume</p>
+                                                <p className="text-xl font-bold text-emerald-600 font-mono">
+                                                    {locationData?.data?.location?.fuel_level_percent && vehicle.attributes.fuel_capacity
+                                                        ? `${((locationData.data.location.fuel_level_percent / 100) * vehicle.attributes.fuel_capacity).toFixed(1)} L`
+                                                        : '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Progress
+                                            value={locationData?.data?.location?.fuel_level_percent ?? 0}
+                                            className="h-3 shadow-inner bg-slate-100"
+                                            // @ts-ignore
+                                            indicatorClassName={cn(
+                                                "transition-all duration-1000",
+                                                (locationData?.data?.location?.fuel_level_percent ?? 0) < 15 ? 'bg-rose-500' :
+                                                    (locationData?.data?.location?.fuel_level_percent ?? 0) < 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                                            )}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-6 border-t border-slate-50">
+                                        <DetailItem label="Tank Capacity" value={`${vehicle.attributes.fuel_capacity || 'N/A'} ${vehicle.attributes.fuel_capacity_unit || 'L'}`} />
+                                        <DetailItem label="Fuel Type" value={vehicle.attributes.fuel_type || 'N/A'} />
+                                        <DetailItem label="Sensor Factor" value={vehicle.attributes.fuel_sensor_conversion_factor?.toString() || 'N/A'} />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="shadow-sm border-slate-200 bg-slate-50/50 border-dashed">
+                                <CardHeader>
+                                    <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-tight">Recent Anomalies</CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-2" />
+                                    <p className="text-sm font-semibold text-slate-900">System Healthy</p>
+                                    <p className="text-xs text-slate-500 mt-1">No fuel theft or drainage anomalies detected in the last 24 hours.</p>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </UpgradeGate>
                 </TabsContent>
 

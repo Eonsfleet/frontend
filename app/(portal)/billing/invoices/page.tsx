@@ -1,19 +1,47 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, FileText, CheckCircle2 } from 'lucide-react'
+import { Download, FileText, CheckCircle2, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { useQuery } from '@tanstack/react-query'
+import * as api from '@/lib/api/billing'
+import { format } from 'date-fns'
 
 export default function InvoiceHistoryPage() {
-    // Mocked data for invoices
-    const invoices = [
-        { id: 'INV-2024-009', date: 'Sep 15, 2024', amount: 25000, status: 'paid', description: 'Growth Plan - Monthly Subscription' },
-        { id: 'INV-2024-008', date: 'Aug 15, 2024', amount: 25000, status: 'paid', description: 'Growth Plan - Monthly Subscription' },
-        { id: 'INV-2024-007', date: 'Jul 15, 2024', amount: 25000, status: 'paid', description: 'Growth Plan - Monthly Subscription' },
-        { id: 'INV-2024-006', date: 'Jun 15, 2024', amount: 10000, status: 'paid', description: 'Starter Plan - Monthly Subscription' },
-    ]
+    const [page, setPage] = useState(1)
+
+    const { data: invoicesData, isLoading, isError } = useQuery({
+        queryKey: ['invoices', page],
+        queryFn: () => api.getInvoices({ page })
+    })
+
+    const handleDownload = (id: number) => {
+        const url = api.getInvoicePdfUrl(id)
+        window.open(url, '_blank')
+    }
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+        )
+    }
+
+    if (isError || !invoicesData) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                <AlertCircle className="h-12 w-12 text-red-500" />
+                <h2 className="text-xl font-semibold text-slate-900">Failed to load invoices</h2>
+                <Button onClick={() => window.location.reload()}>Retry</Button>
+            </div>
+        )
+    }
+
+    const invoices = invoicesData.data.data
+    const meta = invoicesData.data.meta
 
     return (
         <div className="space-y-6 max-w-5xl">
@@ -36,7 +64,6 @@ export default function InvoiceHistoryPage() {
                                 <tr>
                                     <th className="px-6 py-3.5">Invoice ID</th>
                                     <th className="px-6 py-3.5">Date</th>
-                                    <th className="px-6 py-3.5">Description</th>
                                     <th className="px-6 py-3.5">Amount</th>
                                     <th className="px-6 py-3.5">Status</th>
                                     <th className="px-6 py-3.5 text-right">Actions</th>
@@ -46,32 +73,66 @@ export default function InvoiceHistoryPage() {
                                 {invoices.map((invoice) => (
                                     <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4 font-medium text-indigo-600 whitespace-nowrap">
-                                            {invoice.id}
+                                            {invoice.invoice_number}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                                            {invoice.date}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-900">
-                                            {invoice.description}
+                                            {format(new Date(invoice.issued_at), 'MMM dd, yyyy')}
                                         </td>
                                         <td className="px-6 py-4 font-mono font-medium text-slate-900">
-                                            ₦{invoice.amount.toLocaleString()}
+                                            {invoice.currency} {invoice.total.toLocaleString()}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-none px-2 py-0.5 pointer-events-none">
-                                                <CheckCircle2 className="w-3 h-3 mr-1" /> Paid
+                                            <Badge className={`border-none px-2 py-0.5 pointer-events-none ${invoice.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                                {invoice.status === 'paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                                                <span className="capitalize">{invoice.status}</span>
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button variant="outline" size="sm" className="h-8 shadow-sm">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 shadow-sm"
+                                                disabled={!invoice.pdf_available}
+                                                onClick={() => handleDownload(invoice.id)}
+                                            >
                                                 <Download className="w-4 h-4 mr-2" /> PDF
                                             </Button>
                                         </td>
                                     </tr>
                                 ))}
+                                {invoices.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
+                                            No billing statements found for this organization.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
+                    {meta.last_page > 1 && (
+                        <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <p className="text-xs text-slate-500">Page {page} of {meta.last_page}</p>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page === 1}
+                                    onClick={() => setPage(p => p - 1)}
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page === meta.last_page}
+                                    onClick={() => setPage(p => p + 1)}
+                                >
+                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
