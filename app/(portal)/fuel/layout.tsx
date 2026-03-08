@@ -4,19 +4,19 @@ import React from 'react'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Fuel, CreditCard, GitCompare, BarChart3, Lock as LockIcon } from 'lucide-react'
+import { Fuel, CreditCard, GitCompare, BarChart3, Radio, Lock as LockIcon } from 'lucide-react'
 import { useSubscription } from '@/hooks/useSubscription'
 
 export default function FuelLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
-
     const { hasCapability } = useSubscription()
 
     const navItems = [
         { name: 'Expenses', href: '/fuel', icon: Fuel },
-        { name: 'Card Providers', href: '/fuel/cards', icon: CreditCard, capability: 'fuel_card_va' },
+        { name: 'Card Management', href: '/fuel/cards', icon: CreditCard },
         { name: 'Reconciliation', href: '/fuel/reconciliation', icon: GitCompare },
         { name: 'Reports', href: '/fuel/reports', icon: BarChart3 },
+        { name: 'Live Monitor', href: '/fuel/monitor', icon: Radio },
     ]
 
     return (
@@ -42,26 +42,23 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
 
                         <nav className="space-y-1.5 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
                             {navItems.map((item) => {
-                                const isLocked = (item as any).capability && !hasCapability((item as any).capability)
-                                const isActive = !isLocked && pathname === item.href
+                                const isActive = pathname === item.href || (item.href !== '/fuel' && pathname.startsWith(item.href))
 
                                 return (
                                     <Link
                                         key={item.name}
-                                        href={isLocked ? '/billing' : item.href}
+                                        href={item.href}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group whitespace-nowrap lg:whitespace-normal
                                             ${isActive
                                                 ? 'bg-emerald-50 text-emerald-700 font-semibold shadow-sm border border-emerald-100'
                                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
                                             }
-                                            ${isLocked ? 'opacity-60 grayscale' : ''}
                                         `}
                                     >
                                         <div className="flex items-center gap-3">
                                             <item.icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
                                             {item.name}
                                         </div>
-                                        {isLocked && <LockIcon className="h-3 w-3 text-amber-600" />}
                                     </Link>
                                 )
                             })}

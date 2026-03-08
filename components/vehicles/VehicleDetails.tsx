@@ -17,7 +17,9 @@ import {
     Cpu,
     Calendar,
     CheckCircle2,
-    Download
+    Download,
+    AlertCircle,
+    Eye,
 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
