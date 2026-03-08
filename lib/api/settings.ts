@@ -1,13 +1,13 @@
 import apiClient from './client'
-import { UserProfile, Organization, Paginated, Role } from '@/types'
+import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery } from '@/types'
 
 // Organizations
-export const getOrganization = async (id: number): Promise<{ data: Organization }> => {
+export const getOrganization = async (id: number | string): Promise<{ data: Organization }> => {
     const response = await apiClient.get<{ data: Organization }>(`/organizations/${id}`)
     return response.data
 }
 
-export const updateOrganization = async (id: number, data: Partial<Organization>): Promise<{ message: string, data: Organization }> => {
+export const updateOrganization = async (id: number | string, data: any): Promise<{ message: string, data: Organization }> => {
     const response = await apiClient.put<{ message: string, data: Organization }>(`/organizations/${id}`, data)
     return response.data
 }
@@ -26,55 +26,23 @@ export const getUsers = async (params?: { page?: number; per_page?: number; role
     return response.data
 }
 
-export const inviteUser = async (data: { email: string; first_name: string; last_name: string; role: Role; cluster_id?: number }): Promise<{ message: string }> => {
+export const inviteUser = async (data: { email: string; first_name: string; last_name: string; role: string; cluster_id?: number }): Promise<{ message: string }> => {
     const response = await apiClient.post<{ message: string }>('/users', data)
     return response.data
 }
 
-export const deactivateUser = async (id: string): Promise<{ message: string }> => {
+export const deactivateUser = async (id: string | number): Promise<{ message: string }> => {
+    const response = await apiClient.delete<{ message: string }>(`/users/${id}/suspend`) // Assuming suspension endpoint
+    return response.data
+}
+
+export const deleteUser = async (id: string | number): Promise<{ message: string }> => {
     const response = await apiClient.delete<{ message: string }>(`/users/${id}`)
     return response.data
 }
 
-// Roles & Permissions
-export interface RoleData {
-    id: number | string
-    attributes: {
-        name: string
-        type: string
-        summary: { total_users: number, total_permissions: number }
-        created_at: string
-    }
-    relationships: {
-        permissions: Record<string, string>
-    }
-}
-
-export const getRoles = async (): Promise<{ data: { roles: RoleData[], pagination: any } }> => {
-    const response = await apiClient.get('/roles')
-    return response.data
-}
-
-// Clusters
-export interface Cluster {
-    id: number
-    name: string
-    vehicle_count: number
-    manager?: { id: string; name: string }
-}
-
-export const getClusters = async (params?: any): Promise<{ data: any }> => {
-    const response = await apiClient.get('/clusters', { params })
-    return response.data
-}
-
-export const getClusterById = async (id: string | number): Promise<{ data: any }> => {
-    const response = await apiClient.get(`/clusters/${id}`)
-    return response.data
-}
-
-export const createCluster = async (data: { name: string; location: string; manager_id?: string }): Promise<{ message: string; data: Cluster }> => {
-    const response = await apiClient.post<{ message: string; data: Cluster }>('/clusters', data)
+export const requestResetPassword = async (email: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/auth/password/new-otp', { email })
     return response.data
 }
 
@@ -92,12 +60,91 @@ export const getApiKeys = async (): Promise<{ data: ApiKey[] }> => {
     return response.data
 }
 
-export const generateApiKey = async (data: { name: string; expires_in_days: number }): Promise<{ message: string, data: { api_key: string } }> => {
+export const generateApiKey = async (data: {
+    name: string;
+    expires_in_days: number;
+    scopes?: string[];
+    ip_whitelist?: string[];
+}): Promise<{ message: string, data: { api_key: string } }> => {
     const response = await apiClient.post<{ message: string, data: { api_key: string } }>('/api-keys', data)
     return response.data
 }
 
 export const revokeApiKey = async (id: string): Promise<{ message: string }> => {
     const response = await apiClient.delete<{ message: string }>(`/api-keys/${id}`)
+    return response.data
+}
+
+// Roles & Permissions
+export const getRoles = async (): Promise<{ data: { roles: SecurityRole[] } }> => {
+    const response = await apiClient.get('/roles')
+    return response.data
+}
+
+export const getPermissions = async (params?: { page?: number; per_page?: number }): Promise<{ data: { permissions: Permission[] } }> => {
+    const response = await apiClient.get('/permissions', { params })
+    return response.data
+}
+
+export const createRole = async (data: { name: string; permissions: string[] }): Promise<{ message: string, data: SecurityRole }> => {
+    const response = await apiClient.post<{ message: string, data: SecurityRole }>('/roles', data)
+    return response.data
+}
+
+// Clusters
+export const getClusters = async (params?: { page?: number; per_page?: number }): Promise<{ data: { clusters: Cluster[] } }> => {
+    const response = await apiClient.get('/clusters', { params })
+    return response.data
+}
+
+export const createCluster = async (data: {
+    name: string;
+    description?: string;
+    manager_id: number | string;
+    users: (number | string)[];
+    vehicles: (number | string)[];
+}): Promise<{ message: string, data: Cluster }> => {
+    const response = await apiClient.post<{ message: string, data: Cluster }>('/clusters', data)
+    return response.data
+}
+
+export const updateCluster = async (id: string | number, data: {
+    name?: string;
+    description?: string;
+    manager_id?: number | string;
+    users?: (number | string)[];
+    vehicles?: (number | string)[];
+}): Promise<{ message: string, data: Cluster }> => {
+    const response = await apiClient.put<{ message: string, data: Cluster }>(`/clusters/${id}`, data)
+    return response.data
+}
+
+// Webhooks
+export const getWebhooks = async (): Promise<{ data: { webhooks: Webhook[] } }> => {
+    const response = await apiClient.get<{ data: { webhooks: Webhook[] } }>('/webhooks')
+    return response.data
+}
+
+export const createWebhook = async (data: { url: string, events: string[], description?: string }): Promise<{ data: Webhook }> => {
+    const response = await apiClient.post<{ data: Webhook }>('/webhooks', data)
+    return response.data
+}
+
+export const updateWebhook = async (id: string, data: { url?: string, events?: string[], description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
+    const response = await apiClient.put<{ data: Webhook }>(`/webhooks/${id}`, data)
+    return response.data
+}
+
+export const deleteWebhook = async (id: string): Promise<void> => {
+    await apiClient.delete(`/webhooks/${id}`)
+}
+
+export const testWebhook = async (id: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>(`/webhooks/${id}/test`)
+    return response.data
+}
+
+export const getWebhookDeliveries = async (id: string): Promise<{ data: { deliveries: WebhookDelivery[] } }> => {
+    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[] } }>(`/webhooks/${id}/deliveries`)
     return response.data
 }

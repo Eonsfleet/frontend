@@ -27,7 +27,9 @@ import { format } from 'date-fns'
 
 const generateSchema = z.object({
     name: z.string().min(2, 'Description name is required'),
-    expires_in_days: z.number().min(1, 'Define expiration days')
+    expires_in_days: z.number().min(1, 'Define expiration days'),
+    scopes: z.string().optional(),
+    ip_whitelist: z.string().optional()
 })
 
 type GenerateFormValues = z.infer<typeof generateSchema>
@@ -44,7 +46,7 @@ export default function ApiKeysPage() {
 
     const { control, register, handleSubmit, reset, formState: { errors } } = useForm<GenerateFormValues>({
         resolver: zodResolver(generateSchema),
-        defaultValues: { name: '', expires_in_days: 30 }
+        defaultValues: { name: '', expires_in_days: 30, scopes: '', ip_whitelist: '' }
     })
 
     const generateMutation = useMutation({
@@ -66,7 +68,12 @@ export default function ApiKeysPage() {
     })
 
     const onGenerateSubmit = (data: GenerateFormValues) => {
-        generateMutation.mutate(data)
+        const payload = {
+            ...data,
+            scopes: data.scopes ? data.scopes.split(',').map(s => s.trim()) : [],
+            ip_whitelist: data.ip_whitelist ? data.ip_whitelist.split(',').map(ip => ip.trim()) : []
+        }
+        generateMutation.mutate(payload)
     }
 
     const handleCopy = () => {
@@ -155,6 +162,17 @@ export default function ApiKeysPage() {
                                         />
                                         {errors.expires_in_days && <p className="text-[10px] text-red-500">{errors.expires_in_days.message}</p>}
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Scopes (comma separated)</Label>
+                                            <Input {...register('scopes')} placeholder="view_vehicles, view_reports" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>IP Whitelist (comma separated)</Label>
+                                            <Input {...register('ip_whitelist')} placeholder="192.168.1.1, 10.0.0.0/24" />
+                                        </div>
+                                    </div>
                                     <DialogFooter className="pt-2">
                                         <Button type="submit" disabled={generateMutation.isPending} className="w-full bg-slate-900 hover:bg-slate-800">
                                             {generateMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <KeySquare className="w-4 h-4 mr-2" />}
@@ -211,8 +229,19 @@ export default function ApiKeysPage() {
                                                         {key.name}
                                                         {isExpired && <Badge variant="destructive" className="h-5 text-[10px] px-1.5 uppercase font-bold tracking-widest leading-none">Expired</Badge>}
                                                     </div>
-                                                    <div className="font-mono text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                                                        ef_live_...{String(key.id).substring(0, 6)}
+                                                    <div className="font-mono text-xs text-slate-400 mt-1 flex items-center justify-between group/key">
+                                                        <span>ef_live_...{String(key.id).substring(0, 6)}</span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 w-6 p-0 opacity-0 group-hover/key:opacity-100 transition-opacity"
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(`ef_live_...${String(key.id).substring(0, 6)}`)
+                                                                toast.info('Key identifier copied')
+                                                            }}
+                                                        >
+                                                            <Copy className="h-3 w-3" />
+                                                        </Button>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-slate-600">

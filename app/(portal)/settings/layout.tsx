@@ -4,7 +4,7 @@ import React from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Users, Shield, Key, Network, UserCircle } from 'lucide-react'
+import { Building2, Users, Shield, Key, Network, UserCircle, Activity } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 
@@ -25,6 +25,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true },
         { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' },
         { name: 'Developer API Keys', href: '/settings/api-keys', icon: Key, show: isAdmin },
+        { name: 'Webhooks', href: '/settings/webhooks', icon: Activity, show: true },
     ]
 
     return (

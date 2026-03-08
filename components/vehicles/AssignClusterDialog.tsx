@@ -98,7 +98,7 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
                                     {selectedCluster ? (
                                         <div className="flex items-center gap-2">
                                             <LayoutGrid className="h-4 w-4 text-slate-400" />
-                                            <span>{selectedCluster.attributes?.name || selectedCluster.name}</span>
+                                            <span>{selectedCluster.attributes?.name}</span>
                                         </div>
                                     ) : (
                                         <span className="text-slate-500">
@@ -117,7 +117,7 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
                                             {clusters.map((cluster: any) => (
                                                 <CommandItem
                                                     key={cluster.id}
-                                                    value={cluster.attributes?.name || cluster.name}
+                                                    value={cluster.attributes?.name}
                                                     onSelect={() => {
                                                         setSelectedClusterId(cluster.id.toString())
                                                         setOpen(false)
@@ -130,9 +130,9 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
                                                         )}
                                                     />
                                                     <div className="flex flex-col">
-                                                        <span>{cluster.attributes?.name || cluster.name}</span>
+                                                        <span>{cluster.attributes?.name}</span>
                                                         <span className="text-[10px] text-slate-400 font-mono italic">
-                                                            {cluster.attributes?.vehicle_count || cluster.vehicle_count || 0} Assets
+                                                            {cluster.attributes?.total_vehicles || 0} Assets
                                                         </span>
                                                     </div>
                                                 </CommandItem>

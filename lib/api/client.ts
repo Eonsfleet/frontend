@@ -14,7 +14,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const { token, organization } = useAuthStore.getState()
     if (token) config.headers.Authorization = `Bearer ${token}`
-    if (organization?.subdomain) config.headers['X-Tenant'] = organization.subdomain
+    if (organization?.attributes?.subdomain) config.headers['X-Tenant'] = organization.attributes.subdomain
     return config
 })
 

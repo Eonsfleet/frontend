@@ -8,6 +8,8 @@ import { Plus, Search, Mail, Loader2, ShieldCheck, UserMinus, UserCog } from 'lu
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/settings'
 import { Badge } from '@/components/ui/badge'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { MoreHorizontal, Trash2, Lock, RefreshCw, Power } from 'lucide-react'
 import {
     Dialog,
     DialogContent,
@@ -23,7 +25,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { toast } from 'sonner'
-import { Role } from '@/types'
+import { RoleSlug } from '@/types'
 
 const inviteSchema = z.object({
     first_name: z.string().min(2, 'Required'),
@@ -73,8 +75,23 @@ export default function UserManagementPage() {
         mutationFn: api.deactivateUser,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['settings-users'] })
-            toast.success('User deactivated')
+            toast.success('User account suspended periodically')
         }
+    })
+
+    const { mutate: deleteUser, isPending: isDeleting } = useMutation({
+        mutationFn: api.deleteUser,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['settings-users'] })
+            toast.success('User permanently removed from directory')
+        },
+        onError: () => toast.error('Account removal failed')
+    })
+
+    const { mutate: resetPassword, isPending: isResetting } = useMutation({
+        mutationFn: (email: string) => api.requestResetPassword(email),
+        onSuccess: () => toast.success('Security OTP dispatched to user email'),
+        onError: () => toast.error('Failed to trigger reset protocol')
     })
 
     const roleColors: Record<string, string> = {

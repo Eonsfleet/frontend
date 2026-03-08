@@ -12,7 +12,7 @@ export interface UserProfile {
         avatar: string | null
         last_login: string | null
         status: string
-        role: Role | Role[]
+        role: RoleSlug | RoleSlug[]
         joined_date: string | null
     }
     relationships: {
@@ -22,15 +22,22 @@ export interface UserProfile {
 }
 
 export interface Organization {
-    id: number
-    name: string
-    identifier?: string
-    subdomain?: string
-    slug?: string | null
-    domain?: string | null
+    id: number | string
+    attributes: {
+        name: string
+        email?: string
+        fleet_size?: number
+        industry?: string
+        logo?: string
+        subdomain?: string
+        custom_domain?: string | null
+        phone?: string
+        joined_date?: string
+        identifier?: number
+    }
 }
 
-export type Role =
+export type RoleSlug =
     | 'administrator'
     | 'fleet_manager'
     | 'dispatcher'
@@ -39,6 +46,33 @@ export type Role =
     | 'finance'
     | 'compliance'
     | 'vendor'
+
+export interface SecurityRole {
+    id: string
+    attributes: {
+        name: string
+        summary: {
+            total_users: number
+        }
+    }
+    relationships: {
+        permissions: {
+            [key: string]: string
+        }
+    }
+}
+
+export interface Permission {
+    id: string
+    attributes: {
+        name: string
+        type: string
+        created_at: string
+    }
+    relationships: {
+        assigned_to: string[]
+    }
+}
 
 export interface ApiError {
     message: string
@@ -101,6 +135,23 @@ export interface VehicleAttributes {
     organization_id: number
     in_transit: any | null
     updated_at: string
+}
+
+export interface Cluster {
+    id: string
+    attributes: {
+        name: string
+        description: string | null
+        total_vehicles: number
+        total_users: number
+        manager: string | null
+        created_at: string
+        updated_at: string
+        // For creation/form handling
+        manager_id?: string | number
+        user_ids?: (string | number)[]
+        vehicle_ids?: (string | number)[]
+    }
 }
 
 export interface Vehicle {
@@ -298,6 +349,32 @@ export interface FuelReconciliationDiscrepancy {
     relationships: {
         expense: { data: { id: string; type: 'fuel_expenses' } }
         card_transaction: { data: { id: string; type: 'fuel_card_transactions' } }
+    }
+}
+
+export interface Webhook {
+    id: string
+    attributes: {
+        url: string
+        description: string | null
+        events: string[]
+        status: 'active' | 'inactive'
+        secret_key?: string
+        failure_count: number
+        last_failure_at: string | null
+        created_at: string
+    }
+}
+
+export interface WebhookDelivery {
+    id: string
+    attributes: {
+        event_type: string
+        response_code: number
+        response_body: string | null
+        payload: any
+        duration_ms: number
+        created_at: string
     }
 }
 

@@ -67,12 +67,14 @@ export default function OrganizationSettingsPage() {
     })
 
     useEffect(() => {
-        if (orgData?.data) {
+        if (orgData?.data?.attributes) {
+            const attr = orgData.data.attributes
             reset({
-                name: orgData.data.name || '',
-                subdomain: orgData.data.subdomain || '',
-                domain: orgData.data.domain || '',
+                name: attr.name || '',
+                subdomain: attr.subdomain || '',
+                domain: attr.custom_domain || '',
             })
+            if (attr.logo) setLogoUrl(attr.logo)
         }
     }, [orgData, reset])
 
@@ -159,6 +161,23 @@ export default function OrganizationSettingsPage() {
                                     </Label>
                                     <Input id="domain" {...register('domain')} placeholder="e.g., app.yourcompany.com" className="max-w-md" disabled={!isAdmin} />
                                     <p className="text-[11px] text-indigo-600 flex items-center font-medium mt-1">Requires 'Enterprise' plan DNS configuration.</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Industry</Label>
+                                        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                                            <Building className="w-3.5 h-3.5" />
+                                            {orgData?.data?.attributes?.industry || 'N/A'}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Contact</Label>
+                                        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                                            <Phone className="w-3.5 h-3.5" />
+                                            {orgData?.data?.attributes?.phone || 'N/A'}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

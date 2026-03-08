@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard, Car, Users, Route, MapPin, Wrench,
     AlertTriangle, Fuel, BarChart3, CreditCard, Bell,
-    Webhook, Store, Settings, Lock, Menu
+    Store, Settings, Lock, Menu
 } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
 import { useSubscription } from '@/hooks/useSubscription'
@@ -52,7 +52,6 @@ const NAV_SECTIONS = [
         items: [
             { href: '/billing', label: 'Billing', icon: CreditCard, permission: 'billing:read', module: null },
             { href: '/notifications', label: 'Notifications', icon: Bell, permission: 'notifications:read', module: 'notifications' },
-            { href: '/webhooks', label: 'Webhooks', icon: Webhook, permission: null, module: 'webhooks' },
             { href: '/vendors', label: 'Vendors', icon: Store, permission: 'vendors:read', module: 'vendors' },
             { href: '/settings', label: 'Settings', icon: Settings, permission: null, module: null },
         ],
