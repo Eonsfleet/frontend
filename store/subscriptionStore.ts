@@ -30,6 +30,8 @@ export const CAPABILITIES = [
     'custom_roles',
     'fuel_card_va',
     'notification_delegation',
+    'notification_groups',
+    'notification_routing',
 ] as const
 
 export type Capability = (typeof CAPABILITIES)[number]

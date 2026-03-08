@@ -67,4 +67,4 @@ The [plan](file:///var/www/eonsfleet/app/Models/OrganizationSubscriptionModel.ph
 | Category | Slugs |
 | :--- | :--- |
 | **Core** | [vehicles](file:///var/www/eonsfleet/app/Models/Organization.php#77-81), [drivers](file:///var/www/eonsfleet/app/Models/Vehicle.php#96-100), [users](file:///var/www/eonsfleet/app/Models/Organization.php#64-68), [fuel](file:///var/www/eonsfleet/app/Models/FuelConsumption.php#78-85), `analytics`, [maintenance](file:///var/www/eonsfleet/app/Models/Organization.php#124-128), [incident](file:///var/www/eonsfleet/app/Services/Analytics/DriverPerformanceService.php#167-197), [workflow](file:///var/www/eonsfleet/app/Models/WorkflowHistory.php#36-40), [geofence](file:///var/www/eonsfleet/app/Models/Vehicle.php#136-145), `vendors`, `notifications`, `webhooks`, [trips](file:///var/www/eonsfleet/app/Http/Controllers/Api/v1/DriverController.php#90-106), `clusters`, [documents](file:///var/www/eonsfleet/app/Models/Vehicle.php#170-174) |
-| **Advanced** | `custom_roles`, `fuel_card_va`, `notification_delegation` |
+| **Advanced** | `custom_roles`, `fuel_card_va`, `notification_delegation` , `notification_groups`, `notification_routing`|

@@ -86,8 +86,8 @@ export default function WebhooksPage() {
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['settings-webhooks'] })
             toast.success('Webhook registered successfully')
-            if (res.data.attributes.secret_key) {
-                setNewSecret(res.data.attributes.secret_key)
+            if (res.data.secret_key) {
+                setNewSecret(res.data.secret_key)
                 setIsSecretOpen(true)
             }
             handleClose()
@@ -129,10 +129,10 @@ export default function WebhooksPage() {
     const handleEdit = (webhook: any) => {
         setEditingWebhook(webhook)
         setFormData({
-            url: webhook.attributes.url,
-            description: webhook.attributes.description || '',
-            events: webhook.attributes.events,
-            status: webhook.attributes.status
+            url: webhook.url,
+            description: webhook.description || '',
+            events: webhook.events,
+            status: webhook.status
         })
         setIsCreateOpen(true)
     }
@@ -183,27 +183,27 @@ export default function WebhooksPage() {
                                 <div className="flex items-start gap-4">
                                     <div className={cn(
                                         "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
-                                        webhook.attributes.status === 'active' ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                                        webhook.status === 'active' ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
                                     )}>
                                         <Activity className="w-5 h-5" />
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="text-base font-bold text-slate-900">{webhook.attributes.description || 'Unnamed Endpoint'}</h3>
-                                            <Badge variant="outline" className={cn("text-[10px] h-5", webhook.attributes.status === 'active' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
-                                                {webhook.attributes.status}
+                                            <h3 className="text-base font-bold text-slate-900">{webhook.description || 'Unnamed Endpoint'}</h3>
+                                            <Badge variant="outline" className={cn("text-[10px] h-5", webhook.status === 'active' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                                                {webhook.status}
                                             </Badge>
                                         </div>
-                                        <p className="text-sm font-mono text-slate-500 break-all">{webhook.attributes.url}</p>
+                                        <p className="text-sm font-mono text-slate-500 break-all">{webhook.url}</p>
                                         <div className="flex flex-wrap gap-1.5 mt-2">
-                                            {webhook.attributes.events.slice(0, 3).map((ev: string) => (
+                                            {webhook.events.slice(0, 3).map((ev: string) => (
                                                 <Badge key={ev} variant="outline" className="text-[10px] bg-slate-50 border-slate-200 text-slate-600 font-medium">
                                                     {ev}
                                                 </Badge>
                                             ))}
-                                            {webhook.attributes.events.length > 3 && (
+                                            {webhook.events.length > 3 && (
                                                 <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 text-slate-400">
-                                                    +{webhook.attributes.events.length - 3} more
+                                                    +{webhook.events.length - 3} more
                                                 </Badge>
                                             )}
                                         </div>
@@ -429,8 +429,7 @@ function DeliveryHistorySheet({ webhookId, children }: { webhookId: string, chil
 
 function DeliveryItem({ delivery }: { delivery: any }) {
     const [isExpanded, setIsExpanded] = useState(false)
-    const attr = delivery.attributes
-    const success = attr.response_code >= 200 && attr.response_code < 300
+    const success = delivery.response_code >= 200 && delivery.response_code < 300
 
     return (
         <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
@@ -444,15 +443,15 @@ function DeliveryItem({ delivery }: { delivery: any }) {
                         success ? "bg-emerald-500" : "bg-rose-500"
                     )} />
                     <div>
-                        <p className="text-sm font-bold text-slate-900">{attr.event_type}</p>
+                        <p className="text-sm font-bold text-slate-900">{delivery.event_type}</p>
                         <p className="text-[10px] text-slate-500 font-medium">
-                            {format(new Date(attr.created_at), 'MMM d, HH:mm:ss')} • {attr.duration_ms}ms
+                            {format(new Date(delivery.created_at), 'MMM d, HH:mm:ss')} • {delivery.duration_ms}ms
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <Badge variant="outline" className={cn("text-[10px] px-1.5 h-5", success ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200")}>
-                        {attr.response_code}
+                        {delivery.response_code}
                     </Badge>
                     <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", isExpanded && "rotate-180")} />
                 </div>
@@ -463,14 +462,14 @@ function DeliveryItem({ delivery }: { delivery: any }) {
                     <div className="space-y-1">
                         <Label className="text-[10px] uppercase font-bold text-slate-400">Request Payload</Label>
                         <pre className="text-[11px] p-2 bg-slate-900 text-slate-300 rounded overflow-x-auto">
-                            {JSON.stringify(attr.payload, null, 2)}
+                            {JSON.stringify(delivery.payload, null, 2)}
                         </pre>
                     </div>
-                    {attr.response_body && (
+                    {delivery.response_body && (
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Response Body</Label>
                             <div className="text-[11px] p-2 bg-white border border-slate-200 text-slate-600 rounded break-all">
-                                {attr.response_body}
+                                {delivery.response_body}
                             </div>
                         </div>
                     )}

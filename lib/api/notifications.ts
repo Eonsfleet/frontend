@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { Paginated } from '@/types'
+import { NotificationGroup, NotificationRule, NotificationDelegation } from '@/types'
 
 export interface Notification {
     id: string
@@ -36,21 +36,85 @@ export const markAllAsRead = async (): Promise<{ message: string }> => {
     return response.data
 }
 
-export interface ChannelPreference {
-    event_id: string
-    event_name: string
-    email: boolean
-    sms: boolean
-    in_app: boolean
-}
-
-export const getPreferences = async (): Promise<{ data: ChannelPreference[] }> => {
-    const response = await apiClient.get<{ data: ChannelPreference[] }>('/notifications/user/channels')
+export const getPreferences = async (): Promise<{ data: { channels: ChannelAvailability } }> => {
+    const response = await apiClient.get<{ data: { channels: ChannelAvailability } }>('/notifications/user/channels')
     return response.data
 }
 
-export const updatePreference = async (data: { event_id: string; channel: 'email' | 'sms' | 'in_app'; enabled: boolean }): Promise<{ message: string }> => {
-    // Note: Depends on actual API schema. Assuming a flat PUT or PATCH to update one toggle at a time for UX flow.
-    const response = await apiClient.put<{ message: string }>('/notifications/user/channels', data)
+export const updatePreference = async (channels: ChannelAvailability): Promise<{ message: string }> => {
+    const response = await apiClient.put<{ message: string }>('/notifications/user/channels', { channels })
+    return response.data
+}
+
+// Notification Groups
+export const getGroups = async (): Promise<{ data: { success: boolean; groups: NotificationGroup[] } }> => {
+    const response = await apiClient.get<{ data: { success: boolean; groups: NotificationGroup[] } }>('/notifications/groups')
+    return response.data
+}
+
+export const createGroup = async (data: { name: string; description?: string; user_ids: (string | number)[] }): Promise<{ data: NotificationGroup }> => {
+    const response = await apiClient.post<{ data: NotificationGroup }>('/notifications/groups', data)
+    return response.data
+}
+
+export const syncGroupMembers = async (groupId: string | number, user_ids: (string | number)[]): Promise<{ message: string }> => {
+    const response = await apiClient.put<{ message: string }>(`/notifications/groups/${groupId}/members`, { user_ids })
+    return response.data
+}
+
+// Routing Rules
+export const getRules = async (): Promise<{ data: { success: boolean; rules: NotificationRule[] } }> => {
+    const response = await apiClient.get<{ data: { success: boolean; rules: NotificationRule[] } }>('/notifications/config/rules')
+    return response.data
+}
+
+export const getNotificationTypes = async (params?: { configurable?: boolean }): Promise<{ data: { id: number; code: string; name: string }[] }> => {
+    const response = await apiClient.get<{ data: { id: number; code: string; name: string }[] }>('/notifications/types', { params })
+    return response.data
+}
+
+export const createRule = async (data: {
+    notification_type_id: number;
+    is_enabled: boolean;
+    channel_types: string[];
+    recipient_groups?: (string | number)[];
+    recipient_roles?: string[];
+    recipient_users?: (string | number)[];
+}): Promise<{ data: NotificationRule }> => {
+    const response = await apiClient.post<{ data: NotificationRule }>('/notifications/config/rules', data)
+    return response.data
+}
+
+// Delegations
+export const getDelegations = async (): Promise<{ data: { success: boolean; delegations: NotificationDelegation[] } }> => {
+    const response = await apiClient.get<{ data: { success: boolean; delegations: NotificationDelegation[] } }>('/notifications/delegations')
+    return response.data
+}
+
+export const createDelegation = async (data: {
+    initial_user_id?: string | number;
+    delegated_to_id: string | number;
+    event_types: string[];
+    expires_at: string;
+    reason?: string;
+}): Promise<{ data: NotificationDelegation }> => {
+    const response = await apiClient.post<{ data: NotificationDelegation }>('/notifications/delegations', data)
+    return response.data
+}
+
+export const endDelegation = async (id: string | number): Promise<{ message: string }> => {
+    const response = await apiClient.delete<{ message: string }>(`/notifications/delegations/${id}`)
+    return response.data
+}
+
+export interface ChannelAvailability {
+    email: boolean
+    sms: boolean
+    push: boolean
+    in_app: boolean
+}
+
+export const getChannelAvailability = async (): Promise<{ data: { channels: ChannelAvailability } }> => {
+    const response = await apiClient.get<{ data: { channels: ChannelAvailability } }>('/notifications/user/channels')
     return response.data
 }

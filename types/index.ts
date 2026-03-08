@@ -34,6 +34,13 @@ export interface Organization {
         phone?: string
         joined_date?: string
         identifier?: number
+        advanced_capabilities?: {
+            notification_delegation?: boolean
+            notification_groups?: boolean
+            notification_routing?: boolean
+            custom_roles?: boolean
+            [key: string]: boolean | undefined
+        }
     }
 }
 
@@ -353,28 +360,58 @@ export interface FuelReconciliationDiscrepancy {
 }
 
 export interface Webhook {
-    id: string
-    attributes: {
-        url: string
-        description: string | null
-        events: string[]
-        status: 'active' | 'inactive'
-        secret_key?: string
-        failure_count: number
-        last_failure_at: string | null
-        created_at: string
-    }
+    id: string | number
+    url: string
+    description: string | null
+    events: string[]
+    status: 'active' | 'inactive'
+    secret_key?: string
+    failure_count: number
+    last_failure_at: string | null
+    created_at: string
+    updated_at?: string
 }
 
 export interface WebhookDelivery {
-    id: string
-    attributes: {
-        event_type: string
-        response_code: number
-        response_body: string | null
-        payload: any
-        duration_ms: number
-        created_at: string
+    id: string | number
+    event_type: string
+    response_code: number
+    response_body: string | null
+    payload: any
+    duration_ms: number
+    created_at: string
+}
+
+export interface NotificationGroup {
+    id: string | number
+    name: string
+    description: string | null
+    created_at: string
+    relationships?: {
+        users?: { data: { id: string; type: 'users'; name?: string }[] }
+    }
+}
+
+export interface NotificationRule {
+    id: string | number
+    event_type: string
+    channel_types: ('email' | 'sms' | 'push' | 'in_app')[]
+    is_active: boolean
+    condition?: string
+    created_at: string
+    relationships?: {
+        recipient_groups?: { data: { id: string; type: 'notification_groups'; name?: string }[] }
+    }
+}
+
+export interface NotificationDelegation {
+    id: string | number
+    event_types: string[]
+    expires_at: string
+    created_at: string
+    relationships?: {
+        delegated_to: { data: { id: string; type: 'users'; name?: string } }
+        delegated_by: { data: { id: string; type: 'users'; name?: string } }
     }
 }
 
