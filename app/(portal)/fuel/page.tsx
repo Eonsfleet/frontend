@@ -6,33 +6,24 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
-    Loader2, Plus, Fuel, AlertCircle, CheckCircle2, XCircle,
-    Search, Download, CreditCard, Clock, Radio, Wifi, WifiOff, AlertTriangle,
-    ShieldAlert, ArrowDownCircle, Wrench, CheckCircle2 as CheckCircleIcon, BarChart3,
-    ShieldCheck,
+    Loader2, Plus, Download, Search, AlertCircle, CheckCircle2, XCircle,
+    CreditCard, Clock,
 } from 'lucide-react'
-import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
-    AreaChart, Area
-} from 'recharts'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/fuel'
 import { getVehicles } from '@/lib/api/vehicles'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { FuelExpense, FuelVehicle, FuelAbnormality } from '@/types'
+import { FuelExpense } from '@/types'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { extractApiError } from '@/lib/utils'
+import { useAuthStore } from '@/store/authStore'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -47,6 +38,74 @@ function StatusBadge({ status }: { status: string }) {
         default:
             return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><AlertCircle className="w-3 h-3" /> Pending</Badge>
     }
+}
+
+// ── Standardized Table Pagination ───────────────────────────────────────────
+
+interface TablePaginationProps {
+    pagination?: {
+        current_page: number
+        last_page: number
+        total: number
+    }
+    onPageChange: (page: number) => void
+    variant?: 'default' | 'simple'
+}
+
+function TablePagination({ pagination, onPageChange, variant = 'default' }: TablePaginationProps) {
+    if (!pagination || pagination.last_page <= 1) return null
+
+    if (variant === 'simple') {
+        return (
+            <div className="flex items-center justify-between pt-4">
+                <p className="text-xs text-slate-500 font-medium">Page {pagination.current_page} of {pagination.last_page}</p>
+                <div className="flex gap-2">
+                    <Button
+                        size="sm" variant="outline"
+                        className="h-8 px-3 text-xs"
+                        disabled={pagination.current_page <= 1}
+                        onClick={() => onPageChange(pagination.current_page - 1)}
+                    >
+                        Previous
+                    </Button>
+                    <Button
+                        size="sm" variant="outline"
+                        className="h-8 px-3 text-xs"
+                        disabled={pagination.current_page >= pagination.last_page}
+                        onClick={() => onPageChange(pagination.current_page + 1)}
+                    >
+                        Next
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
+                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
+            </p>
+            <div className="flex gap-2">
+                <Button
+                    size="sm" variant="outline"
+                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+                    disabled={pagination.current_page <= 1}
+                    onClick={() => onPageChange(pagination.current_page - 1)}
+                >
+                    Previous
+                </Button>
+                <Button
+                    size="sm" variant="outline"
+                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+                    disabled={pagination.current_page >= pagination.last_page}
+                    onClick={() => onPageChange(pagination.current_page + 1)}
+                >
+                    Next
+                </Button>
+            </div>
+        </div>
+    )
 }
 
 // ── Reject reason dialog ─────────────────────────────────────────────────────
@@ -105,8 +164,8 @@ function RejectDialog({ expenseId, onClose }: { expenseId: string | number | nul
 
 const logSchema = z.object({
     vehicle_id: z.string().min(1, 'Vehicle is required'),
-    cost_per_volume: z.preprocess((v) => parseFloat(String(v ?? '')), z.number().positive('Enter cost per litre')),
-    volume: z.preprocess((v) => parseFloat(String(v ?? '')), z.number().positive('Enter volume')),
+    cost_per_volume: z.coerce.number().positive('Enter cost per litre'),
+    volume: z.coerce.number().positive('Enter volume'),
     entry_date: z.string().min(1, 'Date is required'),
     purchase_from: z.string().optional(),
     reference_number: z.string().optional(),
@@ -115,7 +174,7 @@ type LogForm = z.infer<typeof logSchema>
 
 function LogExpenseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     const queryClient = useQueryClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { user } = useAuthStore()
     const { register, handleSubmit, reset, formState: { errors } } = useForm<LogForm>({
         resolver: zodResolver(logSchema) as any,
         defaultValues: { entry_date: format(new Date(), 'yyyy-MM-dd') },
@@ -130,7 +189,7 @@ function LogExpenseDialog({ open, onClose }: { open: boolean; onClose: () => voi
     const { mutate, isPending } = useMutation({
         mutationFn: (d: LogForm) => api.createFuelExpense({
             vehicle_id: Number(d.vehicle_id),
-            user_id: 0,
+            user_id: Number(user?.id),
             cost_per_volume: d.cost_per_volume,
             volume: d.volume,
             entry_date: d.entry_date,
@@ -207,417 +266,9 @@ function LogExpenseDialog({ open, onClose }: { open: boolean; onClose: () => voi
     )
 }
 
-// ── Supported Vehicles View ──────────────────────────────────────────────────
+// ── Main Page Component ──────────────────────────────────────────────────────
 
-function FuelGauge({ percent, online }: { percent: number | null; online: boolean }) {
-    const size = 100
-    const strokeWidth = 10
-    const r = (size - strokeWidth) / 2
-    const circumference = Math.PI * r
-    const progress = percent !== null ? Math.min(Math.max(percent, 0), 100) : 0
-    const offset = circumference - (progress / 100) * circumference
-
-    const colour = !online || percent === null ? '#94a3b8' :
-        percent > 75 ? '#3b82f6' : percent >= 25 ? '#10b981' :
-            percent >= 10 ? '#f59e0b' : '#ef4444'
-
-    return (
-        <div className="flex flex-col items-center">
-            <svg width={size} height={size / 2 + strokeWidth} viewBox={`0 0 ${size} ${size / 2 + strokeWidth}`}>
-                <path d={`M ${strokeWidth / 2} ${size / 2} A ${r} ${r} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} strokeLinecap="round" />
-                <path d={`M ${strokeWidth / 2} ${size / 2} A ${r} ${r} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`} fill="none" stroke={colour} strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
-                <text x={size / 2} y={size / 2 - 2} textAnchor="middle" fontSize="18" fontWeight="700" fill={online && percent !== null ? '#0f172a' : '#94a3b8'}>
-                    {online && percent !== null ? `${Math.round(percent)}%` : '—'}
-                </text>
-            </svg>
-        </div>
-    )
-}
-
-function FuelLevelBadge({ percent }: { percent: number | null }) {
-    if (percent === null) return <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 text-[10px]">No Data</Badge>
-    if (percent < 10) return <Badge className="bg-rose-500 text-white border-none text-[10px]">Critical</Badge>
-    if (percent < 25) return <Badge className="bg-amber-500 text-white border-none text-[10px]">Low</Badge>
-    if (percent > 75) return <Badge className="bg-blue-500 text-white border-none text-[10px]">Full</Badge>
-    return <Badge className="bg-emerald-500 text-white border-none text-[10px]">OK</Badge>
-}
-
-// ── Abnormality Icon ─────────────────────────────────────────────────────────
-
-function AbnormalityIcon({ type }: { type: string }) {
-    switch (type) {
-        case 'theft': return <ShieldAlert className="h-4 w-4 text-rose-600" />
-        case 'sudden_drop': return <ArrowDownCircle className="h-4 w-4 text-orange-500" />
-        case 'low_fuel': return <AlertTriangle className="h-4 w-4 text-amber-500" />
-        case 'refuel': return <Fuel className="h-4 w-4 text-blue-500" />
-        default: return <Wrench className="h-4 w-4 text-slate-400" />
-    }
-}
-
-// ── Vehicle Detail Dialog ────────────────────────────────────────────────────
-
-function VehicleDetailDialog({ vehicle, onClose }: { vehicle: any | null; onClose: () => void }) {
-    const queryClient = useQueryClient()
-    const { data: abnData, isLoading: isLoadingAbn } = useQuery({
-        queryKey: ['vehicle-abnormalities', vehicle?.id],
-        queryFn: () => api.getVehicleAbnormalities(vehicle!.id, { per_page: 10 }),
-        enabled: !!vehicle,
-    })
-
-    const { data: historyData, isLoading: isLoadingHistory } = useQuery({
-        queryKey: ['vehicle-fuel-history', vehicle?.id],
-        queryFn: () => api.getVehicleFuelHistory(vehicle!.id),
-        enabled: !!vehicle,
-    })
-
-    const { mutate: acknowledge } = useMutation({
-        mutationFn: (alertId: number) => api.acknowledgeFuelAlert(alertId),
-        onSuccess: () => {
-            toast.success('Alert acknowledged.')
-            queryClient.invalidateQueries({ queryKey: ['vehicle-abnormalities', vehicle?.id] })
-        },
-        onError: (err) => toast.error(extractApiError(err)),
-    })
-
-    const { mutate: resolve } = useMutation({
-        mutationFn: ({ id, notes }: { id: number; notes: string }) => api.resolveFuelAlert(id, notes),
-        onSuccess: () => {
-            toast.success('Alert resolved.')
-            queryClient.invalidateQueries({ queryKey: ['vehicle-abnormalities', vehicle?.id] })
-        },
-        onError: (err) => toast.error(extractApiError(err)),
-    })
-
-    const abnormalities = abnData?.data?.abnormalities ?? []
-
-    return (
-        <Dialog open={!!vehicle} onOpenChange={() => onClose()}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <span>Vehicle Fuel Status:</span>
-                        <span className="text-emerald-600">{vehicle?.attributes?.registration_number}</span>
-                    </DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-6 py-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Status</p>
-                            <div className="flex items-center gap-1.5">
-                                <div className={`h-2 w-2 rounded-full ${vehicle?.attributes?.device_online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                <span className="text-sm font-semibold">{vehicle?.attributes?.device_online ? 'Online' : 'Offline'}</span>
-                            </div>
-                        </div>
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Current Level</p>
-                            <p className="text-sm font-semibold">{vehicle?.fuel_level?.fuel_level_percent.toFixed(1)}%</p>
-                        </div>
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Liters Remaining</p>
-                            <p className="text-sm font-semibold">{vehicle?.fuel_level?.fuel_level_liters.toFixed(1)} L</p>
-                        </div>
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Tank Capacity</p>
-                            <p className="text-sm font-semibold">{vehicle?.attributes?.fuel_capacity} L</p>
-                        </div>
-                    </div>
-
-                    {/* History Chart */}
-                    <div>
-                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Fuel Level History (Last 24h)</h3>
-                        <div className="h-64 w-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                            {isLoadingHistory ? (
-                                <div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
-                            ) : historyData?.data?.history?.length ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={historyData.data.history}>
-                                        <defs>
-                                            <linearGradient id="fuelGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis
-                                            dataKey="timestamp"
-                                            tickFormatter={(str) => format(new Date(str), 'HH:mm')}
-                                            fontSize={10}
-                                            tick={{ fill: '#94a3b8' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
-                                        <YAxis
-                                            fontSize={10}
-                                            tick={{ fill: '#94a3b8' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            unit="%"
-                                        />
-                                        <ChartTooltip
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    const d = payload[0].payload
-                                                    return (
-                                                        <div className="bg-slate-900 text-white p-2.5 rounded-lg shadow-xl text-[11px] border border-slate-800">
-                                                            <p className="font-bold border-b border-slate-700 pb-1 mb-1">{format(new Date(d.timestamp), 'MMM dd, HH:mm')}</p>
-                                                            <p className="flex justify-between gap-4"><span>Level:</span> <span className="font-mono text-emerald-400">{d.fuel_level_percent.toFixed(1)}%</span></p>
-                                                            <p className="flex justify-between gap-4"><span>Volume:</span> <span className="font-mono text-emerald-400">{d.fuel_level_liters.toFixed(1)} L</span></p>
-                                                        </div>
-                                                    )
-                                                }
-                                                return null
-                                            }}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="fuel_level_percent"
-                                            stroke="#10b981"
-                                            strokeWidth={2}
-                                            fillOpacity={1}
-                                            fill="url(#fuelGradient)"
-                                            animationDuration={1000}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
-                                    <Clock className="h-8 w-8 opacity-20" />
-                                    <p className="text-xs">No history data available for this vehicle yet.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Recent Abnormalities</h3>
-                        <div className="space-y-2">
-                            {isLoadingAbn ? (
-                                <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
-                            ) : abnormalities.length === 0 ? (
-                                <div className="p-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                                    <p className="text-sm text-slate-400">No abnormalities detected recently.</p>
-                                </div>
-                            ) : (
-                                abnormalities.map((abn: any) => (
-                                    <div key={abn.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg hover:border-slate-200 transition-all shadow-sm">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-9 w-9 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100">
-                                                <AbnormalityIcon type={abn.attributes.type} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900 capitalize">{abn.attributes.type.replace('_', ' ')}</p>
-                                                <p className="text-[11px] text-slate-400">{format(new Date(abn.attributes.alert_time), 'MMM dd, HH:mm')}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <p className={`text-sm font-bold ${abn.attributes.difference < 0 ? 'text-rose-600' : 'text-blue-600'}`}>
-                                                    {abn.attributes.difference > 0 ? '+' : ''}{abn.attributes.difference.toFixed(1)} {abn.attributes.unit}
-                                                </p>
-                                                <Badge variant="outline" className="text-[9px] font-bold py-0 h-4">
-                                                    {(abn.attributes.confidence * 100).toFixed(0)}% confidence
-                                                </Badge>
-                                            </div>
-                                            {abn.attributes.status === 'active' && (
-                                                <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 shadow-sm" onClick={() => acknowledge(abn.id)}>Acknowledge</Button>
-                                            )}
-                                            {abn.attributes.status === 'acknowledged' && (
-                                                <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 shadow-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" onClick={() => resolve({ id: abn.id, notes: 'Resolved by fleet manager' })}>Resolve</Button>
-                                            )}
-                                            {abn.attributes.status === 'resolved' && (
-                                                <CheckCircleIcon className="h-5 w-5 text-emerald-500" />
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <DialogFooter className="bg-slate-50 -mx-6 -mb-6 px-6 py-4 mt-2">
-                    <Button onClick={onClose}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-function LiveMonitorView() {
-    const [search, setSearch] = useState('')
-    const [page, setPage] = useState(1)
-    const [selectedVehicle, setSelectedVehicle] = useState<FuelVehicle | null>(null)
-
-    const { data, isLoading } = useQuery({
-        queryKey: ['fuel-vehicles', { page, search }],
-        queryFn: () => api.getFuelVehicles({ page, per_page: 12, search: search || undefined }),
-    })
-
-    const vehicles: FuelVehicle[] = data?.data?.vehicles ?? []
-    const pagination = data?.data?.pagination
-    const hasAnyVehicle = !isLoading && (vehicles.length > 0 || page > 1 || !!search)
-
-    return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-xl font-bold tracking-tight text-slate-900">Live Fuel Monitor</h1>
-                    <p className="text-sm text-slate-500 mt-1">Real-time fuel levels and abnormality detection.</p>
-                </div>
-                <div className="relative w-full md:max-w-xs">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        placeholder="Search plate, make, model..."
-                        className="pl-9 bg-slate-50 border-slate-200 h-9"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                    />
-                </div>
-            </div>
-
-            {isLoading ? (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                </div>
-            ) : !hasAnyVehicle ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
-                    <Radio className="h-10 w-10 mb-3 opacity-20" />
-                    <p className="text-sm font-medium text-slate-700">No fuel monitoring devices found.</p>
-                </div>
-            ) : (
-                <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                        {vehicles.map(v => {
-                            const level = v.fuel_level?.fuel_level_percent ?? null
-                            const liters = v.fuel_level?.fuel_level_liters ?? null
-                            const online = v.attributes.device_online
-
-                            return (
-                                <Card
-                                    key={v.id}
-                                    className={`shadow-sm hover:shadow-md transition-shadow cursor-pointer ${online ? 'border-slate-200' : 'border-slate-100 opacity-75'}`}
-                                    onClick={() => setSelectedVehicle(v)}
-                                >
-                                    <CardHeader className="pb-2 pt-4 px-4 border-b border-slate-50">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                {online ? <Wifi className="h-3 w-3 text-emerald-500" /> : <WifiOff className="h-3 w-3 text-slate-400" />}
-                                                <span className={`text-[9px] font-bold uppercase tracking-wider ${online ? 'text-emerald-600' : 'text-slate-400'}`}>{online ? 'Online' : 'Offline'}</span>
-                                            </div>
-                                            <FuelLevelBadge percent={level} />
-                                        </div>
-                                        <CardTitle className="text-sm font-bold text-slate-900 mt-1">{v.attributes.registration_number}</CardTitle>
-                                        <p className="text-xs text-slate-400">{v.attributes.make} {v.attributes.model}</p>
-                                    </CardHeader>
-                                    <CardContent className="px-4 pb-4 pt-3 space-y-3">
-                                        <FuelGauge percent={level} online={online} />
-                                        <div className="text-center">
-                                            <p className="text-sm font-bold text-slate-900">
-                                                {liters?.toFixed(1) ?? '—'} L <span className="text-slate-400 font-normal">/ {v.attributes.fuel_capacity} L</span>
-                                            </p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )
-                        })}
-                    </div>
-
-                    {pagination && pagination.last_page > 1 && (
-                        <div className="flex items-center justify-between pt-2">
-                            <p className="text-xs text-slate-500">Page {pagination.current_page} of {pagination.last_page}</p>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                                <Button size="sm" variant="outline" disabled={page >= pagination.last_page} onClick={() => setPage(p => p + 1)}>Next</Button>
-                            </div>
-                        </div>
-                    )}
-                </>
-            )}
-
-            <VehicleDetailDialog vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
-        </div>
-    )
-}
-
-function SectionPlaceholder({ title, description, icon: Icon }: { title: string, description: string, icon: any }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30">
-            <div className="h-16 w-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-400">
-                <Icon className="h-8 w-8" />
-            </div>
-            <div className="max-w-sm space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{description}</p>
-            </div>
-            <Button variant="outline" className="mt-2 border-slate-200 shadow-sm">Enable Integration</Button>
-        </div>
-    )
-}
-
-// ── Main Module Page ─────────────────────────────────────────────────────────
-
-export default function FuelModulePage() {
-    return (
-        <div className="space-y-6">
-            <Tabs defaultValue="ledger" className="space-y-6">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-                    <TabsList className="bg-transparent h-auto p-0 gap-8">
-                        <TabsTrigger value="ledger" className="bg-transparent h-10 px-0 rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-emerald-600 data-[state=active]:shadow-none font-bold text-slate-500 data-[state=active]:text-slate-900">
-                            Expense Ledger
-                        </TabsTrigger>
-                        <TabsTrigger value="monitor" className="bg-transparent h-10 px-0 rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-emerald-600 data-[state=active]:shadow-none font-bold text-slate-500 data-[state=active]:text-slate-900">
-                            Live Monitor
-                        </TabsTrigger>
-                        <TabsTrigger value="cards" className="bg-transparent h-10 px-0 rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-emerald-600 data-[state=active]:shadow-none font-bold text-slate-500 data-[state=active]:text-slate-900">
-                            Fuel Cards
-                        </TabsTrigger>
-                        <TabsTrigger value="reconciliation" className="bg-transparent h-10 px-0 rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-emerald-600 data-[state=active]:shadow-none font-bold text-slate-500 data-[state=active]:text-slate-900">
-                            Reconciliation
-                        </TabsTrigger>
-                        <TabsTrigger value="reports" className="bg-transparent h-10 px-0 rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-emerald-600 data-[state=active]:shadow-none font-bold text-slate-500 data-[state=active]:text-slate-900">
-                            Reports
-                        </TabsTrigger>
-                    </TabsList>
-                </div>
-
-                <TabsContent value="ledger" className="mt-0">
-                    <FuelExpensesPage />
-                </TabsContent>
-
-                <TabsContent value="monitor" className="mt-0">
-                    <LiveMonitorView />
-                </TabsContent>
-
-                <TabsContent value="cards" className="mt-0">
-                    <SectionPlaceholder
-                        title="Fuel Card Management"
-                        description="Synchronize fuel card transactions from providers like Total, Oando, and MRS directly into your ledger."
-                        icon={CreditCard}
-                    />
-                </TabsContent>
-
-                <TabsContent value="reconciliation" className="mt-0">
-                    <SectionPlaceholder
-                        title="Reconciliation Engine"
-                        description="Automatically match manual expenses with card transactions and detect volume/price variances."
-                        icon={ShieldCheck}
-                    />
-                </TabsContent>
-
-                <TabsContent value="reports" className="mt-0">
-                    <SectionPlaceholder
-                        title="Advanced Reporting"
-                        description="Access IFTA compliance, theft summaries, and advanced cost analysis reports."
-                        icon={BarChart3}
-                    />
-                </TabsContent>
-            </Tabs>
-        </div>
-    )
-}
-
-function FuelExpensesPage() {
+export default function FuelExpensesPage() {
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
     const [search, setSearch] = useState('')
@@ -681,7 +332,7 @@ function FuelExpensesPage() {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Fuel Expenses</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Expense Ledger</h1>
                     <p className="text-slate-500 mt-1">Log, review, and approve manual fuel purchase records.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -748,36 +399,33 @@ function FuelExpensesPage() {
                                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                             />
                         </div>
-                        <Select value={statusFilter || 'all'} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}>
-                            <SelectTrigger className="w-44 h-9 bg-slate-50 border-slate-200">
-                                <SelectValue placeholder="All Statuses" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                <SelectItem value="pending_approval">Pending</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                                <SelectItem value="rejected">Rejected</SelectItem>
-                                <SelectItem value="reimbursed">Reimbursed</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <div className="flex items-center gap-2">
-                            <Input
-                                type="date"
-                                className="h-9 w-36 bg-slate-50 border-slate-200 text-sm"
-                                value={startDate}
-                                onChange={(e) => { setStartDate(e.target.value); setPage(1) }}
-                            />
-                            <span className="text-slate-400 text-sm">→</span>
-                            <Input
-                                type="date"
-                                className="h-9 w-36 bg-slate-50 border-slate-200 text-sm"
-                                value={endDate}
-                                onChange={(e) => { setEndDate(e.target.value); setPage(1) }}
-                            />
+                        <div className="w-40">
+                            <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">Status</Label>
+                            <select
+                                className="w-full h-9 bg-slate-50 border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={statusFilter}
+                                onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="pending_approval">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="reimbursed">Reimbursed</option>
+                            </select>
+                        </div>
+                        <div className="w-40">
+                            <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">From</Label>
+                            <Input type="date" className="h-9 bg-slate-50 border-slate-200 text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                        </div>
+                        <div className="w-40">
+                            <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">To</Label>
+                            <Input type="date" className="h-9 bg-slate-50 border-slate-200 text-sm" value={endDate} onChange={e => setEndDate(e.target.value)} />
                         </div>
                         {(search || statusFilter || startDate || endDate) && (
                             <Button
-                                variant="ghost" size="sm" className="h-9 text-slate-500"
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 text-slate-500 hover:text-slate-900"
                                 onClick={() => { setSearch(''); setStatusFilter(''); setStartDate(''); setEndDate(''); setPage(1) }}
                             >
                                 Clear
@@ -787,126 +435,87 @@ function FuelExpensesPage() {
                 </CardContent>
             </Card>
 
-            {/* Expense table */}
             <Card className="shadow-sm border-slate-200">
-                <CardHeader className="bg-white border-b border-slate-100 py-4">
-                    <CardTitle className="text-base font-semibold">Expense Ledger</CardTitle>
-                </CardHeader>
                 <CardContent className="p-0">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-4" />
-                            <p>Loading expense ledger...</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Vehicle</th>
+                                    <th className="px-6 py-4">Date</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Vol (L)</th>
+                                    <th className="px-6 py-4">Cost (₦)</th>
+                                    <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {isLoading ? (
+                                    [1, 2, 3, 4, 5].map(i => (
+                                        <tr key={i} className="animate-pulse">
+                                            <td colSpan={6} className="px-6 py-4 h-16 bg-slate-50/30" />
+                                        </tr>
+                                    ))
+                                ) : expenses.length === 0 ? (
                                     <tr>
-                                        <th className="px-6 py-3.5">Date</th>
-                                        <th className="px-6 py-3.5">Vehicle</th>
-                                        <th className="px-6 py-3.5">Driver</th>
-                                        <th className="px-6 py-3.5 whitespace-nowrap">Vol (L)</th>
-                                        <th className="px-6 py-3.5 whitespace-nowrap">Cost (₦)</th>
-                                        <th className="px-6 py-3.5">Source</th>
-                                        <th className="px-6 py-3.5">Status</th>
-                                        <th className="px-6 py-3.5 text-right">Actions</th>
+                                        <td colSpan={6} className="px-6 py-20 text-center text-slate-400">
+                                            No fuel expenses found.
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {expenses.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
-                                                <div className="flex flex-col items-center justify-center">
-                                                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                                                        <Fuel className="h-6 w-6 text-slate-400" />
+                                ) : (
+                                    expenses.map(exp => (
+                                        <tr key={exp.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-900">{exp.relationships.vehicle?.registration_number ?? 'Unknown'}</div>
+                                                <div className="text-[11px] text-slate-400 font-medium">by {exp.relationships.driver?.name ?? 'Unknown'}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-600">
+                                                {format(new Date(exp.attributes.entry_date), 'MMM dd, yyyy')}
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-medium text-slate-700">
+                                                {(exp.attributes.volume ?? 0).toFixed(1)} L
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-mono font-bold text-slate-900 text-base">₦{(exp.attributes.amount ?? 0).toLocaleString()}</div>
+                                                <div className="text-[10px] text-slate-400 font-bold">₦{(exp.attributes.cost_per_volume ?? 0).toFixed(2)}/L</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <StatusBadge status={exp.attributes.status} />
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {exp.attributes.status === 'pending_approval' ? (
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                                            onClick={() => handleApprove(exp.id)}
+                                                            disabled={isApproving}
+                                                        >
+                                                            Approve
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50"
+                                                            onClick={() => setRejectId(exp.id)}
+                                                        >
+                                                            Reject
+                                                        </Button>
                                                     </div>
-                                                    <p className="font-medium text-slate-900">No Expenses Recorded</p>
-                                                    <p className="text-sm mt-1">No fuel expenses logged yet. Click &apos;+ Log Expense&apos; to get started.</p>
-                                                </div>
+                                                ) : (
+                                                    <Button variant="ghost" size="sm" className="h-8 text-slate-400" disabled>
+                                                        Finalized
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
-                                    ) : (
-                                        expenses.map((item) => (
-                                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                                                    {format(new Date(item.attributes.entry_date), 'MMM dd, yyyy')}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-semibold text-slate-900 leading-tight">
-                                                        {item.relationships.vehicle?.registration_number ?? '—'}
-                                                    </div>
-                                                    <div className="text-xs text-slate-400">
-                                                        {item.relationships.vehicle?.make} {item.relationships.vehicle?.model}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-700">
-                                                    {item.relationships.driver?.name ?? '—'}
-                                                </td>
-                                                <td className="px-6 py-4 font-mono font-medium text-slate-700 whitespace-nowrap">
-                                                    {item.attributes.volume.toFixed(2)} L
-                                                </td>
-                                                <td className="px-6 py-4 font-mono font-medium text-slate-900 whitespace-nowrap">
-                                                    ₦{item.attributes.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <Badge variant="outline" className={`text-[10px] capitalize tracking-wide ${item.attributes.source === 'card' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600'}`}>
-                                                        {item.attributes.source ?? 'manual'}
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <StatusBadge status={item.attributes.status} />
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    {(item.attributes.status === 'pending_approval' || item.attributes.status === 'rejected') ? (
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <Button
-                                                                size="sm" variant="outline"
-                                                                className="h-8 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                                                                onClick={() => handleApprove(item.id)}
-                                                                disabled={isApproving}
-                                                            >
-                                                                Approve
-                                                            </Button>
-                                                            {item.attributes.status === 'pending_approval' && (
-                                                                <Button
-                                                                    size="sm" variant="outline"
-                                                                    className="h-8 border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100"
-                                                                    onClick={() => setRejectId(item.id)}
-                                                                    disabled={isApproving}
-                                                                >
-                                                                    Reject
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-400 italic px-2">
-                                                            {item.attributes.approved_at
-                                                                ? `Actioned ${format(new Date(item.attributes.approved_at), 'MMM dd')}`
-                                                                : '— Actioned —'}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
-                    {/* Pagination */}
-                    {pagination && pagination.last_page > 1 && (
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                            <p className="text-sm text-slate-500">
-                                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
-                            </p>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                                <Button size="sm" variant="outline" disabled={page >= pagination.last_page} onClick={() => setPage(p => p + 1)}>Next</Button>
-                            </div>
-                        </div>
-                    )}
+                    <TablePagination pagination={pagination} onPageChange={setPage} />
                 </CardContent>
             </Card>
 

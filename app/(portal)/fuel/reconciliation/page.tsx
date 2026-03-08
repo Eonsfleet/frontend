@@ -22,6 +22,74 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
+// ── Standardized Table Pagination ───────────────────────────────────────────
+
+interface TablePaginationProps {
+    pagination?: {
+        current_page: number
+        last_page: number
+        total: number
+    }
+    onPageChange: (page: number) => void
+    variant?: 'default' | 'simple'
+}
+
+function TablePagination({ pagination, onPageChange, variant = 'default' }: TablePaginationProps) {
+    if (!pagination || pagination.last_page <= 1) return null
+
+    if (variant === 'simple') {
+        return (
+            <div className="flex items-center justify-between pt-4">
+                <p className="text-xs text-slate-500 font-medium">Page {pagination.current_page} of {pagination.last_page}</p>
+                <div className="flex gap-2">
+                    <Button
+                        size="sm" variant="outline"
+                        className="h-8 px-3 text-xs"
+                        disabled={pagination.current_page <= 1}
+                        onClick={() => onPageChange(pagination.current_page - 1)}
+                    >
+                        Previous
+                    </Button>
+                    <Button
+                        size="sm" variant="outline"
+                        className="h-8 px-3 text-xs"
+                        disabled={pagination.current_page >= pagination.last_page}
+                        onClick={() => onPageChange(pagination.current_page + 1)}
+                    >
+                        Next
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
+                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
+            </p>
+            <div className="flex gap-2">
+                <Button
+                    size="sm" variant="outline"
+                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+                    disabled={pagination.current_page <= 1}
+                    onClick={() => onPageChange(pagination.current_page - 1)}
+                >
+                    Previous
+                </Button>
+                <Button
+                    size="sm" variant="outline"
+                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+                    disabled={pagination.current_page >= pagination.last_page}
+                    onClick={() => onPageChange(pagination.current_page + 1)}
+                >
+                    Next
+                </Button>
+            </div>
+        </div>
+    )
+}
+
 // ── Dispute dialog ────────────────────────────────────────────────────────────
 
 const disputeSchema = z.object({ reason: z.string().min(3, 'Provide a reason.') })
@@ -256,10 +324,10 @@ export default function FuelReconciliationPage() {
                                                     <div className="text-xs text-slate-400 capitalize">{item.attributes.provider}</div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono font-medium text-slate-700">
-                                                    {item.attributes.volume_liters.toFixed(2)} L
+                                                    {(item.attributes.volume_liters ?? 0).toFixed(2)} L
                                                 </td>
                                                 <td className="px-6 py-4 font-mono font-medium text-slate-900">
-                                                    ₦{item.attributes.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    ₦{(item.attributes.amount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     {getDiscStatusBadge(item.attributes.status)}
@@ -295,17 +363,7 @@ export default function FuelReconciliationPage() {
                         </div>
                     )}
 
-                    {pagination && pagination.last_page > 1 && (
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                            <p className="text-sm text-slate-500">
-                                Page {pagination.current_page} of {pagination.last_page} · {pagination.total} records
-                            </p>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                                <Button size="sm" variant="outline" disabled={page >= pagination.last_page} onClick={() => setPage(p => p + 1)}>Next</Button>
-                            </div>
-                        </div>
-                    )}
+                    <TablePagination pagination={pagination} onPageChange={setPage} />
                 </CardContent>
             </Card>
 

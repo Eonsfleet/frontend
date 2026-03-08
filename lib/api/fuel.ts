@@ -249,7 +249,23 @@ export const getDiscrepancies = async (params?: DiscrepancyListParams): Promise<
 
 // ── 8.4 Reports ──────────────────────────────────────────────────────────────
 
-export const getIftaReport = async (quarter: number, year: number): Promise<{ message: string; data: { quarter: number; year: number; by_jurisdiction: Array<{ jurisdiction: string; distance_km: number; fuel_liters: number }>; distance_source: string } }> => {
+export const getIftaReport = async (quarter: number, year: number): Promise<{
+    message: string;
+    data: {
+        quarter: number;
+        year: number;
+        period_start: string;
+        period_end: string;
+        by_jurisdiction: Array<{
+            jurisdiction_code: string;
+            fuel_liters: number;
+            fuel_gallons: number;
+            distance_km: number | null;
+            distance_miles: number | null;
+        }>;
+        distance_source: string | null;
+    }
+}> => {
     const response = await apiClient.get('/fuel/compliance/ifta-report', { params: { quarter, year } })
     return response.data
 }

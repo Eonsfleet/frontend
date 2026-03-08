@@ -122,15 +122,15 @@ function IftaTab() {
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 border border-slate-200 border-t-0">
                                         {report.by_jurisdiction?.map((row) => (
-                                            <tr key={row.jurisdiction} className="hover:bg-slate-50">
+                                            <tr key={row.jurisdiction_code} className="hover:bg-slate-50">
                                                 <td className="px-5 py-3.5">
                                                     <div className="flex items-center gap-2">
                                                         <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                                                        <span className="font-medium text-slate-900">{row.jurisdiction}</span>
+                                                        <span className="font-medium text-slate-900">{row.jurisdiction_code}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-right font-mono text-slate-700">
-                                                    {(row.distance_km || 0).toLocaleString()} km
+                                                    {row.distance_km !== null ? row.distance_km.toLocaleString() : '—'} km
                                                 </td>
                                                 <td className="px-5 py-3.5 text-right font-mono text-slate-700">
                                                     {(row.fuel_liters || 0).toFixed(1)} L

@@ -501,7 +501,6 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                         <Progress
                                             value={locationData?.data?.location?.fuel_level_percent ?? 0}
                                             className="h-3 shadow-inner bg-slate-100"
-                                            // @ts-ignore
                                             indicatorClassName={cn(
                                                 "transition-all duration-1000",
                                                 (locationData?.data?.location?.fuel_level_percent ?? 0) < 15 ? 'bg-rose-500' :
