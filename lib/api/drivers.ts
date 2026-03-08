@@ -50,3 +50,20 @@ export const getDriverCurrentVehicle = async (driverId: string | number): Promis
     return response.data
 }
 
+export const getDriverVehicleHistory = async (driverId: string | number): Promise<{ data: any[] }> => {
+    const response = await apiClient.get(`/drivers/${driverId}/vehicle-history`)
+    return response.data
+}
+
+export const getDriverTrips = async (driverId: string | number): Promise<{ data: any[] }> => {
+    const response = await apiClient.get(`/drivers/${driverId}/trips`)
+    return response.data
+}
+
+export const getDriverPerformance = async (driverId: string | number): Promise<{ data: any }> => {
+    const response = await apiClient.get(`/drivers/${driverId}/performance`)
+    return response.data
+}
+
+
+

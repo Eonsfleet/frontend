@@ -17,12 +17,34 @@ import {
 } from 'lucide-react'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { format } from 'date-fns'
+import { useQuery } from '@tanstack/react-query'
+import { getDriverCurrentVehicle, getDriverPerformance, getDriverTrips } from '@/lib/api/drivers'
+import { Loader2 } from 'lucide-react'
 
 interface DriverDetailsProps {
     driver: UserProfile
 }
 
 export function DriverDetails({ driver }: DriverDetailsProps) {
+    const { data: vehicleResponse, isLoading: isLoadingVehicle } = useQuery({
+        queryKey: ['driver-current-vehicle', driver.id],
+        queryFn: () => getDriverCurrentVehicle(driver.id)
+    })
+
+    const { data: performanceResponse, isLoading: isLoadingPerformance } = useQuery({
+        queryKey: ['driver-performance', driver.id],
+        queryFn: () => getDriverPerformance(driver.id)
+    })
+
+    const { data: tripsResponse, isLoading: isLoadingTrips } = useQuery({
+        queryKey: ['driver-trips', driver.id],
+        queryFn: () => getDriverTrips(driver.id)
+    })
+
+    const currentVehicle = vehicleResponse?.data
+    const performance = performanceResponse?.data
+    const trips = tripsResponse?.data || []
+
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -50,15 +72,25 @@ export function DriverDetails({ driver }: DriverDetailsProps) {
                             <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Current Assignment</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center">
-                                    <Truck className="w-6 h-6 text-slate-400" />
+                            {isLoadingVehicle ? (
+                                <div className="flex justify-center py-2">
+                                    <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-900">TRK-402</span>
-                                    <span className="text-xs text-slate-500 capitalize">Toyota Hilux • 2022</span>
+                            ) : currentVehicle ? (
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center">
+                                        <Truck className="w-6 h-6 text-slate-400" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-slate-900">{currentVehicle.registration_number || currentVehicle.attributes?.registration_number}</span>
+                                        <span className="text-xs text-slate-500 capitalize">{currentVehicle.make || currentVehicle.attributes?.make} {currentVehicle.model || currentVehicle.attributes?.model}</span>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="text-center py-2 text-slate-400 text-xs italic">
+                                    No vehicle assigned
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -75,15 +107,28 @@ export function DriverDetails({ driver }: DriverDetailsProps) {
                                 featureName="Performance Scoring"
                                 description="Monitor driver safety scores and performance trends based on telematics data."
                             >
-                                <div className="flex items-center gap-4">
-                                    <span className="text-4xl font-black text-slate-900">92</span>
-                                    <div className="flex-1 space-y-1">
-                                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                                            <div className="h-full bg-emerald-500 w-[92%]"></div>
-                                        </div>
-                                        <span className="text-xs text-emerald-600 font-medium">+4.2% from last month</span>
+                                {isLoadingPerformance ? (
+                                    <div className="flex justify-center py-2">
+                                        <Loader2 className="w-4 h-4 animate-spin text-blue-300" />
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-4xl font-black text-slate-900">{performance?.score || performance?.attributes?.score || 'N/A'}</span>
+                                        <div className="flex-1 space-y-1">
+                                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-emerald-500 transition-all duration-500"
+                                                    style={{ width: `${performance?.score || performance?.attributes?.score || 0}%` }}
+                                                ></div>
+                                            </div>
+                                            {performance?.trend && (
+                                                <span className="text-xs text-emerald-600 font-medium">
+                                                    {performance.trend > 0 ? '+' : ''}{performance.trend}% from last month
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </UpgradeGate>
                         </CardContent>
                     </Card>
@@ -97,7 +142,36 @@ export function DriverDetails({ driver }: DriverDetailsProps) {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-center py-12 text-slate-500 italic">No trip records found for this driver.</div>
+                    {isLoadingTrips ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+                        </div>
+                    ) : trips.length > 0 ? (
+                        <div className="space-y-4">
+                            {trips.map((trip: any) => (
+                                <div key={trip.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+                                            <Truck className="w-5 h-5 text-slate-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">{trip.attributes?.origin || trip.origin} → {trip.attributes?.destination || trip.destination}</p>
+                                            <p className="text-xs text-slate-500">
+                                                {trip.attributes?.start_time ? format(new Date(trip.attributes.start_time), 'MMM d, HH:mm') : 'N/A'} • {trip.attributes?.distance || trip.distance} km
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 uppercase text-[10px]">
+                                        {trip.attributes?.status || trip.status}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 text-slate-500 italic font-medium">
+                            No trip records found for this driver.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

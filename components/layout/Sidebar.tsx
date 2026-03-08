@@ -125,22 +125,22 @@ export default function Sidebar() {
                                 <div className="space-y-1">
                                     {visibleItems.map(({ href, label, icon: Icon, module }) => {
                                         const isLocked = module && !hasModule(module as any)
-                                        const isActive = pathname === href || pathname.startsWith(href + '/')
+                                        const isActive = !isLocked && (pathname === href || pathname.startsWith(href + '/'))
                                         const isNotifications = label === 'Notifications'
 
                                         const itemContent = (
                                             <Link
-                                                href={href}
+                                                href={isLocked ? '/billing' : href}
                                                 className={cn(
                                                     'flex items-center rounded-xl transition-all duration-200 group relative',
                                                     isSidebarCollapsed ? 'justify-center h-12 w-12 mx-auto' : 'px-4 py-2.5 justify-between',
                                                     isActive
                                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                                                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
-                                                    isLocked && 'opacity-40 cursor-not-allowed grayscale'
+                                                    isLocked && 'hover:bg-amber-50/50'
                                                 )}
                                             >
-                                                <div className="flex items-center gap-3.5">
+                                                <div className={cn("flex items-center gap-3.5", isLocked && "opacity-40 grayscale")}>
                                                     <Icon className={cn(
                                                         "h-5 w-5 shrink-0 transition-transform group-hover:scale-110",
                                                         isActive ? "text-white" : "text-slate-400 group-hover:text-blue-500"
@@ -151,22 +151,25 @@ export default function Sidebar() {
                                                 </div>
 
                                                 {/* Badge Integration */}
-                                                {!isLocked && (
-                                                    <>
-                                                        {isNotifications && unreadCount > 0 && (
-                                                            <div className={cn(
-                                                                "flex h-5 items-center justify-center rounded-full text-[10px] font-black px-1.5",
-                                                                isActive ? "bg-white text-blue-600" : "bg-rose-500 text-white shadow-sm shadow-rose-200",
-                                                                isSidebarCollapsed && "absolute top-1 right-1 h-2 w-2 p-0 border border-white"
-                                                            )}>
-                                                                {!isSidebarCollapsed && unreadCount}
-                                                            </div>
-                                                        )}
-                                                        {!isNotifications && isLocked && (
-                                                            <Lock className="h-3.5 w-3.5 text-slate-300" />
-                                                        )}
-                                                    </>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {isNotifications && unreadCount > 0 && !isLocked && (
+                                                        <div className={cn(
+                                                            "flex h-5 items-center justify-center rounded-full text-[10px] font-black px-1.5",
+                                                            isActive ? "bg-white text-blue-600" : "bg-rose-500 text-white shadow-sm shadow-rose-200",
+                                                            isSidebarCollapsed && "absolute top-1 right-1 h-2 w-2 p-0 border border-white"
+                                                        )}>
+                                                            {!isSidebarCollapsed && unreadCount}
+                                                        </div>
+                                                    )}
+                                                    {isLocked && (
+                                                        <div className={cn(
+                                                            "transition-all",
+                                                            isSidebarCollapsed ? "absolute -top-1 -right-1 bg-white rounded-full p-0.5" : "bg-amber-100/50 p-1 rounded-md"
+                                                        )}>
+                                                            <Lock className={cn("text-amber-600", isSidebarCollapsed ? "h-2 w-2" : "h-3 w-3")} />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </Link>
                                         )
 
@@ -177,7 +180,7 @@ export default function Sidebar() {
                                                         {itemContent}
                                                     </TooltipTrigger>
                                                     <TooltipContent side="right" sideOffset={15} className="bg-slate-900 border-none text-white px-3 py-1.5 font-bold text-xs ring-4 ring-slate-900/10">
-                                                        {label} {isLocked ? '(LOCKED)' : ''}
+                                                        {label} {isLocked ? '(UPGRADE TO UNLOCK)' : ''}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             )

@@ -120,3 +120,9 @@ export const getCurrentDriver = async (vehicleId: string | number): Promise<{ da
     const response = await apiClient.get(`/vehicles/${vehicleId}/current-driver`)
     return response.data
 }
+
+export const getVehicleDriverHistory = async (vehicleId: string | number): Promise<{ data: any[] }> => {
+    const response = await apiClient.get(`/vehicles/${vehicleId}/driver-history`)
+    return response.data
+}
+

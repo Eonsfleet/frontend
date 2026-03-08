@@ -27,11 +27,12 @@ import { AssignClusterDialog } from '@/components/vehicles/AssignClusterDialog'
 import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { LayoutGrid, Loader2, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { getCurrentLocation, getCurrentDriver } from '@/lib/api/vehicles'
+import { getCurrentLocation, getCurrentDriver, getVehicleDriverHistory } from '@/lib/api/vehicles'
 import { getVehicleMaintenanceSchedules } from '@/lib/api/maintenance'
 import { getVehicleDocuments, downloadDocument } from '@/lib/api/documents'
 import { UploadDocumentDialog } from '@/components/vehicles/UploadDocumentDialog'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
@@ -345,7 +346,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-center py-12 text-slate-500 italic">Historical data initialization in progress...</div>
+                                <DriverHistoryList vehicleId={vehicle.id} />
                             </CardContent>
                         </Card>
                     </UpgradeGate>
@@ -500,6 +501,57 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     onClose={() => setIsUploadDocOpen(false)}
                 />
             </Tabs>
+        </div>
+    )
+}
+
+function DriverHistoryList({ vehicleId }: { vehicleId: string | number }) {
+    const { data: response, isLoading } = useQuery({
+        queryKey: ['vehicle-driver-history', vehicleId],
+        queryFn: () => getVehicleDriverHistory(vehicleId)
+    })
+
+    const history = response?.data || []
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+            </div>
+        )
+    }
+
+    if (history.length === 0) {
+        return (
+            <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-xl">
+                <p className="text-slate-500 italic">No historical assignment records found for this vehicle.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-4">
+            {history.map((record: any) => (
+                <div key={record.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                            <User className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-900">{record.attributes?.driver_name || record.driver_name || 'Unknown Driver'}</p>
+                            <p className="text-xs text-slate-500">
+                                {record.attributes?.assigned_at ? format(new Date(record.attributes.assigned_at), 'MMM d, yyyy') : 'N/A'}
+                                {record.attributes?.deassigned_at ? ` — ${format(new Date(record.attributes.deassigned_at), 'MMM d, yyyy')}` : ' — Present'}
+                            </p>
+                        </div>
+                    </div>
+                    {record.attributes?.reason && (
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                            {record.attributes.reason}
+                        </Badge>
+                    )}
+                </div>
+            ))}
         </div>
     )
 }

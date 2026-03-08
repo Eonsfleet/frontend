@@ -8,11 +8,16 @@ import { DriverDetails } from '@/components/drivers/DriverDetails'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Edit, Mail, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { DriverDialog } from '@/components/drivers/DriverDialog'
+import { AssignVehicleDialog } from '@/components/drivers/AssignVehicleDialog'
+import { PermissionGate } from '@/components/shared/PermissionGate'
 
 export default function DriverDetailPage() {
     const params = useParams()
     const router = useRouter()
     const id = params.id as string
+    const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
+    const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false)
 
     const { data: response, isLoading, error } = useQuery({
         queryKey: ['driver', id],
@@ -74,16 +79,39 @@ export default function DriverDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="border-slate-200 text-slate-600 hover:bg-white">
-                        <Edit className="mr-2 h-4 w-4" /> Edit Profile
-                    </Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                        Assign Vehicle
-                    </Button>
+                    <PermissionGate permission="drivers:write">
+                        <Button
+                            variant="outline"
+                            className="border-slate-200 text-slate-600 hover:bg-white"
+                            onClick={() => setIsEditModalOpen(true)}
+                        >
+                            <Edit className="mr-2 h-4 w-4" /> Edit Profile
+                        </Button>
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700"
+                            onClick={() => setIsAssignModalOpen(true)}
+                        >
+                            Assign Vehicle
+                        </Button>
+                    </PermissionGate>
                 </div>
             </div>
 
             <DriverDetails driver={driver} />
+
+            <DriverDialog
+                open={isEditModalOpen}
+                onOpenChange={setIsEditModalOpen}
+                mode="edit"
+                initialData={driver}
+            />
+
+            <AssignVehicleDialog
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                driverId={driver.id}
+                driverName={driver.attributes.full_name}
+            />
         </div>
     )
 }
