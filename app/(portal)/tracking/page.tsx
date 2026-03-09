@@ -1,756 +1,631 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { useQuery } from '@tanstack/react-query'
-import * as vehicleApi from '@/lib/api/vehicles'
-import * as trackingApi from '@/lib/api/tracking'
-import * as geofenceApi from '@/lib/api/geofencing'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-    Loader2, MapPin, Navigation, Truck, RefreshCw,
-    Layers, Search, Filter, History, ChevronRight,
-    Maximize2, Minimize2, Activity, ShieldCheck,
-    ArrowLeftRight, Info
+    Loader2,
+    Navigation,
+    Truck,
+    RefreshCw,
+    Layers,
+    Search,
+    Filter,
+    Clock,
+    Activity,
+    ChevronRight,
+    History,
+    MoreVertical,
+    Eye,
+    EyeOff,
+    X,
+    MapPin,
+    Crosshair,
+    ShieldCheck,
+    Map as MapIcon
 } from 'lucide-react'
-import { Vehicle } from '@/types'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'sonner'
-import { format } from 'date-fns'
-import Link from 'next/link'
-import { useUIStore } from '@/store/uiStore'
-import { useSubscription } from '@/hooks/useSubscription'
 import { cn } from '@/lib/utils'
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import dynamic from 'next/dynamic'
+import { Badge } from '@/components/ui/badge'
+import { UpgradeGate } from '@/components/shared/UpgradeGate'
+import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEcho } from '@/hooks/useEcho'
+import * as api from '@/lib/api/vehicles'
+import * as tripApi from '@/lib/api/trips'
+import TrackingMap from './TrackingMap'
+import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
+import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
 
-// Dynamic import for the dedicated Map component
-const TrackingMap = dynamic(() => import('./TrackingMap'), { ssr: false })
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 
-// Mapbox Config (Tile URL placeholder)
-const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-const MAPBOX_STYLE = 'mapbox/dark-v11'
-const TILE_URL = MAPBOX_ACCESS_TOKEN
-    ? `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/{z}/{x}/{y}?access_token=${MAPBOX_ACCESS_TOKEN}`
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-
-// Vehicle Icon Helper (Used for sidebar and map)
-const getVehicleIcon = (bodyType: string = '', status: string = '') => {
-    const type = bodyType.toLowerCase()
-    const isAction = status === 'moving'
-    const props = { className: cn("w-4 h-4 transition-transform duration-500", isAction && "animate-pulse") }
-
-    if (type.includes('truck')) return <Truck {...props} className={cn(props.className, "text-blue-600")} />
-    if (type.includes('van')) return <Truck {...props} className={cn(props.className, "text-amber-600")} />
-    if (type.includes('bike')) return <Navigation {...props} className={cn(props.className, "text-emerald-600")} />
-    if (type.includes('car')) return <Activity {...props} className={cn(props.className, "text-slate-600")} />
-    return <Activity {...props} className={cn(props.className, "text-blue-600")} />
+const getMarkerSVG = (bodyType: string) => {
+    switch (bodyType?.toLowerCase()) {
+        case 'truck': return '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18h3a5 5 0 0 0 5-5v-1h-8v6Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'
+        case 'van': return '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M18 18h2"/><path d="M4 18h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M7 6v12"/><path d="M17 6v12"/>'
+        default: return '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9C2.1 11.1 2 11.3 2 11.5V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>'
+    }
 }
 
-// Vehicle Marker SVG Path Helper
-const getMarkerSVG = (bodyType: string = '') => {
-    const type = (bodyType || '').toLowerCase()
-    if (type.includes('truck')) return '<path d="M10 17h4V5H2v12h3m10 0h2v-3.34a4 4 0 0 0-1.17-2.83L13 13V5h2v8.66a2 2 0 0 1 .58 1.42V17z"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle>'
-    if (type.includes('van')) return '<path d="M2 17h20v-4H2v4zM2 9h16v4H2V9z"></path><circle cx="5" cy="17" r="2"></circle><circle cx="19" cy="17" r="2"></circle>'
-    if (type.includes('bike')) return '<path d="M5.58 19c.42.61 1.13 1 1.92 1s1.5-.39 1.92-1H11v-2h-1.58c-.42-.61-1.13-1-1.92-1s-1.5.39-1.92 1H2v2h3.58zM18.5 16c-.79 0-1.5.39-1.92 1H13v2h3.58c.42.61 1.13 1 1.92 1s1.5-.39 1.92-1H22v-2h-3.5z"></path>'
-    return '<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path>'
+const getVehicleIcon = (bodyType: string, status: string) => {
+    const isMoving = status === 'moving'
+    switch (bodyType?.toLowerCase()) {
+        case 'truck': return <Truck className={cn("h-4 w-4", isMoving ? "text-emerald-500" : "text-slate-400")} />
+        case 'van': return <Layers className={cn("h-4 w-4", isMoving ? "text-emerald-500" : "text-slate-400")} />
+        default: return <Navigation className={cn("h-4 w-4", isMoving ? "text-emerald-500" : "text-slate-400")} />
+    }
 }
 
-// Normalization utilities
-const normalizeReg = (reg: string) => reg.toUpperCase()
-const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+const MOCK_TRIPS = [
+    { id: 't1', plate: 'LND-123-XY', destination: 'Lagos Terminal', eta: '14:20 PM', status: 'on-time', speed: 72, progress: 65 },
+    { id: 't2', plate: 'ABJ-456-ZZ', destination: 'Abuja Depot', eta: '16:45 PM', status: 'delayed', speed: 45, progress: 30 },
+    { id: 't3', plate: 'PH-789-BC', destination: 'Port Harcourt', eta: '11:15 AM', status: 'on-time', speed: 0, progress: 100 },
+]
 
 export default function TrackingPage() {
-    const { setSidebarCollapsed } = useUIStore()
-    const { hasModule } = useSubscription()
+    const router = useRouter()
+    const queryClient = useQueryClient()
+    const { subscribe } = useEcho()
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<'all' | 'moving' | 'idle' | 'offline' | 'online'>('all')
-    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+    const [isTelemetryOpen, setIsTelemetryOpen] = useState(false)
+    const [isReplayOpen, setIsReplayOpen] = useState(false)
+    const [viewMode, setViewMode] = useState<'all' | 'focused'>('all')
     const [locations, setLocations] = useState<Record<string, any>>({})
-    const [showGeofences, setShowGeofences] = useState(true)
-    const [showClusters, setShowClusters] = useState(true)
-    const [isRefreshing, setIsRefreshing] = useState(false)
-    const [isDetailView, setIsDetailView] = useState(false)
-    const { subscribe } = useEcho()
+    const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'hybrid'>('standard')
 
-    // Automatically collapse sidebar on entry
-    useEffect(() => {
-        setSidebarCollapsed(true)
-        // return () => setSidebarCollapsed(false)
-    }, [])
-
-    // Fetch vehicles
-    const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles', { per_page: 50 }],
-        queryFn: () => vehicleApi.getVehicles({ per_page: 50 }),
-    })
-
-    const vehicles = vehicleData?.data || []
-
-    // Fetch Geofences
-    const { data: geofenceData } = useQuery({
-        queryKey: ['geofences'],
-        queryFn: () => geofenceApi.getGeofences(),
-        enabled: hasModule('geofence') || true, // Enabled for testing
-    })
-
-    const geofences = geofenceData?.data?.geofences || []
-
-    const fetchLocations = async () => {
-        setIsRefreshing(true)
-        try {
-            const locMap: Record<string, any> = {}
-            // Fetch top active vehicles
-            const visibleVehicles = vehicles.slice(0, 20)
-            await Promise.all(visibleVehicles.map(async (v) => {
-                try {
-                    const res = await vehicleApi.getCurrentLocation(v.id)
-                    const { location } = res.data
-                    locMap[v.id] = {
-                        ...location,
-                        lat: location.latitude,
-                        lng: location.longitude,
-                        timestamp: new Date().toISOString()
-                    }
-                } catch (e) { }
-            }))
-            setLocations(prev => ({ ...prev, ...locMap }))
-        } catch (error) {
-            toast.error('Failed to sync live data')
-        } finally {
-            setIsRefreshing(false)
-        }
+    const MAP_LAYERS = {
+        standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        hybrid: 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' // Needs special handling for Google
     }
 
-    useEffect(() => {
-        if (vehicles.length > 0) fetchLocations()
-        const interval = setInterval(() => {
-            if (vehicles.length > 0) fetchLocations()
-        }, 30000) // Keep polling as fallback but slower
-        return () => clearInterval(interval)
-    }, [vehicles.length])
+    const { token } = useAuthStore()
+    const { setSidebarCollapsed } = useUIStore()
 
-    // WebSocket Tracking Integration
+    // Auto-collapse nav menu logic moved to main effect for cleanup
+
+    const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
+        queryKey: ['vehicles', { per_page: 100 }],
+        queryFn: () => api.getVehicles({ per_page: 100 }),
+        enabled: !!token,
+    })
+
+    const { data: tripData, isLoading: isLoadingTrips } = useQuery({
+        queryKey: ['trips', { status: 'in_progress' }],
+        queryFn: () => tripApi.getTrips({ status: 'in_progress' }),
+        enabled: !!token && viewMode === 'focused',
+    })
+
+    const vehicles = useMemo(() => vehicleData?.data || [], [vehicleData])
+    const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData])
+
+    const selectedVehicle = useMemo(() =>
+        vehicles.find(v => v.id === selectedVehicleId) || null
+        , [vehicles, selectedVehicleId])
+
+    const filteredVehicles = useMemo(() => {
+        let result = vehicles
+        if (searchQuery) {
+            result = result.filter(v =>
+                v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+        }
+        if (statusFilter !== 'all') {
+            if (statusFilter === 'online') {
+                result = result.filter(v => locations[v.id]?.is_online || (v.attributes as any).is_online)
+            } else if (statusFilter === 'moving') {
+                result = result.filter(v => locations[v.id]?.status === 'moving' || v.attributes.status === 'in_transit')
+            } else if (statusFilter === 'idle') {
+                result = result.filter(v => locations[v.id]?.status === 'idle' || v.attributes.status === 'active')
+            } else if (statusFilter === 'offline') {
+                result = result.filter(v => v.attributes.status === 'inactive')
+            }
+        }
+        return result
+    }, [vehicles, searchQuery, statusFilter, locations])
+
+    const ongoingTripsData = useMemo(() => {
+        return ongoingTrips.map(trip => {
+            const vehicleId = trip.relationships.vehicle?.data?.id
+            const vehicle = vehicleId ? vehicles.find(v => v.id === vehicleId) : null
+            return {
+                ...trip,
+                vehiclePlate: vehicle?.attributes.registration_number || 'N/A',
+                vehicleId: vehicle?.id || null
+            }
+        })
+    }, [ongoingTrips, vehicles])
+
+    // Initialize locations from vehicle attributes if available
     useEffect(() => {
-        const unsubscribe = subscribe('tracking', 'vehicle.moved', (data: any) => {
-            if (data.vehicle_id && data.location) {
+        if (vehicles.length > 0) {
+            setLocations(prev => {
+                const next = { ...prev }
+                let changed = false
+                vehicles.forEach(v => {
+                    const attrs = v.attributes as any
+                    if (attrs.latitude && !next[v.id]) {
+                        next[v.id] = {
+                            lat: attrs.latitude,
+                            lng: attrs.longitude,
+                            speed: attrs.speed || 0,
+                            heading: attrs.heading || 0,
+                            status: attrs.status || 'idle',
+                            is_online: attrs.is_online || false
+                        }
+                        changed = true
+                    }
+                })
+                return changed ? next : prev
+            })
+        }
+    }, [vehicles])
+
+    // WebSocket Telemetry Subscription
+    useEffect(() => {
+        if (!token) return
+
+        const unsubscribe = subscribe('telemetry', 'TelemetryUpdated', (data: any) => {
+            if (data.vehicle_id) {
                 setLocations(prev => ({
                     ...prev,
                     [data.vehicle_id]: {
-                        ...data.location,
-                        lat: data.location.latitude || data.location.lat,
-                        lng: data.location.longitude || data.location.lng,
-                        timestamp: new Date().toISOString()
+                        ...prev[data.vehicle_id],
+                        lat: data.latitude,
+                        lng: data.longitude,
+                        speed: data.speed,
+                        heading: data.heading,
+                        status: data.status,
+                        is_online: true,
+                        // Additional telemetry for modal
+                        fuel: data.fuel_level_percent,
+                        temp: data.engine_temp,
+                        voltage: data.battery_voltage,
+                        signal: data.signal_strength
                     }
                 }))
             }
         })
-        return () => unsubscribe?.()
-    }, [subscribe])
 
+        return () => {
+            if (unsubscribe) unsubscribe()
+        }
+    }, [token, subscribe])
 
-    // Vehicle Statistics Calculation
-    const stats = useMemo(() => {
-        const counts = { all: vehicles.length, moving: 0, idle: 0, offline: 0, online: 0 }
-        vehicles.forEach(v => {
-            const loc = locations[v.id]
-            if (!loc) {
-                counts.offline++
-            } else {
-                counts.online++
-                if (loc.status === 'moving' || loc.speed > 0) counts.moving++
-                else counts.idle++
-            }
-        })
-        return counts
-    }, [vehicles, locations])
-
-    const filteredVehicles = useMemo(() => {
-        return vehicles.filter(v => {
-            const matchesSearch = v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                v.attributes.make.toLowerCase().includes(searchQuery.toLowerCase())
-
-            const loc = locations[v.id]
-            const isMoving = loc?.status === 'moving' || loc?.speed > 0
-            const isIdle = loc && !isMoving
-            const isOffline = !loc
-
-            const matchesStatus =
-                statusFilter === 'all' ||
-                (statusFilter === 'moving' && isMoving) ||
-                (statusFilter === 'idle' && isIdle) ||
-                (statusFilter === 'offline' && isOffline) ||
-                ((statusFilter as string) === 'online' && (isMoving || isIdle))
-
-            return matchesSearch && matchesStatus
-        }).sort((a, b) => {
-            const locA = locations[a.id]
-            const locB = locations[b.id]
-
-            const statusA = !locA ? 3 : (locA.status === 'moving' || locA.speed > 0 ? 1 : 2)
-            const statusB = !locB ? 3 : (locB.status === 'moving' || locB.speed > 0 ? 1 : 2)
-
-            if (statusA !== statusB) return statusA - statusB
-            return a.attributes.registration_number.localeCompare(b.attributes.registration_number)
-        })
-    }, [vehicles, searchQuery, statusFilter, locations])
-
+    // Auto-collapse sidebar on mount
+    const { isSidebarCollapsed, toggleSidebar } = useUIStore()
+    useEffect(() => {
+        setSidebarCollapsed(true)
+        return () => setSidebarCollapsed(false)
+    }, [setSidebarCollapsed])
 
     return (
-        <div className="h-screen flex overflow-hidden bg-slate-900">
-            {/* Control Sidebar */}
-            <aside className="w-72 flex flex-col bg-white border-r border-slate-200 z-20 shadow-2xl shrink-0 transition-all duration-500">
-                <div className="p-4 border-b border-slate-100 bg-white">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <div className="p-2 rounded-lg bg-blue-100/50">
-                                <Activity className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <h2 className="font-bold text-slate-900">Live Traffic</h2>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={fetchLocations}
-                            className={cn("h-8 w-8 text-slate-400 hover:text-blue-600", isRefreshing && "animate-spin")}
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                        </Button>
-                    </div>
-
-                    <div className="relative mb-3">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input
-                            placeholder="Fleet Search..."
-                            className="bg-slate-50 border-slate-100 pl-9 h-10"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-1">
-                        {(['all', 'moving', 'idle', 'offline', 'online'] as const).map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => setStatusFilter(s)}
-                                className={cn(
-                                    "flex flex-col items-center py-2 rounded-lg border transition-all relative overflow-hidden",
-                                    statusFilter === s
-                                        ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm"
-                                        : "bg-white border-transparent text-slate-500 hover:bg-slate-50"
-                                )}
-                            >
-                                <span className="text-[11px] font-black leading-none mb-1">{stats[s]}</span>
-                                <span className="text-[8px] font-bold uppercase tracking-tighter opacity-70">{s}</span>
-                                <div className={cn(
-                                    "absolute bottom-0 left-0 right-0 h-0.5",
-                                    s === 'moving' ? "bg-emerald-500" :
-                                        s === 'idle' ? "bg-amber-500" :
-                                            s === 'offline' ? "bg-slate-300" :
-                                                s === 'online' ? "bg-blue-400" : "bg-blue-600"
-                                )} />
-                            </button>
-                        ))}
-                    </div>
+        <UpgradeGate
+            module="geofence"
+            featureName="Live Tracking"
+            description="Monitor your fleet in real-time with precise telemetry and location data."
+        >
+            <div className="h-screen w-full flex overflow-hidden bg-slate-100 relative">
+                {/* Immersive Background Map */}
+                <div className="absolute inset-0 z-0 h-full w-full">
+                    <TrackingMap
+                        filteredVehicles={filteredVehicles}
+                        locations={locations}
+                        selectedVehicle={selectedVehicle}
+                        setSelectedVehicle={(v) => setSelectedVehicleId(v.id)}
+                        vehicles={vehicles}
+                        TILE_URL={MAP_LAYERS[mapStyle]}
+                        getMarkerSVG={getMarkerSVG}
+                        getVehicleIcon={getVehicleIcon}
+                    />
                 </div>
 
-                <ScrollArea className="flex-1 bg-white h-0">
-                    <div className="divide-y divide-slate-50">
-                        {isLoadingVehicles ? (
-                            <div className="p-10 flex flex-col items-center opacity-50">
-                                <Loader2 className="w-6 h-6 animate-spin mb-2" />
-                                <span className="text-xs font-medium">Scanning Network...</span>
+                {/* Dynamic Sidebar Overlay */}
+                <div className="absolute left-6 top-6 bottom-6 z-20 flex flex-col pointer-events-none">
+                    <div className="w-72 h-full bg-white/95 backdrop-blur-xl border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out">
+                        {/* Sidebar Header */}
+                        <div className="p-6 border-b border-slate-100/50">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight italic flex items-center gap-2">
+                                    <Activity className="h-4 w-4 text-blue-600" />
+                                    {viewMode === 'all' ? 'Fleet' : 'Active'} <span className="text-blue-600">{viewMode === 'all' ? 'Listing' : 'Trips'}</span>
+                                </h2>
+                                <Badge className="bg-blue-50 text-blue-600 border-none text-[8px] font-black uppercase tracking-widest">
+                                    {viewMode === 'all' ? `${vehicles.length} Assets` : `${ongoingTrips.length} Active`}
+                                </Badge>
                             </div>
-                        ) : filteredVehicles.map(v => {
-                            const loc = locations[v.id]
-                            const isActive = loc?.status === 'moving' || loc?.speed > 0
-                            const isSelected = selectedVehicle?.id === v.id
 
-                            return (
-                                <div
-                                    key={v.id}
-                                    onClick={() => setSelectedVehicle(v)}
-                                    className={cn(
-                                        "p-4 cursor-pointer transition-all border-l-4 hover:bg-slate-50",
-                                        isSelected ? "bg-blue-50/50 border-blue-600" : "border-transparent"
-                                    )}
-                                >
-                                    <div className="flex justify-between items-start mb-1">
-                                        <div className="font-bold text-slate-900 tracking-tight">
-                                            {normalizeReg(v.attributes.registration_number)}
-                                        </div>
-                                        <Badge className={cn(
-                                            "h-5 px-1.5 text-[10px] uppercase font-black",
-                                            !loc ? "bg-slate-100 text-slate-500" :
-                                                isActive ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                                        )}>
-                                            {!loc ? 'OFF' : isActive ? 'MOV' : 'IDL'}
-                                        </Badge>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder={viewMode === 'all' ? "SEARCH ASSETS..." : "SEARCH TRIPS..."}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Sidebar Content */}
+                        <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
+                            {viewMode === 'all' ? (
+                                <>
+                                    {/* Status Quick Filters */}
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                        {(['all', 'moving', 'idle', 'offline', 'online'] as const).map((s) => {
+                                            const count = s === 'all'
+                                                ? vehicles.length
+                                                : s === 'online'
+                                                    ? vehicles.filter(v => locations[v.id]?.is_online || (v.attributes as any).is_online).length
+                                                    : s === 'moving'
+                                                        ? vehicles.filter(v => locations[v.id]?.status === 'moving' || v.attributes.status === 'in_transit').length
+                                                        : s === 'idle'
+                                                            ? vehicles.filter(v => locations[v.id]?.status === 'idle' || v.attributes.status === 'active').length
+                                                            : s === 'offline'
+                                                                ? vehicles.filter(v => v.attributes.status === 'inactive').length
+                                                                : 0;
+
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setStatusFilter(s)}
+                                                    className={cn(
+                                                        "px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
+                                                        statusFilter === s
+                                                            ? (s === 'moving' ? "bg-emerald-600 border-emerald-600 text-white" :
+                                                                s === 'idle' ? "bg-amber-600 border-amber-600 text-white" :
+                                                                    s === 'offline' ? "bg-rose-600 border-rose-600 text-white" :
+                                                                        s === 'online' ? "bg-blue-600 border-blue-600 text-white" :
+                                                                            "bg-slate-900 border-slate-900 text-white")
+                                                            : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                                                    )}
+                                                >
+                                                    {s} ({count})
+                                                </button>
+                                            )
+                                        })}
                                     </div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="text-[11px] text-slate-500 truncate font-semibold uppercase opacity-70">
-                                            {capitalize(v.attributes.make)} {capitalize(v.attributes.model)}
-                                        </div>
-                                        <div className="h-1 w-1 rounded-full bg-slate-300" />
-                                        <div className="text-[10px] font-mono text-slate-400">
-                                            ID: {v.attributes.tracker_id || 'N/A'}
-                                        </div>
-                                    </div>
-                                    {loc ? (
-                                        <div className="flex items-center justify-between bg-white border border-slate-100 rounded-lg p-2 shadow-sm">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded bg-slate-50 flex items-center justify-center">
-                                                    {getVehicleIcon(v.attributes.body_type, loc.status)}
+
+                                    <div className="space-y-2">
+                                        {isLoadingVehicles ? (
+                                            <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                                                <Loader2 className="h-8 w-8 animate-spin" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Hydrating Fleet...</span>
+                                            </div>
+                                        ) : filteredVehicles.map((v) => {
+                                            const loc = locations[v.id]
+                                            const isSelected = selectedVehicleId === v.id
+                                            const lastUpdate = loc?.lastUpdate || (v.attributes as any).current_location?.gpstime || 'N/A'
+                                            const status = loc?.status || v.attributes.status
+
+                                            return (
+                                                <div
+                                                    key={v.id}
+                                                    onClick={() => setSelectedVehicleId(isSelected ? null : v.id)}
+                                                    className={cn(
+                                                        "group flex flex-col p-3 rounded-xl border transition-all cursor-pointer gap-2",
+                                                        isSelected
+                                                            ? "bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100 scale-[1.01]"
+                                                            : "bg-white border-slate-50 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={cn(
+                                                                "p-2 rounded-lg transition-colors",
+                                                                isSelected ? "bg-white/20" : "bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500"
+                                                            )}>
+                                                                <Truck className="h-3.5 w-3.5" />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-[10px] font-black uppercase italic tracking-tight leading-none mb-1">
+                                                                    {v.attributes.registration_number}
+                                                                </h4>
+                                                                <p className={cn("text-[8px] font-bold uppercase", isSelected ? "text-blue-100" : "text-slate-400")}>
+                                                                    {v.attributes.make} {v.attributes.model}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {isSelected ? <Eye className="h-3 w-3 text-white" /> : <EyeOff className="h-3 w-3 text-slate-300" />}
+                                                            <div className={cn(
+                                                                "h-1.5 w-1.5 rounded-full",
+                                                                status === 'in_transit' || status === 'moving' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300"
+                                                            )} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                                        <span className={cn("text-[7px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>
+                                                            Last Update: {lastUpdate}
+                                                        </span>
+                                                        <span className={cn("text-[7px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>
+                                                            {loc?.speed || 0} KPH
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-700">{loc.speed} <span className="text-[10px] font-normal text-slate-400">km/h</span></span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 text-slate-400">
-                                                <Navigation className="w-3 h-3" style={{ transform: `rotate(${loc.heading}deg)` }} />
-                                                <span className="text-[10px] font-mono">{format(new Date(loc.timestamp), 'HH:mm')}</span>
-                                            </div>
+                                            )
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="space-y-2">
+                                    {isLoadingTrips ? (
+                                        <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                                            <Loader2 className="h-8 w-8 animate-spin" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Scanning Missions...</span>
+                                        </div>
+                                    ) : ongoingTripsData.length === 0 ? (
+                                        <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                                            <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No ongoing missions</p>
                                         </div>
                                     ) : (
-                                        <div className="h-10 border border-dashed border-slate-200 rounded-lg flex items-center justify-center bg-slate-50/50">
-                                            <span className="text-[10px] font-bold text-slate-400">NO SIGNAL</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </ScrollArea>
-
-                <div className="p-3 border-t border-slate-100 bg-slate-50">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase text-center tracking-widest">
-                        End of Vehicle Registry
-                    </p>
-                </div>
-            </aside>
-
-            {/* Map Engine Environment */}
-            <div className="flex-1 relative overflow-hidden bg-slate-200">
-                <TrackingMap
-                    filteredVehicles={filteredVehicles}
-                    locations={locations}
-                    selectedVehicle={selectedVehicle}
-                    setSelectedVehicle={setSelectedVehicle}
-                    vehicles={vehicles}
-                    TILE_URL={TILE_URL}
-                    getMarkerSVG={getMarkerSVG}
-                    getVehicleIcon={getVehicleIcon}
-                />
-
-                {/* Map Controls Floating Layer */}
-                <TooltipProvider>
-                    <div className="absolute top-6 right-6 flex flex-col gap-3 z-20">
-                        {/* Control box */}
-                        <div className="bg-white/95 backdrop-blur rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col p-1.5 gap-1">
-                            {/* ... (Geofence/Cluster/History tools kept same) */}
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant={showGeofences ? "secondary" : "ghost"}
-                                        size="icon"
-                                        className={cn("h-10 w-10 text-blue-600 hover:bg-blue-50", !showGeofences && "text-slate-400")}
-                                        onClick={() => setShowGeofences(!showGeofences)}
-                                    >
-                                        <ShieldCheck className="w-5 h-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left"><p className="text-xs font-bold">Toggle Geofences</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant={showClusters ? "secondary" : "ghost"}
-                                        size="icon"
-                                        className={cn("h-10 w-10 text-blue-600 hover:bg-blue-50", !showClusters && "text-slate-400")}
-                                        onClick={() => setShowClusters(!showClusters)}
-                                    >
-                                        <Layers className="w-5 h-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left"><p className="text-xs font-bold">Toggle Clusters</p></TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Link href="/tracking/playback">
-                                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:text-blue-600 hover:bg-blue-50">
-                                            <History className="w-5 h-5" />
-                                        </Button>
-                                    </Link>
-                                </TooltipTrigger>
-                                <TooltipContent side="left"><p className="text-xs font-bold">Telemetry Playback</p></TooltipContent>
-                            </Tooltip>
-                        </div>
-
-                        {/* Zoom Layer */}
-                        <div className="bg-white/95 backdrop-blur rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => (window as any).leafletMap?.zoomIn()}
-                                        className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 border-b border-slate-100 font-bold"
-                                    >
-                                        +
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left"><p className="text-xs font-bold">Zoom In</p></TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => (window as any).leafletMap?.zoomOut()}
-                                        className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 font-bold"
-                                    >
-                                        -
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left"><p className="text-xs font-bold">Zoom Out</p></TooltipContent>
-                            </Tooltip>
-                        </div>
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    className="bg-white/95 backdrop-blur shadow-xl border border-slate-200 h-10 w-10 text-slate-600"
-                                    onClick={() => useUIStore.getState().toggleSidebar()}
-                                >
-                                    <Maximize2 className="w-5 h-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left"><p className="text-xs font-bold">Toggle Fullscreen</p></TooltipContent>
-                        </Tooltip>
-                    </div>
-                </TooltipProvider>
-
-                {/* Compact Detail Card: Shown when selected but not expanded */}
-                <div className={cn(
-                    "fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-40 transition-all duration-500 ease-out",
-                    (selectedVehicle && !isDetailView) ? "translate-y-0 opacity-100" : "translate-y-24 opacity-0 pointer-events-none"
-                )}>
-                    {selectedVehicle && (
-                        <Card className="shadow-2xl border-0 overflow-hidden bg-white/95 backdrop-blur-md animate-in slide-in-from-bottom-12">
-                            <CardContent className="p-0">
-                                <div className="flex">
-                                    {/* Brand Panel */}
-                                    <div className="bg-slate-900 p-6 w-1/3 flex flex-col justify-between text-white shrink-0">
-                                        <div>
-                                            <div className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Entity Telemetry</div>
-                                            <div className="text-2xl font-black mb-1 leading-none">
-                                                {normalizeReg(selectedVehicle.attributes.registration_number)}
-                                            </div>
-                                            <div className="text-xs font-semibold text-blue-400">
-                                                {capitalize(selectedVehicle.attributes.make)} {capitalize(selectedVehicle.attributes.model)}
-                                            </div>
-                                        </div>
-                                        <Badge className="bg-blue-500/20 text-blue-400 border-0 text-[10px] font-bold mt-4">REVERB SYNC ACTIVE</Badge>
-                                    </div>
-
-                                    {/* Data Panel */}
-                                    <div className="flex-1 p-6 flex flex-col justify-between">
-                                        <div className="flex justify-between items-start">
-                                            <div className="grid grid-cols-2 gap-8 flex-1">
-                                                <div>
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Surface Speed</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-4xl font-black text-slate-900">{locations[selectedVehicle.id]?.speed || 0}</span>
-                                                        <span className="text-xs font-bold text-slate-400">KM/H</span>
+                                        ongoingTripsData.map((trip) => {
+                                            const isSelected = selectedVehicleId === trip.vehicleId
+                                            return (
+                                                <div
+                                                    key={trip.id}
+                                                    onClick={() => trip.vehicleId && setSelectedVehicleId(isSelected ? null : trip.vehicleId)}
+                                                    className={cn(
+                                                        "group p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
+                                                        isSelected
+                                                            ? "bg-blue-600 border-blue-600 text-white shadow-2xl scale-[1.01]"
+                                                            : "bg-white border-slate-100 hover:border-blue-200 shadow-sm"
+                                                    )}
+                                                >
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <h4 className={cn(
+                                                                "text-[10px] font-black uppercase tracking-tighter",
+                                                                isSelected ? "text-blue-100" : "text-slate-400"
+                                                            )}>
+                                                                {trip.vehiclePlate}
+                                                            </h4>
+                                                            <Badge className={cn(
+                                                                "text-[8px] font-black border-none px-2 mt-1",
+                                                                isSelected ? "bg-white/20 text-white" : "bg-emerald-500/10 text-emerald-600"
+                                                            )}>
+                                                                ETA: {trip.attributes.eta || 'N/A'}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>Mission #</p>
+                                                            <p className="text-[10px] font-black italic">{trip.attributes.trip_number}</p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Asset Heading</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-4xl font-black text-slate-900">{locations[selectedVehicle.id]?.heading || 0}°</span>
-                                                        <Navigation
-                                                            className="w-4 h-4 text-blue-600"
-                                                            style={{ transform: `rotate(${locations[selectedVehicle.id]?.heading || 0}deg)` }}
+
+                                                    <div className={cn("relative h-1 w-full rounded-full overflow-hidden mb-3", isSelected ? "bg-white/20" : "bg-slate-100")}>
+                                                        <div
+                                                            className={cn("absolute inset-y-0 left-0 rounded-full transition-all duration-1000", isSelected ? "bg-white" : "bg-blue-500")}
+                                                            style={{ width: '65%' }}
                                                         />
                                                     </div>
-                                                </div>
-                                            </div>
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            size="icon"
-                                                            variant="ghost"
-                                                            className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                            onClick={() => setIsDetailView(true)}
-                                                        >
-                                                            <Maximize2 className="w-4 h-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent><p className="text-[10px] font-bold">Deep Dive Analysis</p></TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </div>
-
-                                        <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-tight">
-                                                <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                                Live Sync Status
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button size="sm" variant="outline" className="h-8 text-[10px] font-bold px-4" onClick={() => setSelectedVehicle(null)}>Dismiss</Button>
-                                                <Link href={`/vehicles/${selectedVehicle.id}`}>
-                                                    <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-[10px] font-bold px-4 shadow-sm">View Profile</Button>
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-
-                {/* Right Side Detail Drawer: Known when expanded */}
-                {selectedVehicle && isDetailView && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 animate-in fade-in duration-500" onClick={() => setIsDetailView(false)} />
-                )}
-                <div className={cn(
-                    "fixed inset-y-0 right-0 w-[480px] bg-white shadow-[-12px_0_60px_rgba(0,0,0,0.2)] z-[60] transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] transform border-l border-slate-100 flex flex-col",
-                    (selectedVehicle && isDetailView) ? "translate-x-0" : "translate-x-full"
-                )}>
-                    {selectedVehicle && (
-                        <div className="h-full flex flex-col p-10 overflow-y-auto no-scrollbar">
-                            {/* Header Section */}
-                            <div className="flex items-center justify-between mb-10 pb-8 border-b border-slate-100">
-                                <div className="flex flex-col">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 rounded-2xl bg-slate-900 text-white shadow-lg">
-                                            {getVehicleIcon(selectedVehicle.attributes.body_type, locations[selectedVehicle.id]?.status)}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-3xl font-black text-slate-900 tracking-tighter leading-none mb-2">
-                                                {normalizeReg(selectedVehicle.attributes.registration_number)}
-                                            </h2>
-                                            <Badge className={cn(
-                                                "px-2 h-5 text-[9px] font-black uppercase tracking-widest border-0",
-                                                locations[selectedVehicle.id]?.status === 'moving' ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
-                                            )}>
-                                                {locations[selectedVehicle.id]?.status === 'moving' ? 'Mission Active' : 'System Idle'}
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                    <div className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mt-8">
-                                        Asset Details
-                                    </div>
-                                    <div className="text-lg font-bold text-slate-800 mt-1">
-                                        {capitalize(selectedVehicle.attributes.make)} {capitalize(selectedVehicle.attributes.model)}
-                                        <span className="text-slate-300 mx-2">/</span>
-                                        <span className="text-slate-400">{selectedVehicle.attributes.year}</span>
-                                    </div>
-                                </div>
-                                <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    className="h-12 w-12 rounded-2xl shadow-sm hover:shadow-md transition-all shrink-0"
-                                    onClick={() => setIsDetailView(false)}
-                                >
-                                    <Minimize2 className="w-5 h-5 text-slate-600" />
-                                </Button>
-                            </div>
-
-                            {/* Detailed Stats Section */}
-                            <div className="space-y-10 flex-1">
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div className="p-8 rounded-[2rem] bg-blue-50/50 border border-blue-100/50 group hover:bg-blue-50 transition-colors">
-                                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 block">Surface Velocity</span>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-5xl font-black text-blue-900 tracking-tighter">{locations[selectedVehicle.id]?.speed || 0}</span>
-                                            <span className="text-xs font-black text-blue-400">KM/H</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100 group hover:bg-slate-100 transition-colors">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Relative Heading</span>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-5xl font-black text-slate-900 tracking-tighter">{locations[selectedVehicle.id]?.heading || 0}°</span>
-                                            <div className="p-2 rounded-full bg-white shadow-sm transition-transform duration-700" style={{ transform: `rotate(${locations[selectedVehicle.id]?.heading || 0}deg)` }}>
-                                                <Navigation className="w-6 h-6 text-blue-600 fill-blue-600" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3 mb-6">Advanced Telemetry</h3>
-
-                                    <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2.5 rounded-xl bg-blue-100/50 text-blue-600 group-hover:bg-blue-100 transition-colors">
-                                                <Activity className="w-4 h-4" />
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Signal Integrity</span>
-                                        </div>
-                                        <span className="text-xs font-black text-emerald-500 uppercase tracking-widest">Nominal</span>
-                                    </div>
-
-                                    <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2.5 rounded-xl bg-amber-100/50 text-amber-600 group-hover:bg-amber-100 transition-colors">
-                                                <Truck className="w-4 h-4" />
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Fleet Odometer</span>
-                                        </div>
-                                        <span className="text-xs font-black text-slate-900 tracking-tight">{selectedVehicle.attributes.total_odometer} <span className="text-[10px] text-slate-400 font-bold ml-1">KM</span></span>
-                                    </div>
-
-                                    <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2.5 rounded-xl bg-purple-100/50 text-purple-600 group-hover:bg-purple-100 transition-colors">
-                                                <ArrowLeftRight className="w-4 h-4" />
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Fuel Archetype</span>
-                                        </div>
-                                        <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{selectedVehicle.attributes.fuel_type}</span>
-                                    </div>
-
-                                    <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 group-hover:bg-slate-200 transition-colors">
-                                                <Info className="w-4 h-4" />
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Device UUID</span>
-                                        </div>
-                                        <span className="text-xs font-mono font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md truncate max-w-[150px]">{selectedVehicle.attributes.tracker_id}</span>
-                                    </div>
-
-                                    {/* New Metadata Fields */}
-                                    {locations[selectedVehicle.id]?.metadata && (
-                                        <>
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-orange-100/50 text-orange-600 group-hover:bg-orange-100 transition-colors">
-                                                        <Activity className="w-4 h-4" />
+                                                    <div className={cn("flex justify-between items-center text-[7px] font-black uppercase tracking-widest mt-1", isSelected ? "text-blue-100" : "text-slate-400")}>
+                                                        <span>{locations[trip.vehicleId!]?.speed || 0} KPH</span>
+                                                        <span>TRACKING ACTIVE</span>
                                                     </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Ignition Status</span>
                                                 </div>
-                                                <Badge className={cn(
-                                                    "px-2 h-5 text-[9px] font-black uppercase tracking-widest border-0",
-                                                    locations[selectedVehicle.id].metadata.ignition === 'on' ? "bg-emerald-500 text-white" : "bg-slate-400 text-white"
-                                                )}>
-                                                    {locations[selectedVehicle.id].metadata.ignition || 'OFF'}
-                                                </Badge>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-blue-100/50 text-blue-600 group-hover:bg-blue-100 transition-colors">
-                                                        <Activity className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Vibration/Movement</span>
-                                                </div>
-                                                <Badge className={cn(
-                                                    "px-2 h-5 text-[9px] font-black uppercase tracking-widest border-0",
-                                                    locations[selectedVehicle.id].metadata.movement === 'on' ? "bg-emerald-500 text-white" : "bg-slate-400 text-white"
-                                                )}>
-                                                    {locations[selectedVehicle.id].metadata.movement || 'OFF'}
-                                                </Badge>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-rose-100/50 text-rose-600 group-hover:bg-rose-100 transition-colors">
-                                                        <Activity className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Engine RPM</span>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.engine_rpm || 'N/A'}</span>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-orange-100/50 text-orange-600 group-hover:bg-orange-100 transition-colors">
-                                                        <Activity className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Engine Temp</span>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.engine_temperature || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">°C</span></span>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-emerald-100/50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
-                                                        <ShieldCheck className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Battery Voltage</span>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.battery_voltage || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">V</span></span>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-indigo-100/50 text-indigo-600 group-hover:bg-indigo-100 transition-colors">
-                                                        <Info className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Door Status</span>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{locations[selectedVehicle.id].metadata.door_status || 'N/A'}</span>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-blue-100/50 text-blue-600 group-hover:bg-blue-100 transition-colors">
-                                                        <Navigation className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Trip Distance</span>
-                                                </div>
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{locations[selectedVehicle.id].metadata.trip_odometer || 'N/A'} <span className="text-[10px] text-slate-400 font-bold ml-1">KM</span></span>
-                                            </div>
-                                        </>
+                                            )
+                                        })
                                     )}
                                 </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
-                                <div className="pt-10 mt-10 border-t border-slate-100">
-                                    <div className="flex items-center gap-4 mb-8 bg-slate-50 p-7 rounded-3xl border border-slate-100 shadow-inner">
-                                        <div className="p-3 rounded-2xl bg-white shadow-sm">
-                                            <MapPin className="w-6 h-6 text-blue-500" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Geospatial Position</span>
-                                            <span className="text-sm font-mono font-black text-slate-700 tracking-tight">
-                                                {locations[selectedVehicle.id]?.lat.toFixed(8)}, {locations[selectedVehicle.id]?.lng.toFixed(8)}
-                                            </span>
-                                        </div>
+                {/* Right Side Controls Command Deck */}
+                <div className="absolute right-6 top-6 z-30 flex flex-col gap-4">
+                    <TooltipProvider delayDuration={0}>
+                        <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-2 overflow-hidden items-center">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setViewMode('all')}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            viewMode === 'all' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-slate-400 hover:bg-slate-50 hover:text-blue-600"
+                                        )}
+                                    >
+                                        <MapIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Global Fleet Tracking
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setViewMode('focused')}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            viewMode === 'focused' ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-slate-400 hover:bg-slate-50 hover:text-blue-600"
+                                        )}
+                                    >
+                                        <Crosshair className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Focus Mission Tracking
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+
+                        <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-2 overflow-hidden items-center">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button className="h-12 w-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-emerald-500 transition-all group">
+                                        <ShieldCheck className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Toggle Active Geofences
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => {
+                                            if (viewMode === 'all') {
+                                                router.push('/tracking/playback')
+                                            }
+                                        }}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            viewMode === 'all' ? "text-slate-400 hover:bg-slate-50 hover:text-purple-500" : "text-slate-200 cursor-not-allowed"
+                                        )}
+                                    >
+                                        <History className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Fleet Playback Router
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setMapStyle(mapStyle === 'standard' ? 'satellite' : 'standard')}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            mapStyle === 'satellite' ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:bg-slate-50 hover:text-blue-600"
+                                        )}
+                                    >
+                                        <MapIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Toggle Satellite View
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => queryClient.invalidateQueries({ queryKey: ['vehicles'] })}
+                                        className="h-12 w-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-all group"
+                                    >
+                                        <RefreshCw className="h-5 w-5 group-hover:rotate-180 transition-transform duration-500" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Re-Sync Fleet Data
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+
+                        <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-1 overflow-hidden items-center">
+                            <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors border-b border-slate-50">+</button>
+                            <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors">-</button>
+                        </div>
+                    </TooltipProvider>
+                </div>
+
+
+                {/* Overlays: Selected Info Bottom Bar */}
+                {selectedVehicle && (
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in slide-in-from-bottom-5 duration-500 delay-100 w-full max-w-xl">
+                        <div className="bg-white/95 backdrop-blur-2xl rounded-[28px] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.3)] border border-white/50 p-4 flex items-center gap-6 pointer-events-auto">
+                            <div className="flex items-center gap-4 flex-1">
+                                <div className="p-3.5 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
+                                    <Truck className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tighter truncate">
+                                            {selectedVehicle.attributes.registration_number}
+                                        </h3>
+                                        <div className={cn(
+                                            "h-1.5 w-1.5 rounded-full shrink-0",
+                                            (locations[selectedVehicle.id]?.status === 'moving' || locations[selectedVehicle.id]?.speed > 0) ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
+                                        )} />
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <Button
-                                            variant="outline"
-                                            className="h-14 rounded-2xl text-xs font-black uppercase tracking-widest border-2 hover:bg-slate-50 transition-all"
-                                            onClick={() => {
-                                                setSelectedVehicle(null)
-                                                setIsDetailView(false)
-                                            }}
-                                        >
-                                            Dismiss Asset
-                                        </Button>
-                                        <Link href={`/vehicles/${selectedVehicle.id}`} className="w-full">
-                                            <Button className="w-full h-14 bg-blue-600 hover:bg-blue-700 rounded-2xl text-xs font-black uppercase tracking-widest shadow-2xl shadow-blue-100 transition-all hover:scale-[1.02] active:scale-95">
-                                                View Profile
-                                            </Button>
-                                        </Link>
+                                    <div className="flex items-center gap-1.5">
+                                        <MapPin className="h-2.5 w-2.5 text-blue-500" />
+                                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest truncate">
+                                            {locations[selectedVehicle.id]?.lastUpdate || 'SYNCED REAL-TIME'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="h-10 w-[1px] bg-slate-100 shrink-0" />
+
+                            <div className="flex items-center gap-5 shrink-0 px-2">
+                                <div className="text-center">
+                                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-0.5">Velocity</p>
+                                    <p className="text-base font-black text-slate-900 italic tracking-tighter leading-none">
+                                        {locations[selectedVehicle.id]?.speed || 0}<span className="text-[8px] font-bold text-slate-400 ml-0.5 font-sans not-italic">KPH</span>
+                                    </p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-0.5">Fuel</p>
+                                    <p className="text-base font-black text-slate-900 italic tracking-tighter leading-none">
+                                        {locations[selectedVehicle.id]?.fuel || 0}<span className="text-[8px] font-bold text-slate-400 ml-0.5 font-sans not-italic">%</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                onClick={() => setIsTelemetryOpen(true)}
+                                                className="h-10 w-10 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all flex items-center justify-center shadow-lg"
+                                            >
+                                                <Activity className="h-4 w-4" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="bg-slate-900 text-white border-none font-black text-[9px] uppercase tracking-widest">Sensors</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                <div className="h-8 w-[1px] bg-slate-100 mx-1" />
+
+                                <button
+                                    onClick={() => setSelectedVehicleId(null)}
+                                    className="h-10 w-10 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
+
+            {/* Sub-Components / Drawers */}
+            <TelemetryDrawer
+                isOpen={isTelemetryOpen}
+                onClose={() => setIsTelemetryOpen(false)}
+                vehicle={selectedVehicle ? {
+                    plate: selectedVehicle.attributes.registration_number,
+                    speed: locations[selectedVehicle.id]?.speed || 0,
+                    fuel: locations[selectedVehicle.id]?.fuel || 0,
+                    temp: locations[selectedVehicle.id]?.temp || 0,
+                    status: locations[selectedVehicle.id]?.status || selectedVehicle.attributes.status,
+                    voltage: locations[selectedVehicle.id]?.voltage || '14.2V',
+                    signal: locations[selectedVehicle.id]?.signal || '-62 dBm',
+                    ignition: locations[selectedVehicle.id]?.ignition,
+                    odometer: locations[selectedVehicle.id]?.odometer,
+                    lat: locations[selectedVehicle.id]?.lat,
+                    lng: locations[selectedVehicle.id]?.lng,
+                    lastUpdate: locations[selectedVehicle.id]?.lastUpdate
+                } : null}
+            />
+
+            <TripPlaybackTimeline
+                isOpen={isReplayOpen}
+                onClose={() => setIsReplayOpen(false)}
+            />
 
             <style jsx global>{`
                 .no-scrollbar::-webkit-scrollbar {
@@ -760,66 +635,7 @@ export default function TrackingPage() {
                     -ms-overflow-style: none;
                     scrollbar-width: none;
                 }
-                .leaflet-container {
-                    background: #0f172a !important; /* Dark map fallback */
-                }
-                .leaflet-marker-icon {
-                    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                .marker-container {
-                    position: relative;
-                    width: 40px;
-                    height: 40px;
-                    display: flex;
-                    items-center: center;
-                    justify-content: center;
-                }
-                .marker-base {
-                    position: relative;
-                    width: 32px;
-                    height: 32px;
-                    background: #2563eb;
-                    border: 3px solid white;
-                    border-radius: 50% 50% 50% 0;
-                    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.5s ease;
-                }
-                .marker-container.is-active .marker-base {
-                    background: #10b981;
-                }
-                .marker-pulse {
-                    position: absolute;
-                    width: 40px;
-                    height: 40px;
-                    background: rgba(37, 99, 235, 0.2);
-                    border-radius: 50%;
-                    animation: pulse 2s infinite;
-                    display: none;
-                }
-                .marker-container.is-active .marker-pulse {
-                    display: block;
-                    background: rgba(16, 185, 129, 0.2);
-                }
-                @keyframes pulse {
-                    0% { transform: scale(0.8); opacity: 0.8; }
-                    100% { transform: scale(2.4); opacity: 0; }
-                }
-                .custom-popup .leaflet-popup-content-wrapper {
-                    border-radius: 12px;
-                    padding: 0;
-                    overflow: hidden;
-                    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-                }
-                .custom-popup .leaflet-popup-content {
-                    margin: 0;
-                }
-                .custom-popup .leaflet-popup-tip {
-                    background: white;
-                }
             `}</style>
-        </div>
+        </UpgradeGate>
     )
 }

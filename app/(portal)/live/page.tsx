@@ -1,262 +1,302 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
+import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
+import {
+    Loader2,
+    Navigation,
+    Truck,
+    RefreshCw,
+    Layers,
+    Search,
+    Filter,
+    Clock,
+    Activity,
+    ChevronRight,
+    PlayCircle
+} from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as api from '@/lib/api/vehicles'
-import { Loader2, MapPin, Navigation, Truck, RefreshCw, Layers } from 'lucide-react'
-import { Vehicle } from '@/types'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'sonner'
-import { format } from 'date-fns'
-import Link from 'next/link'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { useAuthStore } from '@/store/authStore'
 
-// Map component utilizing native Leaflet (if loaded globally) or a placeholder UI
+const MOCK_TRIPS = [
+    { id: 't1', plate: 'LND-123-XY', destination: 'Lagos Terminal', eta: '14:20 PM', status: 'on-time' },
+    { id: 't2', plate: 'ABJ-456-ZZ', destination: 'Abuja Depot', eta: '16:45 PM', status: 'delayed' },
+    { id: 't3', plate: 'PH-789-BC', destination: 'Port Harcourt', eta: '11:15 AM', status: 'on-time' },
+]
+
 export default function LiveTrackingPage() {
     const [searchQuery, setSearchQuery] = useState('')
-    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
-    const [locations, setLocations] = useState<Record<string, any>>({})
-    const [isRefreshing, setIsRefreshing] = useState(false)
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+    const [isTelemetryOpen, setIsTelemetryOpen] = useState(false)
+    const [isReplayOpen, setIsReplayOpen] = useState(false)
+    const [viewMode, setViewMode] = useState<'all' | 'focused'>('all')
 
-    // Fetch all vehicles
+    const { token } = useAuthStore()
+
     const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles', { per_page: 100 }],
         queryFn: () => api.getVehicles({ per_page: 100 }),
+        enabled: !!token,
     })
 
     const vehicles = vehicleData?.data || []
 
-    const fetchLocations = async () => {
-        setIsRefreshing(true)
-        try {
-            const locMap: Record<string, any> = {}
-            // In a real production app we'd fetch this via a bulk endpoint or websockets
-            // Since the endpoint is per-vehicle, we'll fetch for visible/active ones or sequentially
-            for (const v of vehicles.slice(0, 15)) { // Limit concurrent requests locally to prevent blocking
-                try {
-                    const res = await api.getCurrentLocation(v.id)
-                    locMap[v.id] = res.data
-                } catch (e) {
-                    // Fail silently for vehicles without location pings
-                }
-            }
-            setLocations(locMap)
-        } catch (error) {
-            toast.error('Failed to update live coordinates')
-        } finally {
-            setIsRefreshing(false)
-        }
-    }
-
-    // Ping location on mount and periodic refresh
-    useEffect(() => {
-        if (vehicles.length > 0) {
-            fetchLocations()
-        }
-
-        const interval = setInterval(() => {
-            if (vehicles.length > 0) fetchLocations()
-        }, 15000) // Poll every 15s
-
-        return () => clearInterval(interval)
-    }, [vehicles.length])
+    // Derived selected vehicle object
+    const selectedVehicle = useMemo(() =>
+        vehicles.find(v => v.id === selectedVehicleId) || null
+        , [vehicles, selectedVehicleId])
 
     const filteredVehicles = useMemo(() => {
         if (!searchQuery) return vehicles
-        const lowerQ = searchQuery.toLowerCase()
         return vehicles.filter(v =>
-            v.attributes.registration_number.toLowerCase().includes(lowerQ) ||
-            v.attributes.make.toLowerCase().includes(lowerQ) ||
-            v.attributes.model.toLowerCase().includes(lowerQ)
+            v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
         )
     }, [vehicles, searchQuery])
 
-    const activeCount = Object.keys(locations).filter(id => locations[id]?.status === 'moving' || locations[id]?.status === 'active').length
-
     return (
-        <div className="h-[calc(100vh-80px)] -m-6 md:-m-8 flex flex-col xl:flex-row overflow-hidden bg-slate-100">
-            {/* Sidebar (Vehicle List) */}
-            <div className="w-full xl:w-96 flex flex-col bg-white border-r border-slate-200 z-10 shrink-0 shadow-xl h-1/2 xl:h-full">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                    <div>
-                        <h2 className="font-bold text-slate-900 flex items-center gap-2">
-                            <Navigation className="w-5 h-5 text-indigo-600" />
-                            Live Telemetry
-                        </h2>
-                        <p className="text-xs text-slate-500 mt-0.5">{vehicles.length} Assets &bull; {activeCount} Moving</p>
+        <div className="h-[calc(100vh-64px)] -m-6 md:-m-8 flex overflow-hidden bg-slate-100 relative">
+            {/* Left Sidebar: Active Operations */}
+            <div className="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                    <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight italic flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-blue-600" />
+                        Live <span className="text-blue-600">Operations</span>
+                    </h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                        Monitoring {vehicles.length} Active Assets
+                    </p>
+                </div>
+
+                <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+                    {/* Search & Filter */}
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="SEARCH FLEET..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
                     </div>
-                    <Button variant="outline" size="icon" onClick={fetchLocations} disabled={isRefreshing} className="h-8 w-8 bg-white">
-                        <RefreshCw className={`w-4 h-4 text-slate-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </Button>
-                </div>
 
-                <div className="p-3 border-b border-slate-100">
-                    <Input
-                        placeholder="Search plate or model..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="bg-slate-50 border-slate-200 h-9"
-                    />
-                </div>
-
-                <ScrollArea className="flex-1">
-                    {isLoadingVehicles ? (
-                        <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
-                    ) : filteredVehicles.length === 0 ? (
-                        <div className="text-center p-8 text-slate-400 text-sm">No vehicles found</div>
-                    ) : (
-                        <div className="divide-y divide-slate-50">
-                            {filteredVehicles.map(v => {
-                                const loc = locations[v.id]
-                                const isMoving = loc?.status === 'moving' || loc?.speed > 0
-                                const isSelected = selectedVehicle?.id === v.id
-
-                                return (
-                                    <div
-                                        key={v.id}
-                                        onClick={() => setSelectedVehicle(v)}
-                                        className={`p-3.5 hover:bg-slate-50 cursor-pointer transition-colors border-l-4 ${isSelected ? 'border-l-indigo-500 bg-indigo-50/50' : 'border-l-transparent'}`}
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <div className="font-bold text-slate-900">{v.attributes.registration_number || v.attributes.display_number}</div>
-                                            {loc ? (
-                                                <Badge variant="secondary" className={`text-[9px] h-4 px-1 uppercase tracking-wider ${isMoving ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                    {isMoving ? 'Moving' : 'Idle'}
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="text-[9px] h-4 px-1 uppercase tracking-wider text-slate-400 border-slate-200">Offline</Badge>
-                                            )}
-                                        </div>
-                                        <div className="text-xs text-slate-500 mb-2 truncate">{v.attributes.make} {v.attributes.model} ({v.attributes.year})</div>
-
-                                        {loc && (
-                                            <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-600 bg-white border border-slate-100 rounded-md p-2 shadow-sm">
-                                                <span className="flex items-center gap-1"><Truck className="w-3 h-3 text-indigo-400" /> {loc.speed || 0} km/h</span>
-                                                <span className="flex items-center gap-1"><Navigation className="w-3 h-3 text-slate-400" style={{ transform: `rotate(${loc.heading || 0}deg)` }} /> {loc.heading || 0}&deg;</span>
-                                                {/* Mock distance/fuel for UI flair */}
-                                                <span className="text-slate-400 ml-auto">{format(new Date(loc.timestamp), 'HH:mm')}</span>
-                                            </div>
-                                        )}
+                    {/* Active Trips Section */}
+                    <div className="space-y-3">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                            Active Trips
+                            <span className="text-blue-600">VIEW ALL</span>
+                        </label>
+                        {MOCK_TRIPS.map((trip) => (
+                            <div
+                                key={trip.id}
+                                onClick={() => {
+                                    const v = vehicles.find(v => v.attributes.registration_number === trip.plate)
+                                    if (v) setSelectedVehicleId(v.id)
+                                }}
+                                className={cn(
+                                    "p-4 rounded-2xl border transition-all cursor-pointer group",
+                                    selectedVehicle?.attributes.registration_number === trip.plate
+                                        ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100"
+                                        : "bg-white border-slate-100 hover:border-blue-200"
+                                )}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
+                                        {trip.plate}
+                                    </h4>
+                                    <Badge className={cn(
+                                        "text-[8px] font-black border-none",
+                                        trip.status === 'on-time' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                    )}>
+                                        {trip.status.toUpperCase()}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                    <Navigation className={cn("h-3 w-3", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
+                                    <span className={cn("truncate", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                        <Clock className={cn("h-3 w-3", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
+                                        <span className={cn("text-[10px] font-black", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
                                     </div>
-                                )
-                            })}
-                        </div>
-                    )}
-                </ScrollArea>
+                                    <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="h-[1px] bg-slate-100 my-4" />
+
+                    {/* All Vehicles Simple List */}
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Idle Fleet</label>
+                        {filteredVehicles.slice(0, 5).map((v) => (
+                            <div
+                                key={v.id}
+                                onClick={() => setSelectedVehicleId(v.id)}
+                                className={cn(
+                                    "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
+                                    selectedVehicleId === v.id ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-50 hover:border-slate-200"
+                                )}
+                            >
+                                <span className="text-[10px] font-black uppercase italic tracking-tight">{v.attributes.registration_number}</span>
+                                <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+                    <button className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm">
+                        <RefreshCw className="h-3 w-3" />
+                        Force Sync Fleet
+                    </button>
+                </div>
             </div>
 
-            {/* Map Area */}
-            <div className="flex-1 relative bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=6.5244,3.3792&zoom=11&size=1600x1200&sensor=false&style=feature:all|element:labels.text.fill|color:0x333333&style=feature:landscape|element:all|color:0xf5f5f5&style=feature:poi|element:all|visibility:off&style=feature:road.highway|element:geometry|color:0xffffff&style=feature:road.arterial|element:geometry|color:0xffffff&style=feature:water|element:geometry|color:0xc2e5ff')] bg-cover bg-center">
+            {/* Main Map View */}
+            <div className="flex-1 relative bg-slate-200">
+                {/* Simulated Map Engine with Better UI */}
+                <div className="absolute inset-0 bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=6.5244,3.3792&zoom=11&size=1600x1200&sensor=false&style=feature:all|element:labels.text.fill|color:0x333333&style=feature:landscape|element:all|color:0xf5f5f5&style=feature:poi|element:all|visibility:off&style=feature:road.highway|element:geometry|color:0xffffff&style=feature:road.arterial|element:geometry|color:0xffffff&style=feature:water|element:geometry|color:0xc2e5ff')] bg-cover bg-center">
+                    <div className="absolute inset-0 bg-slate-400/10 backdrop-grayscale-[20%] pointer-events-none" />
+                </div>
 
-                {/* Visual overlay gradient */}
-                <div className="absolute inset-0 bg-slate-300/20 pointer-events-none" />
+                {/* Map Controls */}
+                <div className="absolute top-8 right-8 z-10 flex flex-col gap-3">
+                    <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-1 flex flex-col overflow-hidden">
+                        <button className="h-10 w-10 flex items-center justify-center hover:bg-white text-slate-900 font-black transition-colors border-b border-slate-100">+</button>
+                        <button className="h-10 w-10 flex items-center justify-center hover:bg-white text-slate-900 font-black transition-colors">-</button>
+                    </div>
+                    <button className="h-10 w-10 bg-white shadow-xl rounded-2xl flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
+                        <Layers className="h-4 w-4" />
+                    </button>
+                </div>
 
-                {/* Simulated markers if no react-leaflet */}
-                {Object.keys(locations).map(vId => {
-                    const loc = locations[vId]
-                    if (!loc) return null
-                    const v = vehicles.find(v => String(v.id) === String(vId))
-                    if (!v) return null
-
-                    const isSelected = selectedVehicle?.id === v.id
-                    const isMoving = loc.status === 'moving' || loc.speed > 0
-
-                    // Generate pseudo random position based on actual lat/lng relative to Lagos (6.52, 3.37)
-                    // For demo purposes, we extrapolate a CSS position since we don't have a real map engine initialized
-                    const topPos = 40 + (6.5244 - loc.lat) * 500
-                    const leftPos = 50 + (loc.lng - 3.3792) * 500
-
-                    return (
-                        <div
-                            key={vId}
-                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-700 ease-in-out z-10`}
-                            style={{
-                                top: `${Math.max(10, Math.min(90, topPos))}%`,
-                                left: `${Math.max(10, Math.min(90, leftPos))}%`
-                            }}
-                            onClick={() => setSelectedVehicle(v)}
+                {/* Top Center: Map Mode Indicator */}
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
+                    <div className="bg-slate-900/80 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 flex items-center gap-4 shadow-2xl">
+                        <button
+                            onClick={() => setViewMode('all')}
+                            className={cn(
+                                "text-[9px] font-black uppercase tracking-widest transition-all",
+                                viewMode === 'all' ? "text-blue-400" : "text-slate-500 hover:text-white"
+                            )}
                         >
-                            <div className="relative group">
-                                <div className={`w-8 h-8 rounded-full shadow-lg border-2 flex items-center justify-center transition-transform ${isSelected ? 'scale-125 border-indigo-600 bg-indigo-500 z-20' : isMoving ? 'border-emerald-500 bg-emerald-400' : 'border-amber-500 bg-amber-400'}`}>
-                                    <Truck className={`w-4 h-4 text-white`} style={{ transform: `rotate(${loc.heading || 0}deg)` }} />
+                            Global Fleet
+                        </button>
+                        <div className="h-3 w-[1px] bg-white/10" />
+                        <button
+                            onClick={() => setViewMode('focused')}
+                            className={cn(
+                                "text-[9px] font-black uppercase tracking-widest transition-all",
+                                viewMode === 'focused' ? "text-blue-400" : "text-slate-500 hover:text-white"
+                            )}
+                        >
+                            Focus Tracking
+                        </button>
+                    </div>
+                </div>
+
+                {/* Simulated Vehicle Markers */}
+                <div className="absolute inset-0 pointer-events-none">
+                    {/* Placeholder for real vehicle markers */}
+                    <div className={cn(
+                        "absolute top-[45%] left-[55%] pointer-events-auto transition-all duration-700",
+                        selectedVehicleId ? "scale-125 z-20" : "scale-100 z-10"
+                    )}>
+                        <div className="relative group cursor-pointer" onClick={() => setSelectedVehicleId('demo-1')}>
+                            <div className={cn(
+                                "h-10 w-10 rounded-full flex items-center justify-center shadow-2xl border-2 transition-all",
+                                selectedVehicleId ? "bg-blue-600 border-white" : "bg-white border-blue-600"
+                            )}>
+                                <Truck className={cn("h-5 w-5", selectedVehicleId ? "text-white" : "text-blue-600")} />
+                            </div>
+                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest border border-white/10">
+                                LND-123-XY • 72 KM/H
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Overlays: Selected Info Bottom Bar */}
+                {selectedVehicle && (
+                    <div className="absolute bottom-8 left-8 right-8 xl:left-96 z-30 pointer-events-none">
+                        <div className="max-w-4xl mx-auto flex items-end justify-between gap-6 pointer-events-auto">
+                            <div className="bg-white rounded-[32px] shadow-2xl border border-slate-100 p-6 flex items-center gap-8 animate-in slide-in-from-bottom-8 duration-500 flex-1">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-4 bg-blue-50 rounded-2xl text-blue-600">
+                                        <Truck className="h-8 w-8" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">{selectedVehicle.attributes.registration_number}</h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CURRENT OPERATOR:</span>
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">MUSA IBRAHIM</span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {/* Ping ripple for moving vehicles */}
-                                {isMoving && !isSelected && (
-                                    <div className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-75" />
-                                )}
+                                <div className="h-12 w-[1px] bg-slate-100 hidden md:block" />
 
-                                {/* Hover tooltip */}
-                                <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max bg-slate-900 text-white text-xs font-bold px-2.5 py-1.5 rounded-md shadow-xl transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-events-none'}`}>
-                                    {v.attributes.registration_number || v.attributes.display_number} &bull; {loc.speed} km/h
-                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 border-l-4 border-r-4 border-b-4 border-transparent border-b-slate-900" />
+                                <div className="hidden md:flex flex-1 items-center justify-around">
+                                    <div className="text-center">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Live Velocity</p>
+                                        <p className="text-xl font-black text-slate-900 italic">72<span className="text-[10px] font-bold text-slate-500 ml-1">KPH</span></p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fuel Remaining</p>
+                                        <p className="text-xl font-black text-slate-900 italic">64<span className="text-[10px] font-bold text-slate-500 ml-1">%</span></p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Signal (RSSI)</p>
+                                        <p className="text-xl font-black text-emerald-600 italic">-62<span className="text-[10px] font-bold text-slate-500 ml-1">dBm</span></p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setIsTelemetryOpen(true)}
+                                        className="p-4 bg-slate-900 text-white rounded-2xl hover:scale-105 transition-all shadow-xl shadow-slate-200"
+                                    >
+                                        <Activity className="h-5 w-5" />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsReplayOpen(true)}
+                                        className="p-4 bg-blue-600 text-white rounded-2xl hover:scale-105 transition-all shadow-xl shadow-blue-100"
+                                    >
+                                        <PlayCircle className="h-5 w-5" />
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    )
-                })}
-
-                {/* Selected Vehicle Info Card Overlay */}
-                {selectedVehicle && (
-                    <div className="absolute bottom-6 left-6 right-6 xl:right-auto xl:w-[400px] z-30 animate-in slide-in-from-bottom-5">
-                        <Card className="shadow-2xl border-0 overflow-hidden">
-                            <div className="h-12 bg-slate-900 px-4 flex items-center justify-between">
-                                <div className="font-bold text-white flex items-center gap-2">
-                                    <Truck className="w-5 h-5 text-indigo-400" />
-                                    {selectedVehicle.attributes.registration_number || selectedVehicle.attributes.display_number}
-                                </div>
-                                <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-300 hover:text-white hover:bg-slate-800" asChild>
-                                    <Link href={`/vehicles/${selectedVehicle.id}`}>View Details</Link>
-                                </Button>
-                            </div>
-                            <CardContent className="p-0">
-                                {locations[selectedVehicle.id] ? (
-                                    <div className="p-4 grid grid-cols-2 gap-4 bg-white/95 backdrop-blur">
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Speed</p>
-                                            <p className="text-2xl font-black text-slate-900">
-                                                {locations[selectedVehicle.id].speed} <span className="text-sm font-semibold text-slate-500">km/h</span>
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Direction</p>
-                                            <p className="text-2xl font-black text-slate-900 flex items-center gap-1">
-                                                {locations[selectedVehicle.id].heading}&deg;
-                                                <Navigation className="w-4 h-4 text-slate-400" style={{ transform: `rotate(${locations[selectedVehicle.id].heading}deg)` }} />
-                                            </p>
-                                        </div>
-                                        <div className="col-span-2 pt-3 border-t border-slate-100 text-sm text-slate-600 flex items-start gap-2">
-                                            <MapPin className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
-                                            <span className="font-medium">{locations[selectedVehicle.id].lat.toFixed(6)}, {locations[selectedVehicle.id].lng.toFixed(6)}</span>
-                                        </div>
-                                        <div className="col-span-2 text-xs text-slate-400 mt-1 pl-6">
-                                            Last transmitted: {format(new Date(locations[selectedVehicle.id].timestamp), 'MMM dd, HH:mm:ss a')}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="p-8 text-center bg-white/95 backdrop-blur">
-                                        <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                                        <p className="font-medium text-slate-900">No Signal Detected</p>
-                                        <p className="text-sm text-slate-500 mt-1">Telemetry endpoint has not broadcasted any location packets for this vehicle recently.</p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
                     </div>
                 )}
-
-                {/* Map Controls placeholder */}
-                <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-                    <Button variant="secondary" size="icon" className="shadow-lg bg-white/90 backdrop-blur hover:bg-white"><Layers className="w-4 h-4" /></Button>
-                    <div className="bg-white/90 backdrop-blur shadow-lg rounded-md overflow-hidden flex flex-col">
-                        <button className="w-10 h-10 flex items-center justify-center border-b border-slate-100 hover:bg-slate-50 text-slate-600 font-bold text-lg">+</button>
-                        <button className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 text-slate-600 font-bold text-lg">-</button>
-                    </div>
-                </div>
             </div>
+
+            {/* Sub-Components / Drawers */}
+            <TelemetryDrawer
+                isOpen={isTelemetryOpen}
+                onClose={() => setIsTelemetryOpen(false)}
+                vehicle={selectedVehicle ? {
+                    plate: selectedVehicle.attributes.registration_number,
+                    speed: 72,
+                    fuel: 64,
+                    temp: 92,
+                    status: 'active',
+                    voltage: '14.2V',
+                    signal: '-62 dBm'
+                } : null}
+            />
+
+            <TripPlaybackTimeline
+                isOpen={isReplayOpen}
+                onClose={() => setIsReplayOpen(false)}
+            />
         </div>
     )
 }

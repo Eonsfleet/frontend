@@ -1,113 +1,127 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Plus, Loader2, MapPin, Eye, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Loader2, MapPin, Eye, Edit2, Trash2, Users, BarChart3, Navigation, AlertCircle } from 'lucide-react'
 import { getGeofences } from '@/lib/api/geofencing'
-import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
+import { BulkAssignmentModal } from './BulkAssignmentModal'
+import { BreachAnalytics } from './BreachAnalytics'
 
 export function GeofenceList() {
-    const [page, setPage] = React.useState(1)
+    const [page, setPage] = useState(1)
+    const [activeAssignment, setActiveAssignment] = useState<string | null>(null)
+    const [activeAnalytics, setActiveAnalytics] = useState<string | null>(null)
 
     const { data, isLoading } = useQuery({
         queryKey: ['geofences', { page }],
         queryFn: () => getGeofences({ page, per_page: 10 }),
     })
 
+    const geofences = data?.data?.geofences || []
+
     return (
-        <Card className="shadow-sm border-slate-200">
-            <CardHeader className="flex flex-row items-center justify-between bg-white border-b border-slate-100">
-                <div>
-                    <CardTitle className="text-lg">Geofence Areas</CardTitle>
-                    <CardDescription>Active boundaries monitored by the system.</CardDescription>
-                </div>
-                <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                    <Link href="/geofences/new">
-                        <Plus className="mr-2 h-4 w-4" /> Create Geofence
-                    </Link>
-                </Button>
-            </CardHeader>
-            <CardContent className="p-0">
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-                        <p>Loading geofences...</p>
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="h-48 w-full bg-white rounded-3xl animate-pulse border border-slate-100" />
+                    ))
+                ) : geofences.length === 0 ? (
+                    <div className="col-span-full py-20 bg-white rounded-[40px] border border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
+                        <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                            <Navigation className="h-10 w-10 text-slate-200" />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 uppercase italic">No Active Zones</h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2 max-w-xs leading-relaxed">
+                            Definitive virtual boundaries help monitor fleet compliance and automate security alerts.
+                        </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                                <tr>
-                                    <th className="px-6 py-4 font-medium">Name</th>
-                                    <th className="px-6 py-4 font-medium">Type</th>
-                                    <th className="px-6 py-4 font-medium">Alert Rule</th>
-                                    <th className="px-6 py-4 font-medium">Status</th>
-                                    <th className="px-6 py-4 font-medium text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {data?.data?.geofences?.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                                                    <MapPin className="h-6 w-6 text-slate-400" />
-                                                </div>
-                                                <p className="font-medium text-slate-900">No Geofences Created</p>
-                                                <p className="text-sm mt-1 mb-4">You have not defined any virtual boundaries yet.</p>
-                                                <Button asChild variant="outline">
-                                                    <Link href="/geofences/new">Draw First Geofence</Link>
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    data?.data?.geofences?.map((item) => (
-                                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="font-medium text-slate-900">{item.attributes.name}</div>
-                                                {item.attributes.description && (
-                                                    <div className="text-xs text-slate-500 truncate max-w-[250px]">{item.attributes.description}</div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <Badge variant="outline" className="capitalize">{item.attributes.type}</Badge>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="capitalize text-slate-700">{item.attributes.alert_type}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <Badge variant={item.attributes.is_active ? 'default' : 'secondary'} className={item.attributes.is_active ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}>
-                                                    {item.attributes.is_active ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="icon" title="View details" asChild>
-                                                        <Link href={`/geofences/${item.id}`}>
-                                                            <Eye className="h-4 w-4 text-slate-500" />
-                                                        </Link>
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" title="Edit geofence">
-                                                        <Edit2 className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 hover:bg-red-50" title="Delete geofence">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    geofences.map((item) => (
+                        <div key={item.id} className="bg-white rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-100 transition-all group overflow-hidden flex flex-col">
+                            <div className="p-6 flex-1">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                        <Navigation className="h-6 w-6" />
+                                    </div>
+                                    <Badge className={cn(
+                                        "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
+                                        item.attributes.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                                    )}>
+                                        {item.attributes.is_active ? 'MONITORING ACTIVE' : 'INACTIVE'}
+                                    </Badge>
+                                </div>
+
+                                <h3 className="text-lg font-black text-slate-900 uppercase italic leading-tight mb-2 truncate group-hover:text-blue-600 transition-colors">
+                                    {item.attributes.name}
+                                </h3>
+
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    <div className="px-2 py-0.5 rounded bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-widest border border-slate-100">
+                                        {item.attributes.type}
+                                    </div>
+                                    <div className="px-2 py-0.5 rounded bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest border border-amber-100">
+                                        ALERT: {item.attributes.alert_type}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-6 mt-6">
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Linked Assets</p>
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <Users className="h-3 w-3 text-blue-500" />
+                                            <span className="text-sm font-black text-slate-700">12</span>
+                                        </div>
+                                    </div>
+                                    <div className="h-8 w-[1px] bg-slate-100" />
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Last Breach</p>
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <AlertCircle className="h-3 w-3 text-rose-500" />
+                                            <span className="text-sm font-black text-slate-700">2h ago</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50/80 backdrop-blur-sm p-3 grid grid-cols-3 gap-2 border-t border-slate-50">
+                                <button
+                                    onClick={() => setActiveAssignment(item.attributes.name)}
+                                    className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
+                                >
+                                    <Users className="h-4 w-4 text-slate-400 group-hover/btn:text-blue-600 mb-1" />
+                                    <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">ASSIGN</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveAnalytics(item.attributes.name)}
+                                    className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
+                                >
+                                    <BarChart3 className="h-4 w-4 text-slate-400 group-hover/btn:text-indigo-600 mb-1" />
+                                    <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">INSIGHTS</span>
+                                </button>
+                                <button className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn">
+                                    <Edit2 className="h-4 w-4 text-slate-400 group-hover/btn:text-slate-900 mb-1" />
+                                    <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">EDIT</span>
+                                </button>
+                            </div>
+                        </div>
+                    ))
                 )}
-            </CardContent>
-        </Card>
+            </div>
+
+            <BulkAssignmentModal
+                isOpen={!!activeAssignment}
+                geofenceName={activeAssignment || ''}
+                onClose={() => setActiveAssignment(null)}
+            />
+
+            <BreachAnalytics
+                isOpen={!!activeAnalytics}
+                geofenceName={activeAnalytics || ''}
+                onClose={() => setActiveAnalytics(null)}
+            />
+        </div>
     )
 }

@@ -9,14 +9,22 @@ interface VehicleStatus {
     color: string
 }
 
-export function VehicleStatusChart({ data }: { data: VehicleStatus[] }) {
+export function VehicleStatusChart({
+    data,
+    title = "Vehicle Status",
+    description = "Real-time fleet availability overview"
+}: {
+    data: VehicleStatus[],
+    title?: string,
+    description?: string
+}) {
     const total = data.reduce((sum, item) => sum + item.value, 0)
 
     return (
         <Card className="col-span-1 border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">Vehicle Status</CardTitle>
-                <CardDescription>Real-time fleet availability overview</CardDescription>
+                <CardTitle className="text-base font-semibold text-slate-900">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="h-[240px] w-full mt-4">

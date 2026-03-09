@@ -65,82 +65,169 @@ export default function TrackingMap({
     getVehicleIcon
 }: TrackingMapProps) {
     return (
-        <MapContainer
-            center={[6.5244, 3.3792]}
-            zoom={12}
-            className="h-full w-full z-10"
-            zoomControl={false}
-        >
-            <TileLayer url={TILE_URL} attribution='&copy; Mapbox' />
+        <>
+            <MapContainer
+                center={[6.5244, 3.3792]}
+                zoom={12}
+                className="h-full w-full z-10"
+                zoomControl={false}
+            >
+                <TileLayer url={TILE_URL} attribution='&copy; Mapbox' />
 
-            <MapController
-                selected={selectedVehicle}
-                locs={locations}
-                allVehicles={vehicles}
-            />
+                <MapController
+                    selected={selectedVehicle}
+                    locs={locations}
+                    allVehicles={vehicles}
+                />
 
-            {filteredVehicles.map(v => {
-                const loc = locations[v.id]
-                if (!loc) return null
-                const isActive = loc.status === 'moving' || loc.speed > 0
+                {filteredVehicles.map(v => {
+                    const loc = locations[v.id]
+                    if (!loc) return null
+                    const isActive = loc.status === 'moving' || loc.speed > 0
+                    const isOnline = loc.is_online || (v.attributes as any).is_online
 
-                return (
-                    <Marker
-                        key={v.id}
-                        position={[loc.lat, loc.lng]}
-                        icon={L.divIcon({
-                            className: 'custom-marker',
-                            html: `
-                                <div class="marker-container ${isActive ? 'is-active' : ''}">
-                                    <div class="marker-pulse"></div>
-                                    <div class="marker-base" style="transform: rotate(${loc.heading || 0}deg)">
-                                        <div class="marker-icon-wrapper">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-                                                ${getMarkerSVG(v.attributes.body_type)}
-                                            </svg>
+                    return (
+                        <Marker
+                            key={v.id}
+                            position={[loc.lat, loc.lng]}
+                            icon={L.divIcon({
+                                className: 'custom-marker-wrapper',
+                                html: `
+                                    <div class="marker-container ${isActive ? 'is-active' : ''} ${isOnline ? 'is-online' : 'is-offline'}">
+                                        <div class="marker-pulse"></div>
+                                        <div class="marker-base" style="transform: rotate(${loc.heading || 0}deg)">
+                                            <div class="marker-icon-wrapper">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
+                                                    ${getMarkerSVG(v.attributes.body_type)}
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `,
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20]
+                            })}
+                            eventHandlers={{
+                                click: () => setSelectedVehicle(v)
+                            }}
+                        >
+                            <Popup className="custom-popup" closeButton={false}>
+                                <div className="p-3 min-w-[200px] bg-white rounded-2xl shadow-2xl border border-slate-100">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <Badge className={cn(
+                                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
+                                            isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+                                        )}>
+                                            {isActive ? 'Moving' : 'Idle'}
+                                        </Badge>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{normalizeReg(v.attributes.registration_number)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
+                                        <div className="p-2 bg-white rounded-lg shadow-sm">
+                                            {getVehicleIcon(v.attributes.body_type, loc.status)}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make)}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{capitalize(v.attributes.model)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Velocity</span>
+                                            <span className="text-sm font-black text-blue-600 italic">{loc.speed} <span className="text-[9px]">KPH</span></span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Heading</span>
+                                            <span className="text-sm font-black text-slate-900 italic">{loc.heading || 0}°</span>
                                         </div>
                                     </div>
                                 </div>
-                            `,
-                            iconSize: [40, 40],
-                            iconAnchor: [20, 20]
-                        })}
-                        eventHandlers={{
-                            click: () => setSelectedVehicle(v)
-                        }}
-                    >
-                        <Popup className="custom-popup" closeButton={false}>
-                            <div className="p-3 min-w-[180px] bg-white rounded-xl shadow-2xl">
-                                <div className="flex items-center justify-between mb-2">
-                                    <Badge className={cn("text-[9px] px-1.5 h-4 font-black uppercase tracking-widest", isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white")}>
-                                        {isActive ? 'Moving' : 'Idle'}
-                                    </Badge>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{normalizeReg(v.attributes.registration_number)}</span>
-                                </div>
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-2 bg-slate-50 rounded-lg">
-                                        {getVehicleIcon(v.attributes.body_type, loc.status)}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make)}</p>
-                                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">{capitalize(v.attributes.model)}</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Speed</span>
-                                        <span className="text-xs font-black text-blue-600">{loc.speed} <span className="text-[9px]">KM/H</span></span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Heading</span>
-                                        <span className="text-xs font-black text-slate-900">{loc.heading || 0}°</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </Popup>
-                    </Marker>
-                )
-            })}
-        </MapContainer>
+                            </Popup>
+                        </Marker>
+                    )
+                })}
+            </MapContainer>
+
+            <style jsx global>{`
+                .leaflet-marker-icon {
+                    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                
+                .marker-container {
+                    position: relative;
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .marker-base {
+                    position: relative;
+                    z-index: 2;
+                    width: 32px;
+                    height: 32px;
+                    background: #1e293b;
+                    border: 2px solid white;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                    transition: transform 0.5s ease;
+                }
+
+                .marker-container.is-active .marker-base {
+                    background: #2563eb;
+                    border-color: #60a5fa;
+                }
+
+                .marker-container.is-offline .marker-base {
+                    opacity: 0.6;
+                    filter: grayscale(1);
+                }
+
+                .marker-pulse {
+                    position: absolute;
+                    width: 40px;
+                    height: 40px;
+                    background: rgba(37, 99, 235, 0.2);
+                    border-radius: 50%;
+                    transform: scale(0);
+                    opacity: 0;
+                    z-index: 1;
+                }
+
+                .marker-container.is-active .marker-pulse {
+                    animation: marker-pulse 2s infinite;
+                }
+
+                @keyframes marker-pulse {
+                    0% { transform: scale(0.5); opacity: 0.8; }
+                    100% { transform: scale(1.5); opacity: 0; }
+                }
+
+                .marker-icon-wrapper {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .custom-popup .leaflet-popup-content-wrapper {
+                    padding: 0;
+                    overflow: hidden;
+                    border-radius: 24px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.2) !important;
+                    border: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .custom-popup .leaflet-popup-tip-container {
+                    display: none;
+                }
+            `}</style>
+        </>
     )
 }
