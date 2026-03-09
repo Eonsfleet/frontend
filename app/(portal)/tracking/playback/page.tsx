@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +15,8 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import * as vehicleApi from '@/lib/api/vehicles'
 import * as trackingApi from '@/lib/api/tracking'
-import { format, subHours, startOfHour, addMinutes } from 'date-fns'
+import * as tripsApi from '@/lib/api/trips'
+import { format, subHours, startOfHour, addMinutes, parseISO } from 'date-fns'
 import { Slider } from '@/components/ui/slider'
 import { useRouter } from 'next/navigation'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -59,6 +62,7 @@ export default function PlaybackPage() {
     const router = useRouter()
     const { setSidebarCollapsed } = useUIStore()
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+    const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
     const [startTime, setStartTime] = useState(format(subHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm"))
     const [endTime, setEndTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"))
 
@@ -79,13 +83,24 @@ export default function PlaybackPage() {
 
     const vehicles = vehicleData?.data || []
 
-    const { data: movementData, isLoading: isLoadingPlayback, isError } = useQuery<{ data: MovementData[] }>({
-        queryKey: ['playback', selectedVehicleId, startTime, endTime],
-        queryFn: () => trackingApi.getVehiclePlayback(selectedVehicleId!, startTime, endTime),
-        enabled: !!selectedVehicleId,
+    const { data: tripsData, isLoading: isLoadingTrips } = useQuery({
+        queryKey: ['trips', selectedVehicleId],
+        queryFn: () => tripsApi.getTrips({ page: 1 }), // Note: Filter by vehicle if API supports it, or filter client side
+        enabled: !!selectedVehicleId
     })
 
-    const movements = useMemo(() => movementData?.data || [], [movementData])
+    const vehicleTrips = useMemo(() => {
+        if (!tripsData?.data?.trips) return []
+        return tripsData.data.trips.filter(t => t.relationships?.vehicle?.data?.id === String(selectedVehicleId))
+    }, [tripsData, selectedVehicleId])
+
+    const { data: movementData, isLoading: isLoadingPlayback, isError } = useQuery({
+        queryKey: ['playback', selectedVehicleId, selectedTripId],
+        queryFn: () => trackingApi.getTripPlayback(selectedVehicleId!, selectedTripId!),
+        enabled: !!selectedVehicleId && !!selectedTripId,
+    })
+
+    const movements = useMemo(() => movementData?.data?.gps_points || [], [movementData])
     const currentMovement = useMemo(() => movements[playbackIndex], [movements, playbackIndex])
 
     // Playback Loop
@@ -111,14 +126,22 @@ export default function PlaybackPage() {
         [vehicles, selectedVehicleId]
     )
 
-    const MapController = ({ movements }: { movements: MovementData[] }) => {
+    const MapController = ({ movements, currentIndex }: { movements: MovementData[], currentIndex: number }) => {
         const map = useMap()
         useEffect(() => {
-            if (movements.length > 0) {
+            if (movements.length > 0 && currentIndex === 0) {
                 const bounds = movements.map(m => [m.lat, m.lng] as [number, number])
                 map.fitBounds(bounds, { padding: [50, 50] })
             }
         }, [movements.length])
+
+        useEffect(() => {
+            if (movements[currentIndex]) {
+                const p = movements[currentIndex]
+                map.flyTo([p.lat, p.lng], 16)
+            }
+        }, [currentIndex, map])
+
         return null
     }
 
@@ -156,7 +179,31 @@ export default function PlaybackPage() {
                             </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Select Trip</label>
+                            <select
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={selectedTripId || ''}
+                                onChange={(e) => {
+                                    setSelectedTripId(e.target.value)
+                                    setPlaybackIndex(0)
+                                    setIsPlaying(false)
+                                }}
+                                disabled={!selectedVehicleId || isLoadingTrips}
+                            >
+                                <option value="" disabled>{isLoadingTrips ? 'Loading Trips...' : 'Select Trip...'}</option>
+                                {vehicleTrips.map(t => (
+                                    <option key={t.id} value={t.id}>
+                                        {t.attributes.trip_number} ({format(parseISO(t.attributes.planned_start_time), 'MMM dd')})
+                                    </option>
+                                ))}
+                                {!isLoadingTrips && vehicleTrips.length === 0 && selectedVehicleId && (
+                                    <option value="" disabled>No trips found</option>
+                                )}
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 opacity-50 pointer-events-none">
                             <div className="space-y-1.5 text-slate-400">
                                 <label className="text-[10px] font-black uppercase tracking-widest">Start Time</label>
                                 <div className="relative">
@@ -208,16 +255,20 @@ export default function PlaybackPage() {
                                         <div className="w-4 h-4 rounded-full bg-blue-600 border-4 border-white shadow mt-1 shrink-0" />
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Origin</p>
-                                            <p className="text-xs font-bold text-slate-900 leading-tight">Lagos Distribution Terminal</p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{format(new Date(startTime), 'MMM dd, HH:mm')}</p>
+                                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                                                {movements[0] ? `${movements[0].lat.toFixed(4)}, ${movements[0].lng.toFixed(4)}` : 'Mission Start Point'}
+                                            </p>
+                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{movements[0] ? format(new Date(movements[0].timestamp), 'MMM dd, HH:mm') : format(new Date(startTime), 'MMM dd, HH:mm')}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 relative">
                                         <div className="w-4 h-4 rounded-full bg-slate-200 border-4 border-white shadow mt-1 shrink-0" />
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Destination</p>
-                                            <p className="text-xs font-bold text-slate-900 leading-tight">Ikeja City Core</p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{format(new Date(endTime), 'MMM dd, HH:mm')}</p>
+                                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                                                {movements[movements.length - 1] ? `${movements[movements.length - 1].lat.toFixed(4)}, ${movements[movements.length - 1].lng.toFixed(4)}` : 'Mission End Point'}
+                                            </p>
+                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{movements[movements.length - 1] ? format(new Date(movements[movements.length - 1].timestamp), 'MMM dd, HH:mm') : format(new Date(endTime), 'MMM dd, HH:mm')}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -253,7 +304,7 @@ export default function PlaybackPage() {
                         zoomControl={false}
                     >
                         <TileLayer url={TILE_URL} attribution='&copy; Mapbox' />
-                        <MapController movements={movements} />
+                        <MapController movements={movements} currentIndex={playbackIndex} />
 
                         {movements.length > 1 && (
                             <Polyline
@@ -266,9 +317,26 @@ export default function PlaybackPage() {
                         )}
 
                         {currentMovement && (
-                            <Marker position={[currentMovement.lat, currentMovement.lng]}>
-                                {/* Custom icon could be added here for better rotation visualization */}
-                            </Marker>
+                            <Marker
+                                position={[currentMovement.lat, currentMovement.lng]}
+                                icon={L.divIcon({
+                                    className: 'custom-marker-wrapper',
+                                    html: `
+                                        <div class="marker-container is-active is-online">
+                                            <div class="marker-pulse"></div>
+                                            <div class="marker-base" style="transform: rotate(${currentMovement.heading || 0}deg); background: #2563eb; border-color: #fff;">
+                                                <div class="marker-icon-wrapper">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
+                                                        <path d="M12 19V5M5 12l7-7 7 7"/>
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `,
+                                    iconSize: [40, 40],
+                                    iconAnchor: [20, 20]
+                                })}
+                            />
                         )}
                     </MapContainer>
                 )}
@@ -429,6 +497,54 @@ export default function PlaybackPage() {
             <style jsx global>{`
                 .leaflet-container {
                     background: #f8fafc !important;
+                }
+                .marker-container {
+                    position: relative;
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .marker-base {
+                    position: relative;
+                    z-index: 2;
+                    width: 32px;
+                    height: 32px;
+                    background: #1e293b;
+                    border: 2px solid white;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                    transition: transform 0.5s ease;
+                }
+                .marker-container.is-active .marker-base {
+                    background: #2563eb;
+                    border-color: #60a5fa;
+                }
+                .marker-pulse {
+                    position: absolute;
+                    width: 40px;
+                    height: 40px;
+                    background: rgba(37, 99, 235, 0.2);
+                    border-radius: 50%;
+                    transform: scale(0);
+                    opacity: 0;
+                    z-index: 1;
+                }
+                .marker-container.is-active .marker-pulse {
+                    animation: marker-pulse 2s infinite;
+                }
+                @keyframes marker-pulse {
+                    0% { transform: scale(0.5); opacity: 0.8; }
+                    100% { transform: scale(1.5); opacity: 0; }
+                }
+                .marker-icon-wrapper {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
                 .custom-popup .leaflet-popup-content-wrapper {
                     border-radius: 12px;

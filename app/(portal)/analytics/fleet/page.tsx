@@ -1,26 +1,47 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Truck, Navigation, Settings } from 'lucide-react'
-
-const topVehicles = [
-    { name: 'KJA-123-AB', distance: 4500, trips: 142 },
-    { name: 'EKY-456-CD', distance: 3800, trips: 110 },
-    { name: 'APP-789-EF', distance: 3100, trips: 89 },
-    { name: 'LSR-321-GH', distance: 2900, trips: 76 },
-    { name: 'BDG-654-IJ', distance: 2100, trips: 55 },
-]
-
-const availabilityStatus = [
-    { name: 'Active on Trip', value: 65, color: '#4f46e5' },
-    { name: 'Idle / Available', value: 20, color: '#10b981' },
-    { name: 'Maintenance', value: 10, color: '#f59e0b' },
-    { name: 'Offline', value: 5, color: '#94a3b8' },
-]
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { useQuery } from '@tanstack/react-query'
+import { getFuelConsumptionReport } from '@/lib/api/analytics'
+import { getTrackingMetrics } from '@/lib/api/tracking'
+import { Loader2 } from 'lucide-react'
 
 export default function FleetAnalyticsPage() {
+    const { data: consumptionData, isLoading: isConsLoading } = useQuery({
+        queryKey: ['fleet-consumption-top'],
+        queryFn: () => getFuelConsumptionReport({ period: 'monthly', sort_by: 'distance', per_page: 5 })
+    })
+
+    const { data: trackingMetrics, isLoading: isMetricsLoading } = useQuery({
+        queryKey: ['fleet-tracking-metrics'],
+        queryFn: () => getTrackingMetrics()
+    })
+
+    const metrics = trackingMetrics?.data || {}
+    const topVehicles = useMemo(() => {
+        return consumptionData?.data?.report_data?.map((r: any) => ({
+            name: r.vehicle_registration,
+            distance: r.distance_km,
+            trips: r.trip_count
+        })) || []
+    }, [consumptionData])
+
+    const availabilityStatus = useMemo(() => [
+        { name: 'Active on Trip', value: metrics.moving_assets || 0, color: '#4f46e5' },
+        { name: 'Idle / Available', value: metrics.idle_assets || 0, color: '#10b981' },
+        { name: 'Offline', value: metrics.offline_assets || 0, color: '#94a3b8' },
+    ], [metrics])
+
+    if (isConsLoading || isMetricsLoading) {
+        return (
+            <div className="h-full w-full flex items-center justify-center p-20">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        )
+    }
+
     return (
         <div className="p-6 lg:p-8 space-y-6">
             <div>

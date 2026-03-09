@@ -16,11 +16,18 @@ import {
     PlayCircle
 } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import * as api from '@/lib/api/vehicles'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/store/authStore'
+import dynamic from 'next/dynamic'
+import { normalizeGpsPacket } from '@/lib/gps'
+
+const LiveMapComponent = dynamic(
+    () => import('@/components/live/LiveMapComponent'),
+    { ssr: false }
+)
 
 const MOCK_TRIPS = [
     { id: 't1', plate: 'LND-123-XY', destination: 'Lagos Terminal', eta: '14:20 PM', status: 'on-time' },
@@ -37,6 +44,7 @@ export default function LiveTrackingPage() {
 
     const { token } = useAuthStore()
 
+    // 1. Fetch all vehicles
     const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles', { per_page: 100 }],
         queryFn: () => api.getVehicles({ per_page: 100 }),
@@ -45,17 +53,54 @@ export default function LiveTrackingPage() {
 
     const vehicles = vehicleData?.data || []
 
+    // 2. Fetch real-time locations for all vehicles
+    const locationQueries = useQueries({
+        queries: vehicles.map((v) => ({
+            queryKey: ['vehicle-location', v.id],
+            queryFn: () => api.getCurrentLocation(v.id),
+            enabled: !!token && vehicles.length > 0,
+            refetchInterval: 10000, // Refresh every 10s for live feel
+        })),
+    })
+
+    console.log(locationQueries, token, vehicles)
+
+    // 3. Normalize and combine data
+    const trackedVehicles = useMemo(() => {
+        return vehicles.map((v, index) => {
+            const locRes = locationQueries[index]?.data
+            const locData = locRes?.data
+            const normalized = locData ? normalizeGpsPacket(locData) : null
+
+            return {
+                id: v.id,
+                registration_number: v.attributes.registration_number,
+                latitude: normalized?.latitude || 0,
+                longitude: normalized?.longitude || 0,
+                speed: normalized?.speed || 0,
+                heading: normalized?.course || 0,
+                status: normalized?.status || 'offline',
+                fuel: normalized?.fuel_level_percent || 0,
+                odometer: normalized?.odometer || 0,
+                ignition: normalized?.ignition || false,
+                address: normalized?.address || 'Locating...'
+            }
+        })
+    }, [vehicles, locationQueries])
+
+    console.log(trackedVehicles)
+
     // Derived selected vehicle object
     const selectedVehicle = useMemo(() =>
-        vehicles.find(v => v.id === selectedVehicleId) || null
-        , [vehicles, selectedVehicleId])
+        trackedVehicles.find(v => v.id === selectedVehicleId) || null
+        , [trackedVehicles, selectedVehicleId])
 
     const filteredVehicles = useMemo(() => {
-        if (!searchQuery) return vehicles
-        return vehicles.filter(v =>
-            v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
+        if (!searchQuery) return trackedVehicles
+        return trackedVehicles.filter(v =>
+            v.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
         )
-    }, [vehicles, searchQuery])
+    }, [trackedVehicles, searchQuery])
 
     return (
         <div className="h-[calc(100vh-64px)] -m-6 md:-m-8 flex overflow-hidden bg-slate-100 relative">
@@ -94,18 +139,18 @@ export default function LiveTrackingPage() {
                             <div
                                 key={trip.id}
                                 onClick={() => {
-                                    const v = vehicles.find(v => v.attributes.registration_number === trip.plate)
+                                    const v = trackedVehicles.find(v => v.registration_number === trip.plate)
                                     if (v) setSelectedVehicleId(v.id)
                                 }}
                                 className={cn(
                                     "p-4 rounded-2xl border transition-all cursor-pointer group",
-                                    selectedVehicle?.attributes.registration_number === trip.plate
+                                    selectedVehicle?.registration_number === trip.plate
                                         ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100"
                                         : "bg-white border-slate-100 hover:border-blue-200"
                                 )}
                             >
                                 <div className="flex items-center justify-between mb-2">
-                                    <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
+                                    <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
                                         {trip.plate}
                                     </h4>
                                     <Badge className={cn(
@@ -116,15 +161,15 @@ export default function LiveTrackingPage() {
                                     </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                                    <Navigation className={cn("h-3 w-3", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
-                                    <span className={cn("truncate", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
+                                    <Navigation className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
+                                    <span className={cn("truncate", selectedVehicle?.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
-                                        <Clock className={cn("h-3 w-3", selectedVehicle?.attributes.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
-                                        <span className={cn("text-[10px] font-black", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
+                                        <Clock className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
+                                        <span className={cn("text-[10px] font-black", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
                                     </div>
-                                    <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.attributes.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
+                                    <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
                                 </div>
                             </div>
                         ))}
@@ -135,7 +180,7 @@ export default function LiveTrackingPage() {
                     {/* All Vehicles Simple List */}
                     <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Idle Fleet</label>
-                        {filteredVehicles.slice(0, 5).map((v) => (
+                        {filteredVehicles.map((v) => (
                             <div
                                 key={v.id}
                                 onClick={() => setSelectedVehicleId(v.id)}
@@ -144,8 +189,11 @@ export default function LiveTrackingPage() {
                                     selectedVehicleId === v.id ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-50 hover:border-slate-200"
                                 )}
                             >
-                                <span className="text-[10px] font-black uppercase italic tracking-tight">{v.attributes.registration_number}</span>
-                                <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                                <span className="text-[10px] font-black uppercase italic tracking-tight">{v.registration_number}</span>
+                                <div className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    v.status === 'online' ? "bg-emerald-500" : "bg-slate-300"
+                                )} />
                             </div>
                         ))}
                     </div>
@@ -161,67 +209,11 @@ export default function LiveTrackingPage() {
 
             {/* Main Map View */}
             <div className="flex-1 relative bg-slate-200">
-                {/* Simulated Map Engine with Better UI */}
-                <div className="absolute inset-0 bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=6.5244,3.3792&zoom=11&size=1600x1200&sensor=false&style=feature:all|element:labels.text.fill|color:0x333333&style=feature:landscape|element:all|color:0xf5f5f5&style=feature:poi|element:all|visibility:off&style=feature:road.highway|element:geometry|color:0xffffff&style=feature:road.arterial|element:geometry|color:0xffffff&style=feature:water|element:geometry|color:0xc2e5ff')] bg-cover bg-center">
-                    <div className="absolute inset-0 bg-slate-400/10 backdrop-grayscale-[20%] pointer-events-none" />
-                </div>
-
-                {/* Map Controls */}
-                <div className="absolute top-8 right-8 z-10 flex flex-col gap-3">
-                    <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-1 flex flex-col overflow-hidden">
-                        <button className="h-10 w-10 flex items-center justify-center hover:bg-white text-slate-900 font-black transition-colors border-b border-slate-100">+</button>
-                        <button className="h-10 w-10 flex items-center justify-center hover:bg-white text-slate-900 font-black transition-colors">-</button>
-                    </div>
-                    <button className="h-10 w-10 bg-white shadow-xl rounded-2xl flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
-                        <Layers className="h-4 w-4" />
-                    </button>
-                </div>
-
-                {/* Top Center: Map Mode Indicator */}
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
-                    <div className="bg-slate-900/80 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 flex items-center gap-4 shadow-2xl">
-                        <button
-                            onClick={() => setViewMode('all')}
-                            className={cn(
-                                "text-[9px] font-black uppercase tracking-widest transition-all",
-                                viewMode === 'all' ? "text-blue-400" : "text-slate-500 hover:text-white"
-                            )}
-                        >
-                            Global Fleet
-                        </button>
-                        <div className="h-3 w-[1px] bg-white/10" />
-                        <button
-                            onClick={() => setViewMode('focused')}
-                            className={cn(
-                                "text-[9px] font-black uppercase tracking-widest transition-all",
-                                viewMode === 'focused' ? "text-blue-400" : "text-slate-500 hover:text-white"
-                            )}
-                        >
-                            Focus Tracking
-                        </button>
-                    </div>
-                </div>
-
-                {/* Simulated Vehicle Markers */}
-                <div className="absolute inset-0 pointer-events-none">
-                    {/* Placeholder for real vehicle markers */}
-                    <div className={cn(
-                        "absolute top-[45%] left-[55%] pointer-events-auto transition-all duration-700",
-                        selectedVehicleId ? "scale-125 z-20" : "scale-100 z-10"
-                    )}>
-                        <div className="relative group cursor-pointer" onClick={() => setSelectedVehicleId('demo-1')}>
-                            <div className={cn(
-                                "h-10 w-10 rounded-full flex items-center justify-center shadow-2xl border-2 transition-all",
-                                selectedVehicleId ? "bg-blue-600 border-white" : "bg-white border-blue-600"
-                            )}>
-                                <Truck className={cn("h-5 w-5", selectedVehicleId ? "text-white" : "text-blue-600")} />
-                            </div>
-                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest border border-white/10">
-                                LND-123-XY • 72 KM/H
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <LiveMapComponent
+                    vehicles={trackedVehicles}
+                    selectedVehicleId={selectedVehicleId}
+                    onSelectVehicle={setSelectedVehicleId}
+                />
 
                 {/* Overlays: Selected Info Bottom Bar */}
                 {selectedVehicle && (
@@ -232,11 +224,14 @@ export default function LiveTrackingPage() {
                                     <div className="p-4 bg-blue-50 rounded-2xl text-blue-600">
                                         <Truck className="h-8 w-8" />
                                     </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">{selectedVehicle.attributes.registration_number}</h3>
+                                    <div className="max-w-[150px]">
+                                        <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight truncate">{selectedVehicle.registration_number}</h3>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CURRENT OPERATOR:</span>
-                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">MUSA IBRAHIM</span>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">STATUS:</span>
+                                            <span className={cn(
+                                                "text-[10px] font-black uppercase tracking-widest",
+                                                selectedVehicle.status === 'online' ? "text-emerald-600" : "text-rose-600"
+                                            )}>{selectedVehicle.status}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -246,15 +241,15 @@ export default function LiveTrackingPage() {
                                 <div className="hidden md:flex flex-1 items-center justify-around">
                                     <div className="text-center">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Live Velocity</p>
-                                        <p className="text-xl font-black text-slate-900 italic">72<span className="text-[10px] font-bold text-slate-500 ml-1">KPH</span></p>
+                                        <p className="text-xl font-black text-slate-900 italic">{selectedVehicle.speed}<span className="text-[10px] font-bold text-slate-500 ml-1">KPH</span></p>
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fuel Remaining</p>
-                                        <p className="text-xl font-black text-slate-900 italic">64<span className="text-[10px] font-bold text-slate-500 ml-1">%</span></p>
+                                        <p className="text-xl font-black text-slate-900 italic">{selectedVehicle.fuel}<span className="text-[10px] font-bold text-slate-500 ml-1">%</span></p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Signal (RSSI)</p>
-                                        <p className="text-xl font-black text-emerald-600 italic">-62<span className="text-[10px] font-bold text-slate-500 ml-1">dBm</span></p>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ignition</p>
+                                        <p className={cn("text-xl font-black italic", selectedVehicle.ignition ? "text-blue-600" : "text-slate-400")}>{selectedVehicle.ignition ? 'ON' : 'OFF'}</p>
                                     </div>
                                 </div>
 
@@ -282,14 +277,19 @@ export default function LiveTrackingPage() {
             <TelemetryDrawer
                 isOpen={isTelemetryOpen}
                 onClose={() => setIsTelemetryOpen(false)}
+                vehicleId={selectedVehicleId}
                 vehicle={selectedVehicle ? {
-                    plate: selectedVehicle.attributes.registration_number,
-                    speed: 72,
-                    fuel: 64,
-                    temp: 92,
-                    status: 'active',
-                    voltage: '14.2V',
-                    signal: '-62 dBm'
+                    plate: selectedVehicle.registration_number,
+                    speed: selectedVehicle.speed,
+                    fuel: selectedVehicle.fuel,
+                    temp: 0, // Will be fetched by TelemetryDrawer sensors but we can pass default
+                    status: selectedVehicle.status,
+                    voltage: '---',
+                    signal: '---',
+                    ignition: selectedVehicle.ignition,
+                    odometer: selectedVehicle.odometer,
+                    lat: selectedVehicle.latitude,
+                    lng: selectedVehicle.longitude
                 } : null}
             />
 

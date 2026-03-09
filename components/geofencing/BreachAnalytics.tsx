@@ -12,8 +12,10 @@ import {
     ResponsiveContainer,
     Cell
 } from 'recharts'
-import { AlertTriangle, TrendingDown, Clock, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, TrendingDown, Clock, ShieldCheck, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import * as geofencingApi from '@/lib/api/geofencing'
 
 const BREACH_DATA = [
     { day: 'Mon', count: 12 },
@@ -34,13 +36,29 @@ const TOP_OFFENDERS = [
 export function BreachAnalytics({
     isOpen,
     onClose,
+    geofenceId,
     geofenceName = 'WAREHOUSE ALPHA'
 }: {
     isOpen: boolean
     onClose: () => void
+    geofenceId?: string | number
     geofenceName?: string
 }) {
+    const { data: analyticsData, isLoading } = useQuery({
+        queryKey: ['geofence-analytics', geofenceId],
+        queryFn: () => geofencingApi.getGeofenceAnalytics(geofenceId!),
+        enabled: isOpen && !!geofenceId
+    })
+
     if (!isOpen) return null
+
+    const analytics = analyticsData?.data || {
+        total_breaches: 0,
+        avg_stay_duration: '0m',
+        compliance_rate: 0,
+        trend: [],
+        offenders: []
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -70,15 +88,15 @@ export function BreachAnalytics({
                                 <AlertTriangle className="h-5 w-5 text-rose-500 group-hover:scale-110 transition-transform" />
                                 <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Total Breaches</span>
                             </div>
-                            <h3 className="text-4xl font-black text-slate-900 italic">89</h3>
-                            <p className="text-[10px] text-rose-600 font-bold uppercase mt-2">+12% vs prev. week</p>
+                            <h3 className="text-4xl font-black text-slate-900 italic">{analytics.total_breaches}</h3>
+                            <p className="text-[10px] text-rose-600 font-bold uppercase mt-2">Historical total</p>
                         </div>
                         <div className="p-6 rounded-3xl bg-blue-50 border border-blue-100">
                             <div className="flex items-center justify-between mb-4">
                                 <Clock className="h-5 w-5 text-blue-500" />
                                 <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Avg. Stay Duration</span>
                             </div>
-                            <h3 className="text-4xl font-black text-slate-900 italic">42m</h3>
+                            <h3 className="text-4xl font-black text-slate-900 italic">{analytics.avg_stay_duration}</h3>
                             <p className="text-[10px] text-blue-600 font-bold uppercase mt-2">Optimal efficiency</p>
                         </div>
                         <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-100">
@@ -86,8 +104,8 @@ export function BreachAnalytics({
                                 <ShieldCheck className="h-5 w-5 text-emerald-500" />
                                 <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Compliance Rate</span>
                             </div>
-                            <h3 className="text-4xl font-black text-slate-900 italic">94%</h3>
-                            <p className="text-[10px] text-emerald-600 font-bold uppercase mt-2">Target reached</p>
+                            <h3 className="text-4xl font-black text-slate-900 italic">{analytics.compliance_rate}%</h3>
+                            <p className="text-[10px] text-emerald-600 font-bold uppercase mt-2">Target tracking</p>
                         </div>
                     </div>
 
@@ -136,7 +154,11 @@ export function BreachAnalytics({
                                 Top Offending Vehicles
                             </h3>
                             <div className="space-y-3">
-                                {TOP_OFFENDERS.map((v) => (
+                                {isLoading ? (
+                                    <div className="flex justify-center p-8">
+                                        <Loader2 className="h-6 w-6 text-slate-200 animate-spin" />
+                                    </div>
+                                ) : (analytics.offenders || []).map((v: any) => (
                                     <div key={v.plate} className="p-4 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-between group hover:border-rose-200 transition-all">
                                         <div className="flex items-center gap-4">
                                             <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:text-rose-500 transition-colors shadow-sm">

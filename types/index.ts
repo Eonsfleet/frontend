@@ -200,16 +200,33 @@ export interface Trip {
 }
 
 export interface MaintenanceSchedule {
-    id: string
+    id: string | number
     attributes: {
-        vehicle_id: string
+        schedule_type: string
         service_type: string
-        last_service_date: string | null
-        last_service_odometer: number | null
-        next_service_date: string | null
-        next_service_odometer: number | null
-        status: 'upcoming' | 'overdue' | 'completed'
-        notes: string | null
+        interval_unit: string
+        interval_value: number
+        due_date: string
+        description: string | null
+        schedule_date: string | null
+        expected_odometer: number | null
+        status: string
+        turn_on_notification: boolean
+        last_scheduled_at: string | null
+        is_recurring: boolean
+        parent_schedule_id?: number | null
+        series_id?: string | null
+        occurrence_number?: number
+        is_master_schedule?: boolean
+        created_at: string
+        updated_at: string
+        // Deprecated/Compatibility fields
+        vehicle_id?: string | number
+        last_service_date?: string | null
+        last_service_odometer?: number | null
+        next_service_date?: string | null
+        next_service_odometer?: number | null
+        notes?: string | null
     }
 }
 

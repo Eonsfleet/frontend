@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,9 @@ interface TrackingMapProps {
     TILE_URL: string
     getMarkerSVG: (bodyType: string) => string
     getVehicleIcon: (bodyType: string, status: string) => React.ReactNode
+    playbackData?: any[]
+    playbackIndex?: number
+    isReplayMode?: boolean
 }
 
 const MapController = ({ selected, locs, allVehicles }: any) => {
@@ -45,11 +48,18 @@ const MapController = ({ selected, locs, allVehicles }: any) => {
     }, [allVehicles.length === 0])
 
     useEffect(() => {
-        if (selected && locs[selected.id]) {
+        if (selected && locs[selected.id] && !allVehicles.isReplayMode) {
             const l = locs[selected.id]
             map.flyTo([l.lat, l.lng], 16)
         }
     }, [selected?.id, locs, map])
+
+    useEffect(() => {
+        if (allVehicles.isReplayMode && allVehicles.playbackData?.[allVehicles.playbackIndex]) {
+            const p = allVehicles.playbackData[allVehicles.playbackIndex]
+            map.flyTo([p.lat, p.lng], 16)
+        }
+    }, [allVehicles.playbackIndex, allVehicles.isReplayMode, map])
 
     return null
 }
@@ -62,8 +72,12 @@ export default function TrackingMap({
     vehicles,
     TILE_URL,
     getMarkerSVG,
-    getVehicleIcon
+    getVehicleIcon,
+    playbackData = [],
+    playbackIndex = 0,
+    isReplayMode = false
 }: TrackingMapProps) {
+    const currentPlayback = playbackData[playbackIndex]
     return (
         <>
             <MapContainer
@@ -77,8 +91,47 @@ export default function TrackingMap({
                 <MapController
                     selected={selectedVehicle}
                     locs={locations}
-                    allVehicles={vehicles}
+                    allVehicles={{
+                        length: vehicles.length,
+                        isReplayMode,
+                        playbackData,
+                        playbackIndex
+                    }}
                 />
+
+                {isReplayMode && playbackData.length > 0 && (
+                    <>
+                        <Polyline
+                            positions={playbackData.map(p => [p.lat, p.lng])}
+                            color="#3b82f6"
+                            weight={4}
+                            opacity={0.6}
+                            dashArray="10, 10"
+                        />
+                        {currentPlayback && (
+                            <Marker
+                                position={[currentPlayback.lat, currentPlayback.lng]}
+                                icon={L.divIcon({
+                                    className: 'custom-marker-wrapper',
+                                    html: `
+                                        <div class="marker-container is-active is-online">
+                                            <div class="marker-pulse"></div>
+                                            <div class="marker-base" style="transform: rotate(${currentPlayback.heading || 0}deg); background: #2563eb; border-color: #fff;">
+                                                <div class="marker-icon-wrapper">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
+                                                        <path d="M12 19V5M5 12l7-7 7 7"/>
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `,
+                                    iconSize: [40, 40],
+                                    iconAnchor: [20, 20]
+                                })}
+                            />
+                        )}
+                    </>
+                )}
 
                 {filteredVehicles.map(v => {
                     const loc = locations[v.id]

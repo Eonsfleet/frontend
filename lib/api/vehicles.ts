@@ -65,6 +65,7 @@ export const deassignDriver = async (vehicleId: string | number): Promise<{ mess
 }
 
 export interface VehicleLocationResponse {
+    message: string
     data: {
         id: string
         attributes: {
@@ -77,33 +78,40 @@ export interface VehicleLocationResponse {
         }
         device: {
             id: string
-            last_packet_received_at: string
+            last_packet_received_at: string | null
             status: string
         }
         location: {
+            device_imei: string
+            vehicle_id: string
+            organization_id: string
             latitude: number
             longitude: number
+            timestamp_utc: string
+            gps_datetime: string
             speed: number
-            heading: number
-            address: string
-            status: string
-            fuel_level_percent: number
             ignition: 'on' | 'off'
+            movement: 'on' | 'off'
+            fuel_level_liters: number | null
+            fuel_level_percent: number | null
+            odometer: number | null
+            altitude: number | null
+            heading: number | null
+            satellites: number | null
+            address: string | null
+            status: string
             metadata: {
-                engine_rpm?: number
-                engine_temperature?: number
-                battery_voltage?: number
-                door_status?: string
-                trip_odometer?: number
-                total_odometer?: number
+                movement: 'on' | 'off'
+                ignition: 'on' | 'off'
             }
         }
     }
+    status: number
 }
 
 export const getCurrentLocation = async (vehicleId: string | number): Promise<VehicleLocationResponse> => {
     const response = await apiClient.get<VehicleLocationResponse>(`/vehicles/${vehicleId}/location/current`)
-    return response.data
+    return response.data ? response.data?.data : response.data
 }
 
 export const assignCluster = async (vehicleId: string | number, clusterId: string | number): Promise<{ message: string }> => {
@@ -121,7 +129,7 @@ export const getCurrentDriver = async (vehicleId: string | number): Promise<{ da
     return response.data
 }
 
-export const getVehicleDriverHistory = async (vehicleId: string | number): Promise<{ data: any[] }> => {
+export const getVehicleDriverHistory = async (vehicleId: string | number): Promise<any> => {
     const response = await apiClient.get(`/vehicles/${vehicleId}/driver-history`)
     return response.data
 }

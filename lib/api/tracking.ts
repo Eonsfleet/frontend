@@ -40,3 +40,20 @@ export const getDevices = async (params?: any): Promise<{ data: { devices: any[]
     const res = await apiClient.get('/devices', { params })
     return res.data
 }
+
+export const getTripPlayback = async (vehicleId: string | number, tripId: string | number, params?: {
+    include_gps_points?: boolean
+    include_events?: boolean
+    point_interval?: number
+}) => {
+    const res = await apiClient.get(`/vehicles/${vehicleId}/trips/${tripId}/playback`, { params })
+    return res.data
+}
+
+export const getVehicleSensorHealth = async (vehicleId: string | number, params?: {
+    include_history?: boolean
+    anomaly_threshold?: string
+}) => {
+    const res = await apiClient.get(`/vehicles/${vehicleId}/sensors/health`, { params })
+    return res.data
+}

@@ -18,7 +18,7 @@ export function VehicleStatusChart({
     title?: string,
     description?: string
 }) {
-    const total = data.reduce((sum, item) => sum + item.value, 0)
+    const total = data.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
 
     return (
         <Card className="col-span-1 border-slate-200 shadow-sm">
@@ -55,7 +55,7 @@ export function VehicleStatusChart({
                                 wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                             />
                             <text x="50%" y="45%" textAnchor="middle" dominantBaseline="middle" className="text-3xl font-bold fill-slate-900">
-                                {total}
+                                {String(total)}
                             </text>
                             <text x="50%" y="55%" textAnchor="middle" dominantBaseline="middle" className="text-xs font-medium fill-slate-500">
                                 Total

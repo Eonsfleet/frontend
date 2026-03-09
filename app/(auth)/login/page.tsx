@@ -53,11 +53,12 @@ export default function LoginPage() {
                 organization
             )
 
-            Cookies.set('ef-token', payload.access_token, {
-                expires: new Date(payload.expires_at),
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax'
-            })
+            setAuth(
+                payload.access_token,
+                payload.refresh_token,
+                payload.user,
+                organization
+            )
             router.push('/dashboard')
         },
         onError: (err: any) => {

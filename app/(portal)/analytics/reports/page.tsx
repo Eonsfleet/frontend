@@ -1,23 +1,36 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { FileText, Clock, Settings, Download, Plus, Mail } from 'lucide-react'
+import { FileText, Clock, Settings, Download, Plus, Mail, Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-const mockSchedules = [
-    { id: 1, name: 'Weekly Fleet Utilization', frequency: 'Every Monday at 08:00', recipients: ['cto@eonsfleet.com'], format: 'PDF', status: 'active', last_run: '2026-03-02T08:00:00Z' },
-    { id: 2, name: 'Monthly Fuel Anomalies', frequency: '1st of every month', recipients: ['finance@eonsfleet.com'], format: 'CSV', status: 'active', last_run: '2026-03-01T08:00:00Z' },
-    { id: 3, name: 'Daily Incident Digest', frequency: 'Daily at 18:00', recipients: ['operations@eonsfleet.com', 'safety@eonsfleet.com'], format: 'PDF', status: 'paused', last_run: '2026-02-28T18:00:00Z' },
-]
+import { useQuery } from '@tanstack/react-query'
+import { getCustomReports } from '@/lib/api/reports'
+import { format } from 'date-fns'
 
 export default function ScheduledReportsPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false)
+    const [page, setPage] = useState(1)
+
+    const { data: reportsData, isLoading } = useQuery({
+        queryKey: ['custom-reports', page],
+        queryFn: () => getCustomReports({ page, per_page: 10 })
+    })
+
+    const reports = reportsData?.data?.data || []
+
+    if (isLoading) {
+        return (
+            <div className="h-full w-full flex items-center justify-center p-20">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+        )
+    }
 
     return (
         <div className="p-6 lg:p-8 space-y-6">
@@ -49,44 +62,57 @@ export default function ScheduledReportsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {mockSchedules.map((schedule) => (
-                                    <TableRow key={schedule.id} className="hover:bg-slate-50/50">
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                                                    <FileText className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-slate-900 text-sm">{schedule.name}</p>
-                                                    <p className="text-xs text-slate-500 mt-0.5">Format: {schedule.format}</p>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                <Clock className="w-4 h-4 text-slate-400" />
-                                                {schedule.frequency}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex -space-x-2">
-                                                {schedule.recipients.map((email, i) => (
-                                                    <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-semibold text-slate-600" title={email}>
-                                                        {email.charAt(0).toUpperCase()}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={schedule.status === 'active' ? 'default' : 'secondary'} className={schedule.status === 'active' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : ''}>
-                                                {schedule.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500"><Settings className="h-4 w-4" /></Button>
+                                {reports.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-12 text-slate-400">
+                                            No scheduled reports found.
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : (
+                                    reports.map((schedule: any) => (
+                                        <TableRow key={schedule.id} className="hover:bg-slate-50/50">
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-slate-900 text-sm">{schedule.name}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">Format: {schedule.format?.toUpperCase()}</p>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2 text-sm text-slate-600">
+                                                    <Clock className="w-4 h-4 text-slate-400" />
+                                                    {schedule.frequency?.charAt(0).toUpperCase() + schedule.frequency?.slice(1)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex -space-x-2">
+                                                    {schedule.recipients?.slice(0, 3).map((email: string, i: number) => (
+                                                        <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-semibold text-slate-600" title={email}>
+                                                            {email.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    ))}
+                                                    {schedule.recipients?.length > 3 && (
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-semibold text-slate-400">
+                                                            +{schedule.recipients.length - 3}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={schedule.is_active ? 'default' : 'secondary'} className={schedule.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : ''}>
+                                                    {schedule.is_active ? 'active' : 'paused'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500"><Settings className="h-4 w-4" /></Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </div>
@@ -112,8 +138,12 @@ export default function ScheduledReportsPage() {
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>Cron Expression (UTC)</Label>
-                            <Input placeholder="0 0 * * 1 (Every Monday at midnight)" />
+                            <Label>Frequency</Label>
+                            <select className="w-full h-10 px-3 rounded-md border border-slate-200 text-sm">
+                                <option>Daily</option>
+                                <option>Weekly</option>
+                                <option>Monthly</option>
+                            </select>
                         </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">

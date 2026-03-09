@@ -47,20 +47,15 @@ apiClient.interceptors.response.use(
                     payload.user.relationships.organization
                 )
 
-                // SYNC COOKIE FOR MIDDLEWARE
-                Cookies.set('ef-token', payload.access_token, {
-                    expires: new Date(payload.expires_at),
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax'
-                })
-
                 original.headers.Authorization = `Bearer ${payload.access_token}`
                 return apiClient(original)
-            } catch {
-                useAuthStore.getState().clearAuth()
-                Cookies.remove('ef-token')
-                if (typeof window !== 'undefined') {
-                    window.location.href = '/login'
+            } catch (err) {
+                const { _hasHydrated } = useAuthStore.getState()
+                if (_hasHydrated) {
+                    useAuthStore.getState().clearAuth()
+                    if (typeof window !== 'undefined') {
+                        window.location.href = '/login'
+                    }
                 }
             }
         }

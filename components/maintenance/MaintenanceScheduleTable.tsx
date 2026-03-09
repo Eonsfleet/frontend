@@ -67,48 +67,53 @@ export function MaintenanceScheduleTable({
                     </TableHeader>
                     <TableBody>
                         {data?.length ? (
-                            data.map((row) => (
-                                <TableRow key={row.id} className="hover:bg-slate-50/50">
-                                    <TableCell className="font-medium text-slate-900">
-                                        {row.attributes.vehicle_id}
-                                    </TableCell>
-                                    <TableCell className="capitalize">
-                                        {row.attributes.service_type.replace('_', ' ')}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs text-slate-700">
-                                                {row.attributes.last_service_date ? format(new Date(row.attributes.last_service_date), 'MMM dd, yyyy') : 'N/A'}
-                                            </span>
-                                            {row.attributes.last_service_odometer && (
-                                                <span className="text-[10px] text-slate-400">
-                                                    {row.attributes.last_service_odometer.toLocaleString()} km
+                            data.map((row) => {
+                                const attrs = row.attributes || {}
+                                return (
+                                    <TableRow key={row.id} className="hover:bg-slate-50/50">
+                                        <TableCell className="font-medium text-slate-900">
+                                            {attrs.vehicle_id || 'N/A'}
+                                        </TableCell>
+                                        <TableCell className="capitalize">
+                                            {(attrs.service_type || 'Maintenance').replace(/_/g, ' ')}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs text-slate-700">
+                                                    {attrs.last_scheduled_at ? format(new Date(attrs.last_scheduled_at), 'MMM dd, yyyy') :
+                                                        attrs.last_service_date ? format(new Date(attrs.last_service_date), 'MMM dd, yyyy') : 'N/A'}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-semibold text-slate-700">
-                                                {row.attributes.next_service_date ? format(new Date(row.attributes.next_service_date), 'MMM dd, yyyy') : 'N/A'}
-                                            </span>
-                                            {row.attributes.next_service_odometer && (
-                                                <span className="text-[10px] text-slate-500">
-                                                    {row.attributes.next_service_odometer.toLocaleString()} km
+                                                {(attrs.last_service_odometer || attrs.expected_odometer) && (
+                                                    <span className="text-[10px] text-slate-400">
+                                                        {(attrs.last_service_odometer || attrs.expected_odometer).toLocaleString()} km
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-semibold text-slate-700">
+                                                    {attrs.due_date ? format(new Date(attrs.due_date), 'MMM dd, yyyy') :
+                                                        attrs.next_service_date ? format(new Date(attrs.next_service_date), 'MMM dd, yyyy') : 'N/A'}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary" className={`${getStatusColor(row.attributes.status)} border-transparent hover:bg-opacity-80`}>
-                                            {row.attributes.status}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-xs text-slate-500 max-w-[200px] truncate">
-                                        {row.attributes.notes || '-'}
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                                                {attrs.next_service_odometer && (
+                                                    <span className="text-[10px] text-slate-500">
+                                                        {attrs.next_service_odometer.toLocaleString()} km
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className={`${getStatusColor(attrs.status)} border-transparent hover:bg-opacity-80`}>
+                                                {attrs.status}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs text-slate-500 max-w-[200px] truncate">
+                                            {attrs.description || attrs.notes || '-'}
+                                        </TableCell>
+                                    </TableRow>
+                                )
+                            })
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={6} className="h-24 text-center">

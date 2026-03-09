@@ -32,6 +32,8 @@ import { useQuery } from '@tanstack/react-query'
 import { getCurrentLocation, getCurrentDriver, getVehicleDriverHistory } from '@/lib/api/vehicles'
 import { getVehicleMaintenanceSchedules } from '@/lib/api/maintenance'
 import { getVehicleDocuments, downloadDocument } from '@/lib/api/documents'
+import { getVehicleCurrentFuel } from '@/lib/api/fuel'
+import { getDriverTrips } from '@/lib/api/drivers'
 import { UploadDocumentDialog } from '@/components/vehicles/UploadDocumentDialog'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -75,8 +77,14 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         queryFn: () => getVehicleDocuments(vehicle.id),
     })
 
+    const { data: fuelResponse, isLoading: isLoadingFuel } = useQuery({
+        queryKey: ['vehicle-fuel', vehicle.id],
+        queryFn: () => getVehicleCurrentFuel(Number(vehicle.id)),
+        refetchInterval: 30000,
+    })
+
     const currentDriver = driverResponse?.data?.relationships?.driver
-    const maintenanceSchedules = maintenanceResponse?.data || []
+    const maintenanceSchedules = maintenanceResponse?.data?.schedules || []
     const documents = documentsResponse?.data?.documents || []
 
     return (
@@ -101,6 +109,12 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium"
                         >
                             Driver History
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="trips"
+                            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium"
+                        >
+                            Trips
                         </TabsTrigger>
                         <TabsTrigger
                             value="maintenance"
@@ -336,22 +350,35 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
 
 
                 <TabsContent value="history" className="outline-none">
-                    <UpgradeGate
-                        module="reporting"
-                        featureName="Assignment History"
-                        description="Access full historical records of driver assignments and usage transitions for this vehicle."
-                    >
-                        <Card className="shadow-sm border-slate-200">
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <History className="w-5 h-5 text-blue-600" /> Driver Assignment History
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <DriverHistoryList vehicleId={vehicle.id} />
-                            </CardContent>
-                        </Card>
-                    </UpgradeGate>
+                    <Card className="shadow-sm border-slate-200">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <History className="w-5 h-5 text-blue-600" /> Driver Assignment History
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <DriverHistoryList vehicleId={vehicle.id} />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="trips" className="outline-none">
+                    <Card className="shadow-sm border-slate-200">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <History className="w-5 h-5 text-blue-600" /> Current Driver Trip History
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {currentDriver ? (
+                                <DriverTripsList driverId={currentDriver.id} />
+                            ) : (
+                                <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-xl">
+                                    <p className="text-slate-500 italic">No driver currently assigned to this vehicle to show trip history.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {/* Placeholder for other tabs */}
@@ -371,52 +398,61 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                 <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-200" /></div>
                             ) : maintenanceSchedules.length > 0 ? (
                                 <div className="space-y-6">
-                                    {maintenanceSchedules.map((schedule: any) => (
-                                        <div key={schedule.id} className="space-y-3">
-                                            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
-                                                        <Calendar className="w-5 h-5 text-slate-400" />
+                                    {maintenanceSchedules.map((schedule: any) => {
+                                        const attrs = schedule.attributes || {}
+                                        const logs = schedule.relationships?.logs || []
+                                        return (
+                                            <div key={schedule.id} className="space-y-3">
+                                                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+                                                            <Calendar className="w-5 h-5 text-slate-400" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900 capitalize">{attrs.service_type || 'Maintenance'} Service</p>
+                                                            <p className="text-xs text-slate-500 uppercase tracking-tight font-medium">
+                                                                {attrs.interval_value} {attrs.interval_unit} • {attrs.schedule_type}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-900">{schedule.schedule_name}</p>
-                                                        <p className="text-xs text-slate-500 uppercase tracking-tight font-medium">
-                                                            {schedule.interval_value} {schedule.interval_unit} • {schedule.schedule_type}
-                                                        </p>
-                                                    </div>
+                                                    <Badge variant="outline" className={cn(
+                                                        "capitalize",
+                                                        attrs.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                            attrs.status === 'overdue' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                                                'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                    )}>
+                                                        {attrs.status}
+                                                    </Badge>
                                                 </div>
-                                                <Badge variant="outline" className="capitalize bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                    {schedule.status}
-                                                </Badge>
-                                            </div>
 
-                                            {schedule.logs && schedule.logs.length > 0 && (
-                                                <div className="pl-6 space-y-2">
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Logs</p>
-                                                    {schedule.logs.map((log: any) => (
-                                                        <div key={log.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-white shadow-sm">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={cn(
-                                                                    "h-2 w-2 rounded-full",
-                                                                    log.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'
-                                                                )} />
-                                                                <div>
-                                                                    <p className="text-xs font-semibold text-slate-700">Due: {new Date(log.due_date).toLocaleDateString()}</p>
-                                                                    {log.completed_date && (
-                                                                        <p className="text-[10px] text-slate-400">Done: {new Date(log.completed_date).toLocaleDateString()}</p>
-                                                                    )}
+                                                {logs.length > 0 && (
+                                                    <div className="pl-6 space-y-2">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recent Logs</p>
+                                                        {logs.map((log: any) => (
+                                                            <div key={log.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-white shadow-sm">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={cn(
+                                                                        "h-2 w-2 rounded-full",
+                                                                        log.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'
+                                                                    )} />
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-slate-700">Due: {new Date(log.due_date).toLocaleDateString()}</p>
+                                                                        {log.completed_date && (
+                                                                            <p className="text-[10px] text-slate-400">Done: {new Date(log.completed_date).toLocaleDateString()}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-xs font-bold text-slate-900">{log.cost > 0 ? `₦${log.cost.toLocaleString()}` : '-'}</p>
+                                                                    <Badge className="text-[9px] h-4" variant={log.status === 'completed' ? 'secondary' : 'outline'}>{log.status}</Badge>
                                                                 </div>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <p className="text-xs font-bold text-slate-900">{log.cost > 0 ? `₦${log.cost.toLocaleString()}` : '-'}</p>
-                                                                <Badge className="text-[9px] h-4" variant={log.status === 'completed' ? 'secondary' : 'outline'}>{log.status}</Badge>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             ) : (
                                 <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-xl">
@@ -486,25 +522,25 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                             <div>
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Level</p>
                                                 <p className="text-4xl font-black text-slate-900 font-mono">
-                                                    {isLoadingLocation ? '—' : `${locationData?.data?.location?.fuel_level_percent ?? 0}%`}
+                                                    {isLoadingFuel ? '—' : `${fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0}%`}
                                                 </p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estimated Volume</p>
                                                 <p className="text-xl font-bold text-emerald-600 font-mono">
-                                                    {locationData?.data?.location?.fuel_level_percent && vehicle.attributes.fuel_capacity
-                                                        ? `${((locationData.data.location.fuel_level_percent / 100) * vehicle.attributes.fuel_capacity).toFixed(1)} L`
+                                                    {fuelResponse?.data?.fuel_level?.fuel_level_liters
+                                                        ? `${fuelResponse.data.fuel_level.fuel_level_liters.toFixed(1)} L`
                                                         : '—'}
                                                 </p>
                                             </div>
                                         </div>
                                         <Progress
-                                            value={locationData?.data?.location?.fuel_level_percent ?? 0}
+                                            value={fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0}
                                             className="h-3 shadow-inner bg-slate-100"
                                             indicatorClassName={cn(
                                                 "transition-all duration-1000",
-                                                (locationData?.data?.location?.fuel_level_percent ?? 0) < 15 ? 'bg-rose-500' :
-                                                    (locationData?.data?.location?.fuel_level_percent ?? 0) < 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                (fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0) < 15 ? 'bg-rose-500' :
+                                                    (fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0) < 30 ? 'bg-amber-500' : 'bg-emerald-500'
                                             )}
                                         />
                                     </div>
@@ -568,7 +604,7 @@ function DriverHistoryList({ vehicleId }: { vehicleId: string | number }) {
         queryFn: () => getVehicleDriverHistory(vehicleId)
     })
 
-    const history = response?.data || []
+    const history = response?.data?.history || (Array.isArray(response?.data) ? response.data : [])
 
     if (isLoading) {
         return (
@@ -688,6 +724,59 @@ function DocumentCard({
                     </Button>
                 </div>
             </div>
+        </div>
+    )
+}
+
+function DriverTripsList({ driverId }: { driverId: string | number }) {
+    const { data: response, isLoading } = useQuery({
+        queryKey: ['driver-trips', driverId],
+        queryFn: () => getDriverTrips(driverId)
+    })
+
+    const trips = response?.data?.trips || (Array.isArray(response?.data) ? response.data : [])
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-200" />
+            </div>
+        )
+    }
+
+    if (trips.length === 0) {
+        return (
+            <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-xl">
+                <p className="text-slate-500 italic">No historical trip records found for this driver.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-4">
+            {trips.map((trip: any) => (
+                <div key={trip.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-blue-600">
+                            <History className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-bold text-slate-900">{trip.attributes?.trip_number || trip.trip_number || 'TRP-' + trip.id}</p>
+                                <Badge variant="outline" className="text-[10px] uppercase">
+                                    {trip.attributes?.status || trip.status}
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                {trip.attributes?.start_location?.name || trip.attributes?.start_location || 'Start'} → {trip.attributes?.end_location?.name || trip.attributes?.end_location || 'End'}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                                {trip.attributes?.planned_start_time ? format(new Date(trip.attributes.planned_start_time), 'MMM d, yyyy HH:mm') : 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            ))}
         </div>
     )
 }

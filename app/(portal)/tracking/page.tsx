@@ -33,6 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useEcho } from '@/hooks/useEcho'
 import * as api from '@/lib/api/vehicles'
 import * as tripApi from '@/lib/api/trips'
+import * as trackingApi from '@/lib/api/tracking'
 import TrackingMap from './TrackingMap'
 import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
 import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
@@ -75,6 +76,12 @@ export default function TrackingPage() {
     const [locations, setLocations] = useState<Record<string, any>>({})
     const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'hybrid'>('standard')
 
+    // Playback state
+    const [playbackData, setPlaybackData] = useState<any[]>([])
+    const [playbackIndex, setPlaybackIndex] = useState(0)
+    const [isPlayingPlayback, setIsPlayingPlayback] = useState(false)
+    const [isLoadingPlayback, setIsLoadingPlayback] = useState(false)
+
     const MAP_LAYERS = {
         standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -102,7 +109,7 @@ export default function TrackingPage() {
     const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData])
 
     const selectedVehicle = useMemo(() =>
-        vehicles.find(v => v.id === selectedVehicleId) || null
+        vehicles.find(v => String(v.id) === String(selectedVehicleId)) || null
         , [vehicles, selectedVehicleId])
 
     const filteredVehicles = useMemo(() => {
@@ -123,20 +130,67 @@ export default function TrackingPage() {
                 result = result.filter(v => v.attributes.status === 'inactive')
             }
         }
+        if (selectedVehicleId && !result.find(v => String(v.id) === String(selectedVehicleId))) {
+            const sv = vehicles.find(v => String(v.id) === String(selectedVehicleId))
+            if (sv) result = [...result, sv]
+        }
         return result
-    }, [vehicles, searchQuery, statusFilter, locations])
+    }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId])
 
     const ongoingTripsData = useMemo(() => {
         return ongoingTrips.map(trip => {
-            const vehicleId = trip.relationships.vehicle?.data?.id
-            const vehicle = vehicleId ? vehicles.find(v => v.id === vehicleId) : null
+            // API Structure confirmed via raw dump: trip.relationships.vehicle.id (direct)
+            const relVehicle = trip.relationships?.vehicle as any
+            const bestVehicleId = relVehicle?.id || (trip.attributes as any)?.vehicleId || (trip.attributes as any)?.vehicle_id
+
+            // Link to fleet vehicle if possible for live telemetry synchronization
+            const fleetVehicle = bestVehicleId ? vehicles.find(v => String(v.id) === String(bestVehicleId)) : null
+
             return {
                 ...trip,
-                vehiclePlate: vehicle?.attributes.registration_number || 'N/A',
-                vehicleId: vehicle?.id || null
+                vehiclePlate: fleetVehicle?.attributes.registration_number || relVehicle?.registration_number || 'N/A',
+                vehicleId: bestVehicleId ? String(bestVehicleId) : null,
+                startTime: trip.attributes.planned_start_time || trip.attributes?.created_at,
+                endTime: trip.attributes.planned_end_time || new Date().toISOString()
             }
         })
     }, [ongoingTrips, vehicles])
+
+    // Fetch playback data when trip is selected and replay is opened
+    useEffect(() => {
+        const fetchPlayback = async () => {
+            const selectedTrip = ongoingTripsData.find(t => t.vehicleId === selectedVehicleId)
+            if (isReplayOpen && selectedVehicleId && selectedTrip) {
+                setIsLoadingPlayback(true)
+                try {
+                    console.log('--- FETCHING TRIP PLAYBACK ---', {
+                        vehicleId: selectedVehicleId,
+                        tripId: selectedTrip.id
+                    })
+                    const res = await trackingApi.getTripPlayback(
+                        selectedVehicleId,
+                        selectedTrip.id
+                    )
+                    console.log('--- PLAYBACK SUCCESS ---', res.data?.gps_points?.length, 'points')
+
+                    // Map gps_points to the format expected by the timeline/map
+                    // The map expects { lat, lng, speed, heading, timestamp }
+                    const points = res.data?.gps_points || []
+                    setPlaybackData(points)
+                    setPlaybackIndex(0)
+                } catch (err) {
+                    console.error('Failed to fetch playback telemetry:', err)
+                } finally {
+                    setIsLoadingPlayback(false)
+                }
+            } else if (!isReplayOpen) {
+                setPlaybackData([])
+                setPlaybackIndex(0)
+                setIsPlayingPlayback(false)
+            }
+        }
+        fetchPlayback()
+    }, [isReplayOpen, selectedVehicleId, ongoingTripsData])
 
     // Initialize locations from vehicle attributes if available
     useEffect(() => {
@@ -224,7 +278,10 @@ export default function TrackingPage() {
 
                 {/* Dynamic Sidebar Overlay */}
                 <div className="absolute left-6 top-6 bottom-6 z-20 flex flex-col pointer-events-none">
-                    <div className="w-72 h-full bg-white/95 backdrop-blur-xl border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out">
+                    <div className={cn(
+                        "w-72 h-full border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out",
+                        viewMode === 'focused' ? "bg-white" : "bg-white/95 backdrop-blur-xl"
+                    )}>
                         {/* Sidebar Header */}
                         <div className="p-6 border-b border-slate-100/50">
                             <div className="flex items-center justify-between mb-4">
@@ -297,7 +354,7 @@ export default function TrackingPage() {
                                             </div>
                                         ) : filteredVehicles.map((v) => {
                                             const loc = locations[v.id]
-                                            const isSelected = selectedVehicleId === v.id
+                                            const isSelected = String(selectedVehicleId) === String(v.id)
                                             const lastUpdate = loc?.lastUpdate || (v.attributes as any).current_location?.gpstime || 'N/A'
                                             const status = loc?.status || v.attributes.status
 
@@ -364,46 +421,51 @@ export default function TrackingPage() {
                                         </div>
                                     ) : (
                                         ongoingTripsData.map((trip) => {
-                                            const isSelected = selectedVehicleId === trip.vehicleId
+                                            const isSelected = String(selectedVehicleId) === String(trip.vehicleId)
                                             return (
                                                 <div
                                                     key={trip.id}
-                                                    onClick={() => trip.vehicleId && setSelectedVehicleId(isSelected ? null : trip.vehicleId)}
+                                                    onClick={() => {
+                                                        if (trip.vehicleId) {
+                                                            setSelectedVehicleId(trip.vehicleId)
+                                                            setIsReplayOpen(true)
+                                                        }
+                                                    }}
                                                     className={cn(
                                                         "group p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
                                                         isSelected
-                                                            ? "bg-blue-600 border-blue-600 text-white shadow-2xl scale-[1.01]"
-                                                            : "bg-white border-slate-100 hover:border-blue-200 shadow-sm"
+                                                            ? "bg-blue-50 border-blue-200 shadow-sm scale-[1.01]"
+                                                            : "bg-white border-slate-100 hover:border-blue-100 shadow-sm"
                                                     )}
                                                 >
                                                     <div className="flex justify-between items-start mb-3">
                                                         <div>
                                                             <h4 className={cn(
                                                                 "text-[10px] font-black uppercase tracking-tighter",
-                                                                isSelected ? "text-blue-100" : "text-slate-400"
+                                                                isSelected ? "text-blue-600" : "text-slate-400"
                                                             )}>
                                                                 {trip.vehiclePlate}
                                                             </h4>
                                                             <Badge className={cn(
                                                                 "text-[8px] font-black border-none px-2 mt-1",
-                                                                isSelected ? "bg-white/20 text-white" : "bg-emerald-500/10 text-emerald-600"
+                                                                isSelected ? "bg-blue-100 text-blue-700" : "bg-emerald-500/10 text-emerald-600"
                                                             )}>
                                                                 ETA: {trip.attributes.eta || 'N/A'}
                                                             </Badge>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>Mission #</p>
-                                                            <p className="text-[10px] font-black italic">{trip.attributes.trip_number}</p>
+                                                            <p className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-blue-400" : "text-slate-400")}>Mission #</p>
+                                                            <p className={cn("text-[10px] font-black italic", isSelected ? "text-blue-700" : "text-slate-900")}>{trip.attributes.trip_number}</p>
                                                         </div>
                                                     </div>
 
-                                                    <div className={cn("relative h-1 w-full rounded-full overflow-hidden mb-3", isSelected ? "bg-white/20" : "bg-slate-100")}>
+                                                    <div className={cn("relative h-1.5 w-full rounded-full overflow-hidden mb-3", isSelected ? "bg-blue-200/50" : "bg-slate-100")}>
                                                         <div
-                                                            className={cn("absolute inset-y-0 left-0 rounded-full transition-all duration-1000", isSelected ? "bg-white" : "bg-blue-500")}
+                                                            className={cn("absolute inset-y-0 left-0 rounded-full transition-all duration-1000", isSelected ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "bg-blue-400")}
                                                             style={{ width: '65%' }}
                                                         />
                                                     </div>
-                                                    <div className={cn("flex justify-between items-center text-[7px] font-black uppercase tracking-widest mt-1", isSelected ? "text-blue-100" : "text-slate-400")}>
+                                                    <div className={cn("flex justify-between items-center text-[7px] font-black uppercase tracking-widest mt-1", isSelected ? "text-blue-500" : "text-slate-400")}>
                                                         <span>{locations[trip.vehicleId!]?.speed || 0} KPH</span>
                                                         <span>TRACKING ACTIVE</span>
                                                     </div>
@@ -530,7 +592,7 @@ export default function TrackingPage() {
 
 
                 {/* Overlays: Selected Info Bottom Bar */}
-                {selectedVehicle && (
+                {selectedVehicle && !isReplayOpen && (
                     <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in slide-in-from-bottom-5 duration-500 delay-100 w-full max-w-xl">
                         <div className="bg-white/95 backdrop-blur-2xl rounded-[28px] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.3)] border border-white/50 p-4 flex items-center gap-6 pointer-events-auto">
                             <div className="flex items-center gap-4 flex-1">
@@ -606,6 +668,7 @@ export default function TrackingPage() {
             <TelemetryDrawer
                 isOpen={isTelemetryOpen}
                 onClose={() => setIsTelemetryOpen(false)}
+                vehicleId={selectedVehicleId}
                 vehicle={selectedVehicle ? {
                     plate: selectedVehicle.attributes.registration_number,
                     speed: locations[selectedVehicle.id]?.speed || 0,
@@ -625,6 +688,12 @@ export default function TrackingPage() {
             <TripPlaybackTimeline
                 isOpen={isReplayOpen}
                 onClose={() => setIsReplayOpen(false)}
+                data={playbackData}
+                currentIndex={playbackIndex}
+                onIndexChange={setPlaybackIndex}
+                isPlaying={isPlayingPlayback}
+                setIsPlaying={setIsPlayingPlayback}
+                isLoading={isLoadingPlayback}
             />
 
             <style jsx global>{`

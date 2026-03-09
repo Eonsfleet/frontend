@@ -11,8 +11,8 @@ import { BreachAnalytics } from './BreachAnalytics'
 
 export function GeofenceList() {
     const [page, setPage] = useState(1)
-    const [activeAssignment, setActiveAssignment] = useState<string | null>(null)
-    const [activeAnalytics, setActiveAnalytics] = useState<string | null>(null)
+    const [activeAssignment, setActiveAssignment] = useState<{ id: string; name: string } | null>(null)
+    const [activeAnalytics, setActiveAnalytics] = useState<{ id: string; name: string } | null>(null)
 
     const { data, isLoading } = useQuery({
         queryKey: ['geofences', { page }],
@@ -88,14 +88,14 @@ export function GeofenceList() {
 
                             <div className="bg-slate-50/80 backdrop-blur-sm p-3 grid grid-cols-3 gap-2 border-t border-slate-50">
                                 <button
-                                    onClick={() => setActiveAssignment(item.attributes.name)}
+                                    onClick={() => setActiveAssignment({ id: item.id, name: item.attributes.name })}
                                     className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
                                 >
                                     <Users className="h-4 w-4 text-slate-400 group-hover/btn:text-blue-600 mb-1" />
                                     <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">ASSIGN</span>
                                 </button>
                                 <button
-                                    onClick={() => setActiveAnalytics(item.attributes.name)}
+                                    onClick={() => setActiveAnalytics({ id: item.id, name: item.attributes.name })}
                                     className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
                                 >
                                     <BarChart3 className="h-4 w-4 text-slate-400 group-hover/btn:text-indigo-600 mb-1" />
@@ -113,13 +113,15 @@ export function GeofenceList() {
 
             <BulkAssignmentModal
                 isOpen={!!activeAssignment}
-                geofenceName={activeAssignment || ''}
+                geofenceId={activeAssignment?.id}
+                geofenceName={activeAssignment?.name || ''}
                 onClose={() => setActiveAssignment(null)}
             />
 
             <BreachAnalytics
                 isOpen={!!activeAnalytics}
-                geofenceName={activeAnalytics || ''}
+                geofenceId={activeAnalytics?.id}
+                geofenceName={activeAnalytics?.name || ''}
                 onClose={() => setActiveAnalytics(null)}
             />
         </div>

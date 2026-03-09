@@ -1,8 +1,9 @@
-'use client'
-
 import React, { useState } from 'react'
-import { Search, Users, CheckCircle2, ChevronRight, X, Filter, Truck } from 'lucide-react'
+import { Search, Users, CheckCircle2, ChevronRight, X, Filter, Truck, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import * as vehicleApi from '@/lib/api/vehicles'
+import * as geofencingApi from '@/lib/api/geofencing'
 
 const MOCK_VEHICLES = [
     { id: '1', plate: 'LND-123-XY', group: 'LAGOS SOUTH', status: 'active' },
@@ -16,16 +17,35 @@ const MOCK_VEHICLES = [
 export function BulkAssignmentModal({
     isOpen,
     onClose,
+    geofenceId,
     geofenceName = 'WAREHOUSE ALPHA'
 }: {
     isOpen: boolean
     onClose: () => void
+    geofenceId?: string | number
     geofenceName?: string
 }) {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [searchTerm, setSearchTerm] = useState('')
+    const queryClient = useQueryClient()
+
+    const { data: vehiclesData, isLoading } = useQuery({
+        queryKey: ['vehicles', { per_page: 100 }],
+        queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
+        enabled: isOpen
+    })
+
+    const assignMutation = useMutation({
+        mutationFn: (ids: string[]) => geofencingApi.bulkAssignVehicles(geofenceId!, ids),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['geofences'] })
+            onClose()
+        }
+    })
 
     if (!isOpen) return null
+
+    const vehicles = vehiclesData?.data || []
 
     const toggleVehicle = (id: string) => {
         setSelectedIds(prev =>
@@ -33,9 +53,9 @@ export function BulkAssignmentModal({
         )
     }
 
-    const filteredVehicles = MOCK_VEHICLES.filter(v =>
-        v.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.group.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredVehicles = vehicles.filter(v =>
+        v.attributes.registration_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.relationships?.cluster?.data?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
@@ -75,7 +95,12 @@ export function BulkAssignmentModal({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {filteredVehicles.map((vehicle) => (
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20">
+                            <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                            <p className="text-[10px] font-black text-slate-400 uppercase mt-4">Fetching fleet data...</p>
+                        </div>
+                    ) : filteredVehicles.map((vehicle) => (
                         <div
                             key={vehicle.id}
                             onClick={() => toggleVehicle(vehicle.id)}
@@ -95,10 +120,10 @@ export function BulkAssignmentModal({
                                 </div>
                                 <div>
                                     <h4 className={cn("text-sm font-black italic uppercase tracking-tight", selectedIds.includes(vehicle.id) ? "text-white" : "text-slate-900")}>
-                                        {vehicle.plate}
+                                        {vehicle.attributes.registration_number}
                                     </h4>
                                     <p className={cn("text-[9px] font-bold uppercase tracking-widest", selectedIds.includes(vehicle.id) ? "text-blue-100" : "text-slate-400")}>
-                                        {vehicle.group}
+                                        {vehicle.relationships?.cluster?.data?.name || 'GENERIC FLEET'}
                                     </p>
                                 </div>
                             </div>
@@ -118,14 +143,11 @@ export function BulkAssignmentModal({
                         <h4 className="text-xl font-black text-slate-900">{selectedIds.length}</h4>
                     </div>
                     <button
-                        disabled={selectedIds.length === 0}
-                        onClick={() => {
-                            console.log('Assigning vehicles:', selectedIds)
-                            onClose()
-                        }}
+                        disabled={selectedIds.length === 0 || assignMutation.isPending}
+                        onClick={() => assignMutation.mutate(selectedIds)}
                         className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all disabled:opacity-50 disabled:shadow-none"
                     >
-                        COMPLETE ASSIGNMENT
+                        {assignMutation.isPending ? 'ASSIGNING...' : 'COMPLETE ASSIGNMENT'}
                         <ChevronRight className="h-4 w-4" />
                     </button>
                 </div>

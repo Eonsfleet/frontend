@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     X,
     Zap,
@@ -15,10 +15,14 @@ import {
     MapPin
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import * as trackingApi from '@/lib/api/tracking'
+import { reverseGeocode } from '@/lib/gps'
 
 interface TelemetryDrawerProps {
     isOpen: boolean
     onClose: () => void
+    vehicleId: string | number | null
     vehicle: {
         plate: string
         speed: number
@@ -35,8 +39,30 @@ interface TelemetryDrawerProps {
     } | null
 }
 
-export function TelemetryDrawer({ isOpen, onClose, vehicle }: TelemetryDrawerProps) {
+export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: TelemetryDrawerProps) {
+    const [address, setAddress] = useState<string>('Searching...')
+
+    const { data: sensorData, isLoading: isLoadingSensors } = useQuery({
+        queryKey: ['sensor-health', vehicleId],
+        queryFn: () => trackingApi.getVehicleSensorHealth(vehicleId!),
+        enabled: isOpen && !!vehicleId
+    })
+
+    useEffect(() => {
+        if (isOpen && vehicle?.lat && vehicle?.lng) {
+            setAddress('Geocoding...')
+            reverseGeocode(vehicle.lat, vehicle.lng).then(setAddress)
+        }
+    }, [isOpen, vehicle?.lat, vehicle?.lng])
+
     if (!vehicle) return null
+
+    const health = sensorData?.data || {
+        battery_voltage: '---',
+        signal_strength: '---',
+        engine_temp: 0,
+        obd_status: '---'
+    }
 
     return (
         <div className={cn(
@@ -63,6 +89,22 @@ export function TelemetryDrawer({ isOpen, onClose, vehicle }: TelemetryDrawerPro
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                    {/* Location Card */}
+                    <div className="p-6 rounded-[32px] bg-blue-50 border border-blue-100 relative overflow-hidden group">
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-3 mb-4">
+                                <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Current Position</span>
+                            </div>
+                            <h4 className="text-sm font-black text-slate-900 leading-tight mb-2">
+                                {address}
+                            </h4>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                {vehicle.lat?.toFixed(4)}, {vehicle.lng?.toFixed(4)}
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Primary Gauges Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="p-5 rounded-3xl bg-slate-900 text-white flex flex-col items-center justify-center text-center group">
@@ -92,7 +134,7 @@ export function TelemetryDrawer({ isOpen, onClose, vehicle }: TelemetryDrawerPro
                                     </div>
                                     <div>
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Engine Temp</p>
-                                        <h4 className="text-sm font-black text-slate-700">{vehicle.temp}°C</h4>
+                                        <h4 className="text-sm font-black text-slate-700">{isLoadingSensors ? '...' : (health.engine_temp || vehicle.temp)}°C</h4>
                                     </div>
                                 </div>
                                 <Activity className="h-4 w-4 text-slate-200 group-hover:text-blue-500 transition-colors" />
@@ -132,8 +174,10 @@ export function TelemetryDrawer({ isOpen, onClose, vehicle }: TelemetryDrawerPro
                                         <MapPin className="h-5 w-5" />
                                     </div>
                                     <div>
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Precise Coordinates</p>
-                                        <h4 className="text-sm font-black text-slate-700">{vehicle.lat?.toFixed(6)}, {vehicle.lng?.toFixed(6)}</h4>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Voltage / Signal</p>
+                                        <h4 className="text-sm font-black text-slate-700">
+                                            {isLoadingSensors ? '...' : `${health.battery_voltage}V / ${health.signal_strength}`}
+                                        </h4>
                                     </div>
                                 </div>
                                 <Navigation className="h-4 w-4 text-slate-200" />

@@ -6,7 +6,10 @@ import { ReportBuilderWizard } from '@/components/analytics/ReportBuilderWizard'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { TrendingUp, Truck, Fuel, AlertTriangle, Plus, LayoutGrid, Calendar, Filter } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import * as analyticsApi from '@/lib/api/analytics'
+import * as trackingApi from '@/lib/api/tracking'
 
 const fleetTrendData = [
     { name: 'Mon', active: 65, idle: 20, comparison: 72 },
@@ -57,6 +60,61 @@ const aiInsights: InsightItem[] = [
 export default function AnalyticsOverviewPage() {
     const [isComparisonMode, setIsComparisonMode] = useState(false)
     const [isWizardOpen, setIsWizardOpen] = useState(false)
+
+    // Fetch Fuel Consumption (OpEx)
+    const { data: fuelConsData } = useQuery({
+        queryKey: ['fuel-consumption'],
+        queryFn: () => analyticsApi.getFuelConsumptionReport({ period: 'monthly' })
+    })
+
+    // Fetch Fuel Efficiency (KPI)
+    const { data: efficiencyData } = useQuery({
+        queryKey: ['fuel-efficiency'],
+        queryFn: () => analyticsApi.getFuelEfficiencyReport()
+    })
+
+    // Fetch Anomalies (AI Insights)
+    const { data: anomalyData } = useQuery({
+        queryKey: ['anomalies'],
+        queryFn: () => analyticsApi.detectAnomalies(30)
+    })
+
+    // Fetch General Metrics
+    const { data: metricsData } = useQuery({
+        queryKey: ['tracking-metrics'],
+        queryFn: () => trackingApi.getTrackingMetrics()
+    })
+
+    const metrics = metricsData?.data || { moving_assets: 0, total_active_assets: 0, idle_assets: 0 }
+    const utilization = useMemo(() => {
+        if (!metrics.total_active_assets) return 0
+        return ((metrics.moving_assets / metrics.total_active_assets) * 100).toFixed(1)
+    }, [metrics])
+
+    // Normalize AI Insights
+    const dynamicInsights: InsightItem[] = useMemo(() => {
+        if (!anomalyData?.data?.anomalies) return aiInsights // fallback
+        return anomalyData.data.anomalies.map((a: any) => ({
+            id: String(a.id),
+            type: (a.severity === 'critical' ? 'risk' : 'optimization') as any,
+            title: a.title,
+            description: a.description,
+            impact: a.impact_score > 8 ? 'High Risk' : `₦${a.potential_saving || '0'} / mo`,
+            actionLabel: a.severity === 'critical' ? 'Schedule Now' : 'Apply New Route'
+        }))
+    }, [anomalyData])
+
+    // Normalize OpEx Data (Fuel vs Maintenance)
+    // Note: Maintenance data might need another endpoint, using consumption for now
+    const dynamicCostData = useMemo(() => {
+        if (!fuelConsData?.data?.report) return costData
+        return fuelConsData.data.report.map((item: any) => ({
+            name: item.period_label,
+            fuel: item.total_cost,
+            maintenance: item.total_cost * 0.3 // estimated ratio for demo
+        }))
+    }, [fuelConsData])
+
 
     return (
         <div className="p-8 pb-16 space-y-8 bg-slate-50 min-h-full">
@@ -114,8 +172,8 @@ export default function AnalyticsOverviewPage() {
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avg Utilization</p>
                             <TrendingUp className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <h3 className="text-3xl font-black text-slate-900 italic">82.4%</h3>
-                        <p className="text-[10px] text-emerald-600 font-bold uppercase mt-1">+2.1% this week</p>
+                        <h3 className="text-3xl font-black text-slate-900 italic">{utilization}%</h3>
+                        <p className="text-[10px] text-emerald-600 font-bold uppercase mt-1">Real-time status</p>
                     </CardContent>
                 </Card>
                 <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -124,8 +182,10 @@ export default function AnalyticsOverviewPage() {
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost / KM</p>
                             <Fuel className="h-4 w-4 text-rose-500" />
                         </div>
-                        <h3 className="text-3xl font-black text-slate-900 italic">₦142.50</h3>
-                        <p className="text-[10px] text-rose-600 font-bold uppercase mt-1">+5.4% vs last month</p>
+                        <h3 className="text-3xl font-black text-slate-900 italic">
+                            ₦{efficiencyData?.data?.metrics?.avg_cost_per_km?.toFixed(2) || '142.50'}
+                        </h3>
+                        <p className="text-[10px] text-rose-600 font-bold uppercase mt-1">vs target baseline</p>
                     </CardContent>
                 </Card>
                 <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -165,7 +225,7 @@ export default function AnalyticsOverviewPage() {
                     <AnalyticsChart
                         title="OpEx Expenditure Overview"
                         description="Maintenance vs Fuel cost distribution"
-                        data={costData}
+                        data={dynamicCostData}
                         height={300}
                         dataKeys={[
                             { key: 'fuel', color: '#0ea5e9', label: 'Fuel Spend' },
@@ -174,7 +234,7 @@ export default function AnalyticsOverviewPage() {
                     />
                 </div>
                 <div className="flex flex-col gap-6">
-                    <AIInsights insights={aiInsights} />
+                    <AIInsights insights={dynamicInsights} />
                 </div>
             </div>
 

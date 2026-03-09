@@ -42,3 +42,16 @@ export const getGeofenceVehicles = async (id: string): Promise<{ data: Vehicle[]
     const response = await apiClient.get<{ data: Vehicle[] }>(`/geofences/${id}/vehicles`)
     return response.data
 }
+
+export const bulkAssignVehicles = async (geofenceId: string | number, vehicleIds: (string | number)[], preserveExisting: boolean = true) => {
+    const res = await apiClient.post(`/geofences/${geofenceId}/bulk-assign`, {
+        vehicle_ids: vehicleIds,
+        preserve_existing: preserveExisting
+    })
+    return res.data
+}
+
+export const getGeofenceAnalytics = async (geofenceId: string | number, params?: { days?: number; include_timeline?: boolean; include_ranking?: boolean }) => {
+    const res = await apiClient.get(`/geofences/${geofenceId}/analytics`, { params })
+    return res.data
+}

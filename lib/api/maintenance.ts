@@ -65,7 +65,7 @@ export const createWorkOrderFromAlert = async (id: string): Promise<MaintenanceJ
     return response.data
 }
 
-export const getVehicleMaintenanceSchedules = async (vehicleId: string | number): Promise<{ data: any[] }> => {
-    const response = await apiClient.get(`/maintenances/schedule/vehicle/${vehicleId}`)
+export const getVehicleMaintenanceSchedules = async (vehicleId: string | number): Promise<MaintenanceListResponse> => {
+    const response = await apiClient.get<MaintenanceListResponse>(`/maintenances/schedule/vehicle/${vehicleId}`)
     return response.data
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
     Play,
     Pause,
@@ -10,23 +10,50 @@ import {
     MapPin,
     Clock,
     ChevronUp,
-    ChevronDown
+    ChevronDown,
+    Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function TripPlaybackTimeline({
     isOpen,
-    onClose
+    onClose,
+    data = [],
+    currentIndex = 0,
+    onIndexChange,
+    isPlaying,
+    setIsPlaying,
+    isLoading
 }: {
     isOpen: boolean
     onClose: () => void
+    data?: any[]
+    currentIndex?: number
+    onIndexChange?: (index: number) => void
+    isPlaying?: boolean
+    setIsPlaying?: (playing: boolean) => void
+    isLoading?: boolean
 }) {
-    const [isPlaying, setIsPlaying] = useState(false)
     const [speed, setSpeed] = useState(1)
-    const [progress, setProgress] = useState(35)
     const [isExpanded, setIsExpanded] = useState(true)
 
+    // Playback Interval Logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout
+        if (isPlaying && onIndexChange && currentIndex < data.length - 1) {
+            interval = setInterval(() => {
+                onIndexChange(currentIndex + 1)
+            }, 1000 / speed)
+        } else if (currentIndex >= data.length - 1) {
+            setIsPlaying?.(false)
+        }
+        return () => clearInterval(interval)
+    }, [isPlaying, currentIndex, data.length, speed, onIndexChange, setIsPlaying])
+
     if (!isOpen) return null
+
+    const currentPoint = data[currentIndex]
+    const progress = data.length > 0 ? (currentIndex / (data.length - 1)) * 100 : 0
 
     return (
         <div className={cn(
@@ -47,16 +74,18 @@ export function TripPlaybackTimeline({
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="h-10 w-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                                <Clock className="h-5 w-5" />
+                                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Clock className="h-5 w-5" />}
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">TRIP REPLAY: LAGOS - IBADAN</h3>
-                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">DATE: 07 MAR 2026 • START: 08:30 AM</p>
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">TRIP REPLAY: {currentPoint ? 'MISSION IN PROGRESS' : 'FETCHING TELEMETRY...'}</h3>
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">
+                                    {currentPoint ? `TIMESTAMP: ${new Date(currentPoint.timestamp).toLocaleTimeString()}` : 'SYNCING WITH TRACKER...'}
+                                </p>
                             </div>
                         </div>
 
                         <div className="flex items-center bg-white/5 rounded-2xl p-1 border border-white/10">
-                            {[1, 2, 4].map((s) => (
+                            {[1, 2, 4, 8].map((s) => (
                                 <button
                                     key={s}
                                     onClick={() => setSpeed(s)}
@@ -82,23 +111,11 @@ export function TripPlaybackTimeline({
                         <input
                             type="range"
                             className="absolute top-4 w-full h-1.5 opacity-0 cursor-pointer z-10"
-                            value={progress}
-                            onChange={(e) => setProgress(parseInt(e.target.value))}
+                            min={0}
+                            max={data.length - 1}
+                            value={currentIndex}
+                            onChange={(e) => onIndexChange?.(parseInt(e.target.value))}
                         />
-
-                        {/* Event Markers */}
-                        <div className="absolute top-3 left-[15%] h-3 w-3 bg-rose-500 rounded-full border-2 border-slate-900 shadow-[0_0_10px_rgba(244,63,94,0.5)] group">
-                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-rose-500 text-white text-[8px] font-black rounded opacity-0 group-hover:opacity-100 transition-all uppercase whitespace-nowrap">
-                                Harsh Braking
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-x-[4px] border-x-transparent border-t-[4px] border-t-rose-500" />
-                            </div>
-                        </div>
-                        <div className="absolute top-3 left-[45%] h-3 w-3 bg-amber-500 rounded-full border-2 border-slate-900 shadow-[0_0_10px_rgba(245,158,11,0.5)] group">
-                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-amber-500 text-white text-[8px] font-black rounded opacity-0 group-hover:opacity-100 transition-all uppercase whitespace-nowrap">
-                                5m Stop
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-x-[4px] border-x-transparent border-t-[4px] border-t-amber-500" />
-                            </div>
-                        </div>
                     </div>
 
                     {/* Controls Row */}
@@ -106,25 +123,31 @@ export function TripPlaybackTimeline({
                         <div className="flex items-center gap-6">
                             <div className="text-center">
                                 <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Current Speed</p>
-                                <p className="text-lg font-black text-white italic">72<span className="text-[10px] font-bold text-slate-500 ml-1">KPH</span></p>
+                                <p className="text-lg font-black text-white italic">{currentPoint?.speed || 0}<span className="text-[10px] font-bold text-slate-500 ml-1">KPH</span></p>
                             </div>
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Distance</p>
-                                <p className="text-lg font-black text-white italic">14.2<span className="text-[10px] font-bold text-slate-500 ml-1">KM</span></p>
+                                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Heading</p>
+                                <p className="text-lg font-black text-white italic">{currentPoint?.heading || 0}<span className="text-[10px] font-bold text-slate-500 ml-1">DEG</span></p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <button className="p-3 text-slate-400 hover:text-white transition-colors">
+                            <button
+                                onClick={() => onIndexChange?.(0)}
+                                className="p-3 text-slate-400 hover:text-white transition-colors"
+                            >
                                 <RotateCcw className="h-5 w-5" />
                             </button>
                             <button
-                                onClick={() => setIsPlaying(!isPlaying)}
+                                onClick={() => setIsPlaying?.(!isPlaying)}
                                 className="h-14 w-14 bg-white rounded-full flex items-center justify-center text-slate-900 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-white/10"
                             >
                                 {isPlaying ? <Pause className="h-6 w-6 fill-current" /> : <Play className="h-6 w-6 fill-current ml-1" />}
                             </button>
-                            <button className="p-3 text-slate-400 hover:text-white transition-colors">
+                            <button
+                                onClick={() => onIndexChange?.(Math.min(data.length - 1, currentIndex + 10))}
+                                className="p-3 text-slate-400 hover:text-white transition-colors"
+                            >
                                 <FastForward className="h-5 w-5" />
                             </button>
                         </div>

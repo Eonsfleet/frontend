@@ -1,27 +1,58 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { Users, Award, ShieldAlert, Timer } from 'lucide-react'
-
-const performanceRadar = [
-    { subject: 'Punctuality', score: 85, fullMark: 100 },
-    { subject: 'Safety', score: 92, fullMark: 100 },
-    { subject: 'Fuel Efficiency', score: 78, fullMark: 100 },
-    { subject: 'Compliance', score: 95, fullMark: 100 },
-    { subject: 'Navigation', score: 88, fullMark: 100 },
-]
-
-const tripCompletions = [
-    { driver: 'Adeola B.', completed: 45, delayed: 2 },
-    { driver: 'Emeka U.', completed: 40, delayed: 1 },
-    { driver: 'John O.', completed: 38, delayed: 4 },
-    { driver: 'Mustapha S.', completed: 32, delayed: 0 },
-    { driver: 'Chioma N.', completed: 28, delayed: 1 },
-]
+import { useQuery } from '@tanstack/react-query'
+import { getTopDriversByTrips } from '@/lib/api/analytics'
+import { Loader2 } from 'lucide-react'
 
 export default function DriverAnalyticsPage() {
+    const { data: driversData, isLoading } = useQuery({
+        queryKey: ['top-drivers-performance'],
+        queryFn: () => getTopDriversByTrips({ limit: 10, period: 'monthly' })
+    })
+
+    const drivers = driversData?.data?.drivers || []
+
+    const performanceRadar = useMemo(() => {
+        if (drivers.length === 0) return [
+            { subject: 'Punctuality', score: 0, fullMark: 100 },
+            { subject: 'Safety', score: 0, fullMark: 100 },
+            { subject: 'Fuel Efficiency', score: 0, fullMark: 100 },
+            { subject: 'Compliance', score: 0, fullMark: 100 },
+            { subject: 'Navigation', score: 0, fullMark: 100 },
+        ]
+
+        const avgSafety = drivers.reduce((acc: number, d: any) => acc + (d.safety_rating || 0), 0) / drivers.length
+        const avgCompliance = drivers.reduce((acc: number, d: any) => acc + (d.compliance_score || 0), 0) / drivers.length
+        const avgFuelEff = drivers.reduce((acc: number, d: any) => acc + (d.fuel_efficiency || 0), 0) / drivers.length
+
+        return [
+            { subject: 'Punctuality', score: 85, fullMark: 100 }, // Static for now as API doesn't provide it
+            { subject: 'Safety', score: Math.round(avgSafety * 20), fullMark: 100 },
+            { subject: 'Fuel Efficiency', score: Math.min(100, Math.round(avgFuelEff * 10)), fullMark: 100 },
+            { subject: 'Compliance', score: Math.round(avgCompliance), fullMark: 100 },
+            { subject: 'Navigation', score: 88, fullMark: 100 }, // Static for now
+        ]
+    }, [drivers])
+
+    const tripCompletions = useMemo(() => {
+        return drivers.slice(0, 5).map((d: any) => ({
+            driver: d.driver_name.split(' ')[0],
+            completed: d.total_trips,
+            delayed: d.incidents_count || 0
+        }))
+    }, [drivers])
+
+    if (isLoading) {
+        return (
+            <div className="h-full w-full flex items-center justify-center p-20">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        )
+    }
+
     return (
         <div className="p-6 lg:p-8 space-y-6">
             <div>
