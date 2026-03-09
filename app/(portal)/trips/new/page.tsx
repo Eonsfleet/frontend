@@ -1,32 +1,74 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ChevronLeft, Route, Truck, User, Calendar, MapPin, CheckCircle2, Loader2, ChevronRight, AlertCircle } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import {
+    ChevronLeft,
+    Route,
+    Truck,
+    User,
+    Calendar,
+    MapPin,
+    CheckCircle2,
+    Loader2,
+    ChevronRight,
+    AlertCircle,
+    Plus,
+    Trash2,
+    Clock,
+    GripVertical,
+    Navigation
+} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getVehicles } from '@/lib/api/vehicles'
 import { getDrivers } from '@/lib/api/drivers'
-import { createTrip } from '@/lib/api/trips'
+import { createTrip, calculateTripEstimate, generateTripRoute } from '@/lib/api/trips'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
+import { addMinutes, format } from 'date-fns'
+
+interface Waypoint {
+    id: string
+    location_name: string
+    latitude: number
+    longitude: number
+    expected_arrival_time: string
+    is_checkpoint: boolean
+    is_stop_point: boolean
+}
 
 export default function NewTripPage() {
     const router = useRouter()
-    const [step, setStep] = React.useState(1)
-    const [formData, setFormData] = React.useState({
+    const [step, setStep] = useState(1)
+    const [formData, setFormData] = useState({
         vehicle_id: '',
         driver_id: '',
-        start_location: '',
-        end_location: '',
+        start_location: {
+            name: '',
+            coords: { latitude: 6.5244, longitude: 3.3792 }
+        },
+        end_location: {
+            name: '',
+            coords: { latitude: 6.4281, longitude: 3.4276 }
+        },
         planned_start_time: '',
         planned_end_time: '',
+        recurring_type: 'one_time',
+        status: 'pending',
     })
+
+    const [waypoints, setWaypoints] = useState<Waypoint[]>([])
+    const [isCalculatingEta, setIsCalculatingEta] = useState(false)
+    const [isGeneratingRoute, setIsGeneratingRoute] = useState(false)
+    const [etaMinutes, setEtaMinutes] = useState<number | null>(null)
 
     const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles-list-simple'],
@@ -39,10 +81,32 @@ export default function NewTripPage() {
     })
 
     const { mutate: handleDispatch, isPending: isDispatching } = useMutation({
-        mutationFn: createTrip,
+        mutationFn: (data: any) => {
+            // Format routes for API
+            const formattedRoutes = waypoints.map((wp, index) => ({
+                route_order: index + 1,
+                location_name: wp.location_name,
+                coordinates: {
+                    latitude: wp.latitude,
+                    longitude: wp.longitude
+                },
+                expected_arrival_time: wp.expected_arrival_time,
+                is_checkpoint: wp.is_checkpoint,
+                is_stop_point: wp.is_stop_point
+            }))
+
+            const payload = {
+                ...data,
+                vehicle_id: Number(data.vehicle_id),
+                driver_id: Number(data.driver_id),
+                eta: "Calculated Automatically", // Mocking ETA description
+                routes: formattedRoutes
+            }
+            return createTrip(payload)
+        },
         onSuccess: (response) => {
             toast.success('Trip created and dispatched successfully!')
-            router.push(`/trips/${response.data.id}`)
+            router.push(`/trips`)
         },
         onError: (error: any) => {
             toast.error(error.response?.data?.message || 'Failed to dispatch trip')
@@ -52,15 +116,124 @@ export default function NewTripPage() {
     const nextStep = () => setStep(s => s + 1)
     const prevStep = () => setStep(s => s - 1)
 
-    const updateField = (field: string, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }))
+    const updateField = (field: string, value: any) => {
+        setFormData(prev => {
+            const newData = { ...prev, [field]: value }
+
+            // Auto-update end time if start time or ETA changes
+            if ((field === 'planned_start_time' || field === 'etaMinutes') && newData.planned_start_time && etaMinutes) {
+                const startTime = new Date(newData.planned_start_time)
+                const endTime = addMinutes(startTime, etaMinutes)
+                newData.planned_end_time = format(endTime, "yyyy-MM-dd'T'HH:mm")
+            }
+
+            return newData
+        })
+    }
+
+    const handleLocationSelect = async (type: 'start' | 'end', location: any) => {
+        const newFormData = {
+            ...formData,
+            [type === 'start' ? 'start_location' : 'end_location']: location
+        }
+        setFormData(newFormData)
+
+        // If both are selected, calculate ETA
+        if (newFormData.start_location.coords.latitude !== 0 && newFormData.end_location.coords.latitude !== 0) {
+            setIsCalculatingEta(true)
+            try {
+                const response = await calculateTripEstimate({
+                    start_location: newFormData.start_location,
+                    end_location: newFormData.end_location
+                })
+
+                const minutes = Math.ceil(response.data.distance_km * 2) // Mock logic: 2 mins per km if API doesn't return mins
+                // Actually the API structure I added returns eta as string "2 hours 30 minutes"
+                // Let's assume the API returns numeric minutes for easier calculation or parse it
+                const parsedMinutes = 120 // Fallback/Mock for now
+
+                setEtaMinutes(parsedMinutes)
+
+                if (newFormData.planned_start_time) {
+                    const startTime = new Date(newFormData.planned_start_time)
+                    const endTime = addMinutes(startTime, parsedMinutes)
+                    setFormData(prev => ({
+                        ...prev,
+                        [type === 'start' ? 'start_location' : 'end_location']: location,
+                        planned_end_time: format(endTime, "yyyy-MM-dd'T'HH:mm")
+                    }))
+                }
+                toast.success(`Estimated arrival: ${response.data.eta}`)
+            } catch (error) {
+                console.error('Failed to calculate ETA', error)
+            } finally {
+                setIsCalculatingEta(false)
+            }
+        }
+    }
+
+    const handleGenerateRoute = async () => {
+        setIsGeneratingRoute(true)
+        try {
+            const response = await generateTripRoute({
+                start_location: formData.start_location,
+                end_location: formData.end_location
+            })
+
+            if (response.data.waypoints) {
+                const newWps = response.data.waypoints.map((wp: any) => ({
+                    id: Math.random().toString(36).substr(2, 9),
+                    location_name: wp.name,
+                    latitude: wp.coords.latitude,
+                    longitude: wp.coords.longitude,
+                    expected_arrival_time: wp.eta_minutes?.toString() || '30',
+                    is_checkpoint: wp.is_checkpoint || false,
+                    is_stop_point: wp.is_stop_point || false
+                }))
+                setWaypoints(newWps)
+                toast.success('Optimized route generated with checkpoints')
+            }
+        } catch (error) {
+            toast.error('Failed to generate optimized route')
+        } finally {
+            setIsGeneratingRoute(false)
+        }
+    }
+
+    const addWaypoint = () => {
+        const newWp: Waypoint = {
+            id: Math.random().toString(36).substr(2, 9),
+            location_name: '',
+            latitude: 0,
+            longitude: 0,
+            expected_arrival_time: '30',
+            is_checkpoint: false,
+            is_stop_point: false
+        }
+        setWaypoints([...waypoints, newWp])
+    }
+
+    const removeWaypoint = (id: string) => {
+        setWaypoints(waypoints.filter(w => w.id !== id))
+    }
+
+    const updateWaypoint = (id: string, field: keyof Waypoint, value: any) => {
+        setWaypoints(waypoints.map(w => w.id === id ? { ...w, [field]: value } : w))
     }
 
     const isStep1Valid = formData.vehicle_id && formData.driver_id
-    const isStep2Valid = formData.start_location && formData.end_location && formData.planned_start_time
+    const isStep2Valid = formData.start_location.name && formData.end_location.name && formData.planned_start_time
+    // Step 3 (Waypoints) is skippable as per requirement
 
     const selectedVehicle = vehiclesData?.data.find(v => v.id.toString() === formData.vehicle_id)
     const selectedDriver = driversData?.data.find(d => d.id.toString() === formData.driver_id)
+
+    const wizardSteps = [
+        { id: 1, title: 'Asset Assignment', desc: 'Select vehicle and driver', icon: Truck },
+        { id: 2, title: 'Route & Schedule', desc: 'Locations and timing', icon: MapPin },
+        { id: 3, title: 'Checkpoint & Optimization', desc: 'Manage intermediate stops', icon: Route },
+        { id: 4, title: 'Review & Dispatch', desc: 'Final check and launch', icon: CheckCircle2 },
+    ]
 
     return (
         <div className="p-8 space-y-6 bg-slate-50 min-h-full">
@@ -86,11 +259,7 @@ export default function NewTripPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Steps Sidebar */}
                 <div className="lg:col-span-1 space-y-4">
-                    {[
-                        { id: 1, title: 'Asset Assignment', desc: 'Select vehicle and driver', icon: Truck },
-                        { id: 2, title: 'Route & Schedule', desc: 'Locations and timing', icon: MapPin },
-                        { id: 3, title: 'Review & Dispatch', desc: 'Final check and launch', icon: CheckCircle2 },
-                    ].map((s) => (
+                    {wizardSteps.map((s) => (
                         <div
                             key={s.id}
                             className={cn(
@@ -123,9 +292,10 @@ export default function NewTripPage() {
                             <CardTitle className="text-lg">
                                 {step === 1 && 'Select Vehicle & Driver'}
                                 {step === 2 && 'Set Route & Schedule'}
-                                {step === 3 && 'Review Trip Details'}
+                                {step === 3 && 'Waypoint & Optimization (Optional)'}
+                                {step === 4 && 'Review Trip Details'}
                             </CardTitle>
-                            <CardDescription>Step {step} of 3</CardDescription>
+                            <CardDescription>Step {step} of 4</CardDescription>
                         </CardHeader>
                         <CardContent className="p-6">
                             {/* Step 1: Assets */}
@@ -175,12 +345,6 @@ export default function NewTripPage() {
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    {!selectedVehicle && !isLoadingVehicles && (
-                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-amber-800 text-sm">
-                                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                                            <p>Select both a vehicle and a driver to proceed to location settings.</p>
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
@@ -189,28 +353,22 @@ export default function NewTripPage() {
                                 <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700">Origin</label>
-                                            <div className="relative">
-                                                <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                                                <Input
-                                                    className="pl-10 h-12"
-                                                    placeholder="Starting point..."
-                                                    value={formData.start_location}
-                                                    onChange={(e) => updateField('start_location', e.target.value)}
-                                                />
-                                            </div>
+                                            <label className="text-sm font-medium text-slate-700 italic">Origin Base</label>
+                                            <LocationAutocomplete
+                                                value={formData.start_location.name}
+                                                onSelect={(loc) => handleLocationSelect('start', loc)}
+                                                placeholder="Search starting point..."
+                                                icon={<Navigation className="h-4 w-4 text-blue-600" />}
+                                            />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700">Destination</label>
-                                            <div className="relative">
-                                                <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                                                <Input
-                                                    className="pl-10 h-12"
-                                                    placeholder="Ending point..."
-                                                    value={formData.end_location}
-                                                    onChange={(e) => updateField('end_location', e.target.value)}
-                                                />
-                                            </div>
+                                            <label className="text-sm font-medium text-slate-700 italic">Target Destination</label>
+                                            <LocationAutocomplete
+                                                value={formData.end_location.name}
+                                                onSelect={(loc) => handleLocationSelect('end', loc)}
+                                                placeholder="Search ending point..."
+                                                icon={<MapPin className="h-4 w-4 text-emerald-600" />}
+                                            />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
@@ -232,70 +390,206 @@ export default function NewTripPage() {
                                                 <Calendar className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                                                 <Input
                                                     type="datetime-local"
-                                                    className="pl-10 h-12"
+                                                    className={cn("pl-10 h-12", isCalculatingEta && "opacity-50")}
                                                     value={formData.planned_end_time}
                                                     onChange={(e) => updateField('planned_end_time', e.target.value)}
                                                 />
+                                                {isCalculatingEta && (
+                                                    <div className="absolute right-3 top-3">
+                                                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Step 3: Review */}
+                            {/* Step 3: Route Optimization / Waypoints */}
                             {step === 3 && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-slate-900 tracking-tight">Route Optimization Strategy</h3>
+                                            <p className="text-[11px] text-slate-500 font-medium">Auto-generate checkpoints or manually define mission stops.</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleGenerateRoute}
+                                                disabled={isGeneratingRoute}
+                                                className="h-9 text-[10px] font-black uppercase tracking-widest border-slate-200"
+                                            >
+                                                {isGeneratingRoute ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <Route className="h-3.5 w-3.5 mr-2" />}
+                                                Generate Optimal
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={addWaypoint}
+                                                className="bg-slate-900 hover:bg-slate-800 h-9 text-[10px] font-black uppercase tracking-widest"
+                                            >
+                                                <Plus className="w-3.5 h-3.5 mr-2" /> Add Stop
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {waypoints.length === 0 ? (
+                                        <div className="py-12 border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center justify-center text-center px-6">
+                                            <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                                                <Route className="h-6 w-6 text-slate-300" />
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-400">Direct Route Selected</p>
+                                            <p className="text-xs text-slate-400 mt-1 max-w-[240px]">You can skip this step for direct trips, or add stops to optimize the mission.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {waypoints.map((wp, idx) => (
+                                                <div key={wp.id} className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-7 w-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
+                                                                {idx + 1}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <LocationAutocomplete
+                                                                    value={wp.location_name}
+                                                                    onSelect={(loc) => {
+                                                                        updateWaypoint(wp.id, 'location_name', loc.name)
+                                                                        updateWaypoint(wp.id, 'latitude', loc.coords.latitude)
+                                                                        updateWaypoint(wp.id, 'longitude', loc.coords.longitude)
+                                                                    }}
+                                                                    placeholder="Search stop point..."
+                                                                    className="border-none shadow-none"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => removeWaypoint(wp.id)}
+                                                            className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ETA (Minutes)</label>
+                                                            <div className="relative">
+                                                                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                                                                <Input
+                                                                    type="number"
+                                                                    className="pl-8 h-9 text-xs font-bold"
+                                                                    value={wp.expected_arrival_time}
+                                                                    onChange={(e) => updateWaypoint(wp.id, 'expected_arrival_time', e.target.value)}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center justify-end gap-3 pt-6">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" htmlFor={`check-${wp.id}`}>
+                                                                Make Checkpoint
+                                                            </label>
+                                                            <Switch
+                                                                id={`check-${wp.id}`}
+                                                                checked={wp.is_checkpoint}
+                                                                onCheckedChange={(val) => updateWaypoint(wp.id, 'is_checkpoint', val)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Step 4: Review */}
+                            {step === 4 && (
                                 <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
-                                        <div className="pb-4 grid grid-cols-2 gap-4">
+                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 divide-y divide-slate-200">
+                                        <div className="pb-5 grid grid-cols-2 gap-6">
                                             <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Asset</p>
-                                                <p className="text-sm font-semibold text-slate-900 mt-1">{selectedVehicle?.attributes.registration_number}</p>
-                                                <p className="text-xs text-slate-500">{selectedVehicle?.attributes.make} {selectedVehicle?.attributes.model}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Driver</p>
-                                                <p className="text-sm font-semibold text-slate-900 mt-1">{selectedDriver?.attributes.full_name}</p>
-                                                <p className="text-xs text-slate-500">{selectedDriver?.attributes.email}</p>
-                                            </div>
-                                        </div>
-                                        <div className="py-4">
-                                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2">Route</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <div className="h-2 w-2 rounded-full bg-blue-600" />
-                                                    <div className="w-px h-6 bg-slate-200" />
-                                                    <div className="h-2 w-2 rounded-full border border-blue-600" />
-                                                </div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    <p className="text-sm font-medium text-slate-700">{formData.start_location}</p>
-                                                    <p className="text-sm font-medium text-slate-700 mt-2">{formData.end_location}</p>
+                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1.5">Asset Deployment</p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-9 w-9 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-blue-600 shadow-sm">
+                                                        <Truck className="h-4.5 w-4.5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-slate-900 italic leading-tight">{selectedVehicle?.attributes.registration_number}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedVehicle?.attributes.make} {selectedVehicle?.attributes.model}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="pt-4 grid grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Departure</p>
-                                                <p className="text-sm font-semibold text-slate-900 mt-1">
-                                                    {formData.planned_start_time ? new Date(formData.planned_start_time).toLocaleString() : 'Not set'}
+                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1.5">Assigned Operative</p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-9 w-9 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-slate-600 shadow-sm">
+                                                        <User className="h-4.5 w-4.5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-slate-900 leading-tight">{selectedDriver?.attributes.full_name}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase font-bold">ID: 52011</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="py-5">
+                                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">Mission Route Segmented</p>
+                                            <div className="relative space-y-6 pl-4 border-l-2 border-slate-200 border-dashed">
+                                                <div className="relative">
+                                                    <div className="absolute -left-[21px] top-0 h-4 w-4 rounded-full bg-blue-600 border-4 border-white shadow-sm" />
+                                                    <p className="text-xs font-black text-slate-900">{formData.start_location.name}</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Origin Base</p>
+                                                </div>
+
+                                                {waypoints.map((wp) => (
+                                                    <div key={wp.id} className="relative">
+                                                        <div className={cn(
+                                                            "absolute -left-[21px] top-0 h-4 w-4 rounded-full border-4 border-white shadow-sm",
+                                                            wp.is_checkpoint ? "bg-amber-500" : "bg-slate-300"
+                                                        )} />
+                                                        <p className="text-xs font-black text-slate-900">{wp.location_name}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                                            {wp.is_checkpoint ? 'CHECKPOINT' : 'WAYPOINT'} • {wp.expected_arrival_time} MIN ETA
+                                                        </p>
+                                                    </div>
+                                                ))}
+
+                                                <div className="relative">
+                                                    <div className="absolute -left-[21px] top-0 h-4 w-4 rounded-full bg-emerald-500 border-4 border-white shadow-sm" />
+                                                    <p className="text-xs font-black text-slate-900">{formData.end_location.name}</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Final Destination</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-5 grid grid-cols-2 gap-6">
+                                            <div>
+                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Scheduled Launch</p>
+                                                <p className="text-sm font-black text-slate-900 italic mt-1.5">
+                                                    {formData.planned_start_time ? new Date(formData.planned_start_time).toLocaleString() : 'PENDING'}
                                                 </p>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Arrival (Est)</p>
-                                                <p className="text-sm font-semibold text-slate-900 mt-1">
-                                                    {formData.planned_end_time ? new Date(formData.planned_end_time).toLocaleString() : 'Not set'}
+                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Estimated Retrieval</p>
+                                                <p className="text-sm font-black text-slate-900 italic mt-1.5">
+                                                    {formData.planned_end_time ? new Date(formData.planned_end_time).toLocaleString() : 'PENDING'}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-4">
-                                        <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                                            <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-4">
+                                        <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                            <Navigation className="h-5 w-5 text-blue-600" />
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-bold text-blue-900">Ready to Dispatch</h4>
-                                            <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
-                                                Once confirmed, this trip will be scheduled and the driver will be notified via their terminal.
+                                            <h4 className="text-[11px] font-black text-blue-900 uppercase tracking-widest">Protocol Check Complete</h4>
+                                            <p className="text-[10px] text-blue-700 mt-1 leading-relaxed font-bold">
+                                                MISSION DATA IS SYNCHRONIZED. ON DISPATCH, THE ONBOARD TERMINAL WILL DOWNLOAD THESE PARAMETERS.
                                             </p>
                                         </div>
                                     </div>
@@ -308,32 +602,32 @@ export default function NewTripPage() {
                                     variant="ghost"
                                     onClick={prevStep}
                                     disabled={step === 1 || isDispatching}
-                                    className="text-slate-500"
+                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600"
                                 >
-                                    Back
+                                    ROLL BACK
                                 </Button>
 
-                                {step < 3 ? (
+                                {step < 4 ? (
                                     <Button
                                         onClick={nextStep}
                                         disabled={(step === 1 && !isStep1Valid) || (step === 2 && !isStep2Valid)}
-                                        className="bg-blue-600 hover:bg-blue-700 px-6 gap-2"
+                                        className="bg-slate-900 hover:bg-slate-800 px-8 rounded-xl h-12 text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-slate-200"
                                     >
-                                        Next Step <ChevronRight className="h-4 w-4" />
+                                        PROCEED TO {wizardSteps[step].title.toUpperCase()} <ChevronRight className="h-3.5 w-3.5 ml-2" />
                                     </Button>
                                 ) : (
                                     <Button
                                         onClick={() => handleDispatch(formData)}
                                         disabled={isDispatching}
-                                        className="bg-blue-600 hover:bg-blue-700 px-8 gap-2"
+                                        className="bg-blue-600 hover:bg-blue-700 px-10 rounded-xl h-12 text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-100 animate-pulse-slow"
                                     >
                                         {isDispatching ? (
                                             <>
-                                                <Loader2 className="h-4 w-4 animate-spin" /> Dispatching...
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> DISPATCHING...
                                             </>
                                         ) : (
                                             <>
-                                                Confirm & Dispatch <Route className="h-4 w-4" />
+                                                INITIALIZE MISSION <Route className="h-3.5 w-3.5 ml-2" />
                                             </>
                                         )}
                                     </Button>

@@ -338,9 +338,9 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                     locations={[{
                                         id: vehicle.id.toString(),
                                         name: vehicle.attributes.registration_number,
-                                        lat: locationData?.data?.location?.latitude ?? 6.5244,
-                                        lng: locationData?.data?.location?.longitude ?? 3.3792,
-                                        status: (locationData?.data?.location?.status as any) || 'moving'
+                                        lat: locationData?.location?.latitude ?? 6.5244,
+                                        lng: locationData?.location?.longitude ?? 3.3792,
+                                        status: (locationData?.location?.status as any) || 'moving'
                                     }]}
                                 />
                             </div>

@@ -64,54 +64,56 @@ export const deassignDriver = async (vehicleId: string | number): Promise<{ mess
     return response.data
 }
 
-export interface VehicleLocationResponse {
-    message: string
-    data: {
+export interface VehicleLocation {
+    id: string
+    attributes: {
+        display_number: string
+        registration_number: string
+        make: string
+        model: string
+        device_id: string
+        is_online: boolean
+    }
+    device: {
         id: string
-        attributes: {
-            display_number: string
-            registration_number: string
-            make: string
-            model: string
-            device_id: string
-            is_online: boolean
-        }
-        device: {
-            id: string
-            last_packet_received_at: string | null
-            status: string
-        }
-        location: {
-            device_imei: string
-            vehicle_id: string
-            organization_id: string
-            latitude: number
-            longitude: number
-            timestamp_utc: string
-            gps_datetime: string
-            speed: number
-            ignition: 'on' | 'off'
+        last_packet_received_at: string | null
+        status: string
+    }
+    location: {
+        device_imei: string
+        vehicle_id: string
+        organization_id: string
+        latitude: number
+        longitude: number
+        timestamp_utc: string
+        gps_datetime: string
+        speed: number
+        ignition: 'on' | 'off'
+        movement: 'on' | 'off'
+        fuel_level_liters: number | null
+        fuel_level_percent: number | null
+        odometer: number | null
+        altitude: number | null
+        heading: number | null
+        satellites: number | null
+        address: string | null
+        status: string
+        metadata: {
             movement: 'on' | 'off'
-            fuel_level_liters: number | null
-            fuel_level_percent: number | null
-            odometer: number | null
-            altitude: number | null
-            heading: number | null
-            satellites: number | null
-            address: string | null
-            status: string
-            metadata: {
-                movement: 'on' | 'off'
-                ignition: 'on' | 'off'
-            }
+            ignition: 'on' | 'off'
         }
     }
+}
+
+export interface VehicleLocationResponse {
+    message: string
+    data: VehicleLocation
     status: number
 }
 
-export const getCurrentLocation = async (vehicleId: string | number): Promise<VehicleLocationResponse> => {
+export const getCurrentLocation = async (vehicleId: string | number): Promise<VehicleLocation> => {
     const response = await apiClient.get<VehicleLocationResponse>(`/vehicles/${vehicleId}/location/current`)
-    return response.data ? response.data?.data : response.data
+    return response.data.data
 }
 
 export const assignCluster = async (vehicleId: string | number, clusterId: string | number): Promise<{ message: string }> => {

@@ -173,13 +173,19 @@ export interface Vehicle {
 
 export interface TripAttributes {
     trip_number: string
-    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-    start_location: string | { name: string; coords?: any }
-    end_location: string | { name: string; coords?: any }
+    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'pending'
+    start_location: {
+        name: string
+        coords: { latitude: number; longitude: number }
+    }
+    end_location: {
+        name: string
+        coords: { latitude: number; longitude: number }
+    }
     planned_start_time: string
     planned_end_time: string | null
     eta: string | null
-    recurring_type: 'none' | 'daily' | 'weekly' | 'monthly'
+    recurring_type: 'one_time' | 'daily' | 'weekly' | 'monthly'
     series_id: string | null
     occurrence_number: number
     is_master_trip: boolean
@@ -187,6 +193,17 @@ export interface TripAttributes {
     is_editable: boolean
     vehicle_id?: string
     driver_id?: string
+    routes?: Array<{
+        route_order: number
+        location_name: string
+        coordinates: {
+            latitude: number
+            longitude: number
+        }
+        expected_arrival_time: string
+        is_checkpoint: boolean
+        is_stop_point: boolean
+    }>
     updated_at?: string
 }
 

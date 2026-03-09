@@ -43,3 +43,18 @@ export const updateTrip = async (id: string, data: any): Promise<TripDetailRespo
     const response = await apiClient.patch<TripDetailResponse>(`/trips/${id}`, data)
     return response.data
 }
+export const calculateTripEstimate = async (data: {
+    start_location: { name: string; coords: { latitude: number; longitude: number } }
+    end_location: { name: string; coords: { latitude: number; longitude: number } }
+}): Promise<{ message: string; data: { eta: string; distance_km: number } }> => {
+    const response = await apiClient.post('/trips/calculate-estimate', data)
+    return response.data
+}
+
+export const generateTripRoute = async (data: {
+    start_location: { name: string; coords: { latitude: number; longitude: number } }
+    end_location: { name: string; coords: { latitude: number; longitude: number } }
+}): Promise<{ message: string; data: { waypoints: any[] } }> => {
+    const response = await apiClient.post('/trips/generate-route', data)
+    return response.data
+}

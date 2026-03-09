@@ -62,14 +62,10 @@ export default function LiveTrackingPage() {
             refetchInterval: 10000, // Refresh every 10s for live feel
         })),
     })
-
-    console.log(locationQueries, token, vehicles)
-
     // 3. Normalize and combine data
     const trackedVehicles = useMemo(() => {
         return vehicles.map((v, index) => {
-            const locRes = locationQueries[index]?.data
-            const locData = locRes?.data
+            const locData = locationQueries[index]?.data
             const normalized = locData ? normalizeGpsPacket(locData) : null
 
             return {
@@ -87,8 +83,6 @@ export default function LiveTrackingPage() {
             }
         })
     }, [vehicles, locationQueries])
-
-    console.log(trackedVehicles)
 
     // Derived selected vehicle object
     const selectedVehicle = useMemo(() =>
