@@ -1,89 +1,194 @@
 'use client'
 
 import React from 'react'
-import { MaintenanceKanban } from '@/components/maintenance/MaintenanceKanban'
-import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { useQuery } from '@tanstack/react-query'
-import { getMaintenanceJobs } from '@/lib/api/maintenance'
+import { getMaintenanceJobs, getMaintenanceStats } from '@/lib/api/maintenance'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Plus, ArrowLeft, Filter, Search } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+    LayoutGrid,
+    ListFilter,
+    Plus,
+    Wrench,
+    Clock,
+    CheckCircle2,
+    AlertCircle,
+    MoreHorizontal,
+    Car,
+    User,
+    Calendar,
+    ArrowRight
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { Input } from '@/components/ui/input'
 
-export default function MaintenanceJobsPage() {
-    const [search, setSearch] = React.useState('')
+const COLUMNS = [
+    { id: 'pending', title: 'Backlog', icon: ListFilter, color: 'text-slate-400', bg: 'bg-slate-50' },
+    { id: 'scheduled', title: 'Scheduled', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { id: 'in_progress', title: 'In Progress', icon: Wrench, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { id: 'completed', title: 'Completed', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+]
 
-    const { data, isLoading } = useQuery({
+export default function MaintenanceJobBoardPage() {
+    const { data: jobData, isLoading } = useQuery({
         queryKey: ['maintenance-jobs'],
-        queryFn: () => getMaintenanceJobs(),
+        queryFn: () => getMaintenanceJobs({ per_page: 100 }),
     })
 
-    const filteredJobs = React.useMemo(() => {
-        if (!data?.data?.jobs) return []
-        if (!search) return data.data.jobs
+    const { data: statsData } = useQuery({
+        queryKey: ['maintenance-stats'],
+        queryFn: () => getMaintenanceStats(),
+    })
 
-        return data.data.jobs.filter(job =>
-            job.attributes.reference_number.toLowerCase().includes(search.toLowerCase()) ||
-            job.attributes.description.toLowerCase().includes(search.toLowerCase()) ||
-            job.relationships.vehicle?.data?.id.toLowerCase().includes(search.toLowerCase())
-        )
-    }, [data, search])
+    const jobs = jobData?.data?.jobs || []
+    const stats = statsData?.data || {}
+
+    const jobsByStatus = React.useMemo(() => {
+        const acc: Record<string, any[]> = {
+            pending: [],
+            scheduled: [],
+            in_progress: [],
+            completed: []
+        }
+        jobs.forEach(job => {
+            const status = job.attributes.status?.toLowerCase() || 'pending'
+            if (acc[status]) acc[status].push(job)
+            else acc.pending.push(job) // fallback
+        })
+        return acc
+    }, [jobs])
 
     return (
-        <UpgradeGate
-            module="maintenance"
-            featureName="Maintenance Workflows"
-            description="Advanced maintenance tracking with job approval boards, parts tracking, cost summaries, and discussion threads. Stay organized and minimize vehicle downtime."
-            requiredPlan="growth"
-        >
-            <div className="p-8 space-y-6 bg-slate-50 min-h-full">
-                {/* Header Row */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" asChild className="rounded-full">
-                            <Link href="/maintenance">
-                                <ArrowLeft className="h-5 w-5 text-slate-500" />
-                            </Link>
-                        </Button>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Job Board</h1>
-                            <p className="text-slate-500 mt-1">Manage maintenance tasks through their lifecycle.</p>
+        <div className="p-8 space-y-8 bg-slate-50/50 min-h-screen">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Link href="/maintenance" className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest transition-colors">
+                            Maintenance Command
+                        </Link>
+                        <ChevronRight className="h-3 w-3 text-slate-300" />
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Job Board</span>
+                    </div>
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase italic">
+                        Ops <span className="text-blue-600">Theater</span>
+                    </h1>
+                    <p className="text-slate-500 mt-1 font-medium italic text-sm">Visualizing real-time maintenance throughput and technician assignments.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm gap-4">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Jobs</span>
+                            <span className="text-sm font-black text-slate-900">{(stats.in_progress_jobs || 0) + (stats.scheduled_jobs || 0)}</span>
+                        </div>
+                        <div className="w-px h-8 bg-slate-100" />
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Efficiency</span>
+                            <span className="text-sm font-black text-emerald-600">{stats.compliance_rate || 0}%</span>
                         </div>
                     </div>
-                    <Button className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-                        <Plus className="mr-2 h-4 w-4" /> Create Job
+                    <Button className="bg-slate-950 hover:bg-slate-900 shadow-xl px-6 font-bold text-xs uppercase tracking-widest group">
+                        <Plus className="mr-2 h-4 w-4 transition-transform group-hover:rotate-90" /> Initiate Job
                     </Button>
                 </div>
-
-                {/* Toolbar */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="relative w-full sm:max-w-md">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input
-                            placeholder="Search reference, description, or vehicle..."
-                            className="pl-9 bg-slate-50 border-transparent focus:bg-white transition-colors h-10 w-full"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Button variant="outline" className="w-full sm:w-auto text-slate-600 border-slate-200">
-                            <Filter className="mr-2 h-4 w-4" /> Priority
-                        </Button>
-                        <Button variant="outline" className="w-full sm:w-auto text-slate-600 border-slate-200">
-                            Mechanic
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Kanban Board Area */}
-                <div className="mt-4">
-                    <MaintenanceKanban
-                        jobs={filteredJobs}
-                        isLoading={isLoading}
-                    />
-                </div>
             </div>
-        </UpgradeGate>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+                {COLUMNS.map((col) => (
+                    <div key={col.id} className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-2">
+                                <div className={cn("p-1.5 rounded-lg", col.bg)}>
+                                    <col.icon className={cn("h-4 w-4", col.color)} />
+                                </div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 italic">
+                                    {col.title}
+                                </h3>
+                                <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-black text-slate-400 px-2 rounded-md">
+                                    {jobsByStatus[col.id]?.length || 0}
+                                </Badge>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="space-y-4 min-h-[500px]">
+                            {isLoading ? (
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-32 w-full rounded-2xl bg-slate-100/50" />
+                                ))
+                            ) : jobsByStatus[col.id]?.length ? (
+                                jobsByStatus[col.id].map((job) => (
+                                    <JobCard key={job.id} job={job} />
+                                ))
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-slate-100/30 rounded-2xl border-2 border-slate-100 border-dashed">
+                                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Empty Lane</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
     )
+}
+
+function JobCard({ job }: { job: any }) {
+    const attrs = job.attributes
+    const vehicle = job.relationships?.vehicle
+    const technician = job.relationships?.technician
+
+    return (
+        <Card className="border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer overflow-hidden bg-white">
+            <CardContent className="p-0">
+                <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-slate-200 text-slate-500 rounded-md bg-slate-50">
+                            WO-{job.id.toString().padStart(4, '0')}
+                        </Badge>
+                        <div className="flex -space-x-2">
+                            <div className="h-6 w-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center">
+                                <User className="h-3 w-3 text-slate-400" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">
+                            {attrs.service_type?.replace(/_/g, ' ') || 'General Maintenance'}
+                        </h4>
+                        <div className="flex items-center gap-1.5">
+                            <Car className="h-3 w-3 text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                {vehicle?.registration_number || attrs.vehicle_id}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                            <Clock className="h-3 w-3" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">
+                                {attrs.scheduled_at ? new Date(attrs.scheduled_at).toLocaleDateString() : 'Unscheduled'}
+                            </span>
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                    </div>
+                </div>
+
+                {attrs.status === 'in_progress' && (
+                    <div className="h-1 w-full bg-slate-100 overflow-hidden">
+                        <div className="h-full bg-blue-500 w-1/2 animate-pulse" />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+function ChevronRight({ className }: { className?: string }) {
+    return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="9 5l7 7-7 7" /></svg>
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import { subDays, startOfDay, endOfDay } from 'date-fns'
+import { DateRange } from 'react-day-picker'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -81,6 +83,11 @@ export default function TrackingPage() {
     const [playbackIndex, setPlaybackIndex] = useState(0)
     const [isPlayingPlayback, setIsPlayingPlayback] = useState(false)
     const [isLoadingPlayback, setIsLoadingPlayback] = useState(false)
+    const [playbackType, setPlaybackType] = useState<'trip' | 'history'>('trip')
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: startOfDay(subDays(new Date(), 1)),
+        to: endOfDay(new Date())
+    })
 
     const MAP_LAYERS = {
         standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -94,8 +101,8 @@ export default function TrackingPage() {
     // Auto-collapse nav menu logic moved to main effect for cleanup
 
     const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles', { per_page: 100 }],
-        queryFn: () => api.getVehicles({ per_page: 100 }),
+        queryKey: ['vehicles-locations', { per_page: 100 }],
+        queryFn: () => api.getVehiclesLocations({ per_page: 100 }),
         enabled: !!token,
     })
 
@@ -121,13 +128,13 @@ export default function TrackingPage() {
         }
         if (statusFilter !== 'all') {
             if (statusFilter === 'online') {
-                result = result.filter(v => locations[v.id]?.is_online || (v.attributes as any).is_online)
+                result = result.filter(v => locations[v.id]?.is_online || v.attributes.is_online)
             } else if (statusFilter === 'moving') {
-                result = result.filter(v => locations[v.id]?.status === 'moving' || v.attributes.status === 'in_transit')
+                result = result.filter(v => locations[v.id]?.status === 'in_transit' || (v as any).location?.status === 'in_transit' || (locations[v.id]?.speed || 0) > 0)
             } else if (statusFilter === 'idle') {
-                result = result.filter(v => locations[v.id]?.status === 'idle' || v.attributes.status === 'active')
+                result = result.filter(v => ['stopped', 'idle', 'active'].includes(locations[v.id]?.status || (v as any).location?.status || ''))
             } else if (statusFilter === 'offline') {
-                result = result.filter(v => v.attributes.status === 'inactive')
+                result = result.filter(v => (v as any).location?.status === 'offline' || !(locations[v.id]?.is_online || v.attributes.is_online))
             }
         }
         if (selectedVehicleId && !result.find(v => String(v.id) === String(selectedVehicleId))) {
@@ -150,57 +157,73 @@ export default function TrackingPage() {
                 ...trip,
                 vehiclePlate: fleetVehicle?.attributes.registration_number || relVehicle?.registration_number || 'N/A',
                 vehicleId: bestVehicleId ? String(bestVehicleId) : null,
-                startTime: trip.attributes.planned_start_time || trip.attributes?.created_at,
+                startTime: trip.attributes.planned_start_time || (trip.attributes as any)?.created_at,
                 endTime: trip.attributes.planned_end_time || new Date().toISOString()
             }
         })
     }, [ongoingTrips, vehicles])
 
-    // Fetch playback data when trip is selected and replay is opened
+    // Unified Playback Fetch Logic
     useEffect(() => {
         const fetchPlayback = async () => {
-            const selectedTrip = ongoingTripsData.find(t => t.vehicleId === selectedVehicleId)
-            if (isReplayOpen && selectedVehicleId && selectedTrip) {
-                setIsLoadingPlayback(true)
-                try {
-                    console.log('--- FETCHING TRIP PLAYBACK ---', {
-                        vehicleId: selectedVehicleId,
-                        tripId: selectedTrip.id
-                    })
-                    const res = await trackingApi.getTripPlayback(
-                        selectedVehicleId,
-                        selectedTrip.id
-                    )
-                    console.log('--- PLAYBACK SUCCESS ---', res.data?.gps_points?.length, 'points')
-
-                    // Map gps_points to the format expected by the timeline/map
-                    // The map expects { lat, lng, speed, heading, timestamp }
-                    const points = res.data?.gps_points || []
-                    setPlaybackData(points)
-                    setPlaybackIndex(0)
-                } catch (err) {
-                    console.error('Failed to fetch playback telemetry:', err)
-                } finally {
-                    setIsLoadingPlayback(false)
-                }
-            } else if (!isReplayOpen) {
+            if (!isReplayOpen || !selectedVehicleId) {
                 setPlaybackData([])
                 setPlaybackIndex(0)
                 setIsPlayingPlayback(false)
+                return
+            }
+
+            setIsLoadingPlayback(true)
+            try {
+                const selectedTrip = ongoingTripsData.find(t => t.vehicleId === selectedVehicleId)
+
+                if (playbackType === 'trip' && selectedTrip) {
+                    console.log('--- FETCHING TRIP PLAYBACK ---', { vehicleId: selectedVehicleId, tripId: selectedTrip.id })
+                    const res = await trackingApi.getTripPlayback(selectedVehicleId, selectedTrip.id)
+                    setPlaybackData(res.data?.gps_points || [])
+                } else {
+                    // Fallback to tracking playback (defaults to selected range or last 24h)
+                    console.log('--- FETCHING TRACKING HISTORY ---', { vehicleId: selectedVehicleId, range: dateRange })
+                    const start = dateRange?.from?.toISOString() || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+                    const end = dateRange?.to?.toISOString() || new Date().toISOString()
+                    const res = await trackingApi.getVehiclePlayback(selectedVehicleId, start, end)
+                    setPlaybackData(res.data?.movements || res.data || [])
+                }
+                setPlaybackIndex(0)
+            } catch (err) {
+                console.error('Failed to fetch playback telemetry:', err)
+            } finally {
+                setIsLoadingPlayback(false)
             }
         }
         fetchPlayback()
-    }, [isReplayOpen, selectedVehicleId, ongoingTripsData])
+    }, [isReplayOpen, selectedVehicleId, playbackType, ongoingTripsData])
 
-    // Initialize locations from vehicle attributes if available
+    // Initialize locations from vehicle attributes and telemetry if available
     useEffect(() => {
         if (vehicles.length > 0) {
             setLocations(prev => {
                 const next = { ...prev }
                 let changed = false
                 vehicles.forEach(v => {
+                    // Use nested location object from getVehiclesLocations response
+                    const tel = (v as any).location
                     const attrs = v.attributes as any
-                    if (attrs.latitude && !next[v.id]) {
+
+                    if (tel && !next[v.id]) {
+                        next[v.id] = {
+                            lat: tel.latitude,
+                            lng: tel.longitude,
+                            speed: tel.speed || 0,
+                            heading: tel.heading || 0,
+                            status: tel.status || 'active',
+                            is_online: (v as any).is_online || false,
+                            fuel: tel.fuel_level_percent,
+                            odometer: tel.odometer,
+                            lastUpdate: tel.gps_datetime
+                        }
+                        changed = true
+                    } else if (attrs.latitude && !next[v.id]) {
                         next[v.id] = {
                             lat: attrs.latitude,
                             lng: attrs.longitude,
@@ -218,35 +241,55 @@ export default function TrackingPage() {
     }, [vehicles])
 
     // WebSocket Telemetry Subscription
-    useEffect(() => {
-        if (!token) return
+    const { organization } = useAuthStore()
+    const { subscribePrivate } = useEcho()
 
-        const unsubscribe = subscribe('telemetry', 'TelemetryUpdated', (data: any) => {
-            if (data.vehicle_id) {
+    useEffect(() => {
+        if (!token || !organization?.id) return
+
+        // 1. Subscribe to Org-wide location updates
+        const locationUnsubscribe = subscribePrivate(`location.organization.${organization.id}`, '.current.recent', (packet: any) => {
+            if (packet.vehicle_id) {
                 setLocations(prev => ({
                     ...prev,
-                    [data.vehicle_id]: {
-                        ...prev[data.vehicle_id],
-                        lat: data.latitude,
-                        lng: data.longitude,
-                        speed: data.speed,
-                        heading: data.heading,
-                        status: data.status,
+                    [packet.vehicle_id]: {
+                        ...prev[packet.vehicle_id],
+                        lat: packet.latitude,
+                        lng: packet.longitude,
+                        speed: packet.speed,
+                        heading: packet.heading,
+                        status: packet.status,
                         is_online: true,
-                        // Additional telemetry for modal
-                        fuel: data.fuel_level_percent,
-                        temp: data.engine_temp,
-                        voltage: data.battery_voltage,
-                        signal: data.signal_strength
+                        fuel: packet.fuel_level_percent,
+                        odometer: packet.odometer,
+                        lastUpdate: packet.gps_datetime,
+                        // Additional telemetry for components
+                        temp: packet.metadata?.engine_temperature,
+                        voltage: packet.metadata?.battery_voltage,
+                        ignition: packet.ignition === 'on'
                     }
                 }))
             }
         })
 
+        // 2. Subscribe to Vehicle Status Changes
+        const statusUnsubscribe = subscribePrivate(`vehicle.status.${organization.id}`, '.vehicle.status.changed', (data: any) => {
+            // Refetch vehicles to update list if needed or just update status color
+            queryClient.invalidateQueries({ queryKey: ['vehicles-locations'] })
+        })
+
+        // 3. Subscribe to Fuel Alerts
+        const fuelUnsubscribe = subscribePrivate(`fuel.alerts.${organization.id}`, '.fuel.alert.triggered', (alert: any) => {
+            // Optional: Show toast or update local state for fuel warnings
+            console.log('Fuel Alert Triggered:', alert)
+        })
+
         return () => {
-            if (unsubscribe) unsubscribe()
+            if (locationUnsubscribe) locationUnsubscribe()
+            if (statusUnsubscribe) statusUnsubscribe()
+            if (fuelUnsubscribe) fuelUnsubscribe()
         }
-    }, [token, subscribe])
+    }, [token, organization?.id, subscribePrivate, queryClient])
 
     // Auto-collapse sidebar on mount
     const { isSidebarCollapsed, toggleSidebar } = useUIStore()
@@ -316,13 +359,13 @@ export default function TrackingPage() {
                                             const count = s === 'all'
                                                 ? vehicles.length
                                                 : s === 'online'
-                                                    ? vehicles.filter(v => locations[v.id]?.is_online || (v.attributes as any).is_online).length
+                                                    ? vehicles.filter(v => locations[v.id]?.is_online || (v as any).is_online).length
                                                     : s === 'moving'
-                                                        ? vehicles.filter(v => locations[v.id]?.status === 'moving' || v.attributes.status === 'in_transit').length
+                                                        ? vehicles.filter(v => locations[v.id]?.status === 'in_transit' || (v as any).location?.status === 'in_transit').length
                                                         : s === 'idle'
-                                                            ? vehicles.filter(v => locations[v.id]?.status === 'idle' || v.attributes.status === 'active').length
+                                                            ? vehicles.filter(v => locations[v.id]?.status === 'stopped' || (v as any).location?.status === 'stopped').length
                                                             : s === 'offline'
-                                                                ? vehicles.filter(v => v.attributes.status === 'inactive').length
+                                                                ? vehicles.filter(v => (v as any).location?.status === 'offline').length
                                                                 : 0;
 
                                             return (
@@ -355,8 +398,8 @@ export default function TrackingPage() {
                                         ) : filteredVehicles.map((v) => {
                                             const loc = locations[v.id]
                                             const isSelected = String(selectedVehicleId) === String(v.id)
-                                            const lastUpdate = loc?.lastUpdate || (v.attributes as any).current_location?.gpstime || 'N/A'
-                                            const status = loc?.status || v.attributes.status
+                                            const lastUpdate = loc?.lastUpdate || (v as any).location?.gps_datetime || 'N/A'
+                                            const status = loc?.status || (v as any).location?.status
 
                                             return (
                                                 <div
@@ -640,6 +683,24 @@ export default function TrackingPage() {
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <button
+                                                onClick={() => {
+                                                    const hasTrip = ongoingTripsData.some(t => t.vehicleId === selectedVehicleId)
+                                                    setPlaybackType(hasTrip ? 'trip' : 'history')
+                                                    setIsReplayOpen(true)
+                                                }}
+                                                className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center border border-blue-100"
+                                            >
+                                                <History className="h-4 w-4" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="bg-slate-900 text-white border-none font-black text-[9px] uppercase tracking-widest">Replay</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
                                                 onClick={() => setIsTelemetryOpen(true)}
                                                 className="h-10 w-10 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all flex items-center justify-center shadow-lg"
                                             >
@@ -670,18 +731,18 @@ export default function TrackingPage() {
                 onClose={() => setIsTelemetryOpen(false)}
                 vehicleId={selectedVehicleId}
                 vehicle={selectedVehicle ? {
-                    plate: selectedVehicle.attributes.registration_number,
-                    speed: locations[selectedVehicle.id]?.speed || 0,
-                    fuel: locations[selectedVehicle.id]?.fuel || 0,
-                    temp: locations[selectedVehicle.id]?.temp || 0,
-                    status: locations[selectedVehicle.id]?.status || selectedVehicle.attributes.status,
-                    voltage: locations[selectedVehicle.id]?.voltage || '14.2V',
-                    signal: locations[selectedVehicle.id]?.signal || '-62 dBm',
-                    ignition: locations[selectedVehicle.id]?.ignition,
-                    odometer: locations[selectedVehicle.id]?.odometer,
-                    lat: locations[selectedVehicle.id]?.lat,
-                    lng: locations[selectedVehicle.id]?.lng,
-                    lastUpdate: locations[selectedVehicle.id]?.lastUpdate
+                    plate: (selectedVehicle as any).attributes.registration_number,
+                    speed: locations[selectedVehicle.id]?.speed || (selectedVehicle as any).location?.speed || 0,
+                    fuel: locations[selectedVehicle.id]?.fuel || (selectedVehicle as any).location?.fuel_level_percent || 0,
+                    temp: locations[selectedVehicle.id]?.temp || (selectedVehicle as any).location?.metadata?.engine_temperature || 0,
+                    status: locations[selectedVehicle.id]?.status || (selectedVehicle as any).location?.status,
+                    voltage: locations[selectedVehicle.id]?.voltage || (selectedVehicle as any).location?.metadata?.battery_voltage || '14.2V',
+                    signal: locations[selectedVehicle.id]?.signal || (selectedVehicle as any).location?.satellites + ' Sats',
+                    ignition: locations[selectedVehicle.id]?.ignition || (selectedVehicle as any).location?.ignition === 'on',
+                    odometer: locations[selectedVehicle.id]?.odometer || (selectedVehicle as any).location?.odometer,
+                    lat: locations[selectedVehicle.id]?.lat || (selectedVehicle as any).location?.latitude,
+                    lng: locations[selectedVehicle.id]?.lng || (selectedVehicle as any).location?.longitude,
+                    lastUpdate: locations[selectedVehicle.id]?.lastUpdate || (selectedVehicle as any).location?.gps_datetime
                 } : null}
             />
 
@@ -694,6 +755,9 @@ export default function TrackingPage() {
                 isPlaying={isPlayingPlayback}
                 setIsPlaying={setIsPlayingPlayback}
                 isLoading={isLoadingPlayback}
+                title={playbackType === 'trip' ? 'TRIP REPLAY' : 'HISTORY REPLAY'}
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
             />
 
             <style jsx global>{`

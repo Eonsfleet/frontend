@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import * as trackingApi from '@/lib/api/tracking'
 import { reverseGeocode } from '@/lib/gps'
+import { useVehicleTelemetry } from '@/hooks/useVehicleTelemetry'
 
 interface TelemetryDrawerProps {
     isOpen: boolean
@@ -48,6 +49,8 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
         enabled: isOpen && !!vehicleId
     })
 
+    const { telemetry, deviceStatus } = useVehicleTelemetry(vehicleId as string, (vehicle as any)?.device_id)
+
     useEffect(() => {
         if (isOpen && vehicle?.lat && vehicle?.lng) {
             setAddress('Geocoding...')
@@ -57,11 +60,17 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
 
     if (!vehicle) return null
 
+    // Combine prop data with real-time telemetry
+    const liveSpeed = telemetry?.speed ?? vehicle.speed
+    const liveFuel = telemetry?.fuel_level_percent ?? vehicle.fuel
+    const liveIgnition = telemetry ? (telemetry.ignition === 'on') : vehicle.ignition
+    const liveOdo = telemetry?.odometer ?? vehicle.odometer
+
     const health = sensorData?.data || {
-        battery_voltage: '---',
-        signal_strength: '---',
-        engine_temp: 0,
-        obd_status: '---'
+        battery_voltage: telemetry?.metadata?.battery_voltage || '---',
+        signal_strength: telemetry?.satellites ? `${telemetry.satellites} Sats` : '---',
+        engine_temp: telemetry?.metadata?.engine_temperature || 0,
+        obd_status: telemetry?.metadata?.driving_state || '---'
     }
 
     return (
@@ -110,12 +119,12 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
                         <div className="p-5 rounded-3xl bg-slate-900 text-white flex flex-col items-center justify-center text-center group">
                             <Gauge className="h-5 w-5 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Velocity</span>
-                            <div className="text-3xl font-black italic mt-1">{vehicle.speed}<span className="text-xs text-slate-500 ml-1">KPH</span></div>
+                            <div className="text-3xl font-black italic mt-1">{liveSpeed}<span className="text-xs text-slate-500 ml-1">KPH</span></div>
                         </div>
                         <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center text-center group">
                             <Fuel className="h-5 w-5 text-rose-500 mb-2 group-hover:scale-110 transition-transform" />
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fuel Level</span>
-                            <div className="text-3xl font-black italic mt-1 text-slate-900">{vehicle.fuel}<span className="text-xs text-slate-400 ml-1">%</span></div>
+                            <div className="text-3xl font-black italic mt-1 text-slate-900">{liveFuel}<span className="text-xs text-slate-400 ml-1">%</span></div>
                         </div>
                     </div>
 
@@ -150,7 +159,7 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
                                     </div>
                                     <div>
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ignition</p>
-                                        <h4 className="text-sm font-black text-slate-700">{vehicle.ignition ? 'ON' : 'OFF'}</h4>
+                                        <h4 className="text-sm font-black text-slate-700">{liveIgnition ? 'ON' : 'OFF'}</h4>
                                     </div>
                                 </div>
                                 <div className={cn("h-2 w-2 rounded-full", vehicle.ignition ? "bg-emerald-500 animate-pulse" : "bg-rose-500")} />
@@ -163,7 +172,7 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
                                     </div>
                                     <div>
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Odometer</p>
-                                        <h4 className="text-sm font-black text-slate-700">{vehicle.odometer?.toLocaleString() || '---'} <span className="text-[10px] text-slate-400">km</span></h4>
+                                        <h4 className="text-sm font-black text-slate-700">{liveOdo?.toLocaleString() || '---'} <span className="text-[10px] text-slate-400">km</span></h4>
                                     </div>
                                 </div>
                             </div>

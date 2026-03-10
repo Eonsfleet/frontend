@@ -84,3 +84,23 @@ export const getActivityLogs = async () => {
     const res = await apiClient.get('/organization/activity-log/summary')
     return res.data?.data ?? res.data
 }
+
+export const getVehiclesWeekly = async () => {
+    const res = await apiClient.get('/dashboard/vehicles/weekly')
+    return res.data?.data ?? res.data
+}
+
+export const getTripsWeekly = async () => {
+    const res = await apiClient.get('/dashboard/trips/weekly')
+    return res.data?.data ?? res.data
+}
+
+export const getIncidentsWeekly = async () => {
+    const res = await apiClient.get('/dashboard/incidents/weekly')
+    return res.data?.data ?? res.data
+}
+
+export const getEfficiencyWeekly = async () => {
+    const res = await apiClient.get('/dashboard/efficiency/weekly')
+    return res.data?.data ?? res.data
+}

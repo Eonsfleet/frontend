@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { Wrench, Calendar, Clock, AlertTriangle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateMaintenanceJobStatus } from '@/lib/api/maintenance'
+import { transitionMaintenanceJob } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
@@ -16,11 +16,11 @@ const COLUMNS: { id: MaintenanceJobStatus; label: string; color: string }[] = [
     { id: 'draft', label: 'Draft', color: 'bg-slate-100 text-slate-700' },
     { id: 'submitted', label: 'Submitted', color: 'bg-amber-100 text-amber-800' },
     { id: 'approved', label: 'Approved', color: 'bg-blue-100 text-blue-800' },
-    { id: 'assigned', label: 'Assigned', color: 'bg-indigo-100 text-indigo-800' },
     { id: 'in_progress', label: 'In Progress', color: 'bg-violet-100 text-violet-800' },
-    { id: 'completed', label: 'Completed', color: 'bg-green-100 text-green-800' },
+    { id: 'pending_verification', label: 'Pending Verification', color: 'bg-orange-100 text-orange-800' },
     { id: 'verified', label: 'Verified', color: 'bg-emerald-100 text-emerald-800' },
     { id: 'closed', label: 'Closed', color: 'bg-slate-200 text-slate-800' },
+    { id: 'rejected', label: 'Rejected', color: 'bg-rose-100 text-rose-800' },
 ]
 
 interface MaintenanceKanbanProps {
@@ -34,7 +34,7 @@ export function MaintenanceKanban({ jobs, isLoading }: MaintenanceKanbanProps) {
     // Simple transition logic for MVP without full drag-and-drop
     // In a real kanban, we'd use @dnd-kit or react-beautiful-dnd
     const { mutate: updateStatus, isPending } = useMutation({
-        mutationFn: ({ id, status }: { id: string, status: string }) => updateMaintenanceJobStatus(id, status),
+        mutationFn: ({ id, status }: { id: string, status: string }) => transitionMaintenanceJob(id, { to_status: status }),
         onSuccess: () => {
             toast.success('Job status updated')
             queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
@@ -92,10 +92,10 @@ export function MaintenanceKanban({ jobs, isLoading }: MaintenanceKanbanProps) {
                                             <h4 className="text-sm font-semibold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
                                                 {job.attributes.description}
                                             </h4>
-                                            {job.relationships.vehicle?.data && (
+                                            {job.relationships?.vehicle && (
                                                 <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-500">
                                                     <Wrench className="h-3 w-3" />
-                                                    <span>{job.relationships.vehicle.data.id}</span>
+                                                    <span>{'registration_number' in job.relationships.vehicle ? job.relationships.vehicle.registration_number : (job.relationships.vehicle as any).data?.id}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -103,7 +103,7 @@ export function MaintenanceKanban({ jobs, isLoading }: MaintenanceKanbanProps) {
                                         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                                             <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                                 <Calendar className="h-3.5 w-3.5" />
-                                                <span>{format(new Date(job.attributes.scheduled_date), 'MMM dd')}</span>
+                                                <span>{job.attributes.scheduled_date ? format(new Date(job.attributes.scheduled_date), 'MMM dd') : 'TBD'}</span>
                                             </div>
 
                                             {job.relationships.assignee?.data ? (

@@ -3,26 +3,26 @@
 import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
 import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
 import {
-    Loader2,
     Navigation,
     Truck,
     RefreshCw,
-    Layers,
     Search,
-    Filter,
     Clock,
     Activity,
     ChevronRight,
     PlayCircle
 } from 'lucide-react'
-import { useState, useMemo, useEffect } from 'react'
-import { useQuery, useQueries } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import * as api from '@/lib/api/vehicles'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/store/authStore'
 import dynamic from 'next/dynamic'
-import { normalizeGpsPacket } from '@/lib/gps'
+import { useFleetTracking } from '@/hooks/useFleetTracking'
+import { getGeofences } from '@/lib/api/geofencing'
+import { getActiveTripForVehicle, getTripRoutes, getLastTripForVehicle } from '@/lib/api/trips'
+import { getTripPlayback } from '@/lib/api/tracking'
 
 const LiveMapComponent = dynamic(
     () => import('@/components/live/LiveMapComponent'),
@@ -40,49 +40,88 @@ export default function LiveTrackingPage() {
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
     const [isTelemetryOpen, setIsTelemetryOpen] = useState(false)
     const [isReplayOpen, setIsReplayOpen] = useState(false)
-    const [viewMode, setViewMode] = useState<'all' | 'focused'>('all')
 
+    // Playback State
+    const [playbackIndex, setPlaybackIndex] = useState(0)
+    const [isPlaybackPlaying, setIsPlaybackPlaying] = useState(false)
+    const [playbackSpeed, setPlaybackSpeed] = useState(1)
     const { token } = useAuthStore()
 
-    // 1. Fetch all vehicles
-    const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles', { per_page: 100 }],
-        queryFn: () => api.getVehicles({ per_page: 100 }),
+    // 1. Fetch initial vehicle locations
+    const { data: routeData } = useQuery({
+        queryKey: ['vehicle-locations', { per_page: 100 }],
+        queryFn: () => api.getVehiclesLocations({ per_page: 100 }),
         enabled: !!token,
     })
 
-    const vehicles = vehicleData?.data || []
+    const initialVehicles = routeData?.data || []
 
-    // 2. Fetch real-time locations for all vehicles
-    const locationQueries = useQueries({
-        queries: vehicles.map((v) => ({
-            queryKey: ['vehicle-location', v.id],
-            queryFn: () => api.getCurrentLocation(v.id),
-            enabled: !!token && vehicles.length > 0,
-            refetchInterval: 10000, // Refresh every 10s for live feel
-        })),
+    // 2. Real-time updates via WebSocket
+    const { telemetryMap } = useFleetTracking()
+
+    // 3. Fetch geofences
+    const { data: geofenceData } = useQuery({
+        queryKey: ['geofences'],
+        queryFn: () => getGeofences(),
+        enabled: !!token,
     })
+
+    const geofences = geofenceData?.data?.geofences || []
+
+    // 4. Fetch active trip for selected vehicle
+    const { data: activeTrip } = useQuery({
+        queryKey: ['active-trip', selectedVehicleId],
+        queryFn: () => getActiveTripForVehicle(selectedVehicleId!),
+        enabled: !!token && !!selectedVehicleId,
+    })
+
+    const { data: tripRouteData } = useQuery({
+        queryKey: ['trip-route', activeTrip?.id],
+        queryFn: () => getTripRoutes(activeTrip!.id),
+        enabled: !!activeTrip?.id,
+    })
+
+    const tripRoutes = tripRouteData?.data || []
+
+    // 5. Fetch last trip for playback
+    const { data: lastTrip } = useQuery({
+        queryKey: ['last-trip', selectedVehicleId],
+        queryFn: () => getLastTripForVehicle(selectedVehicleId!),
+        enabled: !!token && !!selectedVehicleId && isReplayOpen,
+    })
+
+    const { data: playbackResponse } = useQuery({
+        queryKey: ['playback', lastTrip?.id],
+        queryFn: () => getTripPlayback(selectedVehicleId!, lastTrip!.id, { include_gps_points: true }),
+        enabled: !!lastTrip?.id,
+    })
+
+    const playbackPoints = playbackResponse?.data?.gps_points || []
+    const currentPlaybackPoint = playbackPoints[playbackIndex]
     // 3. Normalize and combine data
     const trackedVehicles = useMemo(() => {
-        return vehicles.map((v, index) => {
-            const locData = locationQueries[index]?.data
-            const normalized = locData ? normalizeGpsPacket(locData) : null
+        return initialVehicles.map((v) => {
+            const live = telemetryMap[v.id]
+            const base = v.location ?? null // Initial telemetry from the locations API (may be null for untracked vehicles)
 
             return {
                 id: v.id,
                 registration_number: v.attributes.registration_number,
-                latitude: normalized?.latitude || 0,
-                longitude: normalized?.longitude || 0,
-                speed: normalized?.speed || 0,
-                heading: normalized?.course || 0,
-                status: normalized?.status || 'offline',
-                fuel: normalized?.fuel_level_percent || 0,
-                odometer: normalized?.odometer || 0,
-                ignition: normalized?.ignition || false,
-                address: normalized?.address || 'Locating...'
+                display_number: v.attributes.display_number,
+                device_id: v.attributes.device_id,
+                latitude: live?.latitude ?? base?.latitude ?? 0,
+                longitude: live?.longitude ?? base?.longitude ?? 0,
+                speed: live?.speed ?? base?.speed ?? 0,
+                heading: live?.heading ?? base?.heading ?? 0,
+                status: live?.status ?? base?.status ?? 'offline',
+                fuel: live?.fuel_level_percent ?? base?.fuel_level_percent ?? 0,
+                odometer: live?.odometer ?? base?.odometer ?? 0,
+                ignition: (live?.ignition === 'on') || (base?.ignition === 'on'),
+                address: live?.address ?? base?.address ?? 'Locating...',
+                last_update: live?.gps_datetime ?? base?.gps_datetime ?? null
             }
         })
-    }, [vehicles, locationQueries])
+    }, [initialVehicles, telemetryMap])
 
     // Derived selected vehicle object
     const selectedVehicle = useMemo(() =>
@@ -106,8 +145,24 @@ export default function LiveTrackingPage() {
                         Live <span className="text-blue-600">Operations</span>
                     </h2>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                        Monitoring {vehicles.length} Active Assets
+                        Monitoring {trackedVehicles.length} Active Assets
                     </p>
+                </div>
+
+                {/* Status Counters Bar */}
+                <div className="px-4 py-2 border-b border-slate-100 bg-white grid grid-cols-5 gap-1">
+                    {[
+                        { label: 'ALL', count: trackedVehicles.length, color: 'bg-slate-500' },
+                        { label: 'MOV', count: trackedVehicles.filter(v => v.status === 'in_transit').length, color: 'bg-emerald-500' },
+                        { label: 'STP', count: trackedVehicles.filter(v => v.status === 'stopped').length, color: 'bg-amber-500' },
+                        { label: 'OFF', count: trackedVehicles.filter(v => v.status === 'offline').length, color: 'bg-rose-500' },
+                        { label: 'ONL', count: trackedVehicles.filter(v => v.status !== 'offline').length, color: 'bg-blue-500' },
+                    ].map(stat => (
+                        <div key={stat.label} className="text-center p-1 rounded-lg bg-slate-50 border border-slate-100">
+                            <p className="text-[7px] font-black text-slate-400 leading-none mb-1">{stat.label}</p>
+                            <p className="text-xs font-black text-slate-900 leading-none">{stat.count}</p>
+                        </div>
+                    ))}
                 </div>
 
                 <div className="p-4 space-y-4 flex-1 overflow-y-auto">
@@ -205,6 +260,14 @@ export default function LiveTrackingPage() {
             <div className="flex-1 relative bg-slate-200">
                 <LiveMapComponent
                     vehicles={trackedVehicles}
+                    geofences={geofences}
+                    activeTripRoute={tripRoutes}
+                    playbackMarker={isReplayOpen && currentPlaybackPoint ? {
+                        latitude: currentPlaybackPoint.lat,
+                        longitude: currentPlaybackPoint.lng,
+                        heading: currentPlaybackPoint.heading || 0,
+                        speed: currentPlaybackPoint.speed || 0
+                    } : undefined}
                     selectedVehicleId={selectedVehicleId}
                     onSelectVehicle={setSelectedVehicleId}
                 />
@@ -289,7 +352,17 @@ export default function LiveTrackingPage() {
 
             <TripPlaybackTimeline
                 isOpen={isReplayOpen}
-                onClose={() => setIsReplayOpen(false)}
+                onClose={() => {
+                    setIsReplayOpen(false)
+                    setIsPlaybackPlaying(false)
+                }}
+                data={playbackPoints}
+                currentIndex={playbackIndex}
+                onIndexChange={setPlaybackIndex}
+                isPlaying={isPlaybackPlaying}
+                setIsPlaying={setIsPlaybackPlaying}
+                speed={playbackSpeed}
+                setSpeed={setPlaybackSpeed}
             />
         </div>
     )

@@ -1,33 +1,44 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Circle, Polyline } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { cn } from '@/lib/utils'
+import { Geofence } from '@/types'
 
 // Robust icon creation using standard HTML string to avoid react-dom/server issues in some environments
-const createVehicleIcon = (status: string, heading: number = 0, isSelected: boolean = false) => {
-    const color = isSelected ? '#2563eb' : (status === 'online' ? '#10b981' : '#ed7171')
+const createVehicleIcon = (status: string, heading: number = 0, isSelected: boolean = false, isUpdating: boolean = false, isPlayback: boolean = false) => {
+    let color = '#94a3b8' // Grey (active/offline/default)
 
-    // Simple HTML string for the icon
+    if (isPlayback) color = '#2563eb' // Blue for playback
+    else if (status === 'in_transit') color = '#10b981' // Green
+    else if (status === 'stopped') color = '#f59e0b' // Amber
+    else if (status === 'offline') color = '#ef4444' // Red
+
+    if (isSelected && !isPlayback) color = '#3b82f6'
+
     const html = `
-        <div style="
-            transform: rotate(${heading}deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            background: white;
-            border-radius: 50%;
-            border: 2px solid ${color};
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            transition: transform 0.3s ease;
-        ">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-            </svg>
+        <div class="relative flex items-center justify-center w-[32px] h-[32px]">
+            ${isUpdating ? '<div class="absolute inset-0 rounded-full bg-current opacity-20 animate-ping" style="color: ${color}"></div>' : ''}
+            <div style="
+                transform: rotate(${heading}deg);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                background: white;
+                border-radius: 50%;
+                border: 2px solid ${color};
+                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+                transition: transform 0.3s ease;
+                z-index: 10;
+            " class="${isSelected ? 'scale-110' : ''}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                </svg>
+            </div>
         </div>
     `
 
@@ -78,17 +89,50 @@ interface LiveMapProps {
         speed: number
         heading: number
         status: string
+        last_update?: string
     }[]
+    geofences?: Geofence[]
+    activeTripRoute?: any[]
+    playbackMarker?: {
+        latitude: number
+        longitude: number
+        heading: number
+        speed: number
+    }
     selectedVehicleId: string | null
     onSelectVehicle: (id: string) => void
 }
 
-export default function LiveMapComponent({ vehicles, selectedVehicleId, onSelectVehicle }: LiveMapProps) {
+export default function LiveMapComponent({
+    vehicles,
+    geofences = [],
+    activeTripRoute = [],
+    playbackMarker,
+    selectedVehicleId,
+    onSelectVehicle
+}: LiveMapProps) {
     const [mounted, setMounted] = useState(false)
+    const [updatingVehicles, setUpdatingVehicles] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         setMounted(true)
     }, [])
+
+    // Trigger ping effect when last_update changes
+    useEffect(() => {
+        vehicles.forEach(v => {
+            if (v.last_update) {
+                setUpdatingVehicles(prev => ({ ...prev, [v.id]: true }))
+                setTimeout(() => {
+                    setUpdatingVehicles(prev => {
+                        const next = { ...prev }
+                        delete next[v.id]
+                        return next
+                    })
+                }, 1000)
+            }
+        })
+    }, [vehicles.map(v => v.last_update).join(',')])
 
     if (!mounted) return (
         <div className="w-full h-full bg-slate-100 flex items-center justify-center">
@@ -114,6 +158,68 @@ export default function LiveMapComponent({ vehicles, selectedVehicleId, onSelect
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
+                {geofences.map((gf) => {
+                    const { type, coordinates, radius, name } = gf.attributes
+                    const pathOptions = {
+                        color: '#4f7cff',
+                        fillColor: '#4f7cff',
+                        fillOpacity: 0.08,
+                        weight: 2
+                    }
+
+                    if (type === 'polygon' && Array.isArray(coordinates)) {
+                        return (
+                            <Polygon
+                                key={gf.id}
+                                positions={coordinates as any}
+                                pathOptions={pathOptions}
+                            >
+                                <Popup>{name}</Popup>
+                            </Polygon>
+                        )
+                    }
+                    if (type === 'circle' && radius && Array.isArray(coordinates)) {
+                        return (
+                            <Circle
+                                key={gf.id}
+                                center={coordinates as [number, number]}
+                                radius={radius}
+                                pathOptions={pathOptions}
+                            >
+                                <Popup>{name}</Popup>
+                            </Circle>
+                        )
+                    }
+                    return null
+                })}
+
+                {activeTripRoute.length > 0 && (
+                    <>
+                        <Polyline
+                            positions={activeTripRoute.map(r => [r.coordinates.latitude, r.coordinates.longitude])}
+                            pathOptions={{ color: '#2563eb', weight: 4 }}
+                        />
+                        {activeTripRoute.filter(r => r.is_checkpoint).map((cp, idx) => (
+                            <Circle
+                                key={`cp-${idx}`}
+                                center={[cp.coordinates.latitude, cp.coordinates.longitude]}
+                                radius={50}
+                                pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.5 }}
+                            >
+                                <Popup>Checkpoint: {cp.location_name}</Popup>
+                            </Circle>
+                        ))}
+                    </>
+                )}
+
+                {playbackMarker && (
+                    <Marker
+                        position={[playbackMarker.latitude, playbackMarker.longitude]}
+                        icon={createVehicleIcon('in_transit', playbackMarker.heading, true, false, true)}
+                        zIndexOffset={1000}
+                    />
+                )}
+
                 <MapController
                     locations={vehicles.map(v => ({ id: v.id, lat: v.latitude, lng: v.longitude }))}
                     selectedVehicleId={selectedVehicleId}
@@ -129,7 +235,7 @@ export default function LiveMapComponent({ vehicles, selectedVehicleId, onSelect
                         <Marker
                             key={v.id}
                             position={[v.latitude, v.longitude]}
-                            icon={createVehicleIcon(v.status, v.heading, selectedVehicleId === v.id)}
+                            icon={createVehicleIcon(v.status, v.heading, selectedVehicleId === v.id, updatingVehicles[v.id])}
                             eventHandlers={{
                                 click: () => onSelectVehicle(v.id)
                             }}

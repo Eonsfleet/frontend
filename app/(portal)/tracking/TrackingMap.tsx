@@ -136,8 +136,8 @@ export default function TrackingMap({
                 {filteredVehicles.map(v => {
                     const loc = locations[v.id]
                     if (!loc) return null
-                    const isActive = loc.status === 'moving' || loc.speed > 0
-                    const isOnline = loc.is_online || (v.attributes as any).is_online
+                    const isActive = loc.status === 'in_transit' || (loc.speed || 0) > 0
+                    const isOnline = loc.is_online || v.attributes.is_online
 
                     return (
                         <Marker
@@ -171,7 +171,7 @@ export default function TrackingMap({
                                             "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
                                             isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
                                         )}>
-                                            {isActive ? 'Moving' : 'Idle'}
+                                            {isActive ? 'Moving' : loc.status === 'stopped' ? 'Stopped' : 'Idle'}
                                         </Badge>
                                         <div className="flex items-center gap-1.5">
                                             <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />

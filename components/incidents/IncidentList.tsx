@@ -21,7 +21,7 @@ export function IncidentList() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'reported': return 'bg-slate-100 text-slate-800'
-            case 'investigating': return 'bg-blue-100 text-blue-800'
+            case 'under_investigation': return 'bg-blue-100 text-blue-800'
             case 'action_required': return 'bg-amber-100 text-amber-800'
             case 'action_taken': return 'bg-cyan-100 text-cyan-800'
             case 'pending_resolution': return 'bg-purple-100 text-purple-800'
@@ -101,7 +101,7 @@ export function IncidentList() {
                                                 {item.attributes.type.replace(/_/g, ' ')}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="font-medium text-slate-900">{item.relationships.vehicle?.data ? `VID: ${item.relationships.vehicle.data.id}` : 'General / No Vehicle'}</div>
+                                                <div className="font-medium text-slate-900">{item.relationships?.vehicle ? ('registration_number' in item.relationships.vehicle ? item.relationships.vehicle.registration_number : (item.relationships.vehicle as any).data?.id ?? 'N/A') : 'General / No Vehicle'}</div>
                                                 <div className="text-xs text-slate-500 truncate max-w-[200px]">{item.attributes.description}</div>
                                             </td>
                                             <td className="px-6 py-4">

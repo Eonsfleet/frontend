@@ -8,18 +8,48 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getIncidentById } from '@/lib/api/incidents'
+import { getIncidentById, getIncidentHistory, getIncidentConversation, postIncidentMessage } from '@/lib/api/incidents'
 import { format } from 'date-fns'
 import { WorkflowTimeline } from '@/components/shared/WorkflowTimeline'
 import { IncidentWorkflowActions } from '@/components/incidents/IncidentWorkflowActions'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
 export default function IncidentDetailPage() {
     const params = useParams()
     const id = params.id as string
 
+    const queryClient = useQueryClient()
+    const [message, setMessage] = useState('')
+
     const { data, isLoading } = useQuery({
         queryKey: ['incident', id],
         queryFn: () => getIncidentById(id),
+    })
+
+    const { data: historyData } = useQuery({
+        queryKey: ['incident-history', id],
+        queryFn: () => getIncidentHistory(id),
+        enabled: !!id,
+    })
+
+    const { data: convData } = useQuery({
+        queryKey: ['incident-conversation', id],
+        queryFn: () => getIncidentConversation(id),
+        enabled: !!id,
+    })
+
+    const { mutate: sendMessage, isPending: isSending } = useMutation({
+        mutationFn: (body: string) => postIncidentMessage(id, { body }),
+        onSuccess: () => {
+            toast.success('Message sent')
+            setMessage('')
+            queryClient.invalidateQueries({ queryKey: ['incident-conversation', id] })
+        },
+        onError: () => toast.error('Failed to send message'),
     })
 
     const incident = data?.data
@@ -45,7 +75,7 @@ export default function IncidentDetailPage() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'reported': return 'bg-slate-100 text-slate-800'
-            case 'investigating': return 'bg-blue-100 text-blue-800'
+            case 'under_investigation': return 'bg-blue-100 text-blue-800'
             case 'action_required': return 'bg-amber-100 text-amber-800'
             case 'action_taken': return 'bg-cyan-100 text-cyan-800'
             case 'pending_resolution': return 'bg-purple-100 text-purple-800'
@@ -138,24 +168,35 @@ export default function IncidentDetailPage() {
                                     <CardTitle className="text-base">Involved Assets</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-0 divide-y divide-slate-100">
-                                    {incident.relationships.vehicle?.data && (
+                                    {incident.relationships?.vehicle && (
                                         <div className="p-4 flex flex-col gap-1">
-                                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vehicle ID</span>
-                                            <Link href={`/vehicles/${incident.relationships.vehicle.data.id}`} className="font-medium text-blue-600 hover:underline">
-                                                Vehicle #{incident.relationships.vehicle.data.id}
-                                            </Link>
+                                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vehicle</span>
+                                            {(() => {
+                                                const v = incident.relationships!.vehicle!
+                                                const vid = 'id' in v ? v.id : (v as any).data?.id
+                                                const label = 'registration_number' in v ? v.registration_number : `#${vid}`
+                                                return <Link href={`/vehicles/${vid}`} className="font-medium text-blue-600 hover:underline">{label}</Link>
+                                            })()}
                                         </div>
                                     )}
-                                    {incident.relationships.driver?.data && (
+                                    {incident.relationships?.driver && (
                                         <div className="p-4 flex flex-col gap-1">
                                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Assigned Driver</span>
-                                            <span className="font-medium text-slate-900">User #{incident.relationships.driver.data.id}</span>
+                                            {(() => {
+                                                const d = incident.relationships!.driver!
+                                                const label = 'name' in d ? d.name : `User #${'id' in d ? d.id : (d as any).data?.id}`
+                                                return <span className="font-medium text-slate-900">{label}</span>
+                                            })()}
                                         </div>
                                     )}
-                                    {incident.relationships.assignee?.data && (
+                                    {incident.relationships?.assignee && (
                                         <div className="p-4 flex flex-col gap-1 bg-amber-50/50">
                                             <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Investigation Assignee</span>
-                                            <span className="font-medium text-slate-900">User #{incident.relationships.assignee.data.id}</span>
+                                            {(() => {
+                                                const a = incident.relationships!.assignee!
+                                                const label = 'name' in a ? a.name : `User #${'id' in a ? a.id : (a as any).data?.id}`
+                                                return <span className="font-medium text-slate-900">{label}</span>
+                                            })()}
                                         </div>
                                     )}
                                 </CardContent>
@@ -174,12 +215,12 @@ export default function IncidentDetailPage() {
                         </CardHeader>
                         <CardContent className="p-6">
                             <WorkflowTimeline
-                                history={[
-                                    { status: 'reported', actor: 'System Alert', timestamp: incident.attributes.reported_at, reason: 'Initial incident filing via telematics.' },
-                                    ...(incident.attributes.status !== 'reported' ? [
-                                        { status: incident.attributes.status, actor: 'Fleet Manager', timestamp: new Date().toISOString(), reason: 'Current state indicator' }
-                                    ] : [])
-                                ]}
+                                history={(historyData?.data?.history ?? []).map((e: any) => ({
+                                    status: e.to_status ?? e.status ?? '',
+                                    actor: e.actor?.name ?? e.actor ?? 'System',
+                                    timestamp: e.created_at ?? e.timestamp ?? '',
+                                    reason: e.reason ?? e.notes ?? null,
+                                }))}
                             />
                         </CardContent>
                     </Card>
@@ -192,9 +233,40 @@ export default function IncidentDetailPage() {
                                 <MessageSquare className="h-4 w-4 text-slate-500" /> Internal Notes
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-12 text-center text-slate-500">
-                            <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                            <p>No internal notes left on this incident yet.</p>
+                        <CardContent className="p-6 space-y-4">
+                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                                {convData?.data?.conversation?.messages?.length ? (
+                                    convData.data.conversation.messages.map((msg: any) => (
+                                        <div key={msg.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-semibold text-slate-700">{msg.sender?.name ?? 'User'}</span>
+                                                <span className="text-xs text-slate-400">{msg.created_at ? format(new Date(msg.created_at), 'MMM d, p') : ''}</span>
+                                            </div>
+                                            <p className="text-sm text-slate-800">{msg.body}</p>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-8 text-center text-slate-500">
+                                        <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                        <p>No messages yet. Start the conversation.</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex gap-2 pt-2 border-t border-slate-100">
+                                <Textarea
+                                    placeholder="Add an internal note..."
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    className="bg-white min-h-[72px] resize-none"
+                                />
+                                <Button
+                                    className="shrink-0 self-end"
+                                    disabled={isSending || !message.trim()}
+                                    onClick={() => sendMessage(message)}
+                                >
+                                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

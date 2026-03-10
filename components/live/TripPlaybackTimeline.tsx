@@ -11,8 +11,14 @@ import {
     Clock,
     ChevronUp,
     ChevronDown,
-    Loader2
+    Loader2,
+    Calendar as CalendarIcon
 } from 'lucide-react'
+import { format } from 'date-fns'
+import { DateRange } from 'react-day-picker'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export function TripPlaybackTimeline({
@@ -23,7 +29,12 @@ export function TripPlaybackTimeline({
     onIndexChange,
     isPlaying,
     setIsPlaying,
-    isLoading
+    isLoading,
+    speed,
+    setSpeed,
+    title,
+    dateRange,
+    onDateRangeChange
 }: {
     isOpen: boolean
     onClose: () => void
@@ -33,9 +44,16 @@ export function TripPlaybackTimeline({
     isPlaying?: boolean
     setIsPlaying?: (playing: boolean) => void
     isLoading?: boolean
+    speed?: number
+    setSpeed?: (speed: number) => void
+    title?: string
+    dateRange?: DateRange
+    onDateRangeChange?: (range: DateRange | undefined) => void
 }) {
-    const [speed, setSpeed] = useState(1)
     const [isExpanded, setIsExpanded] = useState(true)
+    const currentSpeed = speed || 1
+    const setCurrentSpeed = setSpeed || (() => { })
+    const displayTitle = title || 'TRIP REPLAY'
 
     // Playback Interval Logic
     useEffect(() => {
@@ -43,12 +61,12 @@ export function TripPlaybackTimeline({
         if (isPlaying && onIndexChange && currentIndex < data.length - 1) {
             interval = setInterval(() => {
                 onIndexChange(currentIndex + 1)
-            }, 1000 / speed)
+            }, 1000 / currentSpeed)
         } else if (currentIndex >= data.length - 1) {
             setIsPlaying?.(false)
         }
         return () => clearInterval(interval)
-    }, [isPlaying, currentIndex, data.length, speed, onIndexChange, setIsPlaying])
+    }, [isPlaying, currentIndex, data.length, currentSpeed, onIndexChange, setIsPlaying])
 
     if (!isOpen) return null
 
@@ -77,26 +95,66 @@ export function TripPlaybackTimeline({
                                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Clock className="h-5 w-5" />}
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">TRIP REPLAY: {currentPoint ? 'MISSION IN PROGRESS' : 'FETCHING TELEMETRY...'}</h3>
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">{displayTitle}: {currentPoint ? 'MISSION IN PROGRESS' : 'FETCHING TELEMETRY...'}</h3>
                                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">
                                     {currentPoint ? `TIMESTAMP: ${new Date(currentPoint.timestamp).toLocaleTimeString()}` : 'SYNCING WITH TRACKER...'}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center bg-white/5 rounded-2xl p-1 border border-white/10">
-                            {[1, 2, 4, 8].map((s) => (
-                                <button
-                                    key={s}
-                                    onClick={() => setSpeed(s)}
-                                    className={cn(
-                                        "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                                        speed === s ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white"
-                                    )}
-                                >
-                                    {s}X
-                                </button>
-                            ))}
+                        <div className="flex items-center gap-3">
+                            {title?.includes('HISTORY') && (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            className={cn(
+                                                "bg-white/5 border-white/10 text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest h-10 px-4 rounded-xl",
+                                                !dateRange && "text-slate-400"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                                            {dateRange?.from ? (
+                                                dateRange.to ? (
+                                                    <>
+                                                        {format(dateRange.from, "LLL dd")} -{" "}
+                                                        {format(dateRange.to, "LLL dd")}
+                                                    </>
+                                                ) : (
+                                                    format(dateRange.from, "LLL dd")
+                                                )
+                                            ) : (
+                                                <span>Pick a date</span>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 bg-slate-900 border-white/10" align="end">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={dateRange?.from}
+                                            selected={dateRange}
+                                            onSelect={onDateRangeChange}
+                                            numberOfMonths={2}
+                                            className="bg-slate-900 text-white"
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                            <div className="flex items-center bg-white/5 rounded-2xl p-1 border border-white/10">
+                                {[1, 5, 10, 30].map((s) => (
+                                    <button
+                                        key={s}
+                                        onClick={() => setCurrentSpeed(s)}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                            currentSpeed === s ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white"
+                                        )}
+                                    >
+                                        {s}X
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 

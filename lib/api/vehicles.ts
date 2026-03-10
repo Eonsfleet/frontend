@@ -73,6 +73,8 @@ export interface VehicleLocation {
         model: string
         device_id: string
         is_online: boolean
+        body_type: string
+        status?: string
     }
     device: {
         id: string
@@ -134,5 +136,13 @@ export const getCurrentDriver = async (vehicleId: string | number): Promise<{ da
 export const getVehicleDriverHistory = async (vehicleId: string | number): Promise<any> => {
     const response = await apiClient.get(`/vehicles/${vehicleId}/driver-history`)
     return response.data
+}
+
+export const getVehiclesLocations = async (params?: { page?: number; per_page?: number }): Promise<Paginated<VehicleLocation>> => {
+    const response = await apiClient.get<{ data: { vehicles: VehicleLocation[], pagination: any } }>('/vehicles/locations', { params })
+    return {
+        data: response.data.data.vehicles,
+        pagination: response.data.data.pagination
+    }
 }
 
