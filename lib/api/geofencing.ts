@@ -14,7 +14,13 @@ export interface GeofenceDetailResponse {
     data: Geofence
 }
 
-export const getGeofences = async (params?: { page?: number; per_page?: number }): Promise<GeofenceListResponse> => {
+export interface GeofenceListParams {
+    page?: number
+    per_page?: number
+    q?: string
+}
+
+export const getGeofences = async (params?: GeofenceListParams): Promise<GeofenceListResponse> => {
     const response = await apiClient.get<GeofenceListResponse>('/geofences', { params })
     return response.data
 }

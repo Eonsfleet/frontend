@@ -5,7 +5,7 @@ import { MaintenanceScheduleTable } from '@/components/maintenance/MaintenanceSc
 import { useQuery } from '@tanstack/react-query'
 import { getMaintenances } from '@/lib/api/maintenance'
 import { Button } from '@/components/ui/button'
-import { Plus, Filter, CalendarRange, ChevronRight, Search, Download } from 'lucide-react'
+import { Plus, Filter, CalendarRange, Search, Download } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'

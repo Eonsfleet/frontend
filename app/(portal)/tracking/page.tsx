@@ -248,7 +248,7 @@ export default function TrackingPage() {
                     speed: next[vl.id]?.speed ?? loc.speed ?? 0,
                     heading: next[vl.id]?.heading ?? loc.heading ?? 0,
                     status: next[vl.id]?.status ?? loc.status ?? 'active',
-                    is_online: vl.attributes?.is_online ?? (vl.device?.status === 'online') ?? false,
+                    is_online: vl.attributes?.is_online ?? (vl.device?.status === 'online'),
                     fuel: next[vl.id]?.fuel ?? loc.fuel_level_percent,
                     fuel_liters: next[vl.id]?.fuel_liters ?? loc.fuel_level_liters,
                     odometer: next[vl.id]?.odometer ?? loc.odometer,

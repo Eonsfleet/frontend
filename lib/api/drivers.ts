@@ -55,7 +55,7 @@ export const getDriverVehicleHistory = async (driverId: string | number): Promis
     return response.data
 }
 
-export const getDriverTrips = async (driverId: string | number): Promise<{ data: any[] }> => {
+export const getDriverTrips = async (driverId: string | number): Promise<any> => {
     const response = await apiClient.get(`/drivers/${driverId}/trips`)
     return response.data
 }
