@@ -71,6 +71,7 @@ export default function PlaybackPage() {
     const [playbackIndex, setPlaybackIndex] = useState(0)
     const [playbackSpeed, setPlaybackSpeed] = useState(1) // 1x, 2x, 4x, 8x
     const [showEvents, setShowEvents] = useState(true)
+    const [syncKey, setSyncKey] = useState(0)
 
     useEffect(() => {
         setSidebarCollapsed(true)
@@ -85,22 +86,46 @@ export default function PlaybackPage() {
 
     const { data: tripsData, isLoading: isLoadingTrips } = useQuery({
         queryKey: ['trips', selectedVehicleId],
-        queryFn: () => tripsApi.getTrips({ page: 1 }), // Note: Filter by vehicle if API supports it, or filter client side
+        queryFn: () => tripsApi.getTrips({ vehicle_id: selectedVehicleId! } as any),
         enabled: !!selectedVehicleId
     })
 
     const vehicleTrips = useMemo(() => {
         if (!tripsData?.data?.trips) return []
-        return tripsData.data.trips.filter(t => t.relationships?.vehicle?.data?.id === String(selectedVehicleId))
+        return tripsData.data.trips.filter(t => {
+            const relVehicle = t.relationships?.vehicle as any
+            const vehicleId = relVehicle?.id || (t.attributes as any)?.vehicle_id
+            return String(vehicleId) === String(selectedVehicleId)
+        })
     }, [tripsData, selectedVehicleId])
 
-    const { data: movementData, isLoading: isLoadingPlayback, isError } = useQuery({
-        queryKey: ['playback', selectedVehicleId, selectedTripId],
+    const { data: tripPlaybackData, isLoading: isLoadingTripPlayback } = useQuery({
+        queryKey: ['playback-trip', selectedVehicleId, selectedTripId],
         queryFn: () => trackingApi.getTripPlayback(selectedVehicleId!, selectedTripId!),
         enabled: !!selectedVehicleId && !!selectedTripId,
     })
 
-    const movements = useMemo(() => movementData?.data?.gps_points || [], [movementData])
+    const { data: vehiclePlaybackData, isLoading: isLoadingVehiclePlayback } = useQuery({
+        queryKey: ['playback-vehicle', selectedVehicleId, syncKey],
+        queryFn: () => trackingApi.getVehiclePlayback(selectedVehicleId!, startTime, endTime),
+        enabled: !!selectedVehicleId && !selectedTripId && syncKey > 0,
+    })
+
+    const isLoadingPlayback = isLoadingTripPlayback || isLoadingVehiclePlayback
+
+    const movements = useMemo(() => {
+        if (selectedTripId) {
+            return tripPlaybackData?.data?.gps_points || []
+        }
+        const raw: any[] = vehiclePlaybackData?.data || []
+        return raw.map((p: any) => ({
+            lat: p.latitude,
+            lng: p.longitude,
+            speed: p.speed,
+            heading: 0,
+            timestamp: p.timestamp,
+        }))
+    }, [selectedTripId, tripPlaybackData, vehiclePlaybackData])
     const currentMovement = useMemo(() => movements[playbackIndex], [movements, playbackIndex])
 
     // Playback Loop
@@ -203,7 +228,7 @@ export default function PlaybackPage() {
                             </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 opacity-50 pointer-events-none">
+                        <div className={cn("grid grid-cols-2 gap-3 transition-opacity", selectedTripId ? "opacity-40 pointer-events-none" : "")}>
                             <div className="space-y-1.5 text-slate-400">
                                 <label className="text-[10px] font-black uppercase tracking-widest">Start Time</label>
                                 <div className="relative">
@@ -236,6 +261,7 @@ export default function PlaybackPage() {
                             onClick={() => {
                                 setPlaybackIndex(0)
                                 setIsPlaying(false)
+                                if (!selectedTripId) setSyncKey(k => k + 1)
                             }}
                         >
                             {isLoadingPlayback ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-3.5 h-3.5 mr-2" />}

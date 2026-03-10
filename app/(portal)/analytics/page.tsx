@@ -76,7 +76,7 @@ export default function AnalyticsOverviewPage() {
     // Fetch Anomalies (AI Insights)
     const { data: anomalyData } = useQuery({
         queryKey: ['anomalies'],
-        queryFn: () => analyticsApi.detectAnomalies(30)
+        queryFn: () => analyticsApi.detectAnomalies({ days: 30 })
     })
 
     // Fetch General Metrics

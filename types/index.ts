@@ -161,13 +161,44 @@ export interface Cluster {
     }
 }
 
+export interface VehicleCurrentLocation {
+    latitude: number | null
+    longitude: number | null
+    speed: number | null
+    heading: number | null
+    status: string
+    ignition: 'on' | 'off' | null
+    movement: 'on' | 'off' | null
+    fuel_level_percent: number | null
+    fuel_level_liters: number | null
+    odometer: number | null
+    altitude: number | null
+    satellites: number | null
+    address: string | null
+    gps_datetime: string | null
+    metadata?: {
+        engine_temperature?: number
+        engine_rpm?: number
+        battery_voltage?: number
+        external_voltage?: number
+        fuel_rate_gps?: number
+        eco_score?: number
+        idling?: boolean
+        jamming?: boolean
+        immobilizer?: boolean
+        driving_state?: string
+        [key: string]: any
+    }
+}
+
 export interface Vehicle {
     id: string
     attributes: VehicleAttributes
     relationships: {
         driver?: { data: { id: string; type: 'users'; name?: string } }
         cluster?: { data: { id: string; type: 'clusters'; name?: string } }
-        device?: { data: { id: string; type: 'devices'; serial_number?: string } }
+        device?: { data: { id: string; type: 'devices'; serial_number?: string; imei?: string } }
+        current_location?: VehicleCurrentLocation
     }
 }
 

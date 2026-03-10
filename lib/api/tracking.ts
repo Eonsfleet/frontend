@@ -22,11 +22,9 @@ export const getTrackingMetrics = async () => {
     return res.data
 }
 
-export const getVehiclePlayback = async (vehicleId: string | number, start: string, end: string) => {
-    const res = await apiClient.post('/tracker/playback', {
-        vehicle_id: vehicleId,
-        start_time: start,
-        end_time: end
+export const getVehiclePlayback = async (vehicleId: string | number, startDate: string, endDate: string) => {
+    const res = await apiClient.get(`/vehicles/${vehicleId}/playback`, {
+        params: { start_date: startDate, end_date: endDate }
     })
     return res.data
 }

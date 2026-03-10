@@ -65,7 +65,7 @@ export default function NewGeofencePage() {
             description: formData.description,
             alert_type: formData.alert_type,
             type: mapData.type,
-            coordinates: mapData.coordinates,
+            location: mapData.coordinates,
             radius: mapData.radius,
             is_active: true,
         }

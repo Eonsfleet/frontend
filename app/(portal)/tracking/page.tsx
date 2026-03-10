@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { DateRange } from 'react-day-picker'
 import { useRouter } from 'next/navigation'
@@ -12,19 +12,17 @@ import {
     RefreshCw,
     Layers,
     Search,
-    Filter,
-    Clock,
     Activity,
-    ChevronRight,
     History,
-    MoreVertical,
     Eye,
     EyeOff,
     X,
     MapPin,
     Crosshair,
     ShieldCheck,
-    Map as MapIcon
+    Map as MapIcon,
+    SlidersHorizontal,
+    Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -36,11 +34,11 @@ import { useEcho } from '@/hooks/useEcho'
 import * as api from '@/lib/api/vehicles'
 import * as tripApi from '@/lib/api/trips'
 import * as trackingApi from '@/lib/api/tracking'
+import { getClusters } from '@/lib/api/settings'
 import TrackingMap from './TrackingMap'
 import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
 import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
-
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const getMarkerSVG = (bodyType: string) => {
     switch (bodyType?.toLowerCase()) {
@@ -59,16 +57,9 @@ const getVehicleIcon = (bodyType: string, status: string) => {
     }
 }
 
-const MOCK_TRIPS = [
-    { id: 't1', plate: 'LND-123-XY', destination: 'Lagos Terminal', eta: '14:20 PM', status: 'on-time', speed: 72, progress: 65 },
-    { id: 't2', plate: 'ABJ-456-ZZ', destination: 'Abuja Depot', eta: '16:45 PM', status: 'delayed', speed: 45, progress: 30 },
-    { id: 't3', plate: 'PH-789-BC', destination: 'Port Harcourt', eta: '11:15 AM', status: 'on-time', speed: 0, progress: 100 },
-]
-
 export default function TrackingPage() {
     const router = useRouter()
     const queryClient = useQueryClient()
-    const { subscribe } = useEcho()
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<'all' | 'moving' | 'idle' | 'offline' | 'online'>('all')
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
@@ -77,6 +68,8 @@ export default function TrackingPage() {
     const [viewMode, setViewMode] = useState<'all' | 'focused'>('all')
     const [locations, setLocations] = useState<Record<string, any>>({})
     const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'hybrid'>('standard')
+    const [clusterModalOpen, setClusterModalOpen] = useState(false)
+    const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([])
 
     // Playback state
     const [playbackData, setPlaybackData] = useState<any[]>([])
@@ -101,8 +94,31 @@ export default function TrackingPage() {
     // Auto-collapse nav menu logic moved to main effect for cleanup
 
     const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-locations', { per_page: 100 }],
-        queryFn: () => api.getVehiclesLocations({ per_page: 100 }),
+        queryKey: ['vehicles-tracking', { per_page: 100 }],
+        queryFn: () => api.getVehicles({ per_page: 100 }),
+        enabled: !!token,
+        refetchInterval: 60_000,
+    })
+
+    // Seed all vehicle locations on load — /vehicles/locations returns full telemetry for every vehicle
+    const { data: vehicleLocationsData } = useQuery({
+        queryKey: ['vehicles-locations-seed'],
+        queryFn: () => api.getVehiclesLocations({ per_page: 200 }),
+        enabled: !!token,
+        refetchInterval: 30_000,
+        staleTime: 0,
+    })
+
+    const { data: currentLocData } = useQuery({
+        queryKey: ['vehicle-current-location', selectedVehicleId],
+        queryFn: () => api.getCurrentLocation(selectedVehicleId!),
+        enabled: !!selectedVehicleId,
+        staleTime: 0,
+    })
+
+    const { data: clustersData } = useQuery({
+        queryKey: ['clusters-tracking'],
+        queryFn: () => getClusters({ per_page: 100 }),
         enabled: !!token,
     })
 
@@ -114,6 +130,7 @@ export default function TrackingPage() {
 
     const vehicles = useMemo(() => vehicleData?.data || [], [vehicleData])
     const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData])
+    const clusters = useMemo(() => (clustersData as any)?.data?.clusters || [], [clustersData])
 
     const selectedVehicle = useMemo(() =>
         vehicles.find(v => String(v.id) === String(selectedVehicleId)) || null
@@ -121,6 +138,13 @@ export default function TrackingPage() {
 
     const filteredVehicles = useMemo(() => {
         let result = vehicles
+        // Cluster filter
+        if (selectedClusterIds.length > 0) {
+            result = result.filter(v => {
+                const clusterId = String(v.relationships?.cluster?.data?.id || '')
+                return selectedClusterIds.includes(clusterId)
+            })
+        }
         if (searchQuery) {
             result = result.filter(v =>
                 v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
@@ -128,13 +152,13 @@ export default function TrackingPage() {
         }
         if (statusFilter !== 'all') {
             if (statusFilter === 'online') {
-                result = result.filter(v => locations[v.id]?.is_online || v.attributes.is_online)
+                result = result.filter(v => locations[v.id]?.is_online)
             } else if (statusFilter === 'moving') {
-                result = result.filter(v => locations[v.id]?.status === 'in_transit' || (v as any).location?.status === 'in_transit' || (locations[v.id]?.speed || 0) > 0)
+                result = result.filter(v => locations[v.id]?.status === 'in_transit' || (locations[v.id]?.speed || 0) > 0)
             } else if (statusFilter === 'idle') {
-                result = result.filter(v => ['stopped', 'idle', 'active'].includes(locations[v.id]?.status || (v as any).location?.status || ''))
+                result = result.filter(v => ['stopped', 'idle', 'active'].includes(locations[v.id]?.status || ''))
             } else if (statusFilter === 'offline') {
-                result = result.filter(v => (v as any).location?.status === 'offline' || !(locations[v.id]?.is_online || v.attributes.is_online))
+                result = result.filter(v => !locations[v.id]?.is_online)
             }
         }
         if (selectedVehicleId && !result.find(v => String(v.id) === String(selectedVehicleId))) {
@@ -142,7 +166,7 @@ export default function TrackingPage() {
             if (sv) result = [...result, sv]
         }
         return result
-    }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId])
+    }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId, selectedClusterIds])
 
     const ongoingTripsData = useMemo(() => {
         return ongoingTrips.map(trip => {
@@ -187,7 +211,14 @@ export default function TrackingPage() {
                     const start = dateRange?.from?.toISOString() || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
                     const end = dateRange?.to?.toISOString() || new Date().toISOString()
                     const res = await trackingApi.getVehiclePlayback(selectedVehicleId, start, end)
-                    setPlaybackData(res.data?.movements || res.data || [])
+                    const raw: any[] = res.data || []
+                    setPlaybackData(raw.map((p: any) => ({
+                        lat: p.latitude,
+                        lng: p.longitude,
+                        speed: p.speed,
+                        heading: 0,
+                        timestamp: p.timestamp,
+                    })))
                 }
                 setPlaybackIndex(0)
             } catch (err) {
@@ -199,38 +230,65 @@ export default function TrackingPage() {
         fetchPlayback()
     }, [isReplayOpen, selectedVehicleId, playbackType, ongoingTripsData])
 
-    // Initialize locations from vehicle attributes and telemetry if available
+    // Seed locations from /vehicles/locations (full telemetry, always populated)
+    useEffect(() => {
+        const list = vehicleLocationsData?.data
+        if (!list?.length) return
+        setLocations(prev => {
+            const next = { ...prev }
+            list.forEach((vl: any) => {
+                const loc = vl.location
+                if (!loc?.latitude) return
+                // Only update if no live WS data already present for this vehicle
+                // (WS data takes precedence — don't overwrite newer updates)
+                next[vl.id] = {
+                    ...next[vl.id],
+                    lat: loc.latitude,
+                    lng: loc.longitude,
+                    speed: next[vl.id]?.speed ?? loc.speed ?? 0,
+                    heading: next[vl.id]?.heading ?? loc.heading ?? 0,
+                    status: next[vl.id]?.status ?? loc.status ?? 'active',
+                    is_online: vl.attributes?.is_online ?? (vl.device?.status === 'online') ?? false,
+                    fuel: next[vl.id]?.fuel ?? loc.fuel_level_percent,
+                    fuel_liters: next[vl.id]?.fuel_liters ?? loc.fuel_level_liters,
+                    odometer: next[vl.id]?.odometer ?? loc.odometer,
+                    lastUpdate: next[vl.id]?.lastUpdate ?? loc.gps_datetime,
+                    satellites: next[vl.id]?.satellites ?? loc.satellites,
+                    address: next[vl.id]?.address ?? loc.address,
+                    ignition: next[vl.id]?.ignition ?? (loc.ignition === 'on'),
+                    metadata: next[vl.id]?.metadata ?? loc.metadata,
+                }
+            })
+            return next
+        })
+    }, [vehicleLocationsData])
+
+    // Also seed from vehicle.relationships.current_location if available
     useEffect(() => {
         if (vehicles.length > 0) {
             setLocations(prev => {
                 const next = { ...prev }
                 let changed = false
                 vehicles.forEach(v => {
-                    // Use nested location object from getVehiclesLocations response
-                    const tel = (v as any).location
+                    const tel = v.relationships?.current_location as any
                     const attrs = v.attributes as any
 
-                    if (tel && !next[v.id]) {
+                    if (tel?.latitude && !next[v.id]) {
                         next[v.id] = {
                             lat: tel.latitude,
                             lng: tel.longitude,
                             speed: tel.speed || 0,
                             heading: tel.heading || 0,
                             status: tel.status || 'active',
-                            is_online: (v as any).is_online || false,
+                            is_online: attrs.is_online || false,
                             fuel: tel.fuel_level_percent,
+                            fuel_liters: tel.fuel_level_liters,
                             odometer: tel.odometer,
-                            lastUpdate: tel.gps_datetime
-                        }
-                        changed = true
-                    } else if (attrs.latitude && !next[v.id]) {
-                        next[v.id] = {
-                            lat: attrs.latitude,
-                            lng: attrs.longitude,
-                            speed: attrs.speed || 0,
-                            heading: attrs.heading || 0,
-                            status: attrs.status || 'idle',
-                            is_online: attrs.is_online || false
+                            lastUpdate: tel.gps_datetime,
+                            satellites: tel.satellites,
+                            address: tel.address,
+                            ignition: tel.ignition === 'on',
+                            metadata: tel.metadata,
                         }
                         changed = true
                     }
@@ -239,6 +297,33 @@ export default function TrackingPage() {
             })
         }
     }, [vehicles])
+
+    // Merge per-vehicle current location when a vehicle is selected
+    useEffect(() => {
+        if (!currentLocData || !selectedVehicleId) return
+        const loc = (currentLocData as any).location || currentLocData
+        if (!loc?.latitude) return
+        setLocations(prev => ({
+            ...prev,
+            [selectedVehicleId]: {
+                ...prev[selectedVehicleId],
+                lat: loc.latitude,
+                lng: loc.longitude,
+                speed: loc.speed || 0,
+                heading: loc.heading || 0,
+                status: loc.status || 'active',
+                is_online: true,
+                fuel: loc.fuel_level_percent,
+                fuel_liters: loc.fuel_level_liters,
+                odometer: loc.odometer,
+                lastUpdate: loc.gps_datetime,
+                satellites: loc.satellites,
+                address: loc.address,
+                ignition: loc.ignition === 'on',
+                metadata: loc.metadata,
+            }
+        }))
+    }, [currentLocData, selectedVehicleId])
 
     // WebSocket Telemetry Subscription
     const { organization } = useAuthStore()
@@ -261,12 +346,23 @@ export default function TrackingPage() {
                         status: packet.status,
                         is_online: true,
                         fuel: packet.fuel_level_percent,
+                        fuel_liters: packet.fuel_level_liters,
                         odometer: packet.odometer,
                         lastUpdate: packet.gps_datetime,
-                        // Additional telemetry for components
+                        satellites: packet.satellites,
+                        address: packet.address,
+                        ignition: packet.ignition === 'on',
+                        metadata: packet.metadata,
                         temp: packet.metadata?.engine_temperature,
                         voltage: packet.metadata?.battery_voltage,
-                        ignition: packet.ignition === 'on'
+                        rpm: packet.metadata?.engine_rpm,
+                        ext_voltage: packet.metadata?.external_voltage,
+                        fuel_rate: packet.metadata?.fuel_rate_gps,
+                        eco_score: packet.metadata?.eco_score,
+                        idling: packet.metadata?.idling,
+                        jamming: packet.metadata?.jamming,
+                        immobilizer: packet.metadata?.immobilizer,
+                        driving_state: packet.metadata?.driving_state,
                     }
                 }))
             }
@@ -274,8 +370,15 @@ export default function TrackingPage() {
 
         // 2. Subscribe to Vehicle Status Changes
         const statusUnsubscribe = subscribePrivate(`vehicle.status.${organization.id}`, '.vehicle.status.changed', (data: any) => {
-            // Refetch vehicles to update list if needed or just update status color
-            queryClient.invalidateQueries({ queryKey: ['vehicles-locations'] })
+            if (data.vehicle_id) {
+                setLocations(prev => ({
+                    ...prev,
+                    [data.vehicle_id]: {
+                        ...prev[data.vehicle_id],
+                        status: data.new_status,
+                    }
+                }))
+            }
         })
 
         // 3. Subscribe to Fuel Alerts
@@ -292,7 +395,6 @@ export default function TrackingPage() {
     }, [token, organization?.id, subscribePrivate, queryClient])
 
     // Auto-collapse sidebar on mount
-    const { isSidebarCollapsed, toggleSidebar } = useUIStore()
     useEffect(() => {
         setSidebarCollapsed(true)
         return () => setSidebarCollapsed(false)
@@ -614,7 +716,7 @@ export default function TrackingPage() {
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={() => queryClient.invalidateQueries({ queryKey: ['vehicles'] })}
+                                        onClick={() => queryClient.invalidateQueries({ queryKey: ['vehicles-tracking'] })}
                                         className="h-12 w-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-all group"
                                     >
                                         <RefreshCw className="h-5 w-5 group-hover:rotate-180 transition-transform duration-500" />
@@ -622,6 +724,25 @@ export default function TrackingPage() {
                                 </TooltipTrigger>
                                 <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
                                     Re-Sync Fleet Data
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setClusterModalOpen(true)}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            selectedClusterIds.length > 0
+                                                ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+                                                : "text-slate-400 hover:bg-slate-50 hover:text-blue-600"
+                                        )}
+                                    >
+                                        <SlidersHorizontal className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Filter by Cluster
                                 </TooltipContent>
                             </Tooltip>
                         </div>
@@ -730,21 +851,91 @@ export default function TrackingPage() {
                 isOpen={isTelemetryOpen}
                 onClose={() => setIsTelemetryOpen(false)}
                 vehicleId={selectedVehicleId}
-                vehicle={selectedVehicle ? {
-                    plate: (selectedVehicle as any).attributes.registration_number,
-                    speed: locations[selectedVehicle.id]?.speed || (selectedVehicle as any).location?.speed || 0,
-                    fuel: locations[selectedVehicle.id]?.fuel || (selectedVehicle as any).location?.fuel_level_percent || 0,
-                    temp: locations[selectedVehicle.id]?.temp || (selectedVehicle as any).location?.metadata?.engine_temperature || 0,
-                    status: locations[selectedVehicle.id]?.status || (selectedVehicle as any).location?.status,
-                    voltage: locations[selectedVehicle.id]?.voltage || (selectedVehicle as any).location?.metadata?.battery_voltage || '14.2V',
-                    signal: locations[selectedVehicle.id]?.signal || (selectedVehicle as any).location?.satellites + ' Sats',
-                    ignition: locations[selectedVehicle.id]?.ignition || (selectedVehicle as any).location?.ignition === 'on',
-                    odometer: locations[selectedVehicle.id]?.odometer || (selectedVehicle as any).location?.odometer,
-                    lat: locations[selectedVehicle.id]?.lat || (selectedVehicle as any).location?.latitude,
-                    lng: locations[selectedVehicle.id]?.lng || (selectedVehicle as any).location?.longitude,
-                    lastUpdate: locations[selectedVehicle.id]?.lastUpdate || (selectedVehicle as any).location?.gps_datetime
-                } : null}
+                vehicle={selectedVehicle ? (() => {
+                    const loc = locations[selectedVehicle.id]
+                    const rel = selectedVehicle.relationships?.current_location as any
+                    return {
+                        plate: selectedVehicle.attributes.registration_number,
+                        make: selectedVehicle.attributes.make,
+                        model: selectedVehicle.attributes.model,
+                        speed: loc?.speed ?? rel?.speed ?? 0,
+                        fuel: loc?.fuel ?? rel?.fuel_level_percent ?? 0,
+                        fuel_liters: loc?.fuel_liters ?? rel?.fuel_level_liters,
+                        temp: loc?.temp ?? rel?.metadata?.engine_temperature ?? 0,
+                        status: loc?.status ?? rel?.status,
+                        voltage: loc?.voltage ?? rel?.metadata?.battery_voltage,
+                        ext_voltage: loc?.ext_voltage ?? rel?.metadata?.external_voltage,
+                        signal: loc?.satellites != null ? `${loc.satellites} Sats` : (rel?.satellites != null ? `${rel.satellites} Sats` : '---'),
+                        ignition: loc?.ignition ?? (rel?.ignition === 'on'),
+                        odometer: loc?.odometer ?? rel?.odometer,
+                        lat: loc?.lat ?? rel?.latitude,
+                        lng: loc?.lng ?? rel?.longitude,
+                        lastUpdate: loc?.lastUpdate ?? rel?.gps_datetime,
+                        address: loc?.address ?? rel?.address,
+                        heading: loc?.heading ?? rel?.heading ?? 0,
+                        rpm: loc?.rpm ?? rel?.metadata?.engine_rpm,
+                        fuel_rate: loc?.fuel_rate ?? rel?.metadata?.fuel_rate_gps,
+                        eco_score: loc?.eco_score ?? rel?.metadata?.eco_score,
+                        idling: loc?.idling ?? rel?.metadata?.idling ?? false,
+                        jamming: loc?.jamming ?? rel?.metadata?.jamming ?? false,
+                        immobilizer: loc?.immobilizer ?? rel?.metadata?.immobilizer ?? false,
+                        driving_state: loc?.driving_state ?? rel?.metadata?.driving_state,
+                    }
+                })() : null}
             />
+
+            {/* Cluster Filter Modal */}
+            <Dialog open={clusterModalOpen} onOpenChange={setClusterModalOpen}>
+                <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
+                    <DialogHeader className="p-6 border-b border-slate-100">
+                        <DialogTitle className="text-sm font-black uppercase tracking-tight italic flex items-center gap-2">
+                            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+                            Filter by <span className="text-blue-600">Cluster</span>
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
+                        {clusters.length === 0 ? (
+                            <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-8">No clusters found</p>
+                        ) : clusters.map((c: any) => {
+                            const id = String(c.id)
+                            const isSelected = selectedClusterIds.includes(id)
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => setSelectedClusterIds(prev =>
+                                        isSelected ? prev.filter(x => x !== id) : [...prev, id]
+                                    )}
+                                    className={cn(
+                                        "w-full flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left",
+                                        isSelected
+                                            ? "bg-blue-600 border-blue-600 text-white"
+                                            : "bg-white border-slate-100 text-slate-700 hover:border-blue-200"
+                                    )}
+                                >
+                                    <span className="text-[11px] font-black uppercase tracking-widest">
+                                        {c.attributes?.name || c.name || `Cluster ${id}`}
+                                    </span>
+                                    {isSelected && <Check className="h-3.5 w-3.5" />}
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <div className="p-4 border-t border-slate-100 flex gap-2">
+                        <button
+                            onClick={() => setSelectedClusterIds([])}
+                            className="flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all"
+                        >
+                            Clear All
+                        </button>
+                        <button
+                            onClick={() => setClusterModalOpen(false)}
+                            className="flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 transition-all"
+                        >
+                            Apply ({selectedClusterIds.length})
+                        </button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <TripPlaybackTimeline
                 isOpen={isReplayOpen}

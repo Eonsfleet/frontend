@@ -197,12 +197,13 @@ export const getFuelMisuseProbability = async (): Promise<any> => {
     return res.data
 }
 
-export const detectAnomalies = async (data: {
-    target: 'fuel' | 'maintenance' | 'trips'
+export const detectAnomalies = async (params: {
+    days?: number
+    target?: 'fuel' | 'maintenance' | 'trips'
     vehicle_ids?: number[]
     period?: string
 }): Promise<any> => {
-    const res = await apiClient.post('/analytics/insights/detect-anomalies', data)
+    const res = await apiClient.post('/analytics/insights/detect-anomalies', params, { params })
     return res.data
 }
 

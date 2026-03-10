@@ -2,11 +2,13 @@
 
 import React, { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Activity } from 'lucide-react'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
 // Normalization & Helpers (Passed from parent or redefined if pure)
 const normalizeReg = (reg: string) => reg.toUpperCase()
@@ -133,75 +135,79 @@ export default function TrackingMap({
                     </>
                 )}
 
-                {filteredVehicles.map(v => {
-                    const loc = locations[v.id]
-                    if (!loc) return null
-                    const isActive = loc.status === 'in_transit' || (loc.speed || 0) > 0
-                    const isOnline = loc.is_online || v.attributes.is_online
+                <MarkerClusterGroup chunkedLoading>
+                    {filteredVehicles.filter(v => {
+                        const loc = locations[v.id]
+                        return loc && loc.lat != null && loc.lng != null && !isNaN(loc.lat) && !isNaN(loc.lng)
+                    }).map(v => {
+                        const loc = locations[v.id]
+                        const isActive = loc.status === 'in_transit' || (loc.speed || 0) > 0
+                        const isOnline = loc.is_online || v.attributes.is_online
 
-                    return (
-                        <Marker
-                            key={v.id}
-                            position={[loc.lat, loc.lng]}
-                            icon={L.divIcon({
-                                className: 'custom-marker-wrapper',
-                                html: `
-                                    <div class="marker-container ${isActive ? 'is-active' : ''} ${isOnline ? 'is-online' : 'is-offline'}">
-                                        <div class="marker-pulse"></div>
-                                        <div class="marker-base" style="transform: rotate(${loc.heading || 0}deg)">
-                                            <div class="marker-icon-wrapper">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-                                                    ${getMarkerSVG(v.attributes.body_type)}
-                                                </svg>
+                        return (
+                            <Marker
+                                key={v.id}
+                                position={[loc.lat, loc.lng]}
+                                icon={L.divIcon({
+                                    className: 'custom-marker-wrapper',
+                                    html: `
+                                        <div class="marker-container ${isActive ? 'is-active' : ''} ${isOnline ? 'is-online' : 'is-offline'}">
+                                            <div class="marker-pulse"></div>
+                                            <div class="marker-base" style="transform: rotate(${loc.heading || 0}deg)">
+                                                <div class="marker-icon-wrapper">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
+                                                        ${getMarkerSVG(v.attributes.body_type)}
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `,
+                                    iconSize: [40, 40],
+                                    iconAnchor: [20, 20]
+                                })}
+                                eventHandlers={{
+                                    click: () => setSelectedVehicle(v)
+                                }}
+                            >
+                                <Popup className="custom-popup" closeButton={false}>
+                                    <div className="p-3 min-w-[200px] bg-white rounded-2xl shadow-2xl border border-slate-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <Badge className={cn(
+                                                "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
+                                                isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+                                            )}>
+                                                {isActive ? 'Moving' : loc.status === 'stopped' ? 'Stopped' : 'Idle'}
+                                            </Badge>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{normalizeReg(v.attributes.registration_number)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
+                                            <div className="p-2 bg-white rounded-lg shadow-sm">
+                                                {getVehicleIcon(v.attributes.body_type, loc.status)}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make)}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{capitalize(v.attributes.model)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Velocity</span>
+                                                <span className="text-sm font-black text-blue-600 italic">{loc.speed} <span className="text-[9px]">KPH</span></span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Heading</span>
+                                                <span className="text-sm font-black text-slate-900 italic">{loc.heading || 0}°</span>
                                             </div>
                                         </div>
                                     </div>
-                                `,
-                                iconSize: [40, 40],
-                                iconAnchor: [20, 20]
-                            })}
-                            eventHandlers={{
-                                click: () => setSelectedVehicle(v)
-                            }}
-                        >
-                            <Popup className="custom-popup" closeButton={false}>
-                                <div className="p-3 min-w-[200px] bg-white rounded-2xl shadow-2xl border border-slate-100">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <Badge className={cn(
-                                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
-                                            isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
-                                        )}>
-                                            {isActive ? 'Moving' : loc.status === 'stopped' ? 'Stopped' : 'Idle'}
-                                        </Badge>
-                                        <div className="flex items-center gap-1.5">
-                                            <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />
-                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{normalizeReg(v.attributes.registration_number)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
-                                        <div className="p-2 bg-white rounded-lg shadow-sm">
-                                            {getVehicleIcon(v.attributes.body_type, loc.status)}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make)}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{capitalize(v.attributes.model)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
-                                        <div className="flex flex-col">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Velocity</span>
-                                            <span className="text-sm font-black text-blue-600 italic">{loc.speed} <span className="text-[9px]">KPH</span></span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Heading</span>
-                                            <span className="text-sm font-black text-slate-900 italic">{loc.heading || 0}°</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )
-                })}
+                                </Popup>
+                            </Marker>
+                        )
+                    })}
+                </MarkerClusterGroup>
             </MapContainer>
 
             <style jsx global>{`
