@@ -32,7 +32,14 @@ export default function NewGeofencePage() {
     })
 
     const { mutate: handleSave, isPending } = useMutation({
-        mutationFn: createGeofence,
+        mutationFn: async (payload: Parameters<typeof createGeofence>[0]) => {
+            const created = await createGeofence(payload)
+            if (formData.vehicle_ids.length > 0) {
+                const { bulkAssignVehicles } = await import('@/lib/api/geofencing')
+                await bulkAssignVehicles(created.data.id, formData.vehicle_ids)
+            }
+            return created
+        },
         onSuccess: () => {
             toast.success('Geofence created successfully!')
             router.push('/geofences')

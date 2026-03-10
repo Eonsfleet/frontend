@@ -1,14 +1,22 @@
 'use client'
 
-import React, { useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Loader2, MapPin, Search } from 'lucide-react'
+import { ChevronLeft, Loader2, Search, Edit2 } from 'lucide-react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { getGeofenceById, getGeofenceVehicles } from '@/lib/api/geofencing'
+
+const GeofenceBoundaryPreview = dynamic(
+    () => import('@/components/geofencing/GeofenceBoundaryPreview'),
+    {
+        ssr: false,
+        loading: () => <div className="h-[300px] w-full bg-slate-100 animate-pulse rounded-md" />,
+    }
+)
 
 export default function GeofenceDetailPage() {
     const params = useParams()
@@ -70,6 +78,13 @@ export default function GeofenceDetailPage() {
                             <p className="text-slate-500 mt-1">{geofence.attributes.description}</p>
                         )}
                     </div>
+                    <Link
+                        href={`/geofences/${id}/edit`}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-white hover:border-blue-200 hover:text-blue-600 transition-all"
+                    >
+                        <Edit2 className="h-4 w-4" />
+                        Edit
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -86,22 +101,21 @@ export default function GeofenceDetailPage() {
                                             Trigger {geofence.attributes.alert_type === 'both' ? 'On Entry & Exit' : `On ${geofence.attributes.alert_type} Only`}
                                         </p>
                                     </div>
-                                    {geofence.attributes.type === 'circle' && (
+                                    {geofence.attributes.type === 'circle' && geofence.attributes.radius != null && (
                                         <div>
-                                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Radius (Meters)</p>
-                                            <p className="font-medium text-slate-900">{geofence.attributes.radius}</p>
+                                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Radius</p>
+                                            <p className="font-medium text-slate-900">
+                                                {geofence.attributes.radius >= 1000
+                                                    ? `${(geofence.attributes.radius / 1000).toFixed(2)} km`
+                                                    : `${geofence.attributes.radius} m`}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
 
                                 <div className="pt-4 mt-4 border-t border-slate-100">
-                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Map Preview</p>
-                                    <div className="h-[300px] w-full bg-slate-100 rounded-md border border-slate-200 flex items-center justify-center overflow-hidden relative">
-                                        <div className="absolute inset-0 bg-[url('https://maps.wikimedia.org/osm-intl/12/697/1594.png')] opacity-50 mix-blend-multiply bg-center bg-cover pointer-events-none filter grayscale" />
-                                        <Badge variant="outline" className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm z-10 shadow-sm border-slate-200 text-blue-700">
-                                            <MapPin className="h-3 w-3 mr-1" /> Boundary Rendered
-                                        </Badge>
-                                    </div>
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Boundary Map</p>
+                                    <GeofenceBoundaryPreview geofence={geofence} height="300px" />
                                 </div>
                             </CardContent>
                         </Card>

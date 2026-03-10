@@ -18,11 +18,12 @@ L.Icon.Default.mergeOptions({
 interface GeofenceMapEditorProps {
     initialGeofence?: Geofence
     onChange: (data: { type: 'polygon' | 'circle', coordinates: any, radius?: number }) => void
+    height?: string
 }
 
-export default function GeofenceMapEditor({ initialGeofence, onChange }: GeofenceMapEditorProps) {
+export default function GeofenceMapEditor({ initialGeofence, onChange, height = '400px' }: GeofenceMapEditorProps) {
     const [mapReady, setMapReady] = useState(false)
-    const DefaultPosition: [number, number] = [34.0522, -118.2437] // Los Angeles default
+    const DefaultPosition: [number, number] = [6.5244, 3.3792] // Lagos, Nigeria
 
     useEffect(() => {
         setMapReady(true)
@@ -60,13 +61,13 @@ export default function GeofenceMapEditor({ initialGeofence, onChange }: Geofenc
         }
     }
 
-    if (!mapReady) return <div className="h-[400px] w-full bg-slate-100 animate-pulse rounded-md" />
+    if (!mapReady) return <div style={{ height }} className="w-full bg-slate-100 animate-pulse rounded-md" />
 
     return (
-        <div className="h-[400px] w-full rounded-md border border-slate-200 overflow-hidden relative z-0">
+        <div style={{ height }} className="w-full rounded-md border border-slate-200 overflow-hidden relative z-0">
             <MapContainer
                 center={DefaultPosition}
-                zoom={13}
+                zoom={11}
                 style={{ height: '100%', width: '100%' }}
             >
                 <TileLayer

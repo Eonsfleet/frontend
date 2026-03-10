@@ -423,6 +423,7 @@ export interface Geofence {
         alert_type: 'enter' | 'exit' | 'both'
         coordinates: any // GeoJSON or custom format
         radius?: number // Required if type is circle
+        speed: number // Speed limit threshold (km/h); 0 means no limit
         is_active: boolean
         schedule: any | null
     }

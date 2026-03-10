@@ -113,7 +113,14 @@ export function IncidentList() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-500 text-xs">
-                                                {format(new Date(item.attributes.reported_at), 'MMM d, yyyy HH:mm')}
+                                                {item.attributes.reported_at ? (
+                                                    (() => {
+                                                        const date = new Date(item.attributes.reported_at);
+                                                        return isNaN(date.getTime()) 
+                                                            ? 'Invalid Date' 
+                                                            : format(date, 'MMM d, yyyy HH:mm');
+                                                    })()
+                                                ) : 'N/A'}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">

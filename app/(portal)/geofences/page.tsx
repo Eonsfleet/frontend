@@ -1,16 +1,40 @@
 'use client'
 
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+import { useQuery } from '@tanstack/react-query'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { GeofenceList } from '@/components/geofencing/GeofenceList'
-// import { GeofenceMap } from '@/components/geofencing/GeofenceMap' // Re-enable when layout is ready
 import { GeofenceBuilder } from '../../../components/geofencing/GeofenceBuilder'
-import { useState } from 'react'
-import { Plus, List, Map as MapIcon, Filter } from 'lucide-react'
+import { Plus, List, Map as MapIcon, Filter, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getGeofences } from '@/lib/api/geofencing'
+
+const GeofenceOverviewMap = dynamic(
+    () => import('@/components/geofencing/GeofenceOverviewMap'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-full w-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        ),
+    }
+)
 
 export default function GeofencesPage() {
     const [view, setView] = useState<'list' | 'map'>('list')
     const [isBuilderOpen, setIsBuilderOpen] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
+
+    // Fetch all geofences for map view (no pagination needed — map shows all)
+    const { data: allGeofencesData, isLoading: isLoadingMapData } = useQuery({
+        queryKey: ['geofences-all'],
+        queryFn: () => getGeofences({ per_page: 100 }),
+        enabled: view === 'map',
+    })
+
+    const allGeofences = allGeofencesData?.data?.geofences || []
 
     return (
         <UpgradeGate
@@ -60,29 +84,41 @@ export default function GeofencesPage() {
                     </div>
                 </div>
 
-                {/* Filters Row */}
-                <div className="flex items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
-                        <Filter className="h-3 w-3 text-slate-400" />
-                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Category: All</span>
+                {/* Filters Row — only shown in list view */}
+                {view === 'list' && (
+                    <div className="flex items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+                            <Filter className="h-3 w-3 text-slate-400" />
+                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Filter: All</span>
+                        </div>
+                        <div className="h-4 w-[1px] bg-slate-200 mx-2" />
+                        <input
+                            type="text"
+                            placeholder="SEARCH GEOFENCES..."
+                            className="bg-transparent border-none focus:ring-0 text-[10px] font-bold uppercase tracking-widest text-slate-600 placeholder:text-slate-300 flex-1"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                    <div className="h-4 w-[1px] bg-slate-200 mx-2" />
-                    <input
-                        type="text"
-                        placeholder="SEARCH GEOFENCES..."
-                        className="bg-transparent border-none focus:ring-0 text-[10px] font-bold uppercase tracking-widest text-slate-600 placeholder:text-slate-300 flex-1"
-                    />
-                </div>
+                )}
 
                 {view === 'list' ? (
-                    <GeofenceList />
+                    <GeofenceList searchTerm={searchTerm} />
                 ) : (
-                    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden h-[600px] shadow-sm flex items-center justify-center">
-                        <div className="text-center">
-                            <MapIcon className="h-12 w-12 text-slate-200 mx-auto mb-4" />
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Unified Map View coming soon</p>
-                            <p className="text-[10px] text-slate-300 font-medium mt-2">Enhanced spatial visualization of all fleet boundaries</p>
-                        </div>
+                    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden h-[600px] shadow-sm relative">
+                        {isLoadingMapData ? (
+                            <div className="h-full flex items-center justify-center">
+                                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                            </div>
+                        ) : allGeofences.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center">
+                                <MapIcon className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No Geofences to Display</p>
+                                <p className="text-[10px] text-slate-300 font-medium mt-2">Create geofences to see them on the map.</p>
+                            </div>
+                        ) : (
+                            <GeofenceOverviewMap geofences={allGeofences} />
+                        )}
                     </div>
                 )}
 

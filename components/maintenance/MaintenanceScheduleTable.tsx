@@ -32,6 +32,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { deleteSchedule } from '@/lib/api/maintenance'
+import { toast } from 'sonner'
 
 interface MaintenanceScheduleTableProps {
     data: MaintenanceSchedule[]
@@ -102,6 +105,18 @@ export function MaintenanceScheduleTable({
     pagination,
     onPageChange
 }: MaintenanceScheduleTableProps) {
+    const queryClient = useQueryClient()
+
+    const { mutate: cancelSchedule, variables: cancellingId } = useMutation({
+        mutationFn: (id: string) => deleteSchedule(id),
+        onSuccess: () => {
+            toast.success('Schedule cancelled.')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules'] })
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules-full'] })
+        },
+        onError: () => toast.error('Failed to cancel schedule.'),
+    })
+
     if (isLoading) {
         return (
             <div className="space-y-3 p-6">
@@ -210,7 +225,11 @@ export function MaintenanceScheduleTable({
                                                         <Clock className="h-3.5 w-3.5" /> Reschedule
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer">
+                                                    <DropdownMenuItem
+                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer"
+                                                        disabled={cancellingId === row.id}
+                                                        onClick={() => cancelSchedule(String(row.id))}
+                                                    >
                                                         <AlertTriangle className="h-3.5 w-3.5" /> Cancel Schedule
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>

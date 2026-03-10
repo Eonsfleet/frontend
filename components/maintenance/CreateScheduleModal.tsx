@@ -26,6 +26,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
 import { CalendarIcon, Car, Wrench, Clock, CheckSquare, Bell, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createSchedule, getAllOrgChecklists } from '@/lib/api/maintenance'
 import { getVehicles } from '@/lib/api/vehicles'
@@ -182,9 +183,9 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                                         <SelectValue placeholder="Select an Asset" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl border-slate-100">
-                                        {vehicleData?.data?.vehicles?.map((v: any) => (
+                                        {vehicleData?.data?.map((v: any) => (
                                             <SelectItem key={v.id} value={v.id.toString()} className="font-bold uppercase text-[10px] tracking-tight py-3">
-                                                {v.registration_number} — {v.make} {v.model}
+                                                {v.attributes.registration_number} — {v.attributes.make} {v.attributes.model}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -343,9 +344,9 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                                         <SelectValue placeholder="Select Preferred Vendor" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl border-slate-100">
-                                        {vendorData?.data?.vendors?.map((v: any) => (
+                                        {vendorData?.data?.map((v: any) => (
                                             <SelectItem key={v.id} value={v.id.toString()} className="font-bold uppercase text-[10px] tracking-tight py-3">
-                                                {v.name}
+                                                {v.attributes.business_name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -394,7 +395,7 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Asset ID</p>
-                                        <p className="text-xs font-bold italic">{vehicleData?.data?.vehicles?.find((v: any) => v.id.toString() === formData.vehicle_id)?.registration_number || 'None'}</p>
+                                        <p className="text-xs font-bold italic">{vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes?.registration_number || 'None'}</p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Interval</p>
