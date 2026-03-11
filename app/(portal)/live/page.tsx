@@ -49,8 +49,8 @@ export default function LiveTrackingPage() {
 
     // 1. Fetch initial vehicle locations
     const { data: routeData } = useQuery({
-        queryKey: ['vehicle-locations', { per_page: 100 }],
-        queryFn: () => api.getVehiclesLocations({ per_page: 100 }),
+        queryKey: ['vehicle-locations', { per_page: 1000 }],
+        queryFn: () => api.getVehiclesLocations({ per_page: 1000 }),
         enabled: !!token,
     })
 
@@ -58,6 +58,8 @@ export default function LiveTrackingPage() {
 
     // 2. Real-time updates via WebSocket
     const { telemetryMap } = useFleetTracking()
+
+    console.log("telemetry: ",telemetryMap)
 
     // 3. Fetch geofences
     const { data: geofenceData } = useQuery({
@@ -98,6 +100,7 @@ export default function LiveTrackingPage() {
 
     const playbackPoints = playbackResponse?.data?.gps_points || []
     const currentPlaybackPoint = playbackPoints[playbackIndex]
+
     // 3. Normalize and combine data
     const trackedVehicles = useMemo(() => {
         return initialVehicles.map((v) => {
@@ -118,10 +121,13 @@ export default function LiveTrackingPage() {
                 odometer: live?.odometer ?? base?.odometer ?? 0,
                 ignition: (live?.ignition === 'on') || (base?.ignition === 'on'),
                 address: live?.address ?? base?.address ?? 'Locating...',
-                last_update: live?.gps_datetime ?? base?.gps_datetime ?? null
+                last_update: live?.gps_datetime ?? base?.gps_datetime ?? null,
+                
             }
         })
     }, [initialVehicles, telemetryMap])
+
+    console.log("trackedVehicles: ", trackedVehicles)
 
     // Derived selected vehicle object
     const selectedVehicle = useMemo(() =>
@@ -134,6 +140,8 @@ export default function LiveTrackingPage() {
             v.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
         )
     }, [trackedVehicles, searchQuery])
+
+    console.log(filteredVehicles)
 
     return (
         <div className="h-[calc(100vh-64px)] -m-6 md:-m-8 flex overflow-hidden bg-slate-100 relative">

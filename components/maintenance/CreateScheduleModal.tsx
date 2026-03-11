@@ -13,12 +13,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command'
+import { Check, ChevronsUpDown } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -40,13 +42,8 @@ interface CreateMaintenanceScheduleModalProps {
 }
 
 const SERVICE_TYPES = [
-    { value: 'oil_change', label: 'Oil Change' },
-    { value: 'tyre_rotation', label: 'Tyre Rotation' },
-    { value: 'brake_service', label: 'Brake Service' },
-    { value: 'battery_check', label: 'Battery Check' },
-    { value: 'engine_check', label: 'Engine Check' },
-    { value: 'full_inspection', label: 'Full Inspection' },
-    { value: 'transmission_service', label: 'Transmission Service' },
+    { value: 'preventive', label: 'Preventive' },
+    { value: 'corrective', label: 'Corrective' },
 ]
 
 export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMaintenanceScheduleModalProps) {
@@ -175,39 +172,110 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Vehicle</Label>
-                                <Select
-                                    value={formData.vehicle_id}
-                                    onValueChange={(v) => setFormData({ ...formData, vehicle_id: v })}
-                                >
-                                    <SelectTrigger className="h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight">
-                                        <SelectValue placeholder="Select an Asset" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-slate-100">
-                                        {vehicleData?.data?.map((v: any) => (
-                                            <SelectItem key={v.id} value={v.id.toString()} className="font-bold uppercase text-[10px] tracking-tight py-3">
-                                                {v.attributes.registration_number} — {v.attributes.make} {v.attributes.model}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight px-4"
+                                        >
+                                            {formData.vehicle_id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Car className="h-4 w-4 text-slate-400" />
+                                                    <span>
+                                                        {vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes.registration_number}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-400">Select an Asset</span>
+                                            )}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search registration number..." />
+                                            <CommandList className="max-h-[250px]">
+                                                <CommandEmpty>No asset found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {vehicleData?.data?.map((v: any) => (
+                                                        <CommandItem
+                                                            key={v.id}
+                                                            value={v.attributes.registration_number}
+                                                            onSelect={() => {
+                                                                setFormData({ ...formData, vehicle_id: v.id.toString() })
+                                                            }}
+                                                            className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    formData.vehicle_id === v.id.toString() ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span>{v.attributes.registration_number}</span>
+                                                                <span className="text-[9px] text-slate-400 italic">
+                                                                    {v.attributes.make} {v.attributes.model}
+                                                                </span>
+                                                            </div>
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Category</Label>
-                                <Select
-                                    value={formData.service_type}
-                                    onValueChange={(v) => setFormData({ ...formData, service_type: v })}
-                                >
-                                    <SelectTrigger className="h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight">
-                                        <SelectValue placeholder="What kind of service?" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-slate-100">
-                                        {SERVICE_TYPES.map((t) => (
-                                            <SelectItem key={t.value} value={t.value} className="font-bold uppercase text-[10px] tracking-tight py-3">
-                                                {t.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight px-4"
+                                        >
+                                            {formData.service_type ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Wrench className="h-4 w-4 text-slate-400" />
+                                                    <span>
+                                                        {SERVICE_TYPES.find(t => t.value === formData.service_type)?.label}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-400">What kind of service?</span>
+                                            )}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
+                                        <Command>
+                                            <CommandList>
+                                                <CommandGroup>
+                                                    {SERVICE_TYPES.map((t) => (
+                                                        <CommandItem
+                                                            key={t.value}
+                                                            value={t.label}
+                                                            onSelect={() => {
+                                                                setFormData({ ...formData, service_type: t.value })
+                                                            }}
+                                                            className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    formData.service_type === t.value ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {t.label}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Brief Description</Label>
@@ -262,19 +330,48 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Unit</Label>
-                                            <Select
-                                                value={formData.interval_unit}
-                                                onValueChange={(v: any) => setFormData({ ...formData, interval_unit: v })}
-                                            >
-                                                <SelectTrigger className="h-12 rounded-xl border-slate-100 bg-slate-50 font-bold uppercase text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent className="rounded-xl border-slate-100">
-                                                    <SelectItem value="days" className="font-bold uppercase text-[10px]">Days</SelectItem>
-                                                    <SelectItem value="weeks" className="font-bold uppercase text-[10px]">Weeks</SelectItem>
-                                                    <SelectItem value="months" className="font-bold uppercase text-[10px]">Months</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 font-bold uppercase text-xs tracking-tight px-4"
+                                                    >
+                                                        {formData.interval_unit ? formData.interval_unit : "Select Unit"}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
+                                                    <Command>
+                                                        <CommandList>
+                                                            <CommandGroup>
+                                                                {[
+                                                                    { value: 'days', label: 'Days' },
+                                                                    { value: 'weeks', label: 'Weeks' },
+                                                                    { value: 'months', label: 'Months' }
+                                                                ].map((unit) => (
+                                                                    <CommandItem
+                                                                        key={unit.value}
+                                                                        value={unit.label}
+                                                                        onSelect={() => {
+                                                                            setFormData({ ...formData, interval_unit: unit.value as any })
+                                                                        }}
+                                                                        className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                formData.interval_unit === unit.value ? "opacity-100" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        {unit.label}
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
                                     </div>
                                     <div className="space-y-2">
@@ -336,21 +433,52 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Provider</Label>
-                                <Select
-                                    value={formData.vendor_id}
-                                    onValueChange={(v) => setFormData({ ...formData, vendor_id: v })}
-                                >
-                                    <SelectTrigger className="h-12 rounded-xl border-slate-100 bg-slate-50/50 font-bold uppercase text-xs tracking-tight">
-                                        <SelectValue placeholder="Select Preferred Vendor" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-slate-100">
-                                        {vendorData?.data?.map((v: any) => (
-                                            <SelectItem key={v.id} value={v.id.toString()} className="font-bold uppercase text-[10px] tracking-tight py-3">
-                                                {v.attributes.business_name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 font-bold uppercase text-xs tracking-tight px-4"
+                                        >
+                                            {formData.vendor_id ? (
+                                                <span>
+                                                    {vendorData?.data?.find((v: any) => v.id.toString() === formData.vendor_id)?.attributes.business_name}
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400">Select Preferred Vendor</span>
+                                            )}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search vendor..." />
+                                            <CommandList className="max-h-[200px]">
+                                                <CommandEmpty>No vendor found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {vendorData?.data?.map((v: any) => (
+                                                        <CommandItem
+                                                            key={v.id}
+                                                            value={v.attributes.business_name}
+                                                            onSelect={() => {
+                                                                setFormData({ ...formData, vendor_id: v.id.toString() })
+                                                            }}
+                                                            className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    formData.vendor_id === v.id.toString() ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {v.attributes.business_name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
 
                             <div className="space-y-2">

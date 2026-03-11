@@ -2,7 +2,7 @@ import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
-type TripStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+type TripStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'pending'
 
 interface TripStatusBadgeProps {
     status: TripStatus
@@ -26,6 +26,9 @@ export function TripStatusBadge({ status, className }: TripStatusBadgeProps) {
         case 'cancelled':
             variant = 'destructive'
             break
+        case 'pending':
+            variant = 'outline'
+            break
     }
 
     const statusColors = {
@@ -33,6 +36,7 @@ export function TripStatusBadge({ status, className }: TripStatusBadgeProps) {
         in_progress: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50',
         completed: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50',
         cancelled: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50',
+        pending: 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-50',
     }
 
     return (

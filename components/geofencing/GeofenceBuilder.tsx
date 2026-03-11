@@ -7,6 +7,8 @@ import { Save, Bell, Navigation, Info, Loader2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createGeofence, bulkAssignVehicles } from '@/lib/api/geofencing'
 import { getVehicles } from '@/lib/api/vehicles'
+import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
+import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
 import { toast } from 'sonner'
 
 // Import MapEditor dynamically to avoid SSR issues with Leaflet
@@ -25,6 +27,7 @@ export function GeofenceBuilder({
     const queryClient = useQueryClient()
     const [formData, setFormData] = useState({
         name: '',
+        location_name: '',
         alert_type: 'both' as 'enter' | 'exit' | 'both',
         speed: 0,
         shape: null as { type: 'polygon' | 'circle'; coordinates: any; radius?: number } | null,
@@ -44,7 +47,8 @@ export function GeofenceBuilder({
 
             const payload: any = {
                 name: formData.name.trim(),
-                alert_type: formData.alert_type,
+                location: formData.location_name.trim(),
+                trigger_type: formData.alert_type,
                 speed: formData.speed,
                 type: formData.shape.type,
                 coordinates: formData.shape.coordinates,
@@ -66,7 +70,7 @@ export function GeofenceBuilder({
         onSuccess: () => {
             toast.success('Geofence activated successfully!')
             queryClient.invalidateQueries({ queryKey: ['geofences'] })
-            setFormData({ name: '', alert_type: 'both', speed: 0, shape: null, vehicle_ids: [] as string[] })
+            setFormData({ name: '', location_name: '', alert_type: 'both', speed: 0, shape: null, vehicle_ids: [] as string[] })
             onClose()
         },
         onError: (err: any) => {
@@ -119,6 +123,20 @@ export function GeofenceBuilder({
                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            />
+                        </div>
+
+                        {/* Location Section */}
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 italic">
+                                Zone Location
+                            </label>
+                            <LocationAutocomplete 
+                                value={formData.location_name}
+                                onSelect={(loc) => setFormData({ ...formData, location_name: loc.name })}
+                                placeholder="Search location address..."
+                                icon={<Navigation className="h-3 w-3 text-blue-600" />}
+                                className="h-10 text-[10px]"
                             />
                         </div>
 
@@ -178,30 +196,13 @@ export function GeofenceBuilder({
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                 <Navigation className="h-3 w-3" />
                                 Assign Vehicles
-                                <span className="ml-auto text-blue-600">{formData.vehicle_ids.length} selected</span>
                             </label>
-                            <div className="max-h-[160px] overflow-y-auto space-y-1 pr-1">
-                                {isLoadingVehicles ? (
-                                    <div className="flex justify-center py-4">
-                                        <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
-                                    </div>
-                                ) : (vehiclesData?.data || []).map((v) => (
-                                    <label key={v.id} className={cn(
-                                        "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer border transition-colors text-[10px] font-bold uppercase tracking-widest",
-                                        formData.vehicle_ids.includes(v.id.toString())
-                                            ? "bg-blue-50 border-blue-200 text-blue-700"
-                                            : "bg-white border-slate-100 text-slate-600 hover:border-slate-200"
-                                    )}>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.vehicle_ids.includes(v.id.toString())}
-                                            onChange={() => toggleVehicle(v.id.toString())}
-                                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                        {v.attributes.registration_number}
-                                    </label>
-                                ))}
-                            </div>
+                            <MultiVehicleSelector 
+                                vehicles={vehiclesData?.data || []}
+                                selectedIds={formData.vehicle_ids}
+                                onChange={(ids) => setFormData({ ...formData, vehicle_ids: ids })}
+                                placeholder="Search vehicles..."
+                            />
                         </div>
 
                         {/* Spatial Data Summary */}
@@ -252,6 +253,7 @@ export function GeofenceBuilder({
                         <GeofenceMapEditor
                             height="100%"
                             onChange={(shape) => setFormData((prev) => ({ ...prev, shape }))}
+                            vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
                         />
                     </div>
 

@@ -35,8 +35,8 @@ export function DashboardMap({ locations }: { locations: any[] }) {
                     <Maximize2 className="h-4 w-4" />
                 </Link>
             </CardHeader>
-            <CardContent className="flex-1 p-0 pb-6 px-6 relative">
-                <div className="w-full h-full rounded-md border overflow-hidden">
+            <CardContent className="flex-1 p-0 relative">
+                <div className="w-full h-full overflow-hidden">
                     <MapComponent locations={locations} />
                 </div>
             </CardContent>

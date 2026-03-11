@@ -2,143 +2,256 @@
 
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob } from '@/lib/api/maintenance'
+import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob, transitionMaintenanceJob, deleteMaintenanceJob } from '@/lib/api/maintenance'
 import { getVehicles } from '@/lib/api/vehicles'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
-    ListFilter,
-    Plus,
-    Wrench,
-    Clock,
-    CheckCircle2,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+    Check,
+    ChevronsUpDown,
     MoreHorizontal,
     Car,
     User,
     Calendar,
     ArrowRight,
     Loader2,
+    ChevronRight,
+    Search,
+    Plus,
+    ListFilter,
+    Settings,
+    Wrench,
+    CheckCircle2,
+    Clock,
+    Trash2
 } from 'lucide-react'
+import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
+const BRAND_BLUE = "text-[#0055FF]"
+const BRAND_BLUE_BG = "bg-[#0055FF]"
+const BRAND_ACCENT = "bg-[#0055FF]/10 text-[#0055FF]"
+
 const COLUMNS = [
-    { id: 'pending', title: 'Backlog', icon: ListFilter, color: 'text-slate-400', bg: 'bg-slate-50' },
-    { id: 'scheduled', title: 'Scheduled', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
-    { id: 'in_progress', title: 'In Progress', icon: Wrench, color: 'text-amber-500', bg: 'bg-amber-50' },
-    { id: 'completed', title: 'Completed', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { id: 'submitted', title: 'Requests', icon: ListFilter, color: 'text-slate-400', bg: 'bg-slate-50' },
+    { id: 'pending_inspection', title: 'Inspection', icon: Search, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { id: 'approved', title: 'Approved', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { id: 'in_progress', title: 'Active Repair', icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-50' },
 ]
 
 export default function MaintenanceJobBoardPage() {
+    const queryClient = useQueryClient()
+    const { role } = usePermission()
     const [createOpen, setCreateOpen] = useState(false)
 
-    const { data: jobData, isLoading } = useQuery({
+    const { data: jobsData, isLoading } = useQuery({
         queryKey: ['maintenance-jobs'],
-        queryFn: () => getMaintenanceJobs({ per_page: 100 }),
+        queryFn: () => getMaintenanceJobs(),
     })
+
+    const jobs = React.useMemo(() => {
+        const allJobs = jobsData?.data?.jobs || []
+        if (role === 'driver') {
+            // In a real scenario, the backend should filter this, 
+            // but we add a safety frontend filter here.
+            return allJobs.filter(job => job.attributes.status === 'submitted')
+        }
+        return allJobs
+    }, [jobsData, role])
 
     const { data: statsData } = useQuery({
         queryKey: ['maintenance-stats'],
         queryFn: () => getMaintenanceStats(),
     })
 
-    const jobs = jobData?.data?.jobs || []
     const stats = statsData?.data || {}
 
     const jobsByStatus = React.useMemo(() => {
         const acc: Record<string, any[]> = {
-            pending: [],
-            scheduled: [],
-            in_progress: [],
-            completed: []
+            submitted: [],
+            pending_inspection: [],
+            approved: [],
+            in_progress: []
         }
         jobs.forEach(job => {
-            const status = job.attributes.status?.toLowerCase() || 'pending'
-            if (acc[status]) acc[status].push(job)
-            else acc.pending.push(job) // fallback
+            const status = job.attributes.status?.toLowerCase() || 'submitted'
+            
+            if (status === 'submitted') {
+                acc.submitted.push(job)
+            } else if (status === 'pending_inspection') {
+                acc.pending_inspection.push(job)
+            } else if (['pending_approval', 'pending_finance_approval', 'approved', 'assigned'].includes(status)) {
+                acc.approved.push(job)
+            } else if (['in_progress', 'pending_verification', 'reopened'].includes(status)) {
+                acc.in_progress.push(job)
+            }
         })
         return acc
     }, [jobs])
 
+    const { mutate: transitionMutation } = useMutation({
+        mutationFn: ({ id, status }: { id: string; status: string }) => 
+            transitionMaintenanceJob(id, { to_status: status }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
+            toast.success('Job status updated.')
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update job status.'),
+    })
+
+    const [deleteTarget, setDeleteTarget] = useState<any>(null)
+    const { mutate: deleteJob, isPending: isDeleting } = useMutation({
+        mutationFn: (id: string) => deleteMaintenanceJob(id),
+        onSuccess: () => {
+            toast.success('Job removed.')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
+            setDeleteTarget(null)
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to delete job.'),
+    })
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+    }
+
+    const handleDrop = (e: React.DragEvent, status: string) => {
+        e.preventDefault()
+        const id = e.dataTransfer.getData('jobId')
+        if (id) {
+            transitionMutation({ id, status })
+        }
+    }
+
     return (
-        <div className="p-8 space-y-8 bg-slate-50/50 min-h-screen">
+        <div className="p-8 space-y-8 bg-[#F8FAFC] min-h-screen">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Link href="/maintenance" className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest transition-colors">
-                            Maintenance Command
+                    <div className="flex items-center gap-2 mb-2">
+                        <Link href="/maintenance" className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-[0.2em] transition-colors">
+                            Command
                         </Link>
                         <ChevronRight className="h-3 w-3 text-slate-300" />
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Job Board</span>
+                        <span className="text-[10px] font-black text-[#0055FF] uppercase tracking-[0.2em]">Theater</span>
                     </div>
-                    <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase italic">
-                        Ops <span className="text-blue-600">Theater</span>
+                    <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase italic leading-none">
+                        Ops <span className="text-[#0055FF]">Theater</span>
                     </h1>
-                    <p className="text-slate-500 mt-1 font-medium italic text-sm">Visualizing real-time maintenance throughput and technician assignments.</p>
+                    <p className="text-slate-400 mt-2 font-bold italic text-[11px] uppercase tracking-widest flex items-center gap-2">
+                        <span className="h-1 w-8 bg-[#0055FF] rounded-full" />
+                        Real-time Maintenance Flow Control
+                    </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm gap-4">
+                    <div className="flex items-center bg-white px-6 py-2.5 rounded-[20px] border border-slate-100 shadow-sm gap-6">
                         <div className="flex flex-col">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Jobs</span>
-                            <span className="text-sm font-black text-slate-900">{(stats.in_progress_jobs || 0) + (stats.scheduled_jobs || 0)}</span>
+                            <span className="text-lg font-black text-slate-900 tracking-tighter">{(stats.in_progress_jobs || 0) + (stats.scheduled_jobs || 0)}</span>
                         </div>
-                        <div className="w-px h-8 bg-slate-100" />
+                        <div className="w-px h-10 bg-slate-50" />
                         <div className="flex flex-col">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Efficiency</span>
-                            <span className="text-sm font-black text-emerald-600">{stats.compliance_rate || 0}%</span>
+                            <span className="text-lg font-black text-emerald-600 tracking-tighter">{stats.compliance_rate || 0}%</span>
                         </div>
                     </div>
+                    {(role === 'fleet_manager' || role === 'administrator') && (
+                        <Button
+                            variant="outline"
+                            className="bg-white hover:bg-slate-50 border-slate-200 shadow-sm px-6 h-12 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all"
+                            asChild
+                        >
+                            <Link href="/maintenance/settings">
+                                <Settings className="mr-2 h-4 w-4" /> Settings
+                            </Link>
+                        </Button>
+                    )}
                     <Button
-                        className="bg-slate-950 hover:bg-slate-900 shadow-xl px-6 font-bold text-xs uppercase tracking-widest group"
+                        className="bg-slate-950 hover:bg-slate-900 shadow-2xl px-8 h-12 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] group border-b-4 border-slate-700 active:border-b-0 active:translate-y-1 transition-all"
                         onClick={() => setCreateOpen(true)}
                     >
-                        <Plus className="mr-2 h-4 w-4 transition-transform group-hover:rotate-90" /> Initiate Job
+                        <Plus className="mr-2 h-4 w-4 transition-transform group-hover:rotate-90" /> Request Repair
                     </Button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-start">
                 {COLUMNS.map((col) => (
-                    <div key={col.id} className="space-y-4">
+                    <div 
+                        key={col.id} 
+                        className="space-y-6"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, col.id)}
+                    >
                         <div className="flex items-center justify-between px-2">
-                            <div className="flex items-center gap-2">
-                                <div className={cn("p-1.5 rounded-lg", col.bg)}>
+                            <div className="flex items-center gap-3">
+                                <div className={cn("p-2 rounded-xl shadow-sm", col.bg)}>
                                     <col.icon className={cn("h-4 w-4", col.color)} />
                                 </div>
-                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 italic">
-                                    {col.title}
-                                </h3>
-                                <Badge variant="secondary" className="bg-white border-slate-100 text-[10px] font-black text-slate-400 px-2 rounded-md">
-                                    {jobsByStatus[col.id]?.length || 0}
-                                </Badge>
+                                <div>
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                                        {col.title}
+                                    </h3>
+                                    <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest leading-none mt-1">
+                                        {jobsByStatus[col.id]?.length || 0} Assets
+                                    </p>
+                                </div>
                             </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900 rounded-xl">
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </div>
 
-                        <div className="space-y-4 min-h-[500px]">
+                        <div className="space-y-5 min-h-[600px] p-2 rounded-[32px] bg-slate-100/30 border border-slate-100/50">
                             {isLoading ? (
                                 Array.from({ length: 3 }).map((_, i) => (
-                                    <Skeleton key={i} className="h-32 w-full rounded-2xl bg-slate-100/50" />
+                                    <Skeleton key={i} className="h-40 w-full rounded-[24px] bg-white shadow-sm" />
                                 ))
                             ) : jobsByStatus[col.id]?.length ? (
                                 jobsByStatus[col.id].map((job) => (
-                                    <Link key={job.id} href={`/maintenance/jobs/${job.id}`} className="block">
-                                        <JobCard job={job} />
-                                    </Link>
+                                    <JobCard 
+                                        key={job.id} 
+                                        job={job} 
+                                        onDelete={() => setDeleteTarget(job)}
+                                    />
                                 ))
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-slate-100/30 rounded-2xl border-2 border-slate-100 border-dashed">
-                                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Empty Lane</p>
+                                <div className="flex flex-col items-center justify-center py-20 px-6 text-center opacity-30">
+                                    <div className="h-12 w-12 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center mb-4">
+                                        <Wrench className="h-5 w-5 text-slate-300" />
+                                    </div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Free Lane</p>
                                 </div>
                             )}
                         </div>
@@ -147,13 +260,48 @@ export default function MaintenanceJobBoardPage() {
             </div>
 
             <CreateJobModal open={createOpen} onOpenChange={setCreateOpen} />
+
+            <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+                <DialogContent className="sm:max-w-[400px] rounded-[32px] p-0 overflow-hidden border-none shadow-3xl">
+                    <div className="p-8 space-y-6 bg-white">
+                        <div className="text-center space-y-4">
+                            <div className="h-14 w-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
+                                <Trash2 className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-xl font-black uppercase tracking-tight italic">Discard Request?</h3>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                This will permanently remove the maintenance request for 
+                                <span className="text-slate-900 ml-1 italic">{deleteTarget?.relationships?.vehicle?.registration_number}</span>.
+                            </p>
+                        </div>
+                        <div className="flex gap-4">
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => setDeleteTarget(null)}
+                                className="flex-1 font-black uppercase text-[10px] tracking-[0.2em] text-slate-400 h-14 rounded-[18px]"
+                            >
+                                Keep it
+                            </Button>
+                            <Button 
+                                onClick={() => deleteJob(deleteTarget.id)}
+                                disabled={isDeleting}
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-14 rounded-[18px] font-black uppercase text-[10px] tracking-[0.2em]"
+                            >
+                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Discard'}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
 
 function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
     const queryClient = useQueryClient()
+    const { can } = usePermission()
     const [form, setForm] = React.useState({ vehicle_id: '', title: '', description: '', fault_category: '', cost_estimate: '' })
+    const isSpecialist = can('administrator') || can('*') || usePermission().role === 'fleet_manager'
 
     const { data: vehiclesData } = useQuery({
         queryKey: ['vehicles-jobs-modal'],
@@ -182,58 +330,151 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[480px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl">
-                <DialogHeader className="p-8 bg-slate-900 text-white">
-                    <DialogTitle className="text-xl font-black uppercase tracking-tight italic flex items-center gap-3">
-                        <Wrench className="h-5 w-5 text-blue-400" /> Initiate Work Order
+            <DialogContent className="sm:max-w-[540px] rounded-[32px] p-0 overflow-hidden border-none shadow-3xl max-h-[90vh] flex flex-col">
+                <DialogHeader className="p-10 bg-slate-900 text-white relative overflow-hidden shrink-0">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#0055FF]/10 rounded-full blur-3xl -mr-16 -mt-16" />
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tighter italic flex items-center gap-4">
+                        <div className="p-3 bg-[#0055FF] rounded-2xl shadow-lg shadow-[#0055FF]/20">
+                            <Wrench className="h-5 w-5 text-white" />
+                        </div>
+                        Request a Repair
                     </DialogTitle>
                 </DialogHeader>
-                <div className="p-8 space-y-5 bg-white">
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vehicle</Label>
-                        <Select value={form.vehicle_id} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v }))}>
-                            <SelectTrigger className="h-11 rounded-xl border-slate-100 bg-slate-50 font-bold text-xs uppercase">
-                                <SelectValue placeholder="Select asset" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {vehiclesData?.data?.map((v: any) => (
-                                    <SelectItem key={v.id} value={v.id.toString()} className="font-bold uppercase text-[10px]">
-                                        {v.attributes.registration_number} — {v.attributes.make} {v.attributes.model}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Job Title</Label>
-                        <Input className="h-11 rounded-xl border-slate-100 bg-slate-50 font-medium" placeholder="e.g. Engine oil replacement" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fault Category</Label>
-                        <Select value={form.fault_category} onValueChange={v => setForm(f => ({ ...f, fault_category: v }))}>
-                            <SelectTrigger className="h-11 rounded-xl border-slate-100 bg-slate-50 font-bold text-xs uppercase">
-                                <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {['engine', 'transmission', 'brakes', 'tyres', 'electrical', 'bodywork', 'suspension', 'fuel_system', 'other'].map(c => (
-                                    <SelectItem key={c} value={c} className="font-bold uppercase text-[10px]">{c.replace(/_/g, ' ')}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</Label>
-                        <Textarea className="rounded-xl border-slate-100 bg-slate-50 min-h-[80px] font-medium text-sm" placeholder="Describe the fault or work required..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cost Estimate (₦)</Label>
-                        <Input type="number" min={0} className="h-11 rounded-xl border-slate-100 bg-slate-50 font-medium" placeholder="0.00" value={form.cost_estimate} onChange={e => setForm(f => ({ ...f, cost_estimate: e.target.value }))} />
+                <div className="p-10 space-y-6 bg-white overflow-y-auto flex-1 custom-scrollbar">
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2 col-span-2">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Strategic Asset</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        className="w-full justify-between h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-[11px] uppercase px-6 focus:ring-[#0055FF]"
+                                    >
+                                        {form.vehicle_id ? (
+                                            <div className="flex items-center gap-2">
+                                                <Car className="h-4 w-4 text-[#0055FF]" />
+                                                <span>
+                                                    {vehiclesData?.data?.find((v: any) => v.id.toString() === form.vehicle_id)?.attributes.registration_number}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400">Select asset for service</span>
+                                        )}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-slate-100" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Search registration number..." />
+                                        <CommandList className="max-h-[250px]">
+                                            <CommandEmpty>No asset found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {vehiclesData?.data?.map((v: any) => (
+                                                    <CommandItem
+                                                        key={v.id}
+                                                        value={v.attributes.registration_number}
+                                                        onSelect={() => {
+                                                            setForm(f => ({ ...f, vehicle_id: v.id.toString() }))
+                                                        }}
+                                                        className="font-black uppercase text-[10px] py-3 px-4"
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                form.vehicle_id === v.id.toString() ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span>{v.attributes.registration_number}</span>
+                                                            <span className="text-[9px] text-slate-400 italic font-bold">
+                                                                {v.attributes.make} {v.attributes.model}
+                                                            </span>
+                                                        </div>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mission Description</Label>
+                            <Input className="h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-[11px] uppercase px-6 focus:ring-[#0055FF]" placeholder="e.g. Full engine diagnostic & repair" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2 col-span-2 md:col-span-1">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Fault Category</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        className={cn(
+                                            "w-full justify-between h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-[11px] uppercase px-6 focus:ring-[#0055FF]",
+                                            !form.fault_category && "text-slate-400"
+                                        )}
+                                    >
+                                        {form.fault_category ? form.fault_category.replace(/_/g, ' ') : "Select Category"}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-slate-100" align="start">
+                                    <Command>
+                                        <CommandList>
+                                            <CommandGroup>
+                                                {['engine', 'brakes', 'electrical', 'bodywork', 'suspension', 'transmission', 'tyres', 'fuel_system', 'other'].map(c => (
+                                                    <CommandItem
+                                                        key={c}
+                                                        value={c}
+                                                        onSelect={() => setForm(f => ({ ...f, fault_category: c }))}
+                                                        className="font-black uppercase text-[10px] py-3 px-4"
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                form.fault_category === c ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                        />
+                                                        {c.replace(/_/g, ' ')}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        {isSpecialist ? (
+                            <div className="space-y-2 col-span-2 md:col-span-1">
+                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Budget (₦) - Optional</Label>
+                                <Input type="number" min={0} className="h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-[11px] uppercase px-6 focus:ring-[#0055FF]" placeholder="Estimated cost..." value={form.cost_estimate} onChange={e => setForm(f => ({ ...f, cost_estimate: e.target.value }))} />
+                            </div>
+                        ) : (
+                            <div className="space-y-2 col-span-2 md:col-span-1">
+                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Estimated Cost (₦) - Optional</Label>
+                                <Input type="number" min={0} className="h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-[11px] uppercase px-6 focus:ring-[#0055FF]" placeholder="0.00" value={form.cost_estimate} onChange={e => setForm(f => ({ ...f, cost_estimate: e.target.value }))} />
+                            </div>
+                        )}
+                        <div className="space-y-2 col-span-2">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Detailed Explanation</Label>
+                            <Textarea className="rounded-[20px] border-slate-100 bg-slate-50 min-h-[100px] font-medium text-sm p-6 focus:ring-[#0055FF]" placeholder="Describe the fault in detail..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Photo Evidence (Optional)</Label>
+                            <div className="border-2 border-dashed border-slate-100 rounded-[20px] p-8 flex flex-col items-center justify-center gap-2 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
+                                <div className="h-10 w-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                                    <Plus className="h-5 w-5 text-slate-400" />
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Attach Images</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <DialogFooter className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-black uppercase text-[10px] tracking-widest text-slate-400">Cancel</Button>
-                    <Button onClick={() => create()} disabled={isPending || !canSubmit} className="bg-slate-900 hover:bg-slate-800 px-8 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl">
-                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Job'}
+                <DialogFooter className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-black uppercase text-[10px] tracking-[0.2em] text-slate-400 hover:bg-slate-100 rounded-xl px-6">Discard</Button>
+                    <Button onClick={() => create()} disabled={isPending || !canSubmit} className="bg-slate-900 hover:bg-black text-white px-10 h-14 rounded-[18px] font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all hover:-translate-y-1">
+                        {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirm Order'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -241,59 +482,94 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
     )
 }
 
-function JobCard({ job }: { job: any }) {
+function JobCard({ job, onDelete }: { job: any; onDelete: () => void }) {
     const attrs = job.attributes
     const vehicle = job.relationships?.vehicle
     const technician = job.relationships?.technician
 
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('jobId', job.id.toString())
+    }
+
     return (
-        <Card className="border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer overflow-hidden bg-white">
-            <CardContent className="p-0">
-                <div className="p-4 space-y-3">
+        <Card 
+            draggable
+            onDragStart={handleDragStart}
+            className="border-none shadow-sm hover:shadow-2xl transition-all duration-500 group cursor-grab active:cursor-grabbing overflow-hidden bg-white rounded-[24px] relative"
+        >
+            <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-white/80 backdrop-blur shadow-sm border border-slate-100 flex items-center justify-center hover:bg-white transition-all">
+                            <MoreHorizontal className="h-3 w-3 text-slate-400" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 rounded-2xl border-slate-100 shadow-xl p-2">
+                        <DropdownMenuItem asChild>
+                            <Link href={`/maintenance/jobs/${job.id}`} className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50 transition-colors">
+                                <Search className="h-3.5 w-3.5 text-slate-400" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Inspect</span>
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                            onClick={onDelete}
+                            className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-rose-50 transition-colors group/del"
+                        >
+                            <Trash2 className="h-3.5 w-3.5 text-slate-400 group-hover/del:text-rose-500" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 group-hover/del:text-rose-600">Discard</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+            <Link href={`/maintenance/jobs/${job.id}`} className="block">
+                <CardContent className="p-6">
+                <div className="space-y-5">
                     <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter border-slate-200 text-slate-500 rounded-md bg-slate-50">
-                            WO-{job.id.toString().padStart(4, '0')}
+                        <Badge variant="outline" className="text-[8px] font-black uppercase tracking-[0.2em] border-slate-100 text-slate-400 rounded-full px-3 py-1 bg-slate-50/50">
+                            #{job.id.toString().padStart(4, '0')}
                         </Badge>
-                        <div className="flex -space-x-2">
-                            <div className="h-6 w-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center">
-                                <User className="h-3 w-3 text-slate-400" />
-                            </div>
+                        <div className="flex -space-x-1.5">
+                            {(technician || [1]).map((_: any, i: number) => (
+                                <div key={i} className="h-7 w-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm">
+                                    <User className="h-3.5 w-3.5 text-slate-400" />
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">
+                    <div className="space-y-1.5">
+                        <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-[#0055FF] transition-colors line-clamp-2">
                             {attrs.service_type?.replace(/_/g, ' ') || 'General Maintenance'}
                         </h4>
-                        <div className="flex items-center gap-1.5">
-                            <Car className="h-3 w-3 text-slate-400" />
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                        <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-1.5 rounded-full bg-[#0055FF]" />
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
                                 {vehicle?.registration_number || attrs.vehicle_id}
                             </span>
                         </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-slate-400">
+                    <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-slate-400">
                             <Clock className="h-3 w-3" />
-                            <span className="text-[9px] font-black uppercase tracking-widest">
-                                {attrs.scheduled_at ? new Date(attrs.scheduled_at).toLocaleDateString() : 'Unscheduled'}
+                            <span className="text-[8px] font-black uppercase tracking-[0.2em]">
+                                {attrs.scheduled_at ? new Date(attrs.scheduled_at).toLocaleDateString() : 'Pending'}
                             </span>
                         </div>
-                        <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                        <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-[#0055FF] group-hover:text-white transition-all text-slate-200">
+                            <ArrowRight className="h-4 w-4" />
+                        </div>
                     </div>
                 </div>
 
                 {attrs.status === 'in_progress' && (
-                    <div className="h-1 w-full bg-slate-100 overflow-hidden">
-                        <div className="h-full bg-blue-500 w-1/2 animate-pulse" />
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-50 overflow-hidden">
+                        <div className="h-full bg-[#0055FF] w-1/3 animate-progress origin-left" />
                     </div>
                 )}
             </CardContent>
+            </Link>
         </Card>
     )
 }
 
-function ChevronRight({ className }: { className?: string }) {
-    return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="9 5l7 7-7 7" /></svg>
-}

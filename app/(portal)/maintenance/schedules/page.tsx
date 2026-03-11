@@ -5,7 +5,7 @@ import { MaintenanceScheduleTable } from '@/components/maintenance/MaintenanceSc
 import { useQuery } from '@tanstack/react-query'
 import { getMaintenances } from '@/lib/api/maintenance'
 import { Button } from '@/components/ui/button'
-import { Plus, Filter, CalendarRange, ChevronRight, Search, Download } from 'lucide-react'
+import { Plus, Filter, CalendarRange, Search, Download } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -85,5 +85,5 @@ export default function MaintenanceSchedulesPage() {
 }
 
 function ChevronRight({ className }: { className?: string }) {
-    return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="9 5l7 7-7 7" /></svg>
+    return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
 }

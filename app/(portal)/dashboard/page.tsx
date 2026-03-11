@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import * as dashboardApi from '@/lib/api/dashboard'
 import * as trackingApi from '@/lib/api/tracking'
 import * as analyticsApi from '@/lib/api/analytics'
+import * as vehicleApi from '@/lib/api/vehicles'
 
 // Enhanced Dummy Data for visual demonstration
 const vehicleStatusData = [
@@ -127,12 +128,6 @@ const recentActivities: ActivityItem[] = [
     },
 ]
 
-const activeMapLocations = [
-    { id: 'loc-1', name: 'TRK-042', lat: 34.0522, lng: -118.2437, status: 'moving' },
-    { id: 'loc-2', name: 'VAN-019', lat: 41.8781, lng: -87.6298, status: 'idle' },
-    { id: 'loc-3', name: 'TRK-088', lat: 40.7128, lng: -74.0060, status: 'moving' },
-]
-
 export default function DashboardPage() {
     const [isFleetModalOpen, setIsFleetModalOpen] = useState(false)
 
@@ -188,6 +183,12 @@ export default function DashboardPage() {
     const { data: activityLogsData } = useQuery({
         queryKey: ['dashboard-activity-logs'],
         queryFn: () => dashboardApi.getActivityLogs()
+    })
+
+    const { data: dashboardLocations } = useQuery({
+        queryKey: ['dashboard-locations'],
+        queryFn: () => vehicleApi.getVehiclesLocations({ per_page: 10 }),
+        refetchInterval: 30_000,
     })
 
     // Normalize Activity Logs
@@ -291,6 +292,17 @@ export default function DashboardPage() {
         }))
     }, [forecastData])
 
+    const normalizedMapLocations = useMemo(() => {
+        const data = dashboardLocations?.data || []
+        return data.map((vl: any) => ({
+            id: String(vl.id),
+            name: vl.attributes?.registration_number || 'Vehicle',
+            lat: vl.location?.latitude,
+            lng: vl.location?.longitude,
+            status: (vl.location?.speed || 0) > 0 ? 'moving' : 'idle'
+        })).filter((l: any) => l.lat && l.lng)
+    }, [dashboardLocations])
+
     return (
         <div className="p-8 pb-16 space-y-8 bg-slate-50 min-h-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -336,7 +348,7 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <DashboardMap locations={activeMapLocations} />
+                    <DashboardMap locations={normalizedMapLocations} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <MaintenanceHeatmap data={normalizedForecast} />
                         <VehicleStatusChart data={dynamicStatusData} />

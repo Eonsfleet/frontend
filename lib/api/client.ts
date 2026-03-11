@@ -8,6 +8,7 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
         Accept: 'application/json',
         'X-Request-Type': 'client',
+        'X-Tenant': 'dkt',
     },
 })
 

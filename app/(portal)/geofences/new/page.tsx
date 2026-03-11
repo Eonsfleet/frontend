@@ -16,13 +16,18 @@ import { getVehicles } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { GeofenceMap } from '@/components/geofencing/GeofenceMap'
 
+import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
+import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
+import { Navigation } from 'lucide-react'
+
 export default function NewGeofencePage() {
     const router = useRouter()
     const [mapData, setMapData] = useState<{ type: 'polygon' | 'circle', coordinates: any, radius?: number } | null>(null)
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        alert_type: 'both' as 'enter' | 'exit' | 'both',
+        trigger_type: 'both' as 'enter' | 'exit' | 'both',
+        location_name: '',
         vehicle_ids: [] as string[]
     })
 
@@ -32,7 +37,7 @@ export default function NewGeofencePage() {
     })
 
     const { mutate: handleSave, isPending } = useMutation({
-        mutationFn: async (payload: Parameters<typeof createGeofence>[0]) => {
+        mutationFn: async (payload: any) => {
             const created = await createGeofence(payload)
             if (formData.vehicle_ids.length > 0) {
                 const { bulkAssignVehicles } = await import('@/lib/api/geofencing')
@@ -63,23 +68,15 @@ export default function NewGeofencePage() {
         const payload = {
             name: formData.name,
             description: formData.description,
-            alert_type: formData.alert_type,
+            trigger_type: formData.trigger_type,
             type: mapData.type,
-            location: mapData.coordinates,
+            coordinates: mapData.coordinates,
+            location: formData.location_name || 'Mapped Location',
             radius: mapData.radius,
-            is_active: true,
+            status: true,
         }
 
         handleSave(payload)
-    }
-
-    const toggleVehicle = (id: string) => {
-        setFormData(prev => ({
-            ...prev,
-            vehicle_ids: prev.vehicle_ids.includes(id)
-                ? prev.vehicle_ids.filter(v => v !== id)
-                : [...prev.vehicle_ids, id]
-        }))
     }
 
     return (
@@ -104,7 +101,6 @@ export default function NewGeofencePage() {
 
                 <form onSubmit={onSubmit}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Left Column: Form Details */}
                         <div className="lg:col-span-1 space-y-6">
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="bg-white border-b border-slate-100">
@@ -120,6 +116,15 @@ export default function NewGeofencePage() {
                                         />
                                     </div>
                                     <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-700 italic">Location Label</label>
+                                        <LocationAutocomplete 
+                                            value={formData.location_name}
+                                            onSelect={(loc) => setFormData({ ...formData, location_name: loc.name })}
+                                            placeholder="Search location address..."
+                                            icon={<Navigation className="h-4 w-4 text-blue-600" />}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Description</label>
                                         <Textarea
                                             placeholder="Optional description"
@@ -129,10 +134,9 @@ export default function NewGeofencePage() {
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Alert Rule</label>
-                                        <span className="text-xs text-slate-400 block mb-1">When to trigger alert</span>
                                         <Select
-                                            value={formData.alert_type}
-                                            onValueChange={(val: any) => setFormData({ ...formData, alert_type: val })}
+                                            value={formData.trigger_type}
+                                            onValueChange={(val: any) => setFormData({ ...formData, trigger_type: val })}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder="When to trigger alert" />
@@ -149,37 +153,22 @@ export default function NewGeofencePage() {
 
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="bg-white border-b border-slate-100">
-                                    <CardTitle className="text-base">Associated Vehicles</CardTitle>
-                                    <CardDescription>Optional: Limit this geofence to specific vehicles.</CardDescription>
+                                    <CardTitle className="text-base">Target Vehicles</CardTitle>
+                                    <CardDescription>Select assets to be monitored by this boundary.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="p-6 max-h-[300px] overflow-y-auto">
-                                    {isLoadingVehicles ? (
-                                        <p className="text-sm text-slate-500">Loading vehicles...</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {vehiclesData?.data.map(v => (
-                                                <label key={v.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-100">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-                                                        checked={formData.vehicle_ids.includes(v.id.toString())}
-                                                        onChange={() => toggleVehicle(v.id.toString())}
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium text-slate-900">{v.attributes.registration_number}</span>
-                                                        <span className="text-xs text-slate-500">{v.attributes.make} {v.attributes.model}</span>
-                                                    </div>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
+                                <CardContent className="p-6">
+                                    <MultiVehicleSelector 
+                                        vehicles={vehiclesData?.data || []}
+                                        selectedIds={formData.vehicle_ids}
+                                        onChange={(ids) => setFormData({ ...formData, vehicle_ids: ids })}
+                                        placeholder="Search and select vehicles..."
+                                    />
                                 </CardContent>
                             </Card>
                         </div>
 
-                        {/* Right Column: Map Editor */}
                         <div className="lg:col-span-2 space-y-6">
-                            <Card className="shadow-sm border-slate-200 h-full flex flex-col">
+                            <Card className="shadow-sm border-slate-200 min-h-[500px] flex flex-col">
                                 <CardHeader className="bg-white border-b border-slate-100 relative z-10">
                                     <CardTitle className="text-base flex items-center justify-between">
                                         <span>Draw Boundary</span>
@@ -187,8 +176,11 @@ export default function NewGeofencePage() {
                                     </CardTitle>
                                     <CardDescription>Use the tools on the map to draw a circular or polygonal boundary.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="p-0 flex-1 min-h-[500px] relative z-0">
-                                    <GeofenceMap onChange={setMapData} />
+                                <CardContent className="p-0 flex-1 relative z-0">
+                                    <GeofenceMap 
+                                        onChange={setMapData} 
+                                        vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
+                                    />
                                 </CardContent>
                             </Card>
 
@@ -196,7 +188,7 @@ export default function NewGeofencePage() {
                                 <Button type="button" variant="outline" asChild>
                                     <Link href="/geofences">Cancel</Link>
                                 </Button>
-                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-32" disabled={isPending}>
+                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-32 shadow-lg shadow-blue-100" disabled={isPending}>
                                     {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-2" /> Save Geofence</>}
                                 </Button>
                             </div>

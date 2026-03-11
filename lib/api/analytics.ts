@@ -17,7 +17,7 @@ export const getFleetAvailabilitySnapshot = async (): Promise<any> => {
     return res.data
 }
 
-export const getFleetAvailabilityTrend = async (params?: { filter?: '30d' | '90d' | '1y' }): Promise<any> => {
+export const getFleetAvailabilityTrend = async (params?: { filter?: '7d' | '30d' | '90d' | '1y' }): Promise<any> => {
     const res = await apiClient.get('/analytics/fleet/availability-trend', { params })
     return res.data
 }
@@ -138,6 +138,38 @@ export const getFuelExecutiveKpis = async (): Promise<any> => {
     return res.data
 }
 
+// ── 3E. Maintenance Analytics ────────────────────────────────────────────────
+
+export const getMaintenanceScheduleCompliance = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/schedule-compliance')
+    return res.data
+}
+
+export const getMaintenanceCostReport = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/cost-report', { params })
+    return res.data
+}
+
+export const getMaintenanceWorkflowReport = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/workflow-report')
+    return res.data
+}
+
+export const getMaintenanceDocumentCompliance = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/document-compliance')
+    return res.data
+}
+
+export const getMaintenanceWorkshopSummary = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/workshop-summary')
+    return res.data
+}
+
+export const getMaintenancePredictiveInsights = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/predictive-insights')
+    return res.data
+}
+
 // ── 3F. Incident Analytics ────────────────────────────────────────────────────
 
 export const getIncidentSummary = async (): Promise<any> => {
@@ -210,4 +242,31 @@ export const detectAnomalies = async (params: {
 export const getDeviceStatusSummary = async (): Promise<any> => {
     const res = await apiClient.get('/analytics/gps/device-status')
     return res.data?.data ?? res.data
+}
+
+// ── 3H. GPS & Routes ──────────────────────────────────────────────────────────
+
+export const getGpsTripSummary = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/gps/trip-summary', { params })
+    return res.data
+}
+
+export const getGpsTripsOverTime = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/gps/trips-over-time', { params })
+    return res.data
+}
+
+export const getGpsDistanceMileage = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/gps/distance-mileage', { params })
+    return res.data
+}
+
+export const getGpsTopByDistance = async (params?: { filter?: string; limit?: number }): Promise<any> => {
+    const res = await apiClient.get('/analytics/gps/top-by-distance', { params })
+    return res.data
+}
+
+export const getGeofenceActivity = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/gps/geofence-activity', { params })
+    return res.data
 }

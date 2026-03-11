@@ -98,7 +98,7 @@ export default function GeofenceDetailPage() {
                                     <div>
                                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Alert Rule</p>
                                         <p className="font-medium text-slate-900 capitalize px-2 py-1 bg-slate-100 rounded-md inline-block">
-                                            Trigger {geofence.attributes.alert_type === 'both' ? 'On Entry & Exit' : `On ${geofence.attributes.alert_type} Only`}
+                                            Trigger {geofence.attributes.trigger_type === 'both' ? 'On Entry & Exit' : `On ${geofence.attributes.trigger_type} Only`}
                                         </p>
                                     </div>
                                     {geofence.attributes.type === 'circle' && geofence.attributes.radius != null && (
@@ -115,7 +115,11 @@ export default function GeofenceDetailPage() {
 
                                 <div className="pt-4 mt-4 border-t border-slate-100">
                                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Boundary Map</p>
-                                    <GeofenceBoundaryPreview geofence={geofence} height="300px" />
+                                    <GeofenceBoundaryPreview 
+                                        geofence={geofence} 
+                                        vehicles={vehiclesData?.data}
+                                        height="300px" 
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

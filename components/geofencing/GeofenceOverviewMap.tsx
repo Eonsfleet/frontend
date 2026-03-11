@@ -16,9 +16,10 @@ const COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2'
 
 interface Props {
     geofences: Geofence[]
+    vehicles?: (import('@/types').Vehicle | any)[]
 }
 
-export default function GeofenceOverviewMap({ geofences }: Props) {
+export default function GeofenceOverviewMap({ geofences, vehicles }: Props) {
     const containerRef = useRef<HTMLDivElement>(null)
     const mapRef = useRef<L.Map | null>(null)
 
@@ -81,6 +82,30 @@ export default function GeofenceOverviewMap({ geofences }: Props) {
                 }
             }
         })
+
+        // Add vehicle markers
+        if (vehicles && vehicles.length > 0) {
+            vehicles.forEach(v => {
+                const loc = v.relationships?.current_location || v.attributes?.current_location
+                if (loc?.latitude && loc?.longitude) {
+                    const marker = L.marker([loc.latitude, loc.longitude], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div class="p-1 rounded-full bg-blue-600 border-2 border-white shadow-lg text-white"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>`,
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10],
+                        })
+                    }).addTo(map)
+                    
+                    marker.bindPopup(`
+                        <div class="p-2 space-y-1">
+                            <p class="text-xs font-black uppercase text-slate-900">${v.attributes.registration_number}</p>
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${v.attributes.make} ${v.attributes.model}</p>
+                        </div>
+                    `)
+                }
+            })
+        }
 
         if (bounds.length > 0) {
             const combined = bounds.reduce((acc, b) => acc.extend(b))

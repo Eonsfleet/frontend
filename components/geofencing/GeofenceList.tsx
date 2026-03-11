@@ -3,13 +3,21 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Loader2, Navigation, Users, BarChart3, Edit2, Trash2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
-import { getGeofences, deleteGeofence } from '@/lib/api/geofencing'
+import { Loader2, Navigation, Users, BarChart3, Edit2, Trash2, AlertCircle, ChevronLeft, ChevronRight, MoreVertical, Power } from 'lucide-react'
+import { getGeofences, deleteGeofence, updateGeofence } from '@/lib/api/geofencing'
 import { Badge } from '@/components/ui/badge'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from '@/lib/utils'
 import { BulkAssignmentModal } from './BulkAssignmentModal'
 import { BreachAnalytics } from './BreachAnalytics'
 import { toast } from 'sonner'
+import { Button } from '../ui/button'
 
 interface GeofenceListProps {
     searchTerm?: string
@@ -43,6 +51,18 @@ export function GeofenceList({ searchTerm = '' }: GeofenceListProps) {
         },
     })
 
+    const { mutate: handleToggleStatus } = useMutation({
+        mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+            updateGeofence(id, { is_active }),
+        onSuccess: () => {
+            toast.success('Geofence status updated.')
+            queryClient.invalidateQueries({ queryKey: ['geofences'] })
+        },
+        onError: () => {
+            toast.error('Failed to update status.')
+        },
+    })
+
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -72,12 +92,55 @@ export function GeofenceList({ searchTerm = '' }: GeofenceListProps) {
                                         <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
                                             <Navigation className="h-6 w-6" />
                                         </div>
-                                        <Badge className={cn(
-                                            "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
-                                            item.attributes.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
-                                        )}>
-                                            {item.attributes.is_active ? 'MONITORING ACTIVE' : 'INACTIVE'}
-                                        </Badge>
+                                        <div className="flex items-center gap-2">
+                                            <Badge className={cn(
+                                                "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
+                                                item.attributes.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                                            )}>
+                                                {item.attributes.is_active ? 'MONITORING ACTIVE' : 'INACTIVE'}
+                                            </Badge>
+
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-900 border border-transparent hover:border-slate-100 hover:bg-slate-50">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48 rounded-2xl border-slate-100 shadow-xl p-2">
+                                                    <DropdownMenuItem
+                                                        className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50"
+                                                        onClick={() => handleToggleStatus({ id: item.id, is_active: !item.attributes.is_active })}
+                                                    >
+                                                        <Power className={cn("h-4 w-4", item.attributes.is_active ? "text-rose-500" : "text-emerald-500")} />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">
+                                                            {item.attributes.is_active ? 'Deactivate' : 'Activate'}
+                                                        </span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator className="bg-slate-50" />
+                                                    <DropdownMenuItem
+                                                        className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50"
+                                                        onClick={() => router.push(`/geofences/${item.id}/edit`)}
+                                                    >
+                                                        <Edit2 className="h-4 w-4 text-slate-400" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Edit Configuration</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50"
+                                                        onClick={() => setActiveAssignment({ id: item.id, name: item.attributes.name })}
+                                                    >
+                                                        <Users className="h-4 w-4 text-slate-400" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Assign Assets</span>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50 text-rose-600 focus:text-rose-600"
+                                                        onClick={() => setDeleteTarget({ id: item.id, name: item.attributes.name })}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">Delete Zone</span>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </div>
 
                                     <h3 className="text-lg font-black text-slate-900 uppercase italic leading-tight mb-2 truncate group-hover:text-blue-600 transition-colors">
@@ -89,7 +152,7 @@ export function GeofenceList({ searchTerm = '' }: GeofenceListProps) {
                                             {item.attributes.type}
                                         </div>
                                         <div className="px-2 py-0.5 rounded bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest border border-amber-100">
-                                            ALERT: {item.attributes.alert_type}
+                                            ALERT: {item.attributes.trigger_type}
                                         </div>
                                     </div>
 

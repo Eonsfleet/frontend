@@ -11,6 +11,7 @@ const DynamicMapEditor = dynamic(
 interface Props {
     onChange: (data: { type: 'polygon' | 'circle', coordinates: any, radius?: number }) => void
     initialGeofence?: Geofence
+    vehicles?: (import('@/types').Vehicle | any)[]
 }
 
 export function GeofenceMap(props: Props) {

@@ -84,7 +84,7 @@ export default function PlaybackPage() {
 
     const vehicles = vehicleData?.data || []
 
-    const { data: tripsData, isLoading: isLoadingTrips } = useQuery({
+    const { data: tripsData, isLoading: isLoadingTrips } = useQuery<{ data: { trips: any[] } }>({
         queryKey: ['trips', selectedVehicleId],
         queryFn: () => tripsApi.getTrips({ vehicle_id: selectedVehicleId! } as any),
         enabled: !!selectedVehicleId
@@ -92,7 +92,7 @@ export default function PlaybackPage() {
 
     const vehicleTrips = useMemo(() => {
         if (!tripsData?.data?.trips) return []
-        return tripsData.data.trips.filter(t => {
+        return tripsData.data.trips.filter((t: any) => {
             const relVehicle = t.relationships?.vehicle as any
             const vehicleId = relVehicle?.id || (t.attributes as any)?.vehicle_id
             return String(vehicleId) === String(selectedVehicleId)
@@ -133,7 +133,7 @@ export default function PlaybackPage() {
         let timer: NodeJS.Timeout
         if (isPlaying && playbackIndex < movements.length - 1) {
             timer = setTimeout(() => {
-                setPlaybackIndex(prev => prev + 1)
+                setPlaybackIndex((prev: number) => prev + 1)
             }, 1000 / playbackSpeed)
         } else if (playbackIndex >= movements.length - 1) {
             setIsPlaying(false)
@@ -147,7 +147,7 @@ export default function PlaybackPage() {
     }, [playbackIndex, movements.length])
 
     const selectedVehicle = useMemo(() =>
-        vehicles.find(v => String(v.id) === String(selectedVehicleId)),
+        vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)),
         [vehicles, selectedVehicleId]
     )
 
@@ -155,7 +155,7 @@ export default function PlaybackPage() {
         const map = useMap()
         useEffect(() => {
             if (movements.length > 0 && currentIndex === 0) {
-                const bounds = movements.map(m => [m.lat, m.lng] as [number, number])
+                const bounds = movements.map((m: MovementData) => [m.lat, m.lng] as [number, number])
                 map.fitBounds(bounds, { padding: [50, 50] })
             }
         }, [movements.length])
@@ -191,14 +191,14 @@ export default function PlaybackPage() {
                             <select
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={selectedVehicleId || ''}
-                                onChange={(e) => {
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                     setSelectedVehicleId(e.target.value)
                                     setPlaybackIndex(0)
                                     setIsPlaying(false)
                                 }}
                             >
                                 <option value="" disabled>Select Asset...</option>
-                                {vehicles.map(v => (
+                                {vehicles.map((v: Vehicle) => (
                                     <option key={v.id} value={v.id}>{v.attributes.registration_number}</option>
                                 ))}
                             </select>
@@ -209,7 +209,7 @@ export default function PlaybackPage() {
                             <select
                                 className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={selectedTripId || ''}
-                                onChange={(e) => {
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                     setSelectedTripId(e.target.value)
                                     setPlaybackIndex(0)
                                     setIsPlaying(false)
@@ -217,7 +217,7 @@ export default function PlaybackPage() {
                                 disabled={!selectedVehicleId || isLoadingTrips}
                             >
                                 <option value="" disabled>{isLoadingTrips ? 'Loading Trips...' : 'Select Trip...'}</option>
-                                {vehicleTrips.map(t => (
+                                {vehicleTrips.map((t: any) => (
                                     <option key={t.id} value={t.id}>
                                         {t.attributes.trip_number} ({format(parseISO(t.attributes.planned_start_time), 'MMM dd')})
                                     </option>
@@ -237,7 +237,7 @@ export default function PlaybackPage() {
                                         type="datetime-local"
                                         className="w-full bg-slate-50 border border-slate-200 rounded-lg h-9 pl-8 pr-2 text-[11px] font-bold text-slate-700 outline-none"
                                         value={startTime}
-                                        onChange={(e) => setStartTime(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartTime(e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -249,7 +249,7 @@ export default function PlaybackPage() {
                                         type="datetime-local"
                                         className="w-full bg-slate-50 border border-slate-200 rounded-lg h-9 pl-8 pr-2 text-[11px] font-bold text-slate-700 outline-none"
                                         value={endTime}
-                                        onChange={(e) => setEndTime(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndTime(e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -261,7 +261,7 @@ export default function PlaybackPage() {
                             onClick={() => {
                                 setPlaybackIndex(0)
                                 setIsPlaying(false)
-                                if (!selectedTripId) setSyncKey(k => k + 1)
+                                if (!selectedTripId) setSyncKey((k: number) => k + 1)
                             }}
                         >
                             {isLoadingPlayback ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-3.5 h-3.5 mr-2" />}
@@ -334,7 +334,7 @@ export default function PlaybackPage() {
 
                         {movements.length > 1 && (
                             <Polyline
-                                positions={movements.map(m => [m.lat, m.lng])}
+                                positions={movements.map((m: MovementData) => [m.lat, m.lng])}
                                 color="#3b82f6"
                                 weight={4}
                                 opacity={0.6}

@@ -146,3 +146,33 @@ export const getVehiclesLocations = async (params?: { page?: number; per_page?: 
     }
 }
 
+export const getVehiclesBatched = async (params: ListVehiclesParams = {}): Promise<Vehicle[]> => {
+    let allVehicles: Vehicle[] = []
+    let currentPage = 1
+    let lastPage = 1
+
+    do {
+        const response = await getVehicles({ ...params, page: currentPage, per_page: 100 })
+        allVehicles = [...allVehicles, ...response.data]
+        lastPage = response.pagination.lastPage
+        currentPage++
+    } while (currentPage <= lastPage)
+
+    return allVehicles
+}
+
+export const getVehiclesLocationsBatched = async (params: { page?: number; per_page?: number } = {}): Promise<VehicleLocation[]> => {
+    let allLocations: VehicleLocation[] = []
+    let currentPage = 1
+    let lastPage = 1
+
+    do {
+        const response = await getVehiclesLocations({ ...params, page: currentPage, per_page: 100 })
+        allLocations = [...allLocations, ...response.data]
+        lastPage = response.pagination.lastPage
+        currentPage++
+    } while (currentPage <= lastPage)
+
+    return allLocations
+}
+
