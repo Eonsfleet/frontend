@@ -152,7 +152,7 @@ export default function MaintenanceAnalyticsPage() {
                                     />
                                     <Tooltip 
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(val: number) => [`₦${val.toLocaleString()}`, 'Cost']}
+                                        formatter={(val) => [`₦${Number(val ?? 0).toLocaleString()}`, 'Cost'] as [string, string]}
                                     />
                                     <Bar dataKey="cost" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={40} />
                                 </BarChart>
