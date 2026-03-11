@@ -9,6 +9,7 @@ import { GeofenceBuilder } from '../../../components/geofencing/GeofenceBuilder'
 import { Plus, List, Map as MapIcon, Filter, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getGeofences } from '@/lib/api/geofencing'
+import { getVehicles } from '@/lib/api/vehicles'
 
 const GeofenceOverviewMap = dynamic(
     () => import('@/components/geofencing/GeofenceOverviewMap'),
@@ -31,6 +32,12 @@ export default function GeofencesPage() {
     const { data: allGeofencesData, isLoading: isLoadingMapData } = useQuery({
         queryKey: ['geofences-all'],
         queryFn: () => getGeofences({ per_page: 100 }),
+        enabled: view === 'map',
+    })
+
+    const { data: vehiclesData } = useQuery({
+        queryKey: ['vehicles-list-simple'],
+        queryFn: () => getVehicles({ per_page: 100 }),
         enabled: view === 'map',
     })
 
@@ -117,7 +124,10 @@ export default function GeofencesPage() {
                                 <p className="text-[10px] text-slate-300 font-medium mt-2">Create geofences to see them on the map.</p>
                             </div>
                         ) : (
-                            <GeofenceOverviewMap geofences={allGeofences} />
+                            <GeofenceOverviewMap 
+                                geofences={allGeofences} 
+                                vehicles={vehiclesData?.data}
+                            />
                         )}
                     </div>
                 )}

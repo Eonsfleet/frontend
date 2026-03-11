@@ -31,12 +31,23 @@ export const getGeofenceById = async (id: string): Promise<GeofenceDetailRespons
 }
 
 export const createGeofence = async (data: Partial<Geofence['attributes']>): Promise<GeofenceDetailResponse> => {
-    const response = await apiClient.post<GeofenceDetailResponse>('/geofences', data)
+    // If the data has alert_type, rename it to trigger_type for backend compatibility
+    const payload = { ...data }
+    if ((payload as any).alert_type) {
+        (payload as any).trigger_type = (payload as any).alert_type
+        delete (payload as any).alert_type
+    }
+    const response = await apiClient.post<GeofenceDetailResponse>('/geofences', payload)
     return response.data
 }
 
 export const updateGeofence = async (id: string, data: Partial<Geofence['attributes']>): Promise<GeofenceDetailResponse> => {
-    const response = await apiClient.put<GeofenceDetailResponse>(`/geofences/${id}`, data)
+    const payload = { ...data }
+    if ((payload as any).alert_type) {
+        (payload as any).trigger_type = (payload as any).alert_type
+        delete (payload as any).alert_type
+    }
+    const response = await apiClient.put<GeofenceDetailResponse>(`/geofences/${id}`, payload)
     return response.data
 }
 

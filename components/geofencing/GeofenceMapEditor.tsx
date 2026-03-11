@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, FeatureGroup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, FeatureGroup, useMap, Circle, Polygon, Popup, Marker } from 'react-leaflet'
 import { EditControl } from 'react-leaflet-draw'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -17,13 +17,33 @@ L.Icon.Default.mergeOptions({
 
 interface GeofenceMapEditorProps {
     initialGeofence?: Geofence
+    vehicles?: (import('@/types').Vehicle | any)[]
     onChange: (data: { type: 'polygon' | 'circle', coordinates: any, radius?: number }) => void
     height?: string
 }
 
-export default function GeofenceMapEditor({ initialGeofence, onChange, height = '400px' }: GeofenceMapEditorProps) {
+const DefaultPosition: [number, number] = [6.5244, 3.3792] // Lagos, Nigeria
+
+const MapCenterer = ({ initialGeofence }: { initialGeofence?: Geofence }) => {
+    const map = useMap()
+    useEffect(() => {
+        if (!initialGeofence) return
+
+        const { type, coordinates, radius } = initialGeofence.attributes
+        if (type === 'circle' && coordinates?.lat && coordinates?.lng) {
+            map.setView([coordinates.lat, coordinates.lng], 15)
+        } else if (type === 'polygon' && coordinates?.type === 'Polygon') {
+            const bounds = L.geoJSON(coordinates as any).getBounds()
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] })
+            }
+        }
+    }, [initialGeofence, map])
+    return null
+}
+
+export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange, height = '400px' }: GeofenceMapEditorProps) {
     const [mapReady, setMapReady] = useState(false)
-    const DefaultPosition: [number, number] = [6.5244, 3.3792] // Lagos, Nigeria
 
     useEffect(() => {
         setMapReady(true)
@@ -40,7 +60,7 @@ export default function GeofenceMapEditor({ initialGeofence, onChange, height = 
     }
 
     const _onDeleted = (e: any) => {
-        // Clear logic would go here, maybe setting state back to null
+        // Handle deletion if needed
     }
 
     const _syncLayerData = (layer: any) => {
@@ -63,6 +83,19 @@ export default function GeofenceMapEditor({ initialGeofence, onChange, height = 
 
     if (!mapReady) return <div style={{ height }} className="w-full bg-slate-100 animate-pulse rounded-md" />
 
+    const renderInitialLayer = () => {
+        if (!initialGeofence) return null
+        const { type, coordinates, radius } = initialGeofence.attributes
+        if (type === 'circle' && coordinates?.lat && coordinates?.lng) {
+            return <Circle center={[coordinates.lat, coordinates.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
+        }
+        if (type === 'polygon' && coordinates?.type === 'Polygon') {
+            const latlngs = (coordinates.coordinates[0] as any[]).map(p => [p[1], p[0]] as [number, number])
+            return <Polygon positions={latlngs} color="#2563eb" fillOpacity={0.2} />
+        }
+        return null
+    }
+
     return (
         <div style={{ height }} className="w-full rounded-md border border-slate-200 overflow-hidden relative z-0">
             <MapContainer
@@ -70,6 +103,7 @@ export default function GeofenceMapEditor({ initialGeofence, onChange, height = 
                 zoom={11}
                 style={{ height: '100%', width: '100%' }}
             >
+                <MapCenterer initialGeofence={initialGeofence} />
                 <TileLayer
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                     attribution='&copy; <a href="https://carto.com/">Carto</a>'
@@ -98,7 +132,35 @@ export default function GeofenceMapEditor({ initialGeofence, onChange, height = 
                             }
                         }}
                     />
+                    {renderInitialLayer()}
                 </FeatureGroup>
+
+                {/* Render Vehicle Markers */}
+                {vehicles && vehicles.length > 0 && vehicles.map(v => {
+                    const loc = v.relationships?.current_location || v.attributes?.current_location
+                    if (loc?.latitude && loc?.longitude) {
+                        return (
+                            <Marker
+                                key={v.id}
+                                position={[loc.latitude, loc.longitude]}
+                                icon={L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div class="p-1.5 rounded-full bg-blue-600 border-2 border-white shadow-lg text-white"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>`,
+                                    iconSize: [28, 28],
+                                    iconAnchor: [14, 14],
+                                })}
+                            >
+                                <Popup>
+                                    <div className="p-2 space-y-1">
+                                        <p className="text-xs font-black uppercase text-slate-900">{v.attributes.registration_number}</p>
+                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{v.attributes.make} {v.attributes.model}</p>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        )
+                    }
+                    return null
+                })}
             </MapContainer>
         </div>
     )

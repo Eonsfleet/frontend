@@ -99,6 +99,35 @@ export interface ChecklistResponse {
     data: { checklists: ChecklistItem[] }
 }
 
+export interface WorkflowSettings {
+    finance_threshold_enabled: boolean
+    cost_threshold: number
+    minimum_approvals: number
+    required_role: string
+}
+
+export interface WorkflowSettingsResponse {
+    message?: string
+    data: {
+        settings: WorkflowSettings
+    }
+}
+
+// ── 0. Workflow Settings ─────────────────────────────────────────────────────
+
+export const getWorkflowSettings = async (type: string = 'maintenance'): Promise<WorkflowSettingsResponse> => {
+    const response = await apiClient.get<WorkflowSettingsResponse>(`/workflow-settings/${type}`)
+    return response.data
+}
+
+export const updateWorkflowSettings = async (
+    type: string = 'maintenance',
+    data: Partial<WorkflowSettings>
+): Promise<WorkflowSettingsResponse> => {
+    const response = await apiClient.post<WorkflowSettingsResponse>(`/workflow-settings/${type}`, data)
+    return response.data
+}
+
 // ── 1A. Scheduling ────────────────────────────────────────────────────────────
 
 export const getMaintenances = async (params?: {

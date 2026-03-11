@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,80 +17,13 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import * as api from '@/lib/api/fuel'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { FuelVehicle } from '@/types'
 import { extractApiError } from '@/lib/utils'
 
-// ── Standardized Table Pagination ───────────────────────────────────────────
-
-interface TablePaginationProps {
-    pagination?: {
-        current_page: number
-        last_page: number
-        total: number
-    }
-    onPageChange: (page: number) => void
-    variant?: 'default' | 'simple'
-}
-
-function TablePagination({ pagination, onPageChange, variant = 'default' }: TablePaginationProps) {
-    if (!pagination || pagination.last_page <= 1) return null
-
-    if (variant === 'simple') {
-        return (
-            <div className="flex items-center justify-between pt-4">
-                <p className="text-xs text-slate-500 font-medium">Page {pagination.current_page} of {pagination.last_page}</p>
-                <div className="flex gap-2">
-                    <Button
-                        size="sm" variant="outline"
-                        className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page <= 1}
-                        onClick={() => onPageChange(pagination.current_page - 1)}
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        size="sm" variant="outline"
-                        className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page >= pagination.last_page}
-                        onClick={() => onPageChange(pagination.current_page + 1)}
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
-        )
-    }
-
-    return (
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
-                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
-            </p>
-            <div className="flex gap-2">
-                <Button
-                    size="sm" variant="outline"
-                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page <= 1}
-                    onClick={() => onPageChange(pagination.current_page - 1)}
-                >
-                    Previous
-                </Button>
-                <Button
-                    size="sm" variant="outline"
-                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page >= pagination.last_page}
-                    onClick={() => onPageChange(pagination.current_page + 1)}
-                >
-                    Next
-                </Button>
-            </div>
-        </div>
-    )
-}
 
 function FuelGauge({ percent, online }: { percent: number | null; online: boolean }) {
     const size = 100
@@ -325,17 +258,50 @@ function VehicleDetailDialog({ vehicle, onClose }: { vehicle: any | null; onClos
 
 export default function LiveMonitorPage() {
     const [search, setSearch] = useState('')
-    const [page, setPage] = useState(1)
     const [selectedVehicle, setSelectedVehicle] = useState<FuelVehicle | null>(null)
+    const observerTarget = React.useRef<HTMLDivElement>(null)
 
-    const { data, isLoading } = useQuery({
-        queryKey: ['fuel-vehicles', { page, search }],
-        queryFn: () => api.getFuelVehicles({ page, per_page: 12, search: search || undefined }),
+    const {
+        data,
+        isLoading,
+        isFetchingNextPage,
+        hasNextPage,
+        fetchNextPage,
+    } = useInfiniteQuery({
+        queryKey: ['fuel-vehicles-infinite', search],
+        queryFn: ({ pageParam = 1 }) => api.getFuelVehicles({ 
+            page: pageParam, 
+            per_page: 12, 
+            search: search || undefined 
+        }),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage: any) => {
+            const current = lastPage.data.pagination.current_page
+            const last = lastPage.data.pagination.last_page
+            return current < last ? current + 1 : undefined
+        },
     })
 
-    const vehicles: FuelVehicle[] = data?.data?.vehicles ?? []
-    const pagination = data?.data?.pagination
-    const hasAnyVehicle = !isLoading && (vehicles.length > 0 || page > 1 || !!search)
+    const vehicles = data?.pages.flatMap((page: any) => page.data.vehicles) ?? []
+    const hasAnyVehicle = vehicles.length > 0 || isLoading || !!search
+
+    // Intersection Observer for Infinite Scroll
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                    fetchNextPage()
+                }
+            },
+            { threshold: 0.1 }
+        )
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current)
+        }
+
+        return () => observer.disconnect()
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     return (
         <div className="space-y-6">
@@ -350,7 +316,7 @@ export default function LiveMonitorPage() {
                         placeholder="Search plate, make, model..."
                         className="pl-9 bg-slate-50 border-slate-200 h-9"
                         value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                        onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
             </div>
@@ -365,9 +331,9 @@ export default function LiveMonitorPage() {
                     <p className="text-sm font-medium text-slate-700">No fuel monitoring devices found.</p>
                 </div>
             ) : (
-                <>
+                <div className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                        {vehicles.map(v => {
+                        {vehicles.map((v: FuelVehicle) => {
                             const level = v.fuel_level?.fuel_level_percent ?? null
                             const liters = v.fuel_level?.fuel_level_liters ?? null
                             const online = v.attributes.device_online
@@ -402,12 +368,23 @@ export default function LiveMonitorPage() {
                         })}
                     </div>
 
-                    <TablePagination
-                        pagination={pagination}
-                        onPageChange={setPage}
-                        variant="simple"
-                    />
-                </>
+                    {/* Infinite Scroll Sentinel */}
+                    <div 
+                        ref={observerTarget} 
+                        className="flex justify-center py-10 border-t border-slate-50"
+                    >
+                        {isFetchingNextPage ? (
+                            <div className="flex items-center gap-2 text-slate-400 animate-pulse">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Syncing Assets...</span>
+                            </div>
+                        ) : hasNextPage ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Scroll to Load More</span>
+                        ) : vehicles.length > 0 ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-200">End of Fleet</span>
+                        ) : null}
+                    </div>
+                </div>
             )}
 
             <VehicleDetailDialog vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />

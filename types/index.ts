@@ -451,7 +451,8 @@ export interface Geofence {
         name: string
         description: string | null
         type: 'polygon' | 'circle'
-        alert_type: 'enter' | 'exit' | 'both'
+        trigger_type: 'enter' | 'exit' | 'both'
+        location?: string | null
         coordinates: any // GeoJSON or custom format
         radius?: number // Required if type is circle
         speed: number // Speed limit threshold (km/h); 0 means no limit

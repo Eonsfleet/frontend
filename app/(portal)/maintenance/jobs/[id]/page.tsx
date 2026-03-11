@@ -15,11 +15,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowLeft, Loader2, DollarSign, Wrench, MessageSquare, History } from 'lucide-react'
+import { ArrowLeft, Loader2, DollarSign, Wrench, MessageSquare, History, Plus, Star, MapPin } from 'lucide-react'
 import Link from 'next/link'
 import { WorkflowTimeline } from '@/components/shared/WorkflowTimeline'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { JobWorkflowActions } from '@/components/shared/JobWorkflowActions'
+import { getVendors } from '@/lib/api/vendors'
+import { assignMaintenanceJob } from '@/lib/api/maintenance'
+import { usePermission } from '@/hooks/usePermission'
 
 export default function MaintenanceJobDetailPage() {
     const params = useParams()
@@ -115,8 +119,11 @@ export default function MaintenanceJobDetailPage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline">Edit Job</Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700">Advance Workflow</Button>
+                    <JobWorkflowActions 
+                        jobId={jobId} 
+                        currentStatus={job.attributes.status} 
+                        estimatedCost={job.attributes.cost_estimate || 0} 
+                    />
                 </div>
             </div>
 
@@ -126,6 +133,11 @@ export default function MaintenanceJobDetailPage() {
                     <TabsTrigger value="overview" className="data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
                         <Wrench className="w-4 h-4 mr-2" /> Overview
                     </TabsTrigger>
+                    {job.attributes.status === 'approved' && (
+                        <TabsTrigger value="assignment" className="data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
+                            <Plus className="w-4 h-4 mr-2" /> Assign Workshop
+                        </TabsTrigger>
+                    )}
                     <TabsTrigger value="costs" className="data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900">
                         <DollarSign className="w-4 h-4 mr-2" /> Costs
                     </TabsTrigger>
@@ -158,9 +170,15 @@ export default function MaintenanceJobDetailPage() {
                                         <p className="text-sm text-slate-900 capitalize">{job.attributes.fault_category?.replace(/_/g, ' ') ?? 'N/A'}</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-sm font-medium text-slate-500">Scheduled Date</p>
+                                        <p className="text-sm font-medium text-slate-500">Reference</p>
+                                        <p className="text-sm text-slate-900 font-mono">
+                                            {job.attributes.reference_number || job.attributes.reference}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-medium text-slate-500">Vendor</p>
                                         <p className="text-sm text-slate-900">
-                                            {job.attributes.scheduled_date ? format(new Date(job.attributes.scheduled_date), 'PPP') : 'N/A'}
+                                            {job.relationships?.vendor?.name || 'Unassigned'}
                                         </p>
                                     </div>
                                     <div className="space-y-1">
@@ -169,18 +187,14 @@ export default function MaintenanceJobDetailPage() {
                                             {job.attributes.started_at ? format(new Date(job.attributes.started_at as string), 'PPP') : 'N/A'}
                                         </p>
                                     </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium text-slate-500">Completed</p>
-                                        <p className="text-sm text-slate-900">
-                                            {job.attributes.completed_at || job.attributes.completed_date
-                                                ? format(new Date((job.attributes.completed_at || job.attributes.completed_date) as string), 'PPP')
-                                                : 'N/A'}
-                                        </p>
-                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
                     </div>
+                </TabsContent>
+
+                <TabsContent value="assignment">
+                    <WorkshopAssignmentSection jobId={jobId} />
                 </TabsContent>
 
                 <TabsContent value="costs">
@@ -275,5 +289,65 @@ export default function MaintenanceJobDetailPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    )
+}
+
+function WorkshopAssignmentSection({ jobId }: { jobId: string | number }) {
+    const queryClient = useQueryClient()
+    const { data: vendorsData, isLoading } = useQuery({
+        queryKey: ['vendors-list'],
+        queryFn: () => getVendors(),
+    })
+
+    const { mutate: assign, isPending } = useMutation({
+        mutationFn: (vendorId: string | number) => assignMaintenanceJob(jobId, { vendor_id: vendorId }),
+        onSuccess: () => {
+            toast.success('Workshop assigned successfully')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-job', jobId.toString()] })
+        },
+        onError: () => toast.error('Failed to assign workshop'),
+    })
+
+    if (isLoading) return <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-300" /></div>
+
+    const vendors = vendorsData?.data || []
+
+    return (
+        <Card className="border-slate-200">
+            <CardHeader className="bg-slate-50/50 border-b">
+                <CardTitle className="text-sm">Registered Workshops</CardTitle>
+                <CardDescription>Select a workshop to handle this repair.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {vendors.map((vendor: any) => (
+                        <div key={vendor.id} className="p-4 rounded-2xl border border-slate-100 bg-white hover:border-[#0055FF] hover:shadow-lg transition-all group relative">
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center group-hover:bg-[#0055FF]/10 transition-colors">
+                                    <Wrench className="h-5 w-5 text-slate-400 group-hover:text-[#0055FF]" />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                    <span className="text-[10px] font-bold text-slate-600">4.8</span>
+                                </div>
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#0055FF] transition-colors">{vendor.name}</h4>
+                            <div className="flex items-center gap-1 text-slate-400 mt-1 mb-4">
+                                <MapPin className="h-3 w-3" />
+                                <span className="text-[10px] truncate">{vendor.address || 'Remote Workshop'}</span>
+                            </div>
+                            <Button 
+                                className="w-full bg-slate-900 group-hover:bg-[#0055FF] rounded-xl text-[10px] font-black uppercase tracking-widest h-10"
+                                onClick={() => assign(vendor.id)}
+                                disabled={isPending}
+                            >
+                                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Assign Job'}
+                            </Button>
+                        </div>
+                    ))}
+                    {!vendors.length && <p className="text-slate-400 text-sm py-8 text-center col-span-full">No active workshops found.</p>}
+                </div>
+            </CardContent>
+        </Card>
     )
 }

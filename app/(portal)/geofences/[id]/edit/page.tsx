@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Loader2, Save } from 'lucide-react'
+import { ChevronLeft, Loader2, Save, Navigation } from 'lucide-react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 interface GeofenceMapProps {
     onChange: (data: { type: 'polygon' | 'circle'; coordinates: any; radius?: number }) => void
     initialGeofence?: import('@/types').Geofence
+    vehicles?: import('@/types').Vehicle[]
 }
 
 const GeofenceMap = dynamic<GeofenceMapProps>(
@@ -28,6 +29,9 @@ const GeofenceMap = dynamic<GeofenceMapProps>(
         loading: () => <div className="h-[500px] w-full bg-slate-100 animate-pulse rounded-md" />,
     }
 )
+
+import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
+import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
 
 export default function EditGeofencePage() {
     const params = useParams()
@@ -39,7 +43,8 @@ export default function EditGeofencePage() {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        alert_type: 'both' as 'enter' | 'exit' | 'both',
+        trigger_type: 'both' as 'enter' | 'exit' | 'both',
+        location_name: '',
         speed: 0,
         is_active: true,
         vehicle_ids: [] as string[],
@@ -67,7 +72,8 @@ export default function EditGeofencePage() {
         setFormData({
             name: g.attributes.name,
             description: g.attributes.description ?? '',
-            alert_type: g.attributes.alert_type,
+            trigger_type: g.attributes.trigger_type,
+            location_name: g.attributes.location || '',
             speed: g.attributes.speed ?? 0,
             is_active: g.attributes.is_active,
             vehicle_ids: [],
@@ -88,17 +94,29 @@ export default function EditGeofencePage() {
             const payload: any = {
                 name: formData.name,
                 description: formData.description,
-                alert_type: formData.alert_type,
+                trigger_type: formData.trigger_type,
+                location: formData.location_name,
                 speed: formData.speed,
                 is_active: formData.is_active,
             }
+
+            // If user redrew the boundary, use new data.
+            // Otherwise, keep existing data from geofenceData.
             if (mapData) {
                 payload.type = mapData.type
                 payload.coordinates = mapData.coordinates
                 if (mapData.type === 'circle' && mapData.radius != null) {
                     payload.radius = mapData.radius
                 }
+            } else if (geofenceData?.data) {
+                const attrs = geofenceData.data.attributes
+                payload.type = attrs.type
+                payload.coordinates = attrs.coordinates
+                if (attrs.type === 'circle') {
+                    payload.radius = attrs.radius
+                }
             }
+
             await updateGeofence(id, payload)
             await bulkAssignVehicles(id, formData.vehicle_ids, false)
         },
@@ -186,6 +204,15 @@ export default function EditGeofencePage() {
                                         />
                                     </div>
                                     <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-700 italic">Location Label</label>
+                                        <LocationAutocomplete 
+                                            value={formData.location_name}
+                                            onSelect={(loc) => setFormData({ ...formData, location_name: loc.name })}
+                                            placeholder="Search location address..."
+                                            icon={<Navigation className="h-4 w-4 text-blue-600" />}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Description</label>
                                         <Textarea
                                             placeholder="Optional description"
@@ -198,8 +225,8 @@ export default function EditGeofencePage() {
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Alert Rule</label>
                                         <Select
-                                            value={formData.alert_type}
-                                            onValueChange={(val: any) => setFormData({ ...formData, alert_type: val })}
+                                            value={formData.trigger_type}
+                                            onValueChange={(val: any) => setFormData({ ...formData, trigger_type: val })}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue />
@@ -244,30 +271,13 @@ export default function EditGeofencePage() {
                                     <CardTitle className="text-base">Associated Vehicles</CardTitle>
                                     <CardDescription>Limit this geofence to specific vehicles.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="p-6 max-h-[300px] overflow-y-auto">
-                                    {isLoadingVehicles ? (
-                                        <p className="text-sm text-slate-500">Loading vehicles...</p>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {vehiclesData?.data.map(v => (
-                                                <label
-                                                    key={v.id}
-                                                    className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-100"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
-                                                        checked={formData.vehicle_ids.includes(v.id.toString())}
-                                                        onChange={() => toggleVehicle(v.id.toString())}
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium text-slate-900">{v.attributes.registration_number}</span>
-                                                        <span className="text-xs text-slate-500">{v.attributes.make} {v.attributes.model}</span>
-                                                    </div>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
+                                <CardContent className="p-6">
+                                    <MultiVehicleSelector 
+                                        vehicles={vehiclesData?.data || []}
+                                        selectedIds={formData.vehicle_ids}
+                                        onChange={(ids) => setFormData({ ...formData, vehicle_ids: ids })}
+                                        placeholder="Search and select vehicles..."
+                                    />
                                 </CardContent>
                             </Card>
                         </div>
@@ -296,6 +306,7 @@ export default function EditGeofencePage() {
                                     <GeofenceMap
                                         onChange={setMapData}
                                         initialGeofence={geofenceData.data}
+                                        vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
                                     />
                                 </CardContent>
                             </Card>
