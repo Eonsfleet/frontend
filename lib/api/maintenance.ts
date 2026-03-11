@@ -483,6 +483,10 @@ export const postJobMessage = async (
     return response.data
 }
 
+export const deleteMaintenanceJob = async (id: string | number): Promise<void> => {
+    await apiClient.delete(`/maintenance/jobs/${id}`)
+}
+
 // ── 1E. Maintenance Analytics ─────────────────────────────────────────────────
 
 export const getMaintenanceScheduleCompliance = async (): Promise<any> => {

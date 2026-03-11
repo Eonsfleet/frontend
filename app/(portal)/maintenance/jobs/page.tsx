@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob } from '@/lib/api/maintenance'
+import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob, transitionMaintenanceJob, deleteMaintenanceJob } from '@/lib/api/maintenance'
 import { getVehicles } from '@/lib/api/vehicles'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,12 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
     Popover,
     PopoverContent,
@@ -47,7 +53,8 @@ import {
     Settings,
     Wrench,
     CheckCircle2,
-    Clock
+    Clock,
+    Trash2
 } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
 import { cn } from '@/lib/utils'
@@ -115,6 +122,39 @@ export default function MaintenanceJobBoardPage() {
         return acc
     }, [jobs])
 
+    const { mutate: transitionMutation } = useMutation({
+        mutationFn: ({ id, status }: { id: string; status: string }) => 
+            transitionMaintenanceJob(id, { to_status: status }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
+            toast.success('Job status updated.')
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update job status.'),
+    })
+
+    const [deleteTarget, setDeleteTarget] = useState<any>(null)
+    const { mutate: deleteJob, isPending: isDeleting } = useMutation({
+        mutationFn: (id: string) => deleteMaintenanceJob(id),
+        onSuccess: () => {
+            toast.success('Job removed.')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
+            setDeleteTarget(null)
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to delete job.'),
+    })
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+    }
+
+    const handleDrop = (e: React.DragEvent, status: string) => {
+        e.preventDefault()
+        const id = e.dataTransfer.getData('jobId')
+        if (id) {
+            transitionMutation({ id, status })
+        }
+    }
+
     return (
         <div className="p-8 space-y-8 bg-[#F8FAFC] min-h-screen">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -168,7 +208,12 @@ export default function MaintenanceJobBoardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-start">
                 {COLUMNS.map((col) => (
-                    <div key={col.id} className="space-y-6">
+                    <div 
+                        key={col.id} 
+                        className="space-y-6"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, col.id)}
+                    >
                         <div className="flex items-center justify-between px-2">
                             <div className="flex items-center gap-3">
                                 <div className={cn("p-2 rounded-xl shadow-sm", col.bg)}>
@@ -195,9 +240,11 @@ export default function MaintenanceJobBoardPage() {
                                 ))
                             ) : jobsByStatus[col.id]?.length ? (
                                 jobsByStatus[col.id].map((job) => (
-                                    <Link key={job.id} href={`/maintenance/jobs/${job.id}`} className="block">
-                                        <JobCard job={job} />
-                                    </Link>
+                                    <JobCard 
+                                        key={job.id} 
+                                        job={job} 
+                                        onDelete={() => setDeleteTarget(job)}
+                                    />
                                 ))
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-20 px-6 text-center opacity-30">
@@ -213,6 +260,39 @@ export default function MaintenanceJobBoardPage() {
             </div>
 
             <CreateJobModal open={createOpen} onOpenChange={setCreateOpen} />
+
+            <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+                <DialogContent className="sm:max-w-[400px] rounded-[32px] p-0 overflow-hidden border-none shadow-3xl">
+                    <div className="p-8 space-y-6 bg-white">
+                        <div className="text-center space-y-4">
+                            <div className="h-14 w-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto">
+                                <Trash2 className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-xl font-black uppercase tracking-tight italic">Discard Request?</h3>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                This will permanently remove the maintenance request for 
+                                <span className="text-slate-900 ml-1 italic">{deleteTarget?.relationships?.vehicle?.registration_number}</span>.
+                            </p>
+                        </div>
+                        <div className="flex gap-4">
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => setDeleteTarget(null)}
+                                className="flex-1 font-black uppercase text-[10px] tracking-[0.2em] text-slate-400 h-14 rounded-[18px]"
+                            >
+                                Keep it
+                            </Button>
+                            <Button 
+                                onClick={() => deleteJob(deleteTarget.id)}
+                                disabled={isDeleting}
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-14 rounded-[18px] font-black uppercase text-[10px] tracking-[0.2em]"
+                            >
+                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Discard'}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -402,19 +482,47 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
     )
 }
 
-function JobCard({ job }: { job: any }) {
+function JobCard({ job, onDelete }: { job: any; onDelete: () => void }) {
     const attrs = job.attributes
     const vehicle = job.relationships?.vehicle
     const technician = job.relationships?.technician
 
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('jobId', job.id.toString())
+    }
+
     return (
-        <Card className="border-none shadow-sm hover:shadow-2xl transition-all duration-500 group cursor-pointer overflow-hidden bg-white rounded-[24px] relative">
-            <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="h-6 w-6 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
-                    <MoreHorizontal className="h-3 w-3 text-slate-400" />
-                </div>
+        <Card 
+            draggable
+            onDragStart={handleDragStart}
+            className="border-none shadow-sm hover:shadow-2xl transition-all duration-500 group cursor-grab active:cursor-grabbing overflow-hidden bg-white rounded-[24px] relative"
+        >
+            <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-white/80 backdrop-blur shadow-sm border border-slate-100 flex items-center justify-center hover:bg-white transition-all">
+                            <MoreHorizontal className="h-3 w-3 text-slate-400" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 rounded-2xl border-slate-100 shadow-xl p-2">
+                        <DropdownMenuItem asChild>
+                            <Link href={`/maintenance/jobs/${job.id}`} className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-slate-50 transition-colors">
+                                <Search className="h-3.5 w-3.5 text-slate-400" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Inspect</span>
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                            onClick={onDelete}
+                            className="rounded-xl flex items-center gap-3 px-3 py-2 cursor-pointer focus:bg-rose-50 transition-colors group/del"
+                        >
+                            <Trash2 className="h-3.5 w-3.5 text-slate-400 group-hover/del:text-rose-500" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 group-hover/del:text-rose-600">Discard</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
-            <CardContent className="p-6">
+            <Link href={`/maintenance/jobs/${job.id}`} className="block">
+                <CardContent className="p-6">
                 <div className="space-y-5">
                     <div className="flex items-center justify-between">
                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-[0.2em] border-slate-100 text-slate-400 rounded-full px-3 py-1 bg-slate-50/50">
@@ -460,6 +568,7 @@ function JobCard({ job }: { job: any }) {
                     </div>
                 )}
             </CardContent>
+            </Link>
         </Card>
     )
 }
