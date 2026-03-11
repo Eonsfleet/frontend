@@ -138,6 +138,38 @@ export const getFuelExecutiveKpis = async (): Promise<any> => {
     return res.data
 }
 
+// ── 3E. Maintenance Analytics ────────────────────────────────────────────────
+
+export const getMaintenanceScheduleCompliance = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/schedule-compliance')
+    return res.data
+}
+
+export const getMaintenanceCostReport = async (params?: { filter?: string }): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/cost-report', { params })
+    return res.data
+}
+
+export const getMaintenanceWorkflowReport = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/workflow-report')
+    return res.data
+}
+
+export const getMaintenanceDocumentCompliance = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/document-compliance')
+    return res.data
+}
+
+export const getMaintenanceWorkshopSummary = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/workshop-summary')
+    return res.data
+}
+
+export const getMaintenancePredictiveInsights = async (): Promise<any> => {
+    const res = await apiClient.get('/analytics/maintenance/predictive-insights')
+    return res.data
+}
+
 // ── 3F. Incident Analytics ────────────────────────────────────────────────────
 
 export const getIncidentSummary = async (): Promise<any> => {
