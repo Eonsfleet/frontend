@@ -49,8 +49,8 @@ export default function LiveTrackingPage() {
 
     // 1. Fetch initial vehicle locations
     const { data: routeData } = useQuery({
-        queryKey: ['vehicle-locations', { per_page: 100 }],
-        queryFn: () => api.getVehiclesLocations({ per_page: 100 }),
+        queryKey: ['vehicle-locations', { per_page: 1000 }],
+        queryFn: () => api.getVehiclesLocations({ per_page: 1000 }),
         enabled: !!token,
     })
 

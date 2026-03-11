@@ -1,6 +1,7 @@
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
 import apiClient from '@/lib/api/client'
+import Cookies from 'js-cookie'
 
 declare global {
     interface Window {
@@ -21,6 +22,7 @@ export const getEcho = () => {
     if (typeof window === 'undefined') return null
 
     if (!echoInstance) {
+        const token = Cookies.get('ef-token')
         echoInstance = new Echo({
             broadcaster: 'reverb',
             key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY || 'your_pusher_key',
@@ -29,6 +31,14 @@ export const getEcho = () => {
             wssPort: parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '443'),
             forceTLS: process.env.NEXT_PUBLIC_PUSHER_SCHEME === 'https',
             enabledTransports: ['ws', 'wss'],
+            authEndpoint: `${endpoint}/broadcasting/auth`,
+            auth: {
+                headers: {
+                    'X-Request-Type': 'client',
+                    'X-Tenant': 'dkt',
+                    'Authorization': `Bearer ${token}`,
+                },
+            },
             
             // authorizer: (channel: any, _options: any) => ({
             //     authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {

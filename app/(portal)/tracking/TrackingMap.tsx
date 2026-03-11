@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Polygon, Circle, Tooltip as LeafletTooltip } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -11,8 +11,11 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
 // Normalization & Helpers (Passed from parent or redefined if pure)
-const normalizeReg = (reg: string) => reg.toUpperCase()
-const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+const normalizeReg = (reg: string) => (reg || '').toUpperCase()
+const capitalize = (str: string) => {
+    if (!str) return 'N/A'
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+}
 
 interface TrackingMapProps {
     filteredVehicles: any[]
@@ -26,10 +29,15 @@ interface TrackingMapProps {
     playbackData?: any[]
     playbackIndex?: number
     isReplayMode?: boolean
+    statusFilter?: string
+    zoomResetKey?: number
+    showGeofences?: boolean
+    geofences?: any[]
 }
 
 const MapController = ({ selected, locs, allVehicles }: any) => {
     const map = useMap()
+    const hasFitted = React.useRef(false)
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -37,29 +45,47 @@ const MapController = ({ selected, locs, allVehicles }: any) => {
         }
     }, [map])
 
-    useEffect(() => {
-        if (allVehicles.length > 0) {
-            const points = Object.values(locs)
-                .map((l: any) => [l.lat, l.lng] as [number, number])
-                .filter(p => !isNaN(p[0]) && !isNaN(p[1]))
+    // Initial Fit Bounds & Manual Reset
+    const fitFleet = React.useCallback(() => {
+        const points = Object.values(locs)
+            .map((l: any) => [l.lat, l.lng] as [number, number])
+            .filter(p => p[0] !== 0 && p[1] !== 0 && !isNaN(p[0]) && !isNaN(p[1]))
 
-            if (points.length > 0) {
-                map.fitBounds(points, { padding: [100, 100], maxZoom: 12 })
-            }
+        if (points.length > 0) {
+            map.fitBounds(points, { padding: [100, 100], maxZoom: 14 })
+            hasFitted.current = true
         }
-    }, [allVehicles.length === 0])
+    }, [locs, map])
 
+    useEffect(() => {
+        if (!hasFitted.current && allVehicles.length > 0) {
+            fitFleet()
+        }
+    }, [allVehicles.length, fitFleet])
+
+    useEffect(() => {
+        if (allVehicles.zoomResetKey > 0) {
+            fitFleet()
+        }
+    }, [allVehicles.zoomResetKey, fitFleet])
+
+    // Selection Follow
     useEffect(() => {
         if (selected && locs[selected.id] && !allVehicles.isReplayMode) {
             const l = locs[selected.id]
-            map.flyTo([l.lat, l.lng], 16)
+            if (l.lat && l.lng) {
+                map.flyTo([l.lat, l.lng], 16)
+            }
         }
-    }, [selected?.id, locs, map])
+    }, [selected?.id, map]) // Optimized dependencies
 
+    // Replay Follow
     useEffect(() => {
         if (allVehicles.isReplayMode && allVehicles.playbackData?.[allVehicles.playbackIndex]) {
             const p = allVehicles.playbackData[allVehicles.playbackIndex]
-            map.flyTo([p.lat, p.lng], 16)
+            if (p.lat && p.lng) {
+                map.flyTo([p.lat, p.lng], 16)
+            }
         }
     }, [allVehicles.playbackIndex, allVehicles.isReplayMode, map])
 
@@ -77,8 +103,20 @@ export default function TrackingMap({
     getVehicleIcon,
     playbackData = [],
     playbackIndex = 0,
-    isReplayMode = false
+    isReplayMode = false,
+    statusFilter = 'all',
+    zoomResetKey = 0,
+    showGeofences = false,
+    geofences = []
 }: TrackingMapProps) {
+    const createClusterCustomIcon = (cluster: any) => {
+        return L.divIcon({
+            html: `<div><span>${cluster.getChildCount()}</span></div>`,
+            className: cn('custom-marker-cluster', `cluster-${statusFilter}`),
+            iconSize: L.point(40, 40, true),
+        })
+    }
+
     const currentPlayback = playbackData[playbackIndex]
     return (
         <>
@@ -97,7 +135,8 @@ export default function TrackingMap({
                         length: vehicles.length,
                         isReplayMode,
                         playbackData,
-                        playbackIndex
+                        playbackIndex,
+                        zoomResetKey
                     }}
                 />
 
@@ -135,7 +174,53 @@ export default function TrackingMap({
                     </>
                 )}
 
-                <MarkerClusterGroup chunkedLoading>
+                {showGeofences && geofences.map((g: any) => {
+                    if (!g.attributes?.coordinates) return null
+                    const { type, coordinates, radius, name } = g.attributes
+
+                    if (type === 'circle') {
+                        // Assuming coordinates is [lat, lng] or {lat, lng}
+                        const center = Array.isArray(coordinates) ? [coordinates[0], coordinates[1]] : [coordinates.lat, coordinates.lng]
+                        return (
+                            <Circle
+                                key={g.id}
+                                center={center as [number, number]}
+                                radius={radius || 500}
+                                pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.2 }}
+                            >
+                                <LeafletTooltip sticky className="bg-slate-900 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md">
+                                    {name}
+                                </LeafletTooltip>
+                            </Circle>
+                        )
+                    }
+
+                    if (type === 'polygon') {
+                        // Normalize GeoJSON [lng, lat] to Leaflet [lat, lng]
+                        const positions = coordinates.map((coord: any) => {
+                            if (Array.isArray(coord)) {
+                                // GeoJSON standard is [lng, lat]
+                                return [coord[1], coord[0]]
+                            }
+                            return [coord.lat, coord.lng]
+                        })
+                        return (
+                            <Polygon
+                                key={g.id}
+                                positions={positions}
+                                pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2 }}
+                            >
+                                <LeafletTooltip sticky className="bg-slate-900 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md">
+                                    {name}
+                                </LeafletTooltip>
+                            </Polygon>
+                        )
+                    }
+
+                    return null
+                })}
+
+                <MarkerClusterGroup chunkedLoading iconCreateFunction={createClusterCustomIcon}>
                     {filteredVehicles.filter(v => {
                         const loc = locations[v.id]
                         return loc && loc.lat != null && loc.lng != null && !isNaN(loc.lat) && !isNaN(loc.lng)
@@ -166,7 +251,10 @@ export default function TrackingMap({
                                     iconAnchor: [20, 20]
                                 })}
                                 eventHandlers={{
-                                    click: () => setSelectedVehicle(v)
+                                    click: () => {
+                                        const isAlreadySelected = selectedVehicle?.id === v.id
+                                        setSelectedVehicle(isAlreadySelected ? null : v)
+                                    }
                                 }}
                             >
                                 <Popup className="custom-popup" closeButton={false}>
@@ -174,9 +262,12 @@ export default function TrackingMap({
                                         <div className="flex items-center justify-between mb-3">
                                             <Badge className={cn(
                                                 "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
-                                                isActive ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+                                                loc.status === 'in_transit' ? "bg-emerald-600 text-white" :
+                                                loc.status === 'idle' ? "bg-amber-600 text-white" :
+                                                loc.status === 'parked' ? "bg-slate-500 text-white" :
+                                                loc.status === 'offline' ? "bg-rose-600 text-white" : "bg-blue-600 text-white"
                                             )}>
-                                                {isActive ? 'Moving' : loc.status === 'stopped' ? 'Stopped' : 'Idle'}
+                                                {capitalize(loc.status || 'online')}
                                             </Badge>
                                             <div className="flex items-center gap-1.5">
                                                 <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />
@@ -188,8 +279,8 @@ export default function TrackingMap({
                                                 {getVehicleIcon(v.attributes.body_type, loc.status)}
                                             </div>
                                             <div>
-                                                <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make)}</p>
-                                                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{capitalize(v.attributes.model)}</p>
+                                                <p className="text-xs font-black text-slate-900 leading-none">{capitalize(v.attributes.make || 'Vehicle')}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{capitalize(v.attributes.model || 'Unknown')}</p>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
@@ -240,13 +331,18 @@ export default function TrackingMap({
                 }
 
                 .marker-container.is-active .marker-base {
+                    background: #059669;
+                    border-color: #10b981;
+                }
+
+                .marker-container.is-online .marker-base {
                     background: #2563eb;
                     border-color: #60a5fa;
                 }
 
                 .marker-container.is-offline .marker-base {
-                    opacity: 0.6;
-                    filter: grayscale(1);
+                    background: #e11d48;
+                    border-color: #fb7185;
                 }
 
                 .marker-pulse {
@@ -285,6 +381,37 @@ export default function TrackingMap({
 
                 .custom-popup .leaflet-popup-tip-container {
                     display: none;
+                }
+
+                .custom-marker-cluster {
+                    background: none;
+                    border: none;
+                }
+
+                .custom-marker-cluster div {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: 900;
+                    color: white;
+                    border: 3px solid white;
+                    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+                    transition: all 0.3s ease;
+                }
+
+                .cluster-all div { background: #0f172a; }
+                .cluster-in_transit div { background: #059669; }
+                .cluster-idle div { background: #d97706; }
+                .cluster-parked div { background: #64748b; }
+                .cluster-offline div { background: #e11d48; }
+                .cluster-online div { background: #2563eb; }
+
+                .custom-marker-cluster:hover div {
+                    transform: scale(1.1);
                 }
             `}</style>
         </>

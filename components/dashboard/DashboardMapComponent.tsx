@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
@@ -22,6 +22,19 @@ interface VehicleLocation {
     lat: number
     lng: number
     status: 'moving' | 'idle' | 'stopped'
+}
+
+const MapController = ({ locations }: { locations: VehicleLocation[] }) => {
+    const map = useMap()
+
+    useEffect(() => {
+        if (locations.length > 0) {
+            const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng] as [number, number]))
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 })
+        }
+    }, [locations, map])
+
+    return null
 }
 
 export default function DashboardMapComponent({ locations }: { locations: VehicleLocation[] }) {
@@ -46,11 +59,12 @@ export default function DashboardMapComponent({ locations }: { locations: Vehicl
     return (
         <div className="w-full h-full relative z-0">
             <MapContainer
-                center={center}
-                zoom={4}
+                center={[0, 0]}
+                zoom={2}
                 scrollWheelZoom={false}
-                className="w-full h-full rounded-md"
+                className="w-full h-full"
             >
+                <MapController locations={locations} />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

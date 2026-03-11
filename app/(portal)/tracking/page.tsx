@@ -24,7 +24,8 @@ import {
     SlidersHorizontal,
     Check
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Vehicle } from '@/types'
+import { cn, normalizeTelemetry } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { useAuthStore } from '@/store/authStore'
@@ -35,6 +36,7 @@ import * as api from '@/lib/api/vehicles'
 import * as tripApi from '@/lib/api/trips'
 import * as trackingApi from '@/lib/api/tracking'
 import { getClusters } from '@/lib/api/settings'
+import { getGeofences } from '@/lib/api/geofencing'
 import TrackingMap from './TrackingMap'
 import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
 import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
@@ -61,7 +63,7 @@ export default function TrackingPage() {
     const router = useRouter()
     const queryClient = useQueryClient()
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | 'moving' | 'idle' | 'offline' | 'online'>('all')
+    const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'idle' | 'parked' | 'offline' | 'online'>('all')
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
     const [isTelemetryOpen, setIsTelemetryOpen] = useState(false)
     const [isReplayOpen, setIsReplayOpen] = useState(false)
@@ -70,6 +72,10 @@ export default function TrackingPage() {
     const [mapStyle, setMapStyle] = useState<'standard' | 'satellite' | 'hybrid'>('standard')
     const [clusterModalOpen, setClusterModalOpen] = useState(false)
     const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([])
+    const [showGeofences, setShowGeofences] = useState(false)
+    const [zoomResetKey, setZoomResetKey] = useState(0)
+
+    const resetZoom = () => setZoomResetKey(prev => prev + 1)
 
     // Playback state
     const [playbackData, setPlaybackData] = useState<any[]>([])
@@ -94,8 +100,8 @@ export default function TrackingPage() {
     // Auto-collapse nav menu logic moved to main effect for cleanup
 
     const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-tracking', { per_page: 100 }],
-        queryFn: () => api.getVehicles({ per_page: 100 }),
+        queryKey: ['vehicles-tracking'],
+        queryFn: () => api.getVehiclesBatched(),
         enabled: !!token,
         refetchInterval: 60_000,
     })
@@ -103,7 +109,7 @@ export default function TrackingPage() {
     // Seed all vehicle locations on load — /vehicles/locations returns full telemetry for every vehicle
     const { data: vehicleLocationsData } = useQuery({
         queryKey: ['vehicles-locations-seed'],
-        queryFn: () => api.getVehiclesLocations({ per_page: 200 }),
+        queryFn: () => api.getVehiclesLocationsBatched(),
         enabled: !!token,
         refetchInterval: 30_000,
         staleTime: 0,
@@ -128,54 +134,56 @@ export default function TrackingPage() {
         enabled: !!token && viewMode === 'focused',
     })
 
-    const vehicles = useMemo(() => vehicleData?.data || [], [vehicleData])
+    const { data: geofencesData } = useQuery({
+        queryKey: ['geofences-tracking'],
+        queryFn: () => getGeofences({ per_page: 100 }),
+        enabled: !!token && showGeofences,
+    })
+
+    const vehicles = useMemo(() => (vehicleData as any) || [], [vehicleData])
     const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData])
     const clusters = useMemo(() => (clustersData as any)?.data?.clusters || [], [clustersData])
+    const geofences = useMemo(() => (geofencesData as any)?.data?.geofences || [], [geofencesData])
 
     const selectedVehicle = useMemo(() =>
-        vehicles.find(v => String(v.id) === String(selectedVehicleId)) || null
+        vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)) || null
         , [vehicles, selectedVehicleId])
 
     const filteredVehicles = useMemo(() => {
         let result = vehicles
         // Cluster filter
         if (selectedClusterIds.length > 0) {
-            result = result.filter(v => {
+            result = result.filter((v: Vehicle) => {
                 const clusterId = String(v.relationships?.cluster?.data?.id || '')
                 return selectedClusterIds.includes(clusterId)
             })
         }
         if (searchQuery) {
-            result = result.filter(v =>
+            result = result.filter((v: Vehicle) =>
                 v.attributes.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
             )
         }
         if (statusFilter !== 'all') {
-            if (statusFilter === 'online') {
-                result = result.filter(v => locations[v.id]?.is_online)
-            } else if (statusFilter === 'moving') {
-                result = result.filter(v => locations[v.id]?.status === 'in_transit' || (locations[v.id]?.speed || 0) > 0)
-            } else if (statusFilter === 'idle') {
-                result = result.filter(v => ['stopped', 'idle', 'active'].includes(locations[v.id]?.status || ''))
-            } else if (statusFilter === 'offline') {
-                result = result.filter(v => !locations[v.id]?.is_online)
-            }
+            result = result.filter((v: Vehicle) => {
+                const loc = locations[v.id]
+                return loc?.status === statusFilter
+            })
         }
-        if (selectedVehicleId && !result.find(v => String(v.id) === String(selectedVehicleId))) {
-            const sv = vehicles.find(v => String(v.id) === String(selectedVehicleId))
+        if (selectedVehicleId && !result.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))) {
+            const sv = vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))
             if (sv) result = [...result, sv]
         }
         return result
     }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId, selectedClusterIds])
 
     const ongoingTripsData = useMemo(() => {
-        return ongoingTrips.map(trip => {
+        return ongoingTrips.map((trip: any) => {
             // API Structure confirmed via raw dump: trip.relationships.vehicle.id (direct)
             const relVehicle = trip.relationships?.vehicle as any
             const bestVehicleId = relVehicle?.id || (trip.attributes as any)?.vehicleId || (trip.attributes as any)?.vehicle_id
 
             // Link to fleet vehicle if possible for live telemetry synchronization
-            const fleetVehicle = bestVehicleId ? vehicles.find(v => String(v.id) === String(bestVehicleId)) : null
+            const fleetVehicle = bestVehicleId ? vehicles.find((v: Vehicle) => String(v.id) === String(bestVehicleId)) : null
 
             return {
                 ...trip,
@@ -232,31 +240,32 @@ export default function TrackingPage() {
 
     // Seed locations from /vehicles/locations (full telemetry, always populated)
     useEffect(() => {
-        const list = vehicleLocationsData?.data
+        const list = vehicleLocationsData as any
         if (!list?.length) return
         setLocations(prev => {
             const next = { ...prev }
             list.forEach((vl: any) => {
-                const loc = vl.location
-                if (!loc?.latitude) return
-                // Only update if no live WS data already present for this vehicle
-                // (WS data takes precedence — don't overwrite newer updates)
+                const telemetry = vl.attributes?.telemetry || vl.location || vl.attributes?.current_location
+                if (!telemetry) return
+
+                const loc = normalizeTelemetry(telemetry, {
+                    deviceStatus: vl.attributes?.device_status || vl.device?.status
+                })
+                if (!loc?.lat) return
+
+                // Priority Check: Only update if no live WS data already present for this vehicle
+                // or if the seeded data is reasonably fresh and WS hasn't received anything yet.
                 next[vl.id] = {
+                    ...loc,
                     ...next[vl.id],
-                    lat: loc.latitude,
-                    lng: loc.longitude,
+                    lat: next[vl.id]?.lat ?? loc.lat,
+                    lng: next[vl.id]?.lng ?? loc.lng,
                     speed: next[vl.id]?.speed ?? loc.speed ?? 0,
                     heading: next[vl.id]?.heading ?? loc.heading ?? 0,
                     status: next[vl.id]?.status ?? loc.status ?? 'active',
-                    is_online: vl.attributes?.is_online ?? (vl.device?.status === 'online'),
-                    fuel: next[vl.id]?.fuel ?? loc.fuel_level_percent,
-                    fuel_liters: next[vl.id]?.fuel_liters ?? loc.fuel_level_liters,
-                    odometer: next[vl.id]?.odometer ?? loc.odometer,
+                    is_online: next[vl.id]?.is_online ?? loc.is_online ?? vl.attributes?.is_online ?? (vl.device?.status === 'online'),
                     lastUpdate: next[vl.id]?.lastUpdate ?? loc.gps_datetime,
-                    satellites: next[vl.id]?.satellites ?? loc.satellites,
-                    address: next[vl.id]?.address ?? loc.address,
-                    ignition: next[vl.id]?.ignition ?? (loc.ignition === 'on'),
-                    metadata: next[vl.id]?.metadata ?? loc.metadata,
+                    ignition: next[vl.id]?.ignition ?? (loc.ignition === 'on' || loc.ignition === '1'),
                 }
             })
             return next
@@ -269,7 +278,7 @@ export default function TrackingPage() {
             setLocations(prev => {
                 const next = { ...prev }
                 let changed = false
-                vehicles.forEach(v => {
+                vehicles.forEach((v: Vehicle) => {
                     const tel = v.relationships?.current_location as any
                     const attrs = v.attributes as any
 
@@ -335,34 +344,16 @@ export default function TrackingPage() {
         // 1. Subscribe to Org-wide location updates
         const locationUnsubscribe = subscribePrivate(`location.organization.${organization.id}`, '.current.recent', (packet: any) => {
             if (packet.vehicle_id) {
+                const normalized = normalizeTelemetry(packet)
                 setLocations(prev => ({
                     ...prev,
                     [packet.vehicle_id]: {
+                        ...normalized,
                         ...prev[packet.vehicle_id],
-                        lat: packet.latitude,
-                        lng: packet.longitude,
-                        speed: packet.speed,
-                        heading: packet.heading,
-                        status: packet.status,
+                        lat: normalized.lat,
+                        lng: normalized.lng,
                         is_online: true,
-                        fuel: packet.fuel_level_percent,
-                        fuel_liters: packet.fuel_level_liters,
-                        odometer: packet.odometer,
-                        lastUpdate: packet.gps_datetime,
-                        satellites: packet.satellites,
-                        address: packet.address,
-                        ignition: packet.ignition === 'on',
-                        metadata: packet.metadata,
-                        temp: packet.metadata?.engine_temperature,
-                        voltage: packet.metadata?.battery_voltage,
-                        rpm: packet.metadata?.engine_rpm,
-                        ext_voltage: packet.metadata?.external_voltage,
-                        fuel_rate: packet.metadata?.fuel_rate_gps,
-                        eco_score: packet.metadata?.eco_score,
-                        idling: packet.metadata?.idling,
-                        jamming: packet.metadata?.jamming,
-                        immobilizer: packet.metadata?.immobilizer,
-                        driving_state: packet.metadata?.driving_state,
+                        ignition: normalized.ignition === 'on' || normalized.ignition === '1',
                     }
                 }))
             }
@@ -418,6 +409,10 @@ export default function TrackingPage() {
                         TILE_URL={MAP_LAYERS[mapStyle]}
                         getMarkerSVG={getMarkerSVG}
                         getVehicleIcon={getVehicleIcon}
+                        statusFilter={statusFilter}
+                        zoomResetKey={zoomResetKey}
+                        showGeofences={showGeofences}
+                        geofences={geofences}
                     />
                 </div>
 
@@ -457,18 +452,13 @@ export default function TrackingPage() {
                                 <>
                                     {/* Status Quick Filters */}
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                                        {(['all', 'moving', 'idle', 'offline', 'online'] as const).map((s) => {
+                                        {(['all', 'in_transit', 'idle', 'parked', 'online', 'offline'] as const).map((s) => {
                                             const count = s === 'all'
                                                 ? vehicles.length
-                                                : s === 'online'
-                                                    ? vehicles.filter(v => locations[v.id]?.is_online || (v as any).is_online).length
-                                                    : s === 'moving'
-                                                        ? vehicles.filter(v => locations[v.id]?.status === 'in_transit' || (v as any).location?.status === 'in_transit').length
-                                                        : s === 'idle'
-                                                            ? vehicles.filter(v => locations[v.id]?.status === 'stopped' || (v as any).location?.status === 'stopped').length
-                                                            : s === 'offline'
-                                                                ? vehicles.filter(v => (v as any).location?.status === 'offline').length
-                                                                : 0;
+                                                : vehicles.filter((v: Vehicle) => {
+                                                    const loc = locations[v.id]
+                                                    return loc?.status === s
+                                                }).length;
 
                                             return (
                                                 <button
@@ -477,11 +467,12 @@ export default function TrackingPage() {
                                                     className={cn(
                                                         "px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
                                                         statusFilter === s
-                                                            ? (s === 'moving' ? "bg-emerald-600 border-emerald-600 text-white" :
+                                                            ? (s === 'in_transit' ? "bg-emerald-600 border-emerald-600 text-white" :
                                                                 s === 'idle' ? "bg-amber-600 border-amber-600 text-white" :
-                                                                    s === 'offline' ? "bg-rose-600 border-rose-600 text-white" :
-                                                                        s === 'online' ? "bg-blue-600 border-blue-600 text-white" :
-                                                                            "bg-slate-900 border-slate-900 text-white")
+                                                                    s === 'parked' ? "bg-slate-500 border-slate-500 text-white" :
+                                                                        s === 'offline' ? "bg-rose-600 border-rose-600 text-white" :
+                                                                            s === 'online' ? "bg-blue-600 border-blue-600 text-white" :
+                                                                                "bg-slate-900 border-slate-900 text-white")
                                                             : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
                                                     )}
                                                 >
@@ -497,7 +488,7 @@ export default function TrackingPage() {
                                                 <Loader2 className="h-8 w-8 animate-spin" />
                                                 <span className="text-[10px] font-black uppercase tracking-widest">Hydrating Fleet...</span>
                                             </div>
-                                        ) : filteredVehicles.map((v) => {
+                                        ) : filteredVehicles.map((v: Vehicle) => {
                                             const loc = locations[v.id]
                                             const isSelected = String(selectedVehicleId) === String(v.id)
                                             const lastUpdate = loc?.lastUpdate || (v as any).location?.gps_datetime || 'N/A'
@@ -534,8 +525,12 @@ export default function TrackingPage() {
                                                         <div className="flex items-center gap-2">
                                                             {isSelected ? <Eye className="h-3 w-3 text-white" /> : <EyeOff className="h-3 w-3 text-slate-300" />}
                                                             <div className={cn(
-                                                                "h-1.5 w-1.5 rounded-full",
-                                                                status === 'in_transit' || status === 'moving' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300"
+                                                                "h-1.5 w-1.5 rounded-full shadow-[0_0_8px]",
+                                                                status === 'in_transit' ? "bg-emerald-500 shadow-emerald-500/50" :
+                                                                status === 'idle' ? "bg-amber-500 shadow-amber-500/50" :
+                                                                status === 'parked' ? "bg-slate-400 shadow-slate-400/50" :
+                                                                status === 'offline' ? "bg-rose-500 shadow-rose-500/50" :
+                                                                "bg-blue-500 shadow-blue-500/50"
                                                             )} />
                                                         </div>
                                                     </div>
@@ -745,6 +740,25 @@ export default function TrackingPage() {
                                     Filter by Cluster
                                 </TooltipContent>
                             </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setShowGeofences(!showGeofences)}
+                                        className={cn(
+                                            "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
+                                            showGeofences
+                                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
+                                                : "text-slate-400 hover:bg-slate-50 hover:text-emerald-600"
+                                        )}
+                                    >
+                                        <ShieldCheck className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest">
+                                    Toggle Geofences
+                                </TooltipContent>
+                            </Tooltip>
                         </div>
 
                         <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-1 overflow-hidden items-center">
@@ -835,7 +849,10 @@ export default function TrackingPage() {
                                 <div className="h-8 w-[1px] bg-slate-100 mx-1" />
 
                                 <button
-                                    onClick={() => setSelectedVehicleId(null)}
+                                    onClick={() => {
+                                        setSelectedVehicleId(null)
+                                        resetZoom()
+                                    }}
                                     className="h-10 w-10 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors"
                                 >
                                     <X className="h-5 w-5" />
@@ -849,7 +866,10 @@ export default function TrackingPage() {
             {/* Sub-Components / Drawers */}
             <TelemetryDrawer
                 isOpen={isTelemetryOpen}
-                onClose={() => setIsTelemetryOpen(false)}
+                onClose={() => {
+                    setIsTelemetryOpen(false)
+                    resetZoom()
+                }}
                 vehicleId={selectedVehicleId}
                 vehicle={selectedVehicle ? (() => {
                     const loc = locations[selectedVehicle.id]
