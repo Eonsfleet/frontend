@@ -232,11 +232,10 @@ export default function DashboardPage() {
 
     // const vehicleStats = totalVehicleData?.data || []
     const totalVehicles = totalVehicleData?.total || metrics.total_active_assets
-    const activeTripsCount = activeTripsData?.count || metrics.moving_assets
+    const activeTripsCount = activeTripsData?.count || metrics.moving_assets || 0
     const avgEfficiency = efficiencyData?.efficiency || "0%"
     const recentIncidentsCount = incidentsData?.count || "0"
 
-    console.log(activeTripsData?.count, "activeTripsData?.count")
     const dynamicDeviceStatusData = useMemo(() => {
         if (!deviceStatusSummary) return deviceStatusData
         return [

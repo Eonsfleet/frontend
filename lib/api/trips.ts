@@ -77,3 +77,18 @@ export const getLastTripForVehicle = async (vehicleId: string | number): Promise
     })
     return response.data.data.trips[0] || null
 }
+
+export const getMyTrips = async (params?: TripListParams): Promise<TripListResponse> => {
+    const response = await apiClient.get<TripListResponse>('/trips/mine', { params })
+    return response.data
+}
+
+export const getTripEvents = async (tripId: string | number): Promise<{ data: any[] }> => {
+    const response = await apiClient.get(`/trips/${tripId}/events`)
+    return response.data
+}
+
+export const getTripCheckpoints = async (tripId: string | number): Promise<{ data: any[] }> => {
+    const response = await apiClient.get(`/trips/${tripId}/checkpoints`)
+    return response.data
+}

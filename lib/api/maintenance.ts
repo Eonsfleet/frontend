@@ -124,7 +124,7 @@ export const updateWorkflowSettings = async (
     type: string = 'maintenance',
     data: Partial<WorkflowSettings>
 ): Promise<WorkflowSettingsResponse> => {
-    const response = await apiClient.post<WorkflowSettingsResponse>(`/workflow-settings/${type}`, data)
+    const response = await apiClient.put<WorkflowSettingsResponse>(`/workflow-settings/${type}`, data)
     return response.data
 }
 

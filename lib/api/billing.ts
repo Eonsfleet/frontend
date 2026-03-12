@@ -175,3 +175,8 @@ export const getSubscriptionHistory = async (params?: { page?: number }): Promis
     const response = await apiClient.get<{ data: { subscriptions: any[]; paginate: any } }>('/subscriptions/organization/', { params })
     return response.data
 }
+
+export const getSubscriptionAddons = async (): Promise<{ data: any[] }> => {
+    const response = await apiClient.get<{ data: any[] }>('/subscriptions/addons')
+    return response.data
+}

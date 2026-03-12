@@ -107,22 +107,27 @@ export default function LiveTrackingPage() {
             const live = telemetryMap[v.id]
             const base = v.location ?? null // Initial telemetry from the locations API (may be null for untracked vehicles)
 
+            const tel = live ?? base
+            const normalized = normalizeTelemetry(tel, {
+                deviceStatus: v.attributes?.deviceStatus || v.attributes?.device_status || v.device?.status
+            })
+
             return {
                 id: v.id,
                 registration_number: v.attributes.registration_number,
                 display_number: v.attributes.display_number,
                 device_id: v.attributes.device_id,
-                latitude: live?.latitude ?? base?.latitude ?? 0,
-                longitude: live?.longitude ?? base?.longitude ?? 0,
-                speed: live?.speed ?? base?.speed ?? 0,
-                heading: live?.heading ?? base?.heading ?? 0,
-                status: live?.status ?? base?.status ?? 'offline',
-                fuel: live?.fuel_level_percent ?? base?.fuel_level_percent ?? 0,
-                odometer: live?.odometer ?? base?.odometer ?? 0,
-                ignition: (live?.ignition === 'on') || (base?.ignition === 'on'),
-                address: live?.address ?? base?.address ?? 'Locating...',
-                last_update: live?.gps_datetime ?? base?.gps_datetime ?? null,
-                
+                latitude: normalized?.lat ?? 0,
+                longitude: normalized?.lng ?? 0,
+                speed: normalized?.speed ?? 0,
+                heading: normalized?.heading ?? 0,
+                status: normalized?.status ?? 'offline',
+                is_online: normalized?.is_online ?? false,
+                fuel: normalized?.fuel_level_percent ?? 0,
+                odometer: normalized?.odometer ?? 0,
+                ignition: normalized?.ignition === true,
+                address: normalized?.address ?? 'Locating...',
+                last_update: normalized?.gps_datetime ?? null,
             }
         })
     }, [initialVehicles, telemetryMap])
@@ -162,9 +167,9 @@ export default function LiveTrackingPage() {
                     {[
                         { label: 'ALL', count: trackedVehicles.length, color: 'bg-slate-500' },
                         { label: 'MOV', count: trackedVehicles.filter(v => v.status === 'in_transit').length, color: 'bg-emerald-500' },
-                        { label: 'STP', count: trackedVehicles.filter(v => v.status === 'stopped').length, color: 'bg-amber-500' },
-                        { label: 'OFF', count: trackedVehicles.filter(v => v.status === 'offline').length, color: 'bg-rose-500' },
-                        { label: 'ONL', count: trackedVehicles.filter(v => v.status !== 'offline').length, color: 'bg-blue-500' },
+                        { label: 'STP', count: trackedVehicles.filter(v => v.status === 'parked' || v.status === 'idle').length, color: 'bg-amber-500' },
+                        { label: 'OFF', count: trackedVehicles.filter(v => !v.is_online).length, color: 'bg-rose-500' },
+                        { label: 'ONL', count: trackedVehicles.filter(v => v.is_online).length, color: 'bg-blue-500' },
                     ].map(stat => (
                         <div key={stat.label} className="text-center p-1 rounded-lg bg-slate-50 border border-slate-100">
                             <p className="text-[7px] font-black text-slate-400 leading-none mb-1">{stat.label}</p>

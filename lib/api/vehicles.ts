@@ -154,7 +154,7 @@ export const getVehiclesBatched = async (params: ListVehiclesParams = {}): Promi
     do {
         const response = await getVehicles({ ...params, page: currentPage, per_page: 100 })
         allVehicles = [...allVehicles, ...response.data]
-        lastPage = response.pagination.lastPage
+        lastPage = (response.pagination as any).last_page ?? response.pagination.lastPage ?? 1
         currentPage++
     } while (currentPage <= lastPage)
 
@@ -169,7 +169,7 @@ export const getVehiclesLocationsBatched = async (params: { page?: number; per_p
     do {
         const response = await getVehiclesLocations({ ...params, page: currentPage, per_page: 100 })
         allLocations = [...allLocations, ...response.data]
-        lastPage = response.pagination.lastPage
+        lastPage = (response.pagination as any).last_page ?? response.pagination.lastPage ?? 1
         currentPage++
     } while (currentPage <= lastPage)
 

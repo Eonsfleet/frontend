@@ -31,26 +31,26 @@ export const getEcho = () => {
             wssPort: parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '443'),
             forceTLS: process.env.NEXT_PUBLIC_PUSHER_SCHEME === 'https',
             enabledTransports: ['ws', 'wss'],
-            authEndpoint: `${endpoint}/broadcasting/auth`,
-            auth: {
-                headers: {
-                    'X-Request-Type': 'client',
-                    'X-Tenant': 'dkt',
-                    'Authorization': `Bearer ${token}`,
-                },
-            },
-            
-            // authorizer: (channel: any, _options: any) => ({
-            //     authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {
-            //         apiClient
-            //             .post(`${endpoint}/broadcasting/auth`, {
-            //                 socket_id: socketId,
-            //                 channel_name: channel.name,
-            //             })
-            //             .then((response: any) => callback(null, response.data))
-            //             .catch((error: any) => callback(new Error(error.message), null))
+            // authEndpoint: `${endpoint}/broadcasting/auth`,
+            // auth: {
+            //     headers: {
+            //         'X-Request-Type': 'client',
+            //         'X-Tenant': 'dkt',
+            //         'Authorization': `Bearer ${token}`,
             //     },
-            // }),
+            // },
+
+            authorizer: (channel: any, _options: any) => ({
+                authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {
+                    apiClient
+                        .post(`${endpoint}/broadcasting/auth`, {
+                            socket_id: socketId,
+                            channel_name: channel.name,
+                        })
+                        .then((response: any) => callback(null, response.data))
+                        .catch((error: any) => callback(new Error(error.message), null))
+                },
+            }),
         })
     }
 

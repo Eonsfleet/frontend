@@ -26,8 +26,9 @@ export const getInbox = async (params?: { page?: number; unread_only?: boolean }
     return response.data
 }
 
-export const markAsRead = async (id: string): Promise<{ message: string }> => {
-    const response = await apiClient.patch<{ message: string }>(`/notifications/user/inbox/${id}/read`)
+export const markAsRead = async (ids: string | string[]): Promise<{ message: string; data: { marked_count: number } }> => {
+    const idArray = Array.isArray(ids) ? ids : [ids]
+    const response = await apiClient.patch<{ message: string; data: { marked_count: number } }>('/notifications/user/inbox/read', { ids: idArray })
     return response.data
 }
 

@@ -249,7 +249,7 @@ export default function TrackingPage() {
                 if (!telemetry) return
 
                 const loc = normalizeTelemetry(telemetry, {
-                    deviceStatus: vl.attributes?.device_status || vl.device?.status
+                    deviceStatus: vl.attributes?.deviceStatus || vl.attributes?.device_status || vl.device?.status
                 })
                 if (!loc?.lat) return
 
@@ -263,7 +263,7 @@ export default function TrackingPage() {
                     speed: next[vl.id]?.speed ?? loc.speed ?? 0,
                     heading: next[vl.id]?.heading ?? loc.heading ?? 0,
                     status: next[vl.id]?.status ?? loc.status ?? 'active',
-                    is_online: next[vl.id]?.is_online ?? loc.is_online ?? vl.attributes?.is_online ?? (vl.device?.status === 'online'),
+                    is_online: next[vl.id]?.is_online ?? loc.is_online ?? vl.attributes?.is_online ?? (vl.attributes?.deviceStatus === 'online'),
                     lastUpdate: next[vl.id]?.lastUpdate ?? loc.gps_datetime,
                     ignition: next[vl.id]?.ignition ?? (loc.ignition === 'on' || loc.ignition === '1'),
                 }
@@ -457,6 +457,8 @@ export default function TrackingPage() {
                                                 ? vehicles.length
                                                 : vehicles.filter((v: Vehicle) => {
                                                     const loc = locations[v.id]
+                                                    if (s === 'online') return loc?.is_online
+                                                    if (s === 'offline') return loc && !loc.is_online
                                                     return loc?.status === s
                                                 }).length;
 
@@ -529,7 +531,7 @@ export default function TrackingPage() {
                                                                 status === 'in_transit' ? "bg-emerald-500 shadow-emerald-500/50" :
                                                                 status === 'idle' ? "bg-amber-500 shadow-amber-500/50" :
                                                                 status === 'parked' ? "bg-slate-400 shadow-slate-400/50" :
-                                                                status === 'offline' ? "bg-rose-500 shadow-rose-500/50" :
+                                                                (status === 'offline' || (loc && !loc.is_online)) ? "bg-rose-500 shadow-rose-500/50" :
                                                                 "bg-blue-500 shadow-blue-500/50"
                                                             )} />
                                                         </div>

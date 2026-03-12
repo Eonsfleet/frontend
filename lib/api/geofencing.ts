@@ -72,3 +72,8 @@ export const getGeofenceAnalytics = async (geofenceId: string | number, params?:
     const res = await apiClient.get(`/geofences/${geofenceId}/analytics`, { params })
     return res.data
 }
+
+export const getGeofenceAlerts = async (geofenceId: string | number, params?: { page?: number; per_page?: number }) => {
+    const res = await apiClient.get(`/geofences/${geofenceId}/alerts`, { params })
+    return res.data
+}

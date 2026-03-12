@@ -235,7 +235,7 @@ export const detectAnomalies = async (params: {
     vehicle_ids?: number[]
     period?: string
 }): Promise<any> => {
-    const res = await apiClient.post('/analytics/insights/detect-anomalies', params, { params })
+    const res = await apiClient.post('/analytics/insights/detect-anomalies', params)
     return res.data
 }
 
