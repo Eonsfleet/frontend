@@ -13,6 +13,16 @@ import { getVehicleCurrentFuel } from '@/lib/api/fuel'
 import { reverseGeocode } from '@/lib/gps'
 import { useVehicleTelemetry } from '@/hooks/useVehicleTelemetry'
 
+// Server timestamps may omit Z suffix — always parse as UTC
+const parseTS = (ts: string | null | undefined): Date | null => {
+    if (!ts) return null
+    return new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z')
+}
+const fmtTime = (ts: string | null | undefined) => {
+    const d = parseTS(ts)
+    return d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null
+}
+
 interface TelemetryDrawerProps {
     isOpen: boolean
     onClose: () => void
@@ -280,7 +290,7 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
                         {liveLastUpdate && (
                             <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                 <Clock className="h-2.5 w-2.5" />
-                                {new Date(liveLastUpdate).toLocaleTimeString()}
+                                {fmtTime(liveLastUpdate)}
                             </p>
                         )}
                         {liveHdop != null && (
@@ -414,7 +424,7 @@ export function TelemetryDrawer({ isOpen, onClose, vehicleId, vehicle }: Telemet
                                     )}
                                     {fuelLastUpdate && (
                                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                                            {new Date(fuelLastUpdate).toLocaleTimeString()}
+                                            {fmtTime(fuelLastUpdate)}
                                         </span>
                                     )}
                                 </div>

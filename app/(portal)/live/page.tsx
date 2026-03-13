@@ -15,7 +15,7 @@ import {
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as api from '@/lib/api/vehicles'
-import { cn } from '@/lib/utils'
+import { cn, normalizeTelemetry } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/store/authStore'
 import dynamic from 'next/dynamic'
@@ -108,8 +108,9 @@ export default function LiveTrackingPage() {
             const base = v.location ?? null // Initial telemetry from the locations API (may be null for untracked vehicles)
 
             const tel = live ?? base
+            const attrs = v.attributes as any
             const normalized = normalizeTelemetry(tel, {
-                deviceStatus: v.attributes?.deviceStatus || v.attributes?.device_status || v.device?.status
+                deviceStatus: attrs?.deviceStatus || attrs?.device_status || (v as any).device?.status
             })
 
             return {

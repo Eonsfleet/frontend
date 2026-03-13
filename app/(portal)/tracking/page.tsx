@@ -85,8 +85,8 @@ export default function TrackingPage() {
     const [isLoadingPlayback, setIsLoadingPlayback] = useState(false)
     const [playbackType, setPlaybackType] = useState<'trip' | 'history'>('trip')
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: startOfDay(subDays(new Date(), 1)),
-        to: endOfDay(new Date())
+        from: subDays(new Date(), 1),   // exactly 24h ago — stays within API max window
+        to: new Date()
     })
 
     const MAP_LAYERS = {
@@ -215,22 +215,23 @@ export default function TrackingPage() {
                 const selectedTrip = ongoingTripsData.find(t => t.vehicleId === selectedVehicleId)
 
                 if (playbackType === 'trip' && selectedTrip) {
-                    console.log('--- FETCHING TRIP PLAYBACK ---', { vehicleId: selectedVehicleId, tripId: selectedTrip.id })
                     const res = await trackingApi.getTripPlayback(selectedVehicleId, selectedTrip.id)
-                    setPlaybackData(res.data?.gps_points || [])
+                    setPlaybackData(res.data?.gps_points || res.gps_points || [])
                 } else {
-                    // Fallback to tracking playback (defaults to selected range or last 24h)
-                    console.log('--- FETCHING TRACKING HISTORY ---', { vehicleId: selectedVehicleId, range: dateRange })
-                    const start = dateRange?.from?.toISOString() || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-                    const end = dateRange?.to?.toISOString() || new Date().toISOString()
-                    const res = await trackingApi.getVehiclePlayback(selectedVehicleId, start, end)
-                    const raw: any[] = res.data || []
+                    // GPS history playback — API enforces 24h max window
+                    const end = dateRange?.to ?? new Date()
+                    const maxStart = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+                    const from = dateRange?.from ?? maxStart
+                    // Clamp: if range exceeds 24h, pull start forward to stay within limit
+                    const start = from < maxStart ? maxStart : from
+                    const res = await trackingApi.getVehiclePlayback(selectedVehicleId, start.toISOString(), end.toISOString())
+                    const raw: any[] = res.data || res || []
                     setPlaybackData(raw.map((p: any) => ({
-                        lat: p.latitude,
-                        lng: p.longitude,
-                        speed: p.speed,
-                        heading: 0,
-                        timestamp: p.timestamp,
+                        lat: p.latitude ?? p.lat,
+                        lng: p.longitude ?? p.lng,
+                        speed: p.speed ?? 0,
+                        heading: p.heading ?? 0,
+                        timestamp: p.timestamp ?? p.gps_datetime,
                     })))
                 }
                 setPlaybackIndex(0)
@@ -525,7 +526,10 @@ export default function TrackingPage() {
                                             const isSelected = String(selectedVehicleId) === String(v.id)
                                             const status = loc?.status || (v as any).location?.status
                                             const rawUpdate = loc?.lastUpdate || (v as any).location?.gps_datetime
-                                            const lastUpdate = rawUpdate ? new Date(rawUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'
+                                            const lastUpdate = rawUpdate
+                                                ? new Date(rawUpdate.endsWith('Z') || rawUpdate.includes('+') ? rawUpdate : rawUpdate + 'Z')
+                                                    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                                : 'N/A'
                                             const fuel = loc?.fuel_level_percent ?? null
                                             const statusLabel =
                                                 !loc?.is_online           ? 'Offline' :
@@ -848,7 +852,12 @@ export default function TrackingPage() {
                                     <div className="flex items-center gap-1.5">
                                         <MapPin className="h-2.5 w-2.5 text-blue-500" />
                                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest truncate">
-                                            {locations[selectedVehicle.id]?.lastUpdate || 'SYNCED REAL-TIME'}
+                                            {(() => {
+                                                const ts = locations[selectedVehicle.id]?.lastUpdate
+                                                if (!ts) return 'SYNCED REAL-TIME'
+                                                const d = new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z')
+                                                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                            })()}
                                         </span>
                                     </div>
                                 </div>
