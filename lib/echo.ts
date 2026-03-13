@@ -13,9 +13,11 @@ declare global {
 
 if (typeof window !== 'undefined') {
     window.Pusher = Pusher
+    // Enable Pusher debug logging in development
+    if (process.env.NODE_ENV !== 'production') {
+        Pusher.logToConsole = true
+    }
 }
-
-const token = Cookies.get('ef-token') || useAuthStore.getState().token
 
 // Broadcasting auth must go to the Laravel API server (strip /v1 suffix)
 const getApiBase = () =>
@@ -27,30 +29,24 @@ export const getEcho = (): Echo<any> | null => {
     if (typeof window === 'undefined') return null
 
     if (!echoInstance) {
-        echoInstance = new Echo({
-            broadcaster: 'reverb',
-            key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY || 'your_pusher_key',
-            wsHost: process.env.NEXT_PUBLIC_PUSHER_HOST || 'reverb.eonsfleet.local',
+        const config = {
+            broadcaster: 'reverb' as const,
+            key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '',
+            wsHost: process.env.NEXT_PUBLIC_PUSHER_HOST || '',
             wsPort: parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '8080'),
             wssPort: parseInt(process.env.NEXT_PUBLIC_PUSHER_PORT || '443'),
             forceTLS: process.env.NEXT_PUBLIC_PUSHER_SCHEME === 'https',
-            enabledTransports: ['ws', 'wss'],
-            // authEndpoint: `${getApiBase()}/broadcasting/auth`,
-            // auth: {
-            //     headers: {
-            //         Authorization: `Bearer ${token}`,
-            //         'X-Request-Type': 'client',
-            //         'Content-Type': 'application/x-www-form-urlencoded',
-            //         'X-Tenant': 'dkt',
-            //     },
-            // },
+            enabledTransports: ['ws', 'wss'] as any,
+        }
 
+        echoInstance = new Echo({
+            ...config,
             authorizer: (channel: any, _options: any) => ({
                 authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {
-                    // Use plain axios (not apiClient) to avoid the 401 logout interceptor
+                    // Read token fresh at auth time — never at module load
                     const token = Cookies.get('ef-token') || useAuthStore.getState().token
                     const { organization } = useAuthStore.getState()
-                    // const subdomain = organization?.attributes?.subdomain || 'dkt'
+                    const subdomain = organization?.attributes?.subdomain || 'dkt'
 
                     axios
                         .post(
@@ -60,17 +56,31 @@ export const getEcho = (): Echo<any> | null => {
                                 headers: {
                                     Authorization: `Bearer ${token}`,
                                     'X-Request-Type': 'client',
-                                    // 'X-Tenant': subdomain,
+                                    'X-Tenant': subdomain,
                                     Accept: 'application/json',
                                     'Content-Type': 'application/json',
                                 },
                             }
                         )
                         .then((response: any) => callback(null, response.data))
-                        .catch((err: any) => callback(new Error(err.message), null))
+                        .catch((err: any) => {
+                            console.error(`[Echo] Auth failed: ${channel.name}`, err?.response?.status)
+                            callback(new Error(err.message), null)
+                        })
                 },
             }),
         })
+
+        // Bind connection lifecycle events
+        const pusher = (echoInstance as any).connector?.pusher
+        if (pusher) {
+            pusher.connection.bind('connecting', () => console.log('[Echo] 🔄 Connecting...'))
+            pusher.connection.bind('connected', () => console.log('[Echo] ✅ Connected! Socket ID:', pusher.connection.socket_id))
+            pusher.connection.bind('disconnected', () => console.warn('[Echo] ⚠️ Disconnected'))
+            pusher.connection.bind('failed', () => console.error('[Echo] ❌ Connection FAILED — check wsHost/wsPort/key'))
+            pusher.connection.bind('unavailable', () => console.error('[Echo] ❌ Connection UNAVAILABLE'))
+            pusher.connection.bind('error', (err: any) => console.error('[Echo] ❌ Connection error:', err))
+        }
     }
 
     return echoInstance

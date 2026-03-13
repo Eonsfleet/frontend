@@ -13,11 +13,11 @@ export function useVehicleTelemetry(
     const [telemetry, setTelemetry] = useState<any>(null)
     const [deviceStatus, setDeviceStatus] = useState<string | null>(null)
 
-    const orgId = organization?.id
+    const orgIdentifier = organization?.attributes?.identifier || organization?.id
 
     useEffect(() => {
         const echo = getEcho()
-        if (!echo || !vehicleId || !orgId) return
+        if (!echo || !vehicleId || !orgIdentifier) return
 
         // Layer 2a: Per-vehicle location stream
         const vehicleChannel = echo.private(`location.vehicle.${vehicleId}`)
@@ -38,7 +38,7 @@ export function useVehicleTelemetry(
         // Layer 2c: Device status (online/offline)
         let statusChannel: any = null
         if (deviceId) {
-            statusChannel = echo.private(`devicestatus.${orgId}.${deviceId}`)
+            statusChannel = echo.private(`devicestatus.${orgIdentifier}.${deviceId}`)
             statusChannel.listen('.device.status', (event: any) => {
                 setDeviceStatus(event.status)
             })
@@ -47,9 +47,9 @@ export function useVehicleTelemetry(
         return () => {
             echo.leave(`location.vehicle.${vehicleId}`)
             if (imei) echo.leave(`location.${imei}`)
-            if (deviceId) echo.leave(`devicestatus.${orgId}.${deviceId}`)
+            if (deviceId) echo.leave(`devicestatus.${orgIdentifier}.${deviceId}`)
         }
-    }, [vehicleId, orgId, deviceId, imei])
+    }, [vehicleId, orgIdentifier, deviceId, imei])
 
     return { telemetry, deviceStatus }
 }

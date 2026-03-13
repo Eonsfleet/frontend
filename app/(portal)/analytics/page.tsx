@@ -64,7 +64,7 @@ export default function AnalyticsOverviewPage() {
     // Fetch Fuel Consumption (OpEx)
     const { data: fuelConsData } = useQuery({
         queryKey: ['fuel-consumption'],
-        queryFn: () => analyticsApi.getFuelConsumptionReport({ period: 'monthly' })
+        queryFn: () => analyticsApi.getFuelConsumptionReport({ filter: '30d' })
     })
 
     // Fetch Fuel Efficiency (KPI)

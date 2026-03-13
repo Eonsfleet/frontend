@@ -34,12 +34,12 @@ export function useFleetTracking() {
     const [telemetryMap, setTelemetryMap] = useState<Record<string, VehicleTelemetry>>({})
     const [alerts, setAlerts] = useState<any[]>([])
 
-    const orgId = organization?.id
+    const orgIdentifier = organization?.attributes?.identifier || organization?.id
 
     useEffect(() => {
-        if (!echo || !orgId) return
+        if (!echo || !orgIdentifier) return
 
-        const channel = echo.private(`location.organization.${orgId}`)
+        const channel = echo.private(`location.organization.${orgIdentifier}`)
 
         channel.listen('.current.recent', (packet: any) => {
             setTelemetryMap(prev => ({
@@ -69,7 +69,7 @@ export function useFleetTracking() {
         })
 
         // Status changes
-        echo.private(`vehicle.status.${orgId}`)
+        echo.private(`vehicle.status.${orgIdentifier}`)
             .listen('.vehicle.status.changed', (event: any) => {
                 setTelemetryMap(prev => {
                     const existing = prev[event.vehicle_id]
@@ -85,10 +85,10 @@ export function useFleetTracking() {
             })
 
         return () => {
-            echo.leave(`location.organization.${orgId}`)
-            echo.leave(`vehicle.status.${orgId}`)
+            echo.leave(`location.organization.${orgIdentifier}`)
+            echo.leave(`vehicle.status.${orgIdentifier}`)
         }
-    }, [echo, orgId])
+    }, [echo, orgIdentifier])
 
     return { telemetryMap, alerts }
 }

@@ -344,10 +344,11 @@ export default function TrackingPage() {
     const { subscribePrivate } = useEcho()
 
     useEffect(() => {
-        if (!token || !organization?.id) return
+        const orgIdentifier = organization?.attributes?.identifier || organization?.id
+        if (!token || !orgIdentifier) return
 
         // 1. Subscribe to Org-wide location updates
-        const locationUnsubscribe = subscribePrivate(`location.organization.${organization.id}`, '.current.recent', (packet: any) => {
+        const locationUnsubscribe = subscribePrivate(`location.organization.${orgIdentifier}`, '.current.recent', (packet: any) => {
             if (packet.vehicle_id) {
                 const normalized = normalizeTelemetry(packet)
                 setLocations(prev => ({
@@ -365,7 +366,7 @@ export default function TrackingPage() {
         })
 
         // 2. Subscribe to Vehicle Status Changes
-        const statusUnsubscribe = subscribePrivate(`vehicle.status.${organization.id}`, '.vehicle.status.changed', (data: any) => {
+        const statusUnsubscribe = subscribePrivate(`vehicle.status.${orgIdentifier}`, '.vehicle.status.changed', (data: any) => {
             if (data.vehicle_id) {
                 setLocations(prev => ({
                     ...prev,
@@ -378,7 +379,7 @@ export default function TrackingPage() {
         })
 
         // 3. Subscribe to Fuel Alerts
-        const fuelUnsubscribe = subscribePrivate(`fuel.alerts.${organization.id}`, '.fuel.event', (alert: any) => {
+        const fuelUnsubscribe = subscribePrivate(`fuel.alerts.${orgIdentifier}`, '.fuel.event', (alert: any) => {
             // Optional: Show toast or update local state for fuel warnings
             console.log('Fuel Event:', alert)
         })
@@ -388,11 +389,11 @@ export default function TrackingPage() {
             if (statusUnsubscribe) statusUnsubscribe()
             if (fuelUnsubscribe) fuelUnsubscribe()
         }
-    }, [token, organization?.id, subscribePrivate, queryClient])
+    }, [token, organization?.attributes?.identifier, subscribePrivate, queryClient])
 
     // Reconnect: refetch vehicle locations when WS reconnects
     useEffect(() => {
-        if (!token || !organization?.id) return
+        if (!token || !organization?.attributes?.identifier) return
         const echo = getEcho()
         if (!echo?.connector?.pusher) return
 
@@ -404,7 +405,7 @@ export default function TrackingPage() {
         return () => {
             pusher.connection.unbind('connected', handleReconnect)
         }
-    }, [token, organization?.id, queryClient])
+    }, [token, organization?.attributes?.identifier, queryClient])
 
     // Auto-collapse sidebar on mount
     useEffect(() => {
@@ -522,8 +523,15 @@ export default function TrackingPage() {
                                         ) : filteredVehicles.map((v: Vehicle) => {
                                             const loc = locations[v.id]
                                             const isSelected = String(selectedVehicleId) === String(v.id)
-                                            const lastUpdate = loc?.lastUpdate || (v as any).location?.gps_datetime || 'N/A'
                                             const status = loc?.status || (v as any).location?.status
+                                            const rawUpdate = loc?.lastUpdate || (v as any).location?.gps_datetime
+                                            const lastUpdate = rawUpdate ? new Date(rawUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'
+                                            const fuel = loc?.fuel_level_percent ?? null
+                                            const statusLabel =
+                                                !loc?.is_online           ? 'Offline' :
+                                                status === 'in_transit'   ? 'Moving' :
+                                                (status === 'stopped' || status === 'parked') ? 'Stopped' :
+                                                status === 'idle'         ? 'Idling' : 'Online'
 
                                             return (
                                                 <div
@@ -554,23 +562,43 @@ export default function TrackingPage() {
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            {isSelected ? <Eye className="h-3 w-3 text-white" /> : <EyeOff className="h-3 w-3 text-slate-300" />}
+                                                            <span className={cn(
+                                                                "text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full",
+                                                                isSelected ? "bg-white/20 text-white" :
+                                                                !loc?.is_online         ? "bg-rose-100 text-rose-600" :
+                                                                status === 'in_transit' ? "bg-emerald-100 text-emerald-700" :
+                                                                (status === 'stopped' || status === 'parked') ? "bg-slate-100 text-slate-500" :
+                                                                status === 'idle'       ? "bg-amber-100 text-amber-700" :
+                                                                                          "bg-blue-100 text-blue-700"
+                                                            )}>
+                                                                {statusLabel}
+                                                            </span>
                                                             <div className={cn(
                                                                 "h-1.5 w-1.5 rounded-full shadow-[0_0_8px]",
-                                                                !loc?.is_online                                               ? "bg-rose-500 shadow-rose-500/50" :
-                                                                status === 'in_transit'                                       ? "bg-emerald-500 shadow-emerald-500/50" :
-                                                                (status === 'stopped' || status === 'parked')                 ? "bg-slate-400 shadow-slate-400/50" :
-                                                                                                                                "bg-blue-500 shadow-blue-500/50"
+                                                                !loc?.is_online                                    ? "bg-rose-500 shadow-rose-500/50" :
+                                                                status === 'in_transit'                            ? "bg-emerald-500 shadow-emerald-500/50" :
+                                                                (status === 'stopped' || status === 'parked')      ? "bg-slate-400 shadow-slate-400/50" :
+                                                                                                                    "bg-blue-500 shadow-blue-500/50"
                                                             )} />
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-between pt-2 border-t border-white/10">
                                                         <span className={cn("text-[7px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>
-                                                            Last Update: {lastUpdate}
+                                                            {lastUpdate}
                                                         </span>
-                                                        <span className={cn("text-[7px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>
-                                                            {loc?.speed || 0} KPH
-                                                        </span>
+                                                        <div className="flex items-center gap-3">
+                                                            {fuel != null && (
+                                                                <span className={cn(
+                                                                    "text-[7px] font-black uppercase tracking-widest",
+                                                                    isSelected ? "text-blue-200" : fuel < 20 ? "text-rose-500" : "text-slate-400"
+                                                                )}>
+                                                                    ⛽ {fuel}%
+                                                                </span>
+                                                            )}
+                                                            <span className={cn("text-[7px] font-black uppercase tracking-widest", isSelected ? "text-blue-200" : "text-slate-400")}>
+                                                                {loc?.speed ?? 0} KPH
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )
@@ -912,28 +940,29 @@ export default function TrackingPage() {
                         imei: (selectedVehicle.relationships?.device as any)?.data?.imei ?? null,
                         altitude: loc?.altitude ?? null,
                         movement: loc?.movement ?? null,
-                        speed: loc?.speed ?? rel?.speed ?? 0,
-                        fuel: loc?.fuel ?? rel?.fuel_level_percent ?? 0,
-                        fuel_liters: loc?.fuel_liters ?? rel?.fuel_level_liters,
-                        temp: loc?.temp ?? rel?.metadata?.engine_temperature ?? 0,
-                        status: loc?.status ?? rel?.status,
-                        voltage: loc?.voltage ?? rel?.metadata?.battery_voltage,
-                        ext_voltage: loc?.ext_voltage ?? rel?.metadata?.external_voltage,
-                        signal: loc?.satellites != null ? `${loc.satellites} Sats` : (rel?.satellites != null ? `${rel.satellites} Sats` : '---'),
-                        ignition: loc?.ignition ?? (rel?.ignition === 'on'),
-                        odometer: loc?.odometer ?? rel?.odometer,
-                        lat: loc?.lat ?? rel?.latitude,
-                        lng: loc?.lng ?? rel?.longitude,
-                        lastUpdate: loc?.lastUpdate ?? rel?.gps_datetime,
-                        address: loc?.address ?? rel?.address,
-                        heading: loc?.heading ?? rel?.heading ?? 0,
-                        rpm: loc?.rpm ?? rel?.metadata?.engine_rpm,
-                        fuel_rate: loc?.fuel_rate ?? rel?.metadata?.fuel_rate_gps,
-                        eco_score: loc?.eco_score ?? rel?.metadata?.eco_score,
-                        idling: loc?.idling ?? rel?.metadata?.idling ?? false,
-                        jamming: loc?.jamming ?? rel?.metadata?.jamming ?? false,
-                        immobilizer: loc?.immobilizer ?? rel?.metadata?.immobilizer ?? false,
-                        driving_state: loc?.driving_state ?? rel?.metadata?.driving_state,
+                        speed:         loc?.speed                ?? rel?.speed                          ?? 0,
+                        // normalizeTelemetry flattens metadata to top-level on loc
+                        fuel:          loc?.fuel_level_percent   ?? rel?.fuel_level_percent             ?? 0,
+                        fuel_liters:   loc?.fuel_level_liters    ?? rel?.fuel_level_liters,
+                        temp:          loc?.engine_temperature   ?? rel?.metadata?.engine_temperature   ?? 0,
+                        status:        loc?.status               ?? rel?.status,
+                        voltage:       loc?.battery_voltage      ?? rel?.metadata?.battery_voltage,
+                        ext_voltage:   loc?.external_voltage     ?? rel?.metadata?.external_voltage,
+                        signal:        loc?.satellites != null   ? `${loc.satellites} Sats` : rel?.satellites != null ? `${rel.satellites} Sats` : '---',
+                        ignition:      loc?.ignition             ?? (rel?.ignition === 'on'),
+                        odometer:      loc?.odometer             ?? rel?.odometer,
+                        lat:           loc?.lat                  ?? rel?.latitude,
+                        lng:           loc?.lng                  ?? rel?.longitude,
+                        lastUpdate:    loc?.lastUpdate           ?? rel?.gps_datetime,
+                        address:       loc?.address              ?? rel?.address,
+                        heading:       loc?.heading              ?? rel?.heading                        ?? 0,
+                        rpm:           loc?.engine_rpm           ?? rel?.metadata?.engine_rpm,
+                        fuel_rate:     loc?.fuel_rate_gps        ?? rel?.metadata?.fuel_rate_gps,
+                        eco_score:     loc?.eco_score            ?? rel?.metadata?.eco_score,
+                        idling:        loc?.idling               ?? rel?.metadata?.idling               ?? false,
+                        jamming:       loc?.jamming              ?? rel?.metadata?.jamming              ?? false,
+                        immobilizer:   loc?.immobilizer          ?? rel?.metadata?.immobilizer          ?? false,
+                        driving_state: loc?.driving_state        ?? rel?.metadata?.driving_state,
                     }
                 })() : null}
             />
