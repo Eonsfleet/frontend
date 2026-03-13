@@ -229,7 +229,7 @@ export default function IncidentsAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {resolutionData?.by_type?.map((t: any, i: number) => (
+                                {resolutionData?.by_type?.length > 0 ? resolutionData.by_type.map((t: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-8 py-5">
                                             <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{t.type.replace('_', ' ')}</span>
@@ -241,7 +241,19 @@ export default function IncidentsAnalyticsPage() {
                                             {t.avg_days} Days
                                         </td>
                                     </tr>
-                                ))}
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                    <Clock className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase">No Resolution Data</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No resolved incidents found</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -262,7 +274,7 @@ export default function IncidentsAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {vehicleIncidents?.vehicles?.map((v: any, i: number) => (
+                                {vehicleIncidents?.vehicles?.length > 0 ? vehicleIncidents.vehicles.map((v: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-8 py-5">
                                             <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration}</p>
@@ -280,7 +292,19 @@ export default function IncidentsAnalyticsPage() {
                                             </Badge>
                                         </td>
                                     </tr>
-                                ))}
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                    <ShieldAlert className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase">No High Risk Vehicles</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">All assets within acceptable range</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

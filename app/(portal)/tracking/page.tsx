@@ -32,6 +32,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEcho } from '@/hooks/useEcho'
+import { getEcho } from '@/lib/echo'
 import * as api from '@/lib/api/vehicles'
 import * as tripApi from '@/lib/api/trips'
 import * as trackingApi from '@/lib/api/tracking'
@@ -63,7 +64,7 @@ export default function TrackingPage() {
     const router = useRouter()
     const queryClient = useQueryClient()
     const [searchQuery, setSearchQuery] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'all' | 'in_transit' | 'idle' | 'parked' | 'offline' | 'online'>('all')
+    const [statusFilter, setStatusFilter] = useState<'all' | 'moving' | 'stopped' | 'online' | 'offline'>('all')
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
     const [isTelemetryOpen, setIsTelemetryOpen] = useState(false)
     const [isReplayOpen, setIsReplayOpen] = useState(false)
@@ -166,7 +167,11 @@ export default function TrackingPage() {
         if (statusFilter !== 'all') {
             result = result.filter((v: Vehicle) => {
                 const loc = locations[v.id]
-                return loc?.status === statusFilter
+                if (statusFilter === 'moving') return loc?.status === 'in_transit'
+                if (statusFilter === 'stopped') return loc?.status === 'stopped' || loc?.status === 'parked'
+                if (statusFilter === 'online') return loc?.is_online === true
+                if (statusFilter === 'offline') return !loc?.is_online
+                return false
             })
         }
         if (selectedVehicleId && !result.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))) {
@@ -348,11 +353,11 @@ export default function TrackingPage() {
                 setLocations(prev => ({
                     ...prev,
                     [packet.vehicle_id]: {
-                        ...normalized,
+                        // Old data as base, new WS data on top so fresh values always win
                         ...prev[packet.vehicle_id],
-                        lat: normalized.lat,
-                        lng: normalized.lng,
+                        ...normalized,
                         is_online: true,
+                        lastUpdate: packet.gps_datetime || packet.timestamp_utc,
                         ignition: normalized.ignition === 'on' || normalized.ignition === '1',
                     }
                 }))
@@ -373,9 +378,9 @@ export default function TrackingPage() {
         })
 
         // 3. Subscribe to Fuel Alerts
-        const fuelUnsubscribe = subscribePrivate(`fuel.alerts.${organization.id}`, '.fuel.alert.triggered', (alert: any) => {
+        const fuelUnsubscribe = subscribePrivate(`fuel.alerts.${organization.id}`, '.fuel.event', (alert: any) => {
             // Optional: Show toast or update local state for fuel warnings
-            console.log('Fuel Alert Triggered:', alert)
+            console.log('Fuel Event:', alert)
         })
 
         return () => {
@@ -384,6 +389,22 @@ export default function TrackingPage() {
             if (fuelUnsubscribe) fuelUnsubscribe()
         }
     }, [token, organization?.id, subscribePrivate, queryClient])
+
+    // Reconnect: refetch vehicle locations when WS reconnects
+    useEffect(() => {
+        if (!token || !organization?.id) return
+        const echo = getEcho()
+        if (!echo?.connector?.pusher) return
+
+        const pusher = echo.connector.pusher
+        const handleReconnect = () => {
+            queryClient.invalidateQueries({ queryKey: ['vehicles-locations-seed'] })
+        }
+        pusher.connection.bind('connected', handleReconnect)
+        return () => {
+            pusher.connection.unbind('connected', handleReconnect)
+        }
+    }, [token, organization?.id, queryClient])
 
     // Auto-collapse sidebar on mount
     useEffect(() => {
@@ -452,15 +473,30 @@ export default function TrackingPage() {
                                 <>
                                     {/* Status Quick Filters */}
                                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                                        {(['all', 'in_transit', 'idle', 'parked', 'online', 'offline'] as const).map((s) => {
+                                        {([
+                                            { key: 'all',     label: 'All' },
+                                            { key: 'moving',  label: 'Moving' },
+                                            { key: 'stopped', label: 'Stopped' },
+                                            { key: 'online',  label: 'Online' },
+                                            { key: 'offline', label: 'Offline' },
+                                        ] as const).map(({ key: s, label }) => {
                                             const count = s === 'all'
                                                 ? vehicles.length
                                                 : vehicles.filter((v: Vehicle) => {
                                                     const loc = locations[v.id]
-                                                    if (s === 'online') return loc?.is_online
-                                                    if (s === 'offline') return loc && !loc.is_online
-                                                    return loc?.status === s
-                                                }).length;
+                                                    if (s === 'moving')  return loc?.status === 'in_transit'
+                                                    if (s === 'stopped') return loc?.status === 'stopped' || loc?.status === 'parked'
+                                                    if (s === 'online')  return loc?.is_online === true
+                                                    if (s === 'offline') return !loc?.is_online
+                                                    return false
+                                                }).length
+
+                                            const activeColor =
+                                                s === 'moving'  ? "bg-emerald-600 border-emerald-600 text-white" :
+                                                s === 'stopped' ? "bg-slate-500 border-slate-500 text-white" :
+                                                s === 'online'  ? "bg-blue-600 border-blue-600 text-white" :
+                                                s === 'offline' ? "bg-rose-600 border-rose-600 text-white" :
+                                                                  "bg-slate-900 border-slate-900 text-white"
 
                                             return (
                                                 <button
@@ -468,17 +504,10 @@ export default function TrackingPage() {
                                                     onClick={() => setStatusFilter(s)}
                                                     className={cn(
                                                         "px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
-                                                        statusFilter === s
-                                                            ? (s === 'in_transit' ? "bg-emerald-600 border-emerald-600 text-white" :
-                                                                s === 'idle' ? "bg-amber-600 border-amber-600 text-white" :
-                                                                    s === 'parked' ? "bg-slate-500 border-slate-500 text-white" :
-                                                                        s === 'offline' ? "bg-rose-600 border-rose-600 text-white" :
-                                                                            s === 'online' ? "bg-blue-600 border-blue-600 text-white" :
-                                                                                "bg-slate-900 border-slate-900 text-white")
-                                                            : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                                                        statusFilter === s ? activeColor : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
                                                     )}
                                                 >
-                                                    {s} ({count})
+                                                    {label} ({count})
                                                 </button>
                                             )
                                         })}
@@ -528,11 +557,10 @@ export default function TrackingPage() {
                                                             {isSelected ? <Eye className="h-3 w-3 text-white" /> : <EyeOff className="h-3 w-3 text-slate-300" />}
                                                             <div className={cn(
                                                                 "h-1.5 w-1.5 rounded-full shadow-[0_0_8px]",
-                                                                status === 'in_transit' ? "bg-emerald-500 shadow-emerald-500/50" :
-                                                                status === 'idle' ? "bg-amber-500 shadow-amber-500/50" :
-                                                                status === 'parked' ? "bg-slate-400 shadow-slate-400/50" :
-                                                                (status === 'offline' || (loc && !loc.is_online)) ? "bg-rose-500 shadow-rose-500/50" :
-                                                                "bg-blue-500 shadow-blue-500/50"
+                                                                !loc?.is_online                                               ? "bg-rose-500 shadow-rose-500/50" :
+                                                                status === 'in_transit'                                       ? "bg-emerald-500 shadow-emerald-500/50" :
+                                                                (status === 'stopped' || status === 'parked')                 ? "bg-slate-400 shadow-slate-400/50" :
+                                                                                                                                "bg-blue-500 shadow-blue-500/50"
                                                             )} />
                                                         </div>
                                                     </div>
@@ -880,6 +908,10 @@ export default function TrackingPage() {
                         plate: selectedVehicle.attributes.registration_number,
                         make: selectedVehicle.attributes.make,
                         model: selectedVehicle.attributes.model,
+                        device_id: selectedVehicle.attributes.device_id ?? null,
+                        imei: (selectedVehicle.relationships?.device as any)?.data?.imei ?? null,
+                        altitude: loc?.altitude ?? null,
+                        movement: loc?.movement ?? null,
                         speed: loc?.speed ?? rel?.speed ?? 0,
                         fuel: loc?.fuel ?? rel?.fuel_level_percent ?? 0,
                         fuel_liters: loc?.fuel_liters ?? rel?.fuel_level_liters,

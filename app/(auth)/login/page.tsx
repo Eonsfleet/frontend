@@ -50,14 +50,8 @@ export default function LoginPage() {
                 payload.access_token,
                 payload.refresh_token,
                 payload.user,
-                organization
-            )
-
-            setAuth(
-                payload.access_token,
-                payload.refresh_token,
-                payload.user,
-                organization
+                organization,
+                payload.expires_at
             )
             router.push('/dashboard')
         },

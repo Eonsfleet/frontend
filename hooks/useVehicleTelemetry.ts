@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useEcho } from './useEcho'
+import { getEcho } from '@/lib/echo'
 import { useAuthStore } from '@/store/authStore'
 
-export function useVehicleTelemetry(vehicleId: string | null, deviceImei?: string | null) {
-    const { echo } = useEcho()
+export function useVehicleTelemetry(
+    vehicleId: string | null,
+    deviceId?: string | null,   // vehicle.attributes.device_id → devicestatus.{orgId}.{deviceId}
+    imei?: string | null        // vehicle.relationships.device.data.imei → location.{imei}
+) {
     const { organization } = useAuthStore()
     const [telemetry, setTelemetry] = useState<any>(null)
     const [deviceStatus, setDeviceStatus] = useState<string | null>(null)
@@ -13,28 +16,29 @@ export function useVehicleTelemetry(vehicleId: string | null, deviceImei?: strin
     const orgId = organization?.id
 
     useEffect(() => {
+        const echo = getEcho()
         if (!echo || !vehicleId || !orgId) return
 
-        // Per-vehicle location
+        // Layer 2a: Per-vehicle location stream
         const vehicleChannel = echo.private(`location.vehicle.${vehicleId}`)
         vehicleChannel.listen('.current.recent', (packet: any) => {
             setTelemetry(packet)
         })
 
-        // Fuel level
-        const fuelChannel = echo.private(`fuel.vehicle.${vehicleId}`)
-        fuelChannel.listen('.fuel.level', (event: any) => {
-            setTelemetry((prev: any) => prev ? {
-                ...prev,
-                fuel_level_percent: event.fuel_level_percent,
-                fuel_level_liters: event.fuel_level_liters
-            } : null)
-        })
+        // Layer 2b: Location by device IMEI (raw device stream)
+        let imeiChannel: any = null
+        if (imei) {
+            imeiChannel = echo.private(`location.${imei}`)
+            imeiChannel.listen('.current.recent', (packet: any) => {
+                // Only apply if no vehicle-level data has arrived yet
+                setTelemetry((prev: any) => prev ?? packet)
+            })
+        }
 
-        // Device status
+        // Layer 2c: Device status (online/offline)
         let statusChannel: any = null
-        if (deviceImei) {
-            statusChannel = echo.private(`devicestatus.${orgId}.${deviceImei}`)
+        if (deviceId) {
+            statusChannel = echo.private(`devicestatus.${orgId}.${deviceId}`)
             statusChannel.listen('.device.status', (event: any) => {
                 setDeviceStatus(event.status)
             })
@@ -42,12 +46,10 @@ export function useVehicleTelemetry(vehicleId: string | null, deviceImei?: strin
 
         return () => {
             echo.leave(`location.vehicle.${vehicleId}`)
-            echo.leave(`fuel.vehicle.${vehicleId}`)
-            if (deviceImei) {
-                echo.leave(`devicestatus.${orgId}.${deviceImei}`)
-            }
+            if (imei) echo.leave(`location.${imei}`)
+            if (deviceId) echo.leave(`devicestatus.${orgId}.${deviceId}`)
         }
-    }, [echo, vehicleId, orgId, deviceImei])
+    }, [vehicleId, orgId, deviceId, imei])
 
     return { telemetry, deviceStatus }
 }

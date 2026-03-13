@@ -206,32 +206,45 @@ export default function MaintenanceAnalyticsPage() {
                         </div>
                     </CardHeader>
                     <div className="p-8 pt-4 space-y-4">
-                        {complianceData?.schedules?.slice(0, 4).map((s: any, i: number) => (
-                            <div key={i} className={cn(
-                                "flex items-center justify-between p-4 rounded-2xl border",
-                                s.status === 'overdue' ? "bg-rose-50 border-rose-100" : "bg-amber-50 border-amber-100"
-                            )}>
-                                <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                        "h-10 w-10 rounded-xl flex items-center justify-center",
-                                        s.status === 'overdue' ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600"
+                        {complianceData?.schedules?.filter((s: any) => s.status === 'overdue' || s.status === 'upcoming').slice(0, 4).length > 0 ? (
+                            complianceData.schedules
+                                .filter((s: any) => s.status === 'overdue' || s.status === 'upcoming')
+                                .slice(0, 4)
+                                .map((s: any, i: number) => (
+                                    <div key={i} className={cn(
+                                        "flex items-center justify-between p-4 rounded-2xl border",
+                                        s.status === 'overdue' ? "bg-rose-50 border-rose-100" : "bg-amber-50 border-amber-100"
                                     )}>
-                                        <AlertCircle className="h-5 w-5" />
+                                        <div className="flex items-center gap-4">
+                                            <div className={cn(
+                                                "h-10 w-10 rounded-xl flex items-center justify-center",
+                                                s.status === 'overdue' ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600"
+                                            )}>
+                                                <AlertCircle className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{s.vehicle_registration}</p>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.service_type}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={cn(
+                                                "text-[10px] font-black uppercase tracking-widest",
+                                                s.status === 'overdue' ? "text-rose-600" : "text-amber-600"
+                                            )}>{s.status}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Due {s.due_date}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{s.vehicle_registration}</p>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.service_type}</p>
-                                    </div>
+                                ))
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+                                <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                                 </div>
-                                <div className="text-right">
-                                    <p className={cn(
-                                        "text-[10px] font-black uppercase tracking-widest",
-                                        s.status === 'overdue' ? "text-rose-600" : "text-amber-600"
-                                    )}>{s.status}</p>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Due {s.due_date}</p>
-                                </div>
+                                <p className="text-[11px] font-black text-slate-900 uppercase">All Schedules On Track</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No overdue or upcoming alerts</p>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </Card>
 
@@ -250,20 +263,32 @@ export default function MaintenanceAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {costData?.by_vehicle?.slice(0, 5).map((v: any, i: number) => (
+                                {costData?.by_vehicle?.length > 0 ? costData.by_vehicle.slice(0, 5).map((v: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-8 py-5">
                                             <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration}</p>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Vehicle ID: {v.vehicle_id}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ID: {v.vehicle_id}</p>
                                         </td>
                                         <td className="px-8 py-5 text-right font-black text-[11px] text-rose-600">
                                             ₦{(v.total_cost_kobo / 100).toLocaleString()}
                                         </td>
                                         <td className="px-8 py-5 text-right text-[10px] font-bold text-slate-500 uppercase">
-                                            {v.last_service || 'N/A'}
+                                            {v.last_service || '—'}
                                         </td>
                                     </tr>
-                                ))}
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                    <Wrench className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase">No Cost Data</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No maintenance costs recorded yet</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

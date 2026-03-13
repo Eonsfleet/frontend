@@ -8,7 +8,8 @@ export interface CustomReport {
     metrics?: string[]
     filters?: any
     format: 'pdf' | 'csv' | 'json'
-    frequency: 'once' | 'daily' | 'weekly' | 'monthly'
+    schedule?: 'once' | 'daily' | 'weekly' | 'monthly'
+    frequency?: 'once' | 'daily' | 'weekly' | 'monthly'
     day_of_week?: number
     day_of_month?: number
     recipients?: string[]
@@ -20,7 +21,7 @@ export interface CustomReport {
 
 export const createCustomReport = async (data: Partial<CustomReport>) => {
     const res = await apiClient.post('/reports/custom', data)
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const getCustomReports = async (params?: {
@@ -32,27 +33,27 @@ export const getCustomReports = async (params?: {
     order?: 'asc' | 'desc'
 }) => {
     const res = await apiClient.get('/reports/custom', { params })
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const getCustomReport = async (id: number | string) => {
     const res = await apiClient.get(`/reports/custom/${id}`)
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const updateCustomReport = async (id: number | string, data: Partial<CustomReport>) => {
-    const res = await apiClient.put(`/reports/custom/${id}`, data)
-    return res.data
+    const res = await apiClient.patch(`/reports/custom/${id}`, data)
+    return res.data?.data ?? res.data
 }
 
 export const deleteCustomReport = async (id: number | string) => {
     const res = await apiClient.delete(`/reports/custom/${id}`)
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const getRecommendedReports = async () => {
-    const res = await apiClient.get('/reports/recommended')
-    return res.data
+    const res = await apiClient.get('/reports/custom/recommended')
+    return res.data?.data ?? res.data
 }
 
 // ── Scheduled Reports ─────────────────────────────────────────────────────────
@@ -61,12 +62,12 @@ export interface ScheduledReport {
     id: number
     name: string
     report_type: string
-    format: 'pdf' | 'csv' | 'json'
-    frequency: 'once' | 'daily' | 'weekly' | 'monthly'
+    filter?: string
+    format: 'pdf' | 'csv'
+    frequency: 'daily' | 'weekly' | 'monthly'
     day_of_week?: number
     day_of_month?: number
     recipients?: string[]
-    filters?: any
     is_active: boolean
     last_delivered_at?: string
     created_at: string
@@ -79,47 +80,45 @@ export const getScheduledReports = async (params?: {
     is_active?: boolean
 }) => {
     const res = await apiClient.get('/analytics/reports/scheduled', { params })
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const createScheduledReport = async (data: {
     name: string
     report_type: string
-    format: 'pdf' | 'csv' | 'json'
-    frequency: 'once' | 'daily' | 'weekly' | 'monthly'
+    filter?: '7d' | '30d' | '90d' | '1y'
+    format: 'pdf' | 'csv'
+    frequency: 'daily' | 'weekly' | 'monthly'
     day_of_week?: number
     day_of_month?: number
-    recipients?: string[]
-    filters?: any
+    recipients: string[]
+    is_active?: boolean
 }) => {
     const res = await apiClient.post('/analytics/reports/scheduled', data)
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const getScheduledReport = async (id: number | string) => {
     const res = await apiClient.get(`/analytics/reports/scheduled/${id}`)
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const updateScheduledReport = async (id: number | string, data: Partial<ScheduledReport>) => {
-    const res = await apiClient.put(`/analytics/reports/scheduled/${id}`, data)
-    return res.data
+    const res = await apiClient.patch(`/analytics/reports/scheduled/${id}`, data)
+    return res.data?.data ?? res.data
 }
 
 export const deleteScheduledReport = async (id: number | string) => {
-    await apiClient.delete(`/analytics/reports/scheduled/${id}`)
+    const res = await apiClient.delete(`/analytics/reports/scheduled/${id}`)
+    return res.data?.data ?? res.data
 }
 
 export const exportReport = async (params: {
     report_type: string
-    format?: 'pdf' | 'csv' | 'json'
-    filter?: string
+    format?: 'pdf' | 'csv'
+    filter?: '7d' | '30d' | '90d' | '1y'
     limit?: number
-    date_from?: string
-    date_to?: string
-    vehicle_id?: number
-    cluster_id?: number
-}): Promise<Blob> => {
+}) => {
     const res = await apiClient.get('/analytics/reports/export', {
         params,
         responseType: 'blob',
