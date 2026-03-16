@@ -42,7 +42,7 @@ export const getAlerts = async (params?: {
     type?: string
 }) => {
     const res = await apiClient.get('/dashboard/alerts', { params })
-    return res.data
+    return res.data?.data ?? res.data
 }
 
 export const getMaintenanceForecast = async (params?: {
@@ -53,25 +53,25 @@ export const getMaintenanceForecast = async (params?: {
     sort_by?: string
 }) => {
     const res = await apiClient.get('/dashboard/maintenance-forecast', { params })
-    return res.data
+    return res.data?.data ?? res.data
 }
 export const getVehicleStats = async () => {
-    const res = await apiClient.get('/dashboard/vehicles/total?include=trend')
+    const res = await apiClient.get('/dashboard/vehicles/total')
     return res.data?.data ?? res.data
 }
 
 export const getActiveTrips = async () => {
-    const res = await apiClient.get('/dashboard/trips/active?include=trend')
+    const res = await apiClient.get('/dashboard/trips/active')
     return res.data?.data ?? res.data
 }
 
 export const getEfficiencyStats = async () => {
-    const res = await apiClient.get('/dashboard/efficiency/average?include=trend')
+    const res = await apiClient.get('/dashboard/efficiency/average')
     return res.data?.data ?? res.data
 }
 
 export const getRecentIncidents = async () => {
-    const res = await apiClient.get('/dashboard/incidents/recent?include=trend')
+    const res = await apiClient.get('/dashboard/incidents/recent')
     return res.data?.data ?? res.data
 }
 

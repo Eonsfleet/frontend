@@ -35,7 +35,6 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
-
 const NAV_SECTIONS = [
   {
     label: "Operations",

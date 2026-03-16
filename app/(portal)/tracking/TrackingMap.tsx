@@ -262,12 +262,12 @@ export default function TrackingMap({
                                         <div className="flex items-center justify-between mb-3">
                                             <Badge className={cn(
                                                 "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
-                                                loc.status === 'in_transit' ? "bg-emerald-600 text-white" :
-                                                loc.status === 'idle' ? "bg-amber-600 text-white" :
-                                                loc.status === 'parked' ? "bg-slate-500 text-white" :
-                                                loc.status === 'offline' ? "bg-rose-600 text-white" : "bg-blue-600 text-white"
+                                                !isOnline                                           ? "bg-rose-600 text-white" :
+                                                loc.status === 'in_transit'                         ? "bg-emerald-600 text-white" :
+                                                (loc.status === 'stopped' || loc.status === 'parked') ? "bg-slate-500 text-white" :
+                                                                                                      "bg-blue-600 text-white"
                                             )}>
-                                                {capitalize(loc.status || 'online')}
+                                                {!isOnline ? 'Offline' : loc.status === 'in_transit' ? 'Moving' : (loc.status === 'stopped' || loc.status === 'parked') ? 'Stopped' : capitalize(loc.status || 'Online')}
                                             </Badge>
                                             <div className="flex items-center gap-1.5">
                                                 <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300")} />
@@ -404,9 +404,8 @@ export default function TrackingMap({
                 }
 
                 .cluster-all div { background: #0f172a; }
-                .cluster-in_transit div { background: #059669; }
-                .cluster-idle div { background: #d97706; }
-                .cluster-parked div { background: #64748b; }
+                .cluster-moving div { background: #059669; }
+                .cluster-stopped div { background: #64748b; }
                 .cluster-offline div { background: #e11d48; }
                 .cluster-online div { background: #2563eb; }
 

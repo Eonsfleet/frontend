@@ -10,7 +10,7 @@ interface AuthState {
     user: UserProfile | null
     organization: Organization | null
     _hasHydrated: boolean
-    setAuth: (token: string, refreshToken: string, user: UserProfile, org: Organization | null) => void
+    setAuth: (token: string, refreshToken: string, user: UserProfile, org: Organization | null, expiresAt?: string) => void
     setHasHydrated: (state: boolean) => void
     updateUser: (user: Partial<UserProfile>) => void
     clearAuth: () => void
@@ -28,11 +28,8 @@ export const useAuthStore = create<AuthState>()(
             setHasHydrated: (state) => set({ _hasHydrated: state }),
             updateUser: (partial) =>
                 set((s) => ({ user: s.user ? { ...s.user, ...partial } : null })),
-            setAuth: (token, refreshToken, user, organization) => {
-                set({ token, refreshToken, user, organization });
-                // Note: We don't have expires_at here directly in the signature, 
-                // but we can set a long enough default or pass it if needed.
-                // For now, let's just ensure the cookie is set.
+            setAuth: (token, refreshToken, user, organization, expiresAt) => {
+                set({ token, refreshToken, user, organization, expiresAt: expiresAt || null });
                 Cookies.set('ef-token', token, {
                     secure: process.env.NODE_ENV === 'production',
                     sameSite: 'lax',

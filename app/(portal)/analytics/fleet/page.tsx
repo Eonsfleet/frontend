@@ -17,7 +17,7 @@ export default function FleetAnalyticsPage() {
 
     const { data: summaryData, isLoading: isSummaryLoading } = useQuery({
         queryKey: ['fleet-utilization-summary', filter],
-        queryFn: () => getFleetUtilizationSummary() // Endpoint currently doesn't take filter but doc says it might
+        queryFn: () => getFleetUtilizationSummary({ filter })
     })
 
     const { data: snapshotData, isLoading: isSnapshotLoading } = useQuery({
@@ -32,18 +32,29 @@ export default function FleetAnalyticsPage() {
 
     const { data: vehicleListData, isLoading: isListLoading } = useQuery({
         queryKey: ['fleet-vehicle-list', filter],
-        queryFn: () => getFleetVehicleList({ filter, per_page: 5 })
+        queryFn: () => getFleetVehicleList({ filter, limit: 5 })
     })
 
-    const summary = summaryData || { total_vehicles: 0, active_vehicles: 0, utilization_rate_pct: 0, total_trips: 0, completed_trips: 0, completion_rate_pct: 0 }
+    const summary = summaryData || { total_vehicles: 0, active_vehicles: 0, utilization_rate_pct: 0, total_trips: 0, completed_trips: 0, completion_rate_pct: 0, total_distance_km: 0 }
 
     const availabilityData = useMemo(() => {
         if (!snapshotData?.by_status) return []
-        return Object.entries(snapshotData.by_status).map(([name, value], i) => ({
-            name: name.toUpperCase().replace('_', ' '),
-            value: Number(value),
-            color: COLORS[i % COLORS.length]
-        }))
+        
+        const statusMap: Record<string, { label: string, color: string }> = {
+            'active': { label: 'Active', color: '#10b981' },
+            'in_transit': { label: 'In Transit', color: '#4f46e5' },
+            'stopped': { label: 'Stopped', color: '#f59e0b' },
+            'status_': { label: 'Offline/Unknown', color: '#ef4444' }
+        }
+
+        return Object.entries(snapshotData.by_status).map(([key, value]) => {
+            const config = statusMap[key] || { label: key.toUpperCase(), color: '#94a3b8' }
+            return {
+                name: config.label,
+                value: Number(value),
+                color: config.color
+            }
+        })
     }, [snapshotData])
 
     const trend = useMemo(() => {
@@ -167,7 +178,7 @@ export default function FleetAnalyticsPage() {
                         <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Real-time asset distribution</CardDescription>
                     </CardHeader>
                     <CardContent className="p-8 pt-0 flex flex-col items-center">
-                        <div className="h-[240px] w-full">
+                        <div className="relative h-[240px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
@@ -186,6 +197,12 @@ export default function FleetAnalyticsPage() {
                                     <Tooltip />
                                 </PieChart>
                             </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-2xl font-black text-slate-900">
+                                    {availabilityData.reduce((s, d) => s + d.value, 0)}
+                                </span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Total</span>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4 w-full mt-4">
                             {availabilityData.map(status => (
@@ -225,7 +242,7 @@ export default function FleetAnalyticsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {vehicleListData?.data?.map((v: any, i: number) => (
+                            {vehicleListData?.data?.length > 0 ? vehicleListData.data.map((v: any, i: number) => (
                                 <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-3">
@@ -253,7 +270,19 @@ export default function FleetAnalyticsPage() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )) : (
+                                <tr>
+                                    <td colSpan={4} className="px-8 py-12 text-center">
+                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                <Truck className="h-5 w-5 text-slate-400" />
+                                            </div>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">No Vehicles Found</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No trips recorded for this period</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

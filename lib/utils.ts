@@ -39,8 +39,8 @@ export function normalizeTelemetry(telemetry: any, overrides?: any) {
 
   // Consolidated Status Logic
   // Statuses: in_transit, online, offline, idle, parked
-  const devStatus = (normalized.deviceStatus || normalized.device_status || '').toLowerCase()
-  const isOnline = devStatus === 'online' || normalized.is_online === true
+  const devStatus = (normalized.deviceStatus || normalized.device_status || normalized.attributes?.deviceStatus || normalized.attributes?.device_status || '').toLowerCase()
+  const isOnline = devStatus === 'online' || normalized.is_online === true || normalized.attributes?.is_online === true
   
   const speed = normalized.speed || 0
   const ignition = (normalized.ignition || '').toLowerCase()

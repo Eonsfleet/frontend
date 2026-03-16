@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
-import { Loader2, MapPin, Navigation, Map, Ruler, Clock, ChevronRight, Activity, TrendingUp } from 'lucide-react'
+import { Loader2, MapPin, Navigation, Map, Ruler, ChevronRight, Activity } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -114,10 +114,10 @@ export default function GpsAnalyticsPage() {
                     description="Per completed route"
                 />
                 <StatCard
-                    title="Active Geofences"
-                    value={geofenceData?.total_active || 0}
+                    title="Top Breach Zones"
+                    value={geofenceData?.top_breach_zones?.length || 0}
                     icon={Map}
-                    description="Monitored zones"
+                    description="Zones with recorded alerts"
                 />
             </div>
 
@@ -166,26 +166,32 @@ export default function GpsAnalyticsPage() {
                         <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Zone entry/exit frequency</CardDescription>
                     </CardHeader>
                     <CardContent className="p-8 pt-0 space-y-4">
-                        {geofenceData?.activity?.slice(0, 5).map((a: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-xl bg-blue-100 flex items-center justify-center">
-                                        <Map className="h-4 w-4 text-blue-600" />
+                        {geofenceData?.top_breach_zones?.length > 0 ? (
+                            geofenceData.top_breach_zones.slice(0, 5).map((a: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-xl bg-blue-100 flex items-center justify-center">
+                                            <Map className="h-4 w-4 text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{a.name}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Zone #{a.geofence_id}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{a.geofence_name}</p>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{a.event_type} • {a.timestamp}</p>
-                                    </div>
+                                    <Badge className="bg-rose-100 border-none text-rose-700 text-[8px] font-black uppercase">
+                                        {a.alert_count} alerts
+                                    </Badge>
                                 </div>
-                                <Badge className="bg-white border-slate-200 text-slate-600 text-[8px] font-black uppercase">{a.vehicle_registration}</Badge>
-                            </div>
-                        ))}
-                        {geofenceData?.activity?.length === 0 && (
+                            ))
+                        ) : (
                             <div className="flex flex-col items-center justify-center h-[250px] text-center space-y-4">
                                 <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center">
                                     <Activity className="h-6 w-6 text-slate-400" />
                                 </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No recent zone activity</p>
+                                <div>
+                                    <p className="text-[11px] font-black text-slate-900 uppercase">No Breach Activity</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">No geofence alerts in this period</p>
+                                </div>
                             </div>
                         )}
                     </CardContent>
@@ -208,7 +214,7 @@ export default function GpsAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {topVehicles?.vehicles?.map((v: any, i: number) => (
+                                {topVehicles?.vehicles?.length > 0 ? topVehicles.vehicles.map((v: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-8 py-5">
                                             <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration}</p>
@@ -225,7 +231,19 @@ export default function GpsAnalyticsPage() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                    <Ruler className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase">No Distance Data</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No trips recorded in this period</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
