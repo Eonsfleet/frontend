@@ -29,12 +29,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useQuery } from "@tanstack/react-query";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as notificationApi from "@/lib/api/notifications";
 import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+import { getEcho } from "@/lib/echo";
+import { useAuthStore } from "@/store/authStore";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
+
 const NAV_SECTIONS = [
   {
     label: "Operations",
@@ -161,13 +166,31 @@ export default function Sidebar() {
   const { can } = usePermission();
   const { hasCapability } = useSubscription();
   const { isSidebarCollapsed, toggleSidebar } = useUIStore();
+  const queryClient = useQueryClient();
+  const { user, token } = useAuthStore();
 
   // Fetch notifications for the badge
   const { data: inboxData } = useQuery({
     queryKey: ["notifications", "inbox"],
     queryFn: () => notificationApi.getInbox({ unread_only: true }),
-    refetchInterval: 30000, // Sync every 30s
+    refetchInterval: 30000,
+    enabled: !!token,
   });
+
+  // Real-time notification push via WebSocket
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    const echo = getEcho();
+    if (!echo) return;
+    const channel = echo.private(`notification.${user.id}`);
+    channel.listen(".notification.created", () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", "inbox"] });
+    });
+
+    return () => {
+      echo.leave(`notification.${user.id}`);
+    };
+  }, [token, user?.id, queryClient]);
 
   const unreadCount =
     inboxData?.data?.notifications?.filter((n) => !n.attributes.read_at)
@@ -196,7 +219,7 @@ export default function Sidebar() {
 
         <div
           className={cn(
-            "h-16 flex items-center border-b shrink-0 transition-all px-5",
+            "h-16 flex items-center border-b shrink-0 transition-all ",
             isSidebarCollapsed ? "justify-center px-0" : "gap-3",
           )}
         >
@@ -344,10 +367,10 @@ export default function Sidebar() {
             {!isSidebarCollapsed && (
               <div className="min-w-0">
                 <p className="text-xs font-black text-slate-900 truncate">
-                  Suleiman Musa
+                  {user?.attributes?.full_name}
                 </p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                  Fleet Admin
+                  {user?.attributes?.role}
                 </p>
               </div>
             )}
