@@ -29,12 +29,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as notificationApi from "@/lib/api/notifications";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { getEcho } from "@/lib/echo";
 import { useAuthStore } from "@/store/authStore";
+import Image from "next/image";
+import logoE from "@/public/images/logoE.svg";
+import logo from "@/public/images/logo.png";
 
 const NAV_SECTIONS = [
   {
@@ -215,18 +219,19 @@ export default function Sidebar() {
 
         <div
           className={cn(
-            "h-16 flex items-center border-b shrink-0 transition-all px-5",
+            "h-16 flex items-center border-b shrink-0 transition-all ",
             isSidebarCollapsed ? "justify-center px-0" : "gap-3",
           )}
         >
-          <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <div className="w-4 h-4 bg-white rounded-sm rotate-45" />
+          <div
+            className={cn(
+              "h-16 flex items-center border-b shrink-0 transition-all px-5",
+              isSidebarCollapsed ? "justify-center px-0" : "gap-3",
+            )}
+          >
+            {isSidebarCollapsed && <Image src={logoE} alt="Eonsfleet logo" />}
+            {!isSidebarCollapsed && <Image src={logo} alt="EonsFleet Logo" />}
           </div>
-          {!isSidebarCollapsed && (
-            <span className="font-black text-slate-900 tracking-tighter text-lg animate-in fade-in slide-in-from-left-2">
-              EonsFleet
-            </span>
-          )}
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 scrollbar-none">
