@@ -27,7 +27,7 @@ const TYPE_CONFIG: Record<ActivityType, { icon: LucideIcon; color: string; bg: s
 
 export function ActivityFeed({ activities = [] }: { activities?: ActivityItem[] }) {
     return (
-        <Card className="col-span-1 lg:col-span-2 border-slate-200 shadow-sm overflow-hidden flex flex-col h-[600px]">
+        <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
             <CardHeader className="bg-white border-b border-slate-50 flex flex-row items-center justify-between pb-4">
                 <div>
                     <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">

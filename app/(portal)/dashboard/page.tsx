@@ -16,6 +16,7 @@ import * as dashboardApi from '@/lib/api/dashboard'
 import * as trackingApi from '@/lib/api/tracking'
 import * as analyticsApi from '@/lib/api/analytics'
 import * as vehicleApi from '@/lib/api/vehicles'
+import { useAuthStore } from '@/store/authStore'
 
 // Enhanced Dummy Data for visual demonstration
 const vehicleStatusData = [
@@ -130,99 +131,115 @@ const recentActivities: ActivityItem[] = [
 
 export default function DashboardPage() {
     const [isFleetModalOpen, setIsFleetModalOpen] = useState(false)
+    const { token } = useAuthStore()
 
-    // Fetch Alerts
-    const { data: alertsData, isLoading: isLoadingAlerts } = useQuery({
+    const { data: alertsData } = useQuery({
         queryKey: ['dashboard-alerts'],
-        queryFn: () => dashboardApi.getAlerts({ severity: 'critical,warning', limit: 10 })
+        queryFn: () => dashboardApi.getAlerts({ severity: 'critical,warning', limit: 10 }),
+        enabled: !!token,
     })
 
-    // Fetch Maintenance Forecast
-    const { data: forecastData, isLoading: isLoadingForecast } = useQuery({
+    const { data: forecastData } = useQuery({
         queryKey: ['dashboard-forecast'],
-        queryFn: () => dashboardApi.getMaintenanceForecast({ days: 7 })
+        queryFn: () => dashboardApi.getMaintenanceForecast({ days: 7 }),
+        enabled: !!token,
     })
 
-    // Fetch Tracking Metrics (Keeping for Status Chart for now)
     const { data: metricsData } = useQuery({
         queryKey: ['tracking-metrics'],
-        queryFn: () => trackingApi.getTrackingMetrics()
+        queryFn: () => trackingApi.getTrackingMetrics(),
+        enabled: !!token,
     })
 
-    // Fetch Specific KPI Stats
     const { data: totalVehicleData } = useQuery({
         queryKey: ['dashboard-total-vehicles'],
-        queryFn: () => dashboardApi.getVehicleStats()
+        queryFn: () => dashboardApi.getVehicleStats(),
+        enabled: !!token,
     })
 
     const { data: activeTripsData } = useQuery({
         queryKey: ['dashboard-active-trips'],
-        queryFn: () => dashboardApi.getActiveTrips()
+        queryFn: () => dashboardApi.getActiveTrips(),
+        enabled: !!token,
     })
 
     const { data: efficiencyData } = useQuery({
         queryKey: ['dashboard-avg-efficiency'],
-        queryFn: () => dashboardApi.getEfficiencyStats()
+        queryFn: () => dashboardApi.getEfficiencyStats(),
+        enabled: !!token,
     })
 
     const { data: incidentsData } = useQuery({
         queryKey: ['dashboard-recent-incidents'],
-        queryFn: () => dashboardApi.getRecentIncidents()
+        queryFn: () => dashboardApi.getRecentIncidents(),
+        enabled: !!token,
     })
 
     const { data: deviceStatusSummary } = useQuery({
         queryKey: ['dashboard-device-status'],
-        queryFn: () => analyticsApi.getDeviceStatusSummary()
+        queryFn: () => analyticsApi.getDeviceStatusSummary(),
+        enabled: !!token,
     })
 
     const { data: vehicleStatusData } = useQuery({
         queryKey: ['dashboard-vehicle-status'],
-        queryFn: () => dashboardApi.getVehicleStatus()
+        queryFn: () => dashboardApi.getVehicleStatus(),
+        enabled: !!token,
     })
 
     const { data: activityLogsData } = useQuery({
         queryKey: ['dashboard-activity-logs'],
-        queryFn: () => dashboardApi.getActivityLogs()
+        queryFn: () => dashboardApi.getActivityLogs(),
+        enabled: !!token,
     })
 
-    const { data: dashboardLocations } = useQuery({
-        queryKey: ['dashboard-locations'],
-        queryFn: () => vehicleApi.getVehiclesLocations({ per_page: 10 }),
+    const { data: dashboardVehicles } = useQuery({
+        queryKey: ['dashboard-vehicles-map'],
+        queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
+        enabled: !!token,
         refetchInterval: 30_000,
     })
 
     // Normalize Activity Logs
     const normalizedActivities = useMemo(() => {
-        const logs = Array.isArray(activityLogsData?.data) ? activityLogsData.data :
-            Array.isArray(activityLogsData) ? activityLogsData : []
+        const logs: any[] = Array.isArray(activityLogsData?.data) ? activityLogsData.data : []
+
+        const resourceTypeMap: Record<string, ActivityItem['type']> = {
+            incident: 'incident',
+            maintenancejob: 'maintenance',
+            maintenance: 'maintenance',
+            vehicle: 'system',
+            trip: 'system',
+            device: 'system',
+            user: 'system',
+            geofence: 'system',
+        }
 
         return logs.map((log: any) => {
-            const changes = log.changes ? Object.keys(log.changes) : []
-            const changeCount = changes.length
-            const changeText = changeCount > 0
-                ? ` • ${changeCount} change${changeCount > 1 ? 's' : ''} (${changes.slice(0, 2).join(', ')}${changeCount > 2 ? '...' : ''})`
-                : ''
+            const activityType = resourceTypeMap[log.resource_type?.toLowerCase().replace(/\s/g, '')] ?? 'system'
+            const actor = log.changed_by?.name ?? 'System'
 
-            const resourceTypeMap: { [key: string]: ActivityItem['type'] } = {
-                incident: 'incident',
-                maintenance: 'maintenance',
-                vehicle: 'system',
-                user: 'system', // Assuming user changes are system-related
-                device: 'system', // Assuming device changes are system-related
-                geofence: 'system', // Assuming geofence changes are system-related
-                route: 'system', // Assuming route changes are system-related
-            };
-
-            const activityType = resourceTypeMap[log.resource_type?.toLowerCase()] || 'system';
+            // Build a human-readable description of what changed
+            let description = `By ${actor}`
+            if (log.changes && Object.keys(log.changes).length > 0) {
+                const fields = Object.entries(log.changes)
+                    .slice(0, 2)
+                    .map(([field, val]: [string, any]) =>
+                        `${field.replace(/_/g, ' ')}: ${val.from} → ${val.to}`
+                    )
+                    .join(' • ')
+                description = `${actor} — ${fields}${Object.keys(log.changes).length > 2 ? ' …' : ''}`
+            }
 
             return {
                 id: String(log.id),
-                title: log.description || `${log.resource_type} ${log.action}`,
-                description: `Action by ${log.changed_by_user}${changeText}`,
+                title: log.description,
+                description,
                 timestamp: log.changed_at,
                 type: activityType,
-                status: log.action === 'created' ? 'completed' :
-                    log.action === 'updated' ? 'in_progress' : undefined,
+                status: log.action === 'created' ? 'completed' as const :
+                    log.action === 'updated' ? 'in_progress' as const :
+                        log.action === 'deleted' ? 'resolved' as const : undefined,
             }
         })
     }, [activityLogsData])
@@ -251,30 +268,59 @@ export default function DashboardPage() {
         { label: 'Maint.', value: metrics.total_active_assets - (metrics.moving_assets + metrics.idle_assets + metrics.offline_assets), color: 'bg-blue-500' },
     ]
 
+    const STATUS_COLORS: Record<string, string> = {
+        active: '#10b981',
+        in_transit: '#3b82f6',
+        under_maintenance: '#f59e0b',
+        maintenance: '#f59e0b',
+        disbursed: '#8b5cf6',
+        inactive: '#6b7280',
+        offline: '#ef4444',
+    }
+
     const dynamicStatusData = useMemo(() => {
-        if (!vehicleStatusData) return []
-        // Map API response to chart format
-        // Expected format: { name: string, value: number, color: string }
-        return [
-            { name: 'Active', value: Number(vehicleStatusData.active) || 0, color: '#10b981' },
-            { name: 'Idle', value: Number(vehicleStatusData.idle) || 0, color: '#f59e0b' },
-            { name: 'Offline', value: Number(vehicleStatusData.offline) || 0, color: '#ef4444' },
-            { name: 'Maintenance', value: Number(vehicleStatusData.maintenance) || 0, color: '#3b82f6' }
-        ]
+        const distribution = vehicleStatusData?.distribution || []
+        return distribution.map((item: { status: string; count: number; percentage: number }) => ({
+            name: item.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+            value: item.count,
+            color: STATUS_COLORS[item.status] ?? '#94a3b8',
+        }))
     }, [vehicleStatusData])
 
     // Normalize Alerts Data
     const normalizedAlerts: AlertItem[] = useMemo(() => {
-        if (!alertsData?.data?.data) return []
-        return alertsData.data.data.map((alert: any) => ({
-            id: String(alert.id),
-            severity: (alert.severity === 'informational' ? 'info' : alert.severity) as any,
-            title: alert.title,
-            description: alert.description,
-            timestamp: format(parseISO(alert.created_at), 'hh:mm a'),
-            location: alert.meta?.geofence_name || alert.vehicle_registration,
-            actions: alert.action_url ? [{ label: 'View Details', onClick: () => window.location.href = alert.action_url, variant: 'outline' }] : undefined
-        }))
+        const alerts = alertsData?.alerts || []
+        return alerts.map((alert: any) => {
+            const meta = alert.meta || {}
+
+            let description = alert.description
+            if (alert.type === 'fuel_alert' && meta.previous_level != null && meta.current_level != null) {
+                description = `${alert.description} — ${meta.previous_level}L → ${meta.current_level}L (−${meta.difference}L)`
+            } else if (alert.type === 'incident' && meta.status) {
+                description = `${alert.description} • Priority: ${meta.priority ?? 'N/A'} • Status: ${meta.status}`
+            } else if (alert.type === 'maintenance_alert' && meta.alert_type) {
+                description = `${alert.description} • Trigger: ${meta.alert_type} (${meta.threshold_type})`
+            }
+
+            const actionMap: Record<string, string> = {
+                fuel_alert: '/fuel',
+                incident: '/incidents',
+                maintenance_alert: '/maintenance',
+            }
+            const href = actionMap[alert.type]
+
+            return {
+                id: String(alert.id),
+                severity: (alert.severity === 'informational' ? 'info' : alert.severity) as any,
+                title: `${alert.vehicle_registration} — ${alert.title}`,
+                description,
+                timestamp: format(parseISO(alert.created_at), 'hh:mm a'),
+                location: meta.geofence_name || alert.vehicle_registration,
+                actions: href
+                    ? [{ label: 'View Details', onClick: () => { window.location.href = href }, variant: 'outline' as const }]
+                    : undefined,
+            }
+        })
     }, [alertsData])
 
     // Normalize Maintenance Data
@@ -292,15 +338,54 @@ export default function DashboardPage() {
     }, [forecastData])
 
     const normalizedMapLocations = useMemo(() => {
-        const data = dashboardLocations?.data || []
-        return data.map((vl: any) => ({
-            id: String(vl.id),
-            name: vl.attributes?.registration_number || 'Vehicle',
-            lat: vl.location?.latitude,
-            lng: vl.location?.longitude,
-            status: (vl.location?.speed || 0) > 0 ? 'moving' : 'idle'
-        })).filter((l: any) => l.lat && l.lng)
-    }, [dashboardLocations])
+        const vehicles = dashboardVehicles?.data || []
+        return vehicles
+            .map((v: any) => {
+                const loc = v.relationships?.current_location
+                if (!loc) return null
+                const attrs = loc.attributes
+                const coords = attrs?.coordinates
+                const lat = parseFloat(coords?.latitude ?? 0)
+                const lng = parseFloat(coords?.longitude ?? 0)
+                if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null
+
+                const deviceStatus = (v.attributes?.deviceStatus || v.relationships?.device?.status || '').toLowerCase()
+                const isOnline = deviceStatus === 'online'
+                const state = attrs?.state
+                const ignition = attrs?.ignition
+                const vehicleStatus = (v.attributes?.status || '').toLowerCase()
+
+                let status: string
+                if (!isOnline) {
+                    status = 'offline'
+                } else if (state === 'moving' || (attrs?.speed ?? 0) > 0 || vehicleStatus === 'in_transit') {
+                    status = 'in_transit'
+                } else if (vehicleStatus === 'under_maintenance') {
+                    status = 'parked'
+                } else if (ignition === 'on' || vehicleStatus === 'active') {
+                    status = 'idle'
+                } else {
+                    status = 'parked'
+                }
+
+                return {
+                    id: String(v.id),
+                    name: v.attributes?.registration_number || v.attributes?.display_number || 'Vehicle',
+                    lat,
+                    lng,
+                    status,
+                    speed: attrs?.speed ?? 0,
+                    heading: attrs?.angle ? parseFloat(attrs.angle) : null,
+                    address: attrs?.address ?? null,
+                }
+            })
+            .filter(Boolean)
+    }, [dashboardVehicles])
+
+
+    // console.log("Normalized Map Locations:", normalizedMapLocations)
+
+    
 
     return (
         <div className="p-8 pb-16 space-y-8 bg-slate-50 min-h-full">
@@ -346,23 +431,26 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: operational data */}
                 <div className="lg:col-span-2 space-y-6">
                     <DashboardMap locations={normalizedMapLocations} />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[400px]">
                         <MaintenanceHeatmap data={normalizedForecast} />
                         <VehicleStatusChart data={dynamicStatusData} />
                     </div>
-
-
-                    <AlertsPanel alerts={normalizedAlerts} />
-                </div>
-                <div className="space-y-6">
                     <ActivityFeed activities={normalizedActivities} />
-                    <VehicleStatusChart
-                        data={dynamicDeviceStatusData}
-                        title="Device Status"
-                        description="GPS tracker heartbeat monitoring"
-                    />
+                </div>
+                {/* Right: live feed — alerts + activity, both scrollable */}
+                <div className="space-y-6">
+                    <AlertsPanel alerts={normalizedAlerts} />
+                    <div className="h-[400px]">
+                        <VehicleStatusChart
+                            data={dynamicDeviceStatusData}
+                            title="Device Status"
+                            description="GPS tracker heartbeat monitoring"
+                        />
+                    </div>
+                    
                 </div>
             </div>
 

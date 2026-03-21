@@ -20,6 +20,13 @@ import {
     Download,
     AlertCircle,
     Eye,
+    Activity,
+    Gauge,
+    Thermometer,
+    Zap,
+    Shield,
+    Navigation,
+    Droplets,
 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
@@ -29,7 +36,7 @@ import { AssignClusterDialog } from '@/components/vehicles/AssignClusterDialog'
 import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { LayoutGrid, Loader2, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { getCurrentLocation, getCurrentDriver, getVehicleDriverHistory } from '@/lib/api/vehicles'
+import { getCurrentDriver, getVehicleDriverHistory } from '@/lib/api/vehicles'
 import { getVehicleMaintenanceSchedules } from '@/lib/api/maintenance'
 import { getVehicleDocuments, downloadDocument } from '@/lib/api/documents'
 import { getVehicleCurrentFuel } from '@/lib/api/fuel'
@@ -50,17 +57,31 @@ interface VehicleDetailsProps {
     vehicle: Vehicle
 }
 
+// ── Small helper: one row inside a telemetry group card ──────────────────────
+function TelemetryRow({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+        <div className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+            <span className="text-xs font-semibold text-slate-800 text-right max-w-[60%]">
+                {value === null || value === undefined || value === '' ? (
+                    <span className="text-slate-300 font-normal italic">—</span>
+                ) : (
+                    String(value)
+                )}
+            </span>
+        </div>
+    )
+}
+
 export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
     const [isAssignOpen, setIsAssignOpen] = React.useState(false)
     const [isAssignClusterOpen, setIsAssignClusterOpen] = React.useState(false)
     const [isAssignTrackerOpen, setIsAssignTrackerOpen] = React.useState(false)
     const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false)
 
-    const { data: locationData, isLoading: isLoadingLocation } = useQuery({
-        queryKey: ['vehicle-location', vehicle.id],
-        queryFn: () => getCurrentLocation(vehicle.id),
-        refetchInterval: 10000,
-    })
+    // Location is now read directly from the vehicle relationship — no query needed
+    const currentLocation = (vehicle as any).relationships?.current_location ?? null
+    const loc = currentLocation?.attributes ?? null
 
     const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
         queryKey: ['vehicle-current-driver', vehicle.id],
@@ -83,9 +104,23 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         refetchInterval: 30000,
     })
 
-    const currentDriver = driverResponse?.data?.relationships?.driver
+    // Try embedded current_driver array first, fall back to query result
+    const embeddedDriverArr = (vehicle as any).relationships?.current_driver
+    const embeddedDriver = Array.isArray(embeddedDriverArr) && embeddedDriverArr.length > 0
+        ? embeddedDriverArr[0]
+        : null
+    const currentDriver = embeddedDriver ?? driverResponse?.data?.relationships?.driver ?? null
+
     const maintenanceSchedules = maintenanceResponse?.data?.schedules || []
     const documents = documentsResponse?.data?.documents || []
+
+    // GPS device from relationships
+    const device = (vehicle as any).relationships?.device ?? null
+
+    // Location tab coordinates
+    const lat = currentLocation?.attributes?.coordinates?.latitude ?? 0
+    const lng = currentLocation?.attributes?.coordinates?.longitude ?? 0
+    const locationState = currentLocation?.attributes?.state ?? 'offline'
 
     return (
         <div className="space-y-6">
@@ -99,10 +134,10 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             Overview
                         </TabsTrigger>
                         <TabsTrigger
-                            value="location"
+                            value="telemetry"
                             className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium"
                         >
-                            Location
+                            Live Telemetry
                         </TabsTrigger>
                         <TabsTrigger
                             value="history"
@@ -137,8 +172,10 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     </TabsList>
                 </div>
 
+                {/* ── OVERVIEW TAB ───────────────────────────────────────────── */}
                 <TabsContent value="overview" className="space-y-6 outline-none">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Vehicle Specifications */}
                         <Card className="md:col-span-2 shadow-sm border-slate-200">
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
@@ -171,7 +208,9 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </CardContent>
                         </Card>
 
+                        {/* Right column: Driver + GPS Device */}
                         <div className="space-y-6">
+                            {/* Current Driver */}
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="pb-3 flex flex-row items-center justify-between">
                                     <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Current Driver</CardTitle>
@@ -187,7 +226,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                     </PermissionGate>
                                 </CardHeader>
                                 <CardContent>
-                                    {isLoadingDriver ? (
+                                    {isLoadingDriver && !embeddedDriver ? (
                                         <div className="flex justify-center py-4">
                                             <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
                                         </div>
@@ -221,6 +260,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                 </CardContent>
                             </Card>
 
+                            {/* GPS Device */}
                             <Card className="shadow-sm border-slate-200">
                                 <CardHeader className="pb-3">
                                     <div className="flex items-center justify-between">
@@ -238,7 +278,54 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    {vehicle.attributes.device_id ? (
+                                    {device ? (
+                                        <div className="space-y-3">
+                                            {/* Online status row */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className={cn(
+                                                            'h-2.5 w-2.5 rounded-full flex-shrink-0',
+                                                            device.is_online ? 'bg-emerald-500' : 'bg-rose-400'
+                                                        )}
+                                                    />
+                                                    <Cpu className="w-4 h-4 text-slate-400" />
+                                                    <span className="text-xs font-mono font-semibold text-slate-800 truncate">{device.imei || vehicle.attributes.device_id}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    {device.is_online ? (
+                                                        <Badge variant="default" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px]">Online</Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100 text-[10px]">Offline</Badge>
+                                                    )}
+                                                    {device.has_fuel && (
+                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px]">Fuel Sensor</Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {/* Device detail rows */}
+                                            <div className="space-y-1 pt-1">
+                                                {device.phone && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-slate-400 font-medium">SIM</span>
+                                                        <span className="font-mono text-slate-700">{device.phone}</span>
+                                                    </div>
+                                                )}
+                                                {device.country && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-slate-400 font-medium">Country</span>
+                                                        <span className="text-slate-700">{device.country}</span>
+                                                    </div>
+                                                )}
+                                                {device.status && (
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-slate-400 font-medium">Status</span>
+                                                        <span className="text-slate-700 capitalize">{device.status}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : vehicle.attributes.device_id ? (
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
@@ -267,7 +354,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </Card>
                         </div>
 
-                        {/* Technical Specifications Section */}
+                        {/* Technical Specifications */}
                         <Card className="md:col-span-2 shadow-sm border-slate-200">
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
@@ -276,7 +363,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </CardHeader>
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-12">
                                 <DetailItem label="VIN / Chasis Number" value={vehicle.attributes.chasis_number || 'Not Recorded'} />
-                                <DetailItem label="Gross Vehicle Mass (GVM)" value={vehicle.attributes.gvm ? `${vehicle.attributes.gvm} kg` : 'N/A'} />
+                                <DetailItem label="Gross Vehicle Mass (GVM)" value={(vehicle.attributes as any).gvm ? `${(vehicle.attributes as any).gvm} kg` : 'N/A'} />
                                 <DetailItem label="Fuel Capacity" value={vehicle.attributes.fuel_capacity ? `${vehicle.attributes.fuel_capacity} ${vehicle.attributes.fuel_capacity_unit || 'L'}` : 'N/A'} />
                                 <DetailItem label="Odometer When Joined" value={vehicle.attributes.odometer_when_join ? `${vehicle.attributes.odometer_when_join.toLocaleString()} km` : 'N/A'} />
                                 <DetailItem label="Fuel Conversion Factor" value={vehicle.attributes.fuel_sensor_conversion_factor?.toString() || 'N/A'} />
@@ -284,29 +371,29 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </CardContent>
                         </Card>
 
-                        {/* Tire Pressure Reference Section */}
+                        {/* Tire Pressure Reference */}
                         <Card className="shadow-sm border-slate-200">
                             <CardHeader>
                                 <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tire Pressure Reference (PSI)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {vehicle.attributes.tire_psi ? (
+                                {(vehicle.attributes as any).tire_psi ? (
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Front Left</p>
-                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.front_left}</p>
+                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.front_left}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Front Right</p>
-                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.front_right}</p>
+                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.front_right}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Rear Left</p>
-                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.rear_left}</p>
+                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.rear_left}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Rear Right</p>
-                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.rear_right}</p>
+                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.rear_right}</p>
                                         </div>
                                     </div>
                                 ) : (
@@ -317,38 +404,269 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </CardContent>
                         </Card>
                     </div>
+
                 </TabsContent>
 
-                <TabsContent value="location" className="outline-none">
-                    <Card className="h-[600px] shadow-sm border-slate-200 overflow-hidden flex flex-col">
-                        <CardHeader className="flex flex-row items-center justify-between pb-4">
-                            <div>
-                                <CardTitle className="text-lg">Real-time Location</CardTitle>
-                                <CardDescription>Last reported position of {vehicle.attributes.registration_number}</CardDescription>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex-1 p-0 relative">
-                            <div className="w-full h-full">
-                                {isLoadingLocation ? (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50 z-20">
-                                        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                {/* ── LIVE TELEMETRY TAB ────────────────────────────────────── */}
+                <TabsContent value="telemetry" className="outline-none space-y-6">
+                    {!loc ? (
+                        <Card className="shadow-sm border-slate-200">
+                            <CardContent className="py-16 text-center">
+                                <MapPin className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                                <p className="text-slate-400 italic">No telemetry data available for this vehicle yet.</p>
+                                <p className="text-xs text-slate-300 mt-1">Ensure a GPS device is assigned and online.</p>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <>
+                            {/* Map card */}
+                            <Card className="shadow-sm border-slate-200 overflow-hidden">
+                                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                                    <div>
+                                        <CardTitle className="text-base">Live Location</CardTitle>
+                                        <CardDescription className="text-xs">
+                                            {loc.address
+                                                ? loc.address
+                                                : (lat !== 0 || lng !== 0)
+                                                    ? `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+                                                    : 'Position unavailable'}
+                                        </CardDescription>
                                     </div>
-                                ) : null}
-                                <MapView
-                                    locations={[{
-                                        id: vehicle.id.toString(),
-                                        name: vehicle.attributes.registration_number,
-                                        lat: locationData?.location?.latitude ?? 6.5244,
-                                        lng: locationData?.location?.longitude ?? 3.3792,
-                                        status: (locationData?.location?.status as any) || 'moving'
-                                    }]}
-                                />
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={cn(
+                                                'h-2 w-2 rounded-full flex-shrink-0',
+                                                locationState === 'moving' ? 'bg-emerald-500' :
+                                                    locationState === 'stopped' ? 'bg-amber-400' : 'bg-slate-300'
+                                            )} />
+                                            <span className="text-xs font-semibold text-slate-600 capitalize">{loc.state ?? locationState}</span>
+                                        </div>
+                                        {loc.speed != null && (
+                                            <span className="text-xs font-bold text-slate-700 font-mono">{loc.speed} km/h</span>
+                                        )}
+                                        {loc.ignition != null && (
+                                            <Badge variant="outline" className={cn(
+                                                "text-[10px] uppercase font-bold",
+                                                loc.ignition ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'
+                                            )}>
+                                                IGN {loc.ignition ? 'ON' : 'OFF'}
+                                            </Badge>
+                                        )}
+                                        {loc.gps_datetime && (
+                                            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+                                                {format(new Date(loc.gps_datetime), 'MMM d, HH:mm:ss')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <div className="w-full h-[420px]">
+                                    <MapView
+                                        locations={[{
+                                            id: vehicle.id.toString(),
+                                            name: vehicle.attributes.registration_number,
+                                            lat: lat || 6.5244,
+                                            lng: lng || 3.3792,
+                                            status: (locationState as any) || 'moving',
+                                            address: loc.address ?? (lat !== 0 || lng !== 0 ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : undefined),
+                                        }]}
+                                    />
+                                </div>
+                                {/* Info strip */}
+                                <div className="border-t border-slate-100 bg-slate-50/60 px-6 py-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">State</p>
+                                        <p className="text-sm font-semibold text-slate-800 capitalize">{loc.state ?? '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Speed</p>
+                                        <p className="text-sm font-semibold text-slate-800">{loc.speed != null ? `${loc.speed} km/h` : '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Ignition</p>
+                                        <p className={cn("text-sm font-semibold", loc.ignition ? 'text-emerald-600' : 'text-slate-500')}>
+                                            {loc.ignition != null ? (loc.ignition ? 'On' : 'Off') : '—'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Coordinates</p>
+                                        <p className="text-xs font-mono text-slate-700">
+                                            {lat !== 0 || lng !== 0 ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : '—'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Last GPS Time</p>
+                                        <p className="text-xs font-semibold text-slate-700">
+                                            {loc.gps_datetime ? format(new Date(loc.gps_datetime), 'MMM d HH:mm:ss') : '—'}
+                                        </p>
+                                    </div>
+                                    {loc.address && (
+                                        <div className="col-span-2 sm:col-span-1">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Address</p>
+                                            <p className="text-xs text-slate-700 leading-snug line-clamp-2">{loc.address}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
+
+                            {/* 4-column key-stats banner */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3 shadow-sm">
+                                    <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                        <Gauge className="w-5 h-5 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Speed</p>
+                                        <p className="text-2xl font-black text-slate-900 leading-tight font-mono">{loc.speed ?? '—'}</p>
+                                        <p className="text-[9px] text-slate-400 font-semibold">km/h</p>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3 shadow-sm">
+                                    <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                                        <Droplets className="w-5 h-5 text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fuel Level</p>
+                                        <p className={cn(
+                                            "text-2xl font-black leading-tight font-mono",
+                                            (loc.fuel_level_percent ?? 100) < 15 ? 'text-rose-600' :
+                                                (loc.fuel_level_percent ?? 100) < 30 ? 'text-amber-600' : 'text-emerald-600'
+                                        )}>
+                                            {loc.fuel_level_percent ?? '—'}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-semibold">percent</p>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3 shadow-sm">
+                                    <div className="h-9 w-9 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
+                                        <Activity className="w-5 h-5 text-violet-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Eco Score</p>
+                                        <p className={cn(
+                                            "text-2xl font-black leading-tight font-mono",
+                                            (loc.eco_score ?? 100) < 40 ? 'text-rose-600' :
+                                                (loc.eco_score ?? 100) < 70 ? 'text-amber-600' : 'text-emerald-600'
+                                        )}>
+                                            {loc.eco_score ?? '—'}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-semibold">/ 100</p>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3 shadow-sm">
+                                    <div className="h-9 w-9 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                                        <Thermometer className="w-5 h-5 text-rose-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Engine Temp</p>
+                                        <p className={cn(
+                                            "text-2xl font-black leading-tight font-mono",
+                                            loc.engine_temperature == null ? 'text-slate-400' :
+                                                loc.engine_temperature > 100 ? 'text-rose-600' :
+                                                    loc.engine_temperature > 85 ? 'text-amber-600' : 'text-slate-900'
+                                        )}>
+                                            {loc.engine_temperature ?? '—'}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-semibold">°C</p>
+                                    </div>
+                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
+
+                            {/* 3-column telemetry group grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Droplets className="w-3.5 h-3.5 text-emerald-500" /> Fuel
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="Rate" value={loc.fuel_rate != null ? `${loc.fuel_rate} L/h` : null} />
+                                        <TelemetryRow label="Consumed" value={loc.fuel_consumed != null ? `${loc.fuel_consumed} L` : null} />
+                                        <TelemetryRow label="Used (GPS)" value={loc.fuel_used_gps != null ? `${loc.fuel_used_gps} L` : null} />
+                                        <TelemetryRow label="Level OBD" value={loc.fuel_level_obd != null ? `${loc.fuel_level_obd}%` : null} />
+                                        <TelemetryRow label="Source" value={loc.fuel_source} />
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Gauge className="w-3.5 h-3.5 text-blue-500" /> Engine
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="RPM" value={loc.engine_rpm} />
+                                        <TelemetryRow label="RPM (OBD)" value={loc.engine_rpm_obd} />
+                                        <TelemetryRow label="Oil Level" value={loc.oil_level} />
+                                        <TelemetryRow label="Driving State" value={loc.driving_state} />
+                                        <TelemetryRow label="Idling" value={loc.idling != null ? (loc.idling ? 'Yes' : 'No') : null} />
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Zap className="w-3.5 h-3.5 text-amber-500" /> Battery / Power
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="Battery Voltage" value={loc.battery_voltage != null ? `${loc.battery_voltage} V` : null} />
+                                        <TelemetryRow label="Battery Current" value={loc.battery_current != null ? `${loc.battery_current} A` : null} />
+                                        <TelemetryRow label="External Voltage" value={loc.external_voltage != null ? `${loc.external_voltage} V` : null} />
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Navigation className="w-3.5 h-3.5 text-sky-500" /> GPS Signal
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="Satellites" value={loc.satellites} />
+                                        <TelemetryRow label="Altitude" value={loc.altitude != null ? `${loc.altitude} m` : null} />
+                                        <TelemetryRow label="Confidence" value={loc.confidence} />
+                                        <TelemetryRow label="Protocol" value={loc.protocol_name} />
+                                        <TelemetryRow label="Heading (°)" value={loc.angle} />
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Odometer
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="Odometer" value={loc.odometer != null ? `${loc.odometer.toLocaleString()} km` : null} />
+                                        <TelemetryRow label="Trip" value={loc.trip_odometer != null ? `${loc.trip_odometer.toLocaleString()} km` : null} />
+                                        <TelemetryRow label="Total Mileage" value={loc.total_mileage != null ? `${loc.total_mileage.toLocaleString()} km` : null} />
+                                        <TelemetryRow label="Source" value={loc.odometer_source} />
+                                    </CardContent>
+                                </Card>
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="pb-2 pt-4 px-4">
+                                        <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Shield className="w-3.5 h-3.5 text-rose-500" /> Security
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4 space-y-0.5">
+                                        <TelemetryRow label="Immobilizer" value={loc.immobilizer != null ? (loc.immobilizer ? 'Active' : 'Inactive') : null} />
+                                        <TelemetryRow label="Jamming" value={loc.jamming != null ? (loc.jamming ? 'Detected' : 'Clear') : null} />
+                                        <TelemetryRow label="Unplug" value={loc.unplug != null ? (loc.unplug ? 'Yes' : 'No') : null} />
+                                        <TelemetryRow label="Sleep Mode" value={loc.sleep_mode != null ? (loc.sleep_mode ? 'On' : 'Off') : null} />
+                                        <TelemetryRow label="Door Status" value={loc.door_status} />
+                                        <TelemetryRow label="Load Weight" value={loc.load_weight != null ? `${loc.load_weight} kg` : null} />
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {loc.gps_datetime && (
+                                <p className="text-[10px] text-slate-400 text-right font-medium pb-2">
+                                    Last updated: {format(new Date(loc.gps_datetime), 'MMM d, yyyy HH:mm:ss')}
+                                </p>
+                            )}
+                        </>
+                    )}
                 </TabsContent>
 
-
+                {/* ── HISTORY TAB ───────────────────────────────────────────── */}
                 <TabsContent value="history" className="outline-none">
                     <Card className="shadow-sm border-slate-200">
                         <CardHeader>
@@ -362,6 +680,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     </Card>
                 </TabsContent>
 
+                {/* ── TRIPS TAB ─────────────────────────────────────────────── */}
                 <TabsContent value="trips" className="outline-none">
                     <Card className="shadow-sm border-slate-200">
                         <CardHeader>
@@ -381,7 +700,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     </Card>
                 </TabsContent>
 
-                {/* Placeholder for other tabs */}
+                {/* ── MAINTENANCE TAB ───────────────────────────────────────── */}
                 <TabsContent value="maintenance" className="outline-none">
                     <Card className="shadow-sm border-slate-200">
                         <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -463,6 +782,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     </Card>
                 </TabsContent>
 
+                {/* ── DOCUMENTS TAB ─────────────────────────────────────────── */}
                 <TabsContent value="documents" className="outline-none">
                     <Card className="shadow-sm border-slate-200">
                         <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -502,71 +822,167 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                         </CardContent>
                     </Card>
                 </TabsContent>
+
+                {/* ── FUEL TAB ──────────────────────────────────────────────── */}
                 <TabsContent value="fuel" className="outline-none">
                     <UpgradeGate
                         module="fuel"
                         featureName="Fuel Intelligence"
                         description="Monitor fuel levels, consumption trends and theft anomalies in real-time."
                     >
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <Card className="md:col-span-2 shadow-sm border-slate-200">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Fuel className="w-5 h-5 text-emerald-600" /> Real-time Fuel Status
-                                    </CardTitle>
-                                    <CardDescription>Live fuel level data from onboard sensor and GPS tracker.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-8">
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-end">
+                        {(() => {
+                            const fuelVehicle = fuelResponse?.data?.vehicle
+                            const fuelLevel = fuelResponse?.data?.fuel_level
+                            const fuelPercent = fuelLevel?.fuel_level_percent ?? 0
+                            const tankCapacity = fuelLevel?.tank_capacity ?? vehicle.attributes.fuel_capacity
+                            return (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <Card className="md:col-span-2 shadow-sm border-slate-200">
+                                        <CardHeader className="flex flex-row items-start justify-between pb-4">
                                             <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Level</p>
-                                                <p className="text-4xl font-black text-slate-900 font-mono">
-                                                    {isLoadingFuel ? '—' : `${fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0}%`}
-                                                </p>
+                                                <CardTitle className="text-lg flex items-center gap-2">
+                                                    <Fuel className="w-5 h-5 text-emerald-600" /> Real-time Fuel Status
+                                                </CardTitle>
+                                                <CardDescription>Live fuel level data from onboard sensor and GPS tracker.</CardDescription>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estimated Volume</p>
-                                                <p className="text-xl font-bold text-emerald-600 font-mono">
-                                                    {fuelResponse?.data?.fuel_level?.fuel_level_liters
-                                                        ? `${fuelResponse.data.fuel_level.fuel_level_liters.toFixed(1)} L`
-                                                        : '—'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Progress
-                                            value={fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0}
-                                            className="h-3 shadow-inner bg-slate-100"
-                                            indicatorClassName={cn(
-                                                "transition-all duration-1000",
-                                                (fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0) < 15 ? 'bg-rose-500' :
-                                                    (fuelResponse?.data?.fuel_level?.fuel_level_percent ?? 0) < 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                                            {fuelLevel?.last_updated && (
+                                                <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap pt-1">
+                                                    Updated {format(new Date(fuelLevel.last_updated), 'MMM d, HH:mm')}
+                                                </span>
                                             )}
-                                        />
-                                    </div>
+                                        </CardHeader>
+                                        <CardContent className="space-y-8">
+                                            {isLoadingFuel ? (
+                                                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-200" /></div>
+                                            ) : (
+                                                <>
+                                                    <div className="space-y-4">
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Level</p>
+                                                                <p className={cn(
+                                                                    "text-5xl font-black font-mono leading-tight",
+                                                                    fuelPercent < 15 ? 'text-rose-600' :
+                                                                        fuelPercent < 30 ? 'text-amber-600' : 'text-slate-900'
+                                                                )}>
+                                                                    {fuelPercent}%
+                                                                </p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estimated Volume</p>
+                                                                <p className="text-2xl font-bold text-emerald-600 font-mono">
+                                                                    {fuelLevel?.fuel_level_liters != null
+                                                                        ? `${Number(fuelLevel.fuel_level_liters).toFixed(1)} L`
+                                                                        : tankCapacity
+                                                                            ? `~${Math.round((fuelPercent / 100) * tankCapacity)} L`
+                                                                            : '—'}
+                                                                </p>
+                                                                {tankCapacity && (
+                                                                    <p className="text-[10px] text-slate-400 mt-0.5">of {tankCapacity} L tank</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <Progress
+                                                            value={fuelPercent}
+                                                            className="h-4 shadow-inner bg-slate-100 rounded-full"
+                                                            indicatorClassName={cn(
+                                                                "transition-all duration-1000 rounded-full",
+                                                                fuelPercent < 15 ? 'bg-rose-500' :
+                                                                    fuelPercent < 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                            )}
+                                                        />
+                                                        <div className="flex justify-between text-[10px] text-slate-400 font-medium -mt-1">
+                                                            <span>Empty</span>
+                                                            <span>Full</span>
+                                                        </div>
+                                                    </div>
 
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-6 border-t border-slate-50">
-                                        <DetailItem label="Tank Capacity" value={`${vehicle.attributes.fuel_capacity || 'N/A'} ${vehicle.attributes.fuel_capacity_unit || 'L'}`} />
-                                        <DetailItem label="Fuel Type" value={vehicle.attributes.fuel_type || 'N/A'} />
-                                        <DetailItem label="Sensor Factor" value={vehicle.attributes.fuel_sensor_conversion_factor?.toString() || 'N/A'} />
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-6 border-t border-slate-100">
+                                                        <DetailItem
+                                                            label="Tank Capacity"
+                                                            value={tankCapacity ? `${tankCapacity} L` : 'N/A'}
+                                                        />
+                                                        <DetailItem
+                                                            label="Fuel Type"
+                                                            value={fuelVehicle?.fuel_type ?? vehicle.attributes.fuel_type ?? 'N/A'}
+                                                        />
+                                                        <DetailItem
+                                                            label="Sensor Factor"
+                                                            value={vehicle.attributes.fuel_sensor_conversion_factor?.toString() || 'N/A'}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </CardContent>
+                                    </Card>
 
-                            <Card className="shadow-sm border-slate-200 bg-slate-50/50 border-dashed">
-                                <CardHeader>
-                                    <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-tight">Recent Anomalies</CardTitle>
-                                </CardHeader>
-                                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-2" />
-                                    <p className="text-sm font-semibold text-slate-900">System Healthy</p>
-                                    <p className="text-xs text-slate-500 mt-1">No fuel theft or drainage anomalies detected in the last 24 hours.</p>
-                                </CardContent>
-                            </Card>
-                        </div>
+                                    {/* Device / anomaly side panel */}
+                                    <div className="space-y-4">
+                                        {/* GPS Device summary */}
+                                        <Card className="shadow-sm border-slate-200">
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-tight">Sensor Device</CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                {fuelVehicle ? (
+                                                    <>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={cn(
+                                                                    'h-2.5 w-2.5 rounded-full flex-shrink-0',
+                                                                    fuelVehicle.device_online ? 'bg-emerald-500' : 'bg-rose-400'
+                                                                )} />
+                                                                <Cpu className="w-4 h-4 text-slate-400" />
+                                                                <span className="text-xs font-mono font-semibold text-slate-800 truncate">
+                                                                    {fuelVehicle.device_imei || vehicle.attributes.device_id || '—'}
+                                                                </span>
+                                                            </div>
+                                                            <Badge variant="outline" className={cn(
+                                                                "text-[10px] font-bold",
+                                                                fuelVehicle.device_online
+                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                                    : 'bg-rose-50 text-rose-600 border-rose-100'
+                                                            )}>
+                                                                {fuelVehicle.device_online ? 'Online' : 'Offline'}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="flex items-center justify-between text-xs pt-1">
+                                                            <span className="text-slate-400 font-medium">Fuel Sensor</span>
+                                                            <Badge variant="outline" className={cn(
+                                                                "text-[10px]",
+                                                                fuelVehicle.device_has_fuel
+                                                                    ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                    : 'bg-slate-50 text-slate-500 border-slate-200'
+                                                            )}>
+                                                                {fuelVehicle.device_has_fuel ? 'Installed' : 'Not Installed'}
+                                                            </Badge>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic text-center py-4">Device info unavailable</p>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Anomaly card */}
+                                        <Card className="shadow-sm border-slate-200 bg-slate-50/50 border-dashed">
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-tight">Recent Anomalies</CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                                                <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-2" />
+                                                <p className="text-sm font-semibold text-slate-900">System Healthy</p>
+                                                <p className="text-xs text-slate-500 mt-1">No fuel theft or drainage anomalies detected in the last 24 hours.</p>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                </div>
+                            )
+                        })()}
                     </UpgradeGate>
                 </TabsContent>
 
+                {/* ── DIALOGS ───────────────────────────────────────────────── */}
                 <AssignDriverDialog
                     vehicleId={vehicle.id}
                     vehicleReg={vehicle.attributes.registration_number}
@@ -597,6 +1013,8 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         </div>
     )
 }
+
+// ── Helper components (unchanged) ────────────────────────────────────────────
 
 function DriverHistoryList({ vehicleId }: { vehicleId: string | number }) {
     const { data: response, isLoading } = useQuery({

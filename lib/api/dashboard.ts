@@ -80,9 +80,9 @@ export const getVehicleStatus = async () => {
     return res.data?.data ?? res.data
 }
 
-export const getActivityLogs = async () => {
-    const res = await apiClient.get('/organization/activity-log/summary')
-    return res.data?.data ?? res.data
+export const getActivityLogs = async (params?: { page?: number; per_page?: number }) => {
+    const res = await apiClient.get('/organization/activity-log', { params })
+    return res.data
 }
 
 export const getVehiclesWeekly = async () => {

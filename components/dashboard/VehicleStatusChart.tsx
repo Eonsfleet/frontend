@@ -21,13 +21,13 @@ export function VehicleStatusChart({
     const total = data.reduce((sum, item) => sum + (Number(item.value) || 0), 0)
 
     return (
-        <Card className="col-span-1 border-slate-200 shadow-sm">
-            <CardHeader className="pb-2">
+        <Card className="col-span-1 border-slate-200 shadow-sm flex flex-col h-full">
+            <CardHeader className="pb-2 shrink-0">
                 <CardTitle className="text-base font-semibold text-slate-900">{title}</CardTitle>
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
-            <CardContent>
-                <div className="h-[240px] w-full mt-4">
+            <CardContent className="flex-1 min-h-0">
+                <div className="h-full w-full mt-4">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Pie
@@ -65,5 +65,6 @@ export function VehicleStatusChart({
                 </div>
             </CardContent>
         </Card>
+
     )
 }

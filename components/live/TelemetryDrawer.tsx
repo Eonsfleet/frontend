@@ -80,6 +80,7 @@ interface TelemetryDrawerProps {
     movement?: string | null;
     device_id?: string | null;
     imei?: string | null;
+    raw?: any; // full current_location.attributes snapshot for fields not in WS packet
   } | null;
 }
 
@@ -197,37 +198,53 @@ export function TelemetryDrawer({
 
   if (!vehicle) return null;
 
-  // ── Resolved values: WS telemetry > prop fallback ──────────────────────
+  // ── Resolved values: WS telemetry > prop fallback > raw REST snapshot ──
+  const raw = vehicle.raw ?? {};
   const liveSpeed = telemetry?.speed ?? vehicle.speed;
   const liveHeading = telemetry?.heading ?? vehicle.heading ?? 0;
   const liveIgnition = telemetry
-    ? telemetry.ignition === "on" || telemetry.ignition === "1"
+    ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
     : vehicle.ignition;
   const liveMovement = telemetry?.movement ?? vehicle.movement;
   const liveStatus = telemetry?.status ?? vehicle.status;
   const liveLat = telemetry?.latitude ?? vehicle.lat;
   const liveLng = telemetry?.longitude ?? vehicle.lng;
-  const liveAltitude = telemetry?.altitude ?? vehicle.altitude;
-  const liveSatellites = telemetry?.satellites ?? null;
-  const liveOdo = telemetry?.odometer ?? vehicle.odometer;
+  const liveAltitude = telemetry?.altitude ?? vehicle.altitude ?? raw.altitude;
+  const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
+  const liveOdo = telemetry?.odometer ?? vehicle.odometer ?? raw.odometer;
   const liveLastUpdate = telemetry?.gps_datetime ?? vehicle.lastUpdate;
 
-  // Metadata fields (flattened by backend into top-level after normalization,
-  // but raw WS packet keeps them under metadata — handle both)
+  // Metadata fields — WS flattens metadata to top-level after normalizeTelemetry;
+  // raw WS keeps them under metadata; REST snapshot is in raw.*
   const meta = telemetry?.metadata ?? {};
-  const liveRpm = meta.engine_rpm ?? vehicle.rpm;
-  const liveFuelRate = meta.fuel_rate_gps ?? vehicle.fuel_rate;
-  const liveEcoScore = meta.eco_score ?? vehicle.eco_score;
-  const liveIdling = meta.idling ?? vehicle.idling ?? false;
-  const liveJamming = meta.jamming ?? vehicle.jamming ?? false;
-  const liveImmobilizer = meta.immobilizer ?? vehicle.immobilizer ?? false;
-  const liveDrivingState = meta.driving_state ?? vehicle.driving_state;
-  const liveBatteryV = meta.battery_voltage ?? vehicle.voltage;
-  const liveExtV = meta.external_voltage ?? vehicle.ext_voltage;
-  const liveEngineTemp = meta.engine_temperature ?? vehicle.temp ?? 0;
-  const liveRssi = meta.rssi ?? null;
-  const liveHdop = meta.hdop ?? null;
-  const liveMileage = meta.mileage ?? null;
+  const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle.rpm;
+  const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
+  const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
+  const liveFuelRate = meta.fuel_rate_gps ?? meta.fuel_rate ?? telemetry?.fuel_rate ?? raw.fuel_rate ?? vehicle.fuel_rate;
+  const liveFuelConsumed = meta.fuel_consumed ?? telemetry?.fuel_consumed ?? raw.fuel_consumed;
+  const liveFuelUsedGps = meta.fuel_used_gps ?? telemetry?.fuel_used_gps ?? raw.fuel_used_gps;
+  const liveFuelLevelObd = meta.fuel_level_obd ?? telemetry?.fuel_level_obd ?? raw.fuel_level_obd;
+  const liveFuelSource = meta.fuel_source ?? telemetry?.fuel_source ?? raw.fuel_source;
+  const liveEcoScore = meta.eco_score ?? telemetry?.eco_score ?? raw.eco_score ?? vehicle.eco_score;
+  const liveIdling = meta.idling ?? telemetry?.idling ?? raw.idling ?? vehicle.idling ?? false;
+  const liveJamming = meta.jamming ?? telemetry?.jamming ?? raw.jamming ?? vehicle.jamming ?? false;
+  const liveImmobilizer = meta.immobilizer ?? telemetry?.immobilizer ?? raw.immobilizer ?? vehicle.immobilizer ?? false;
+  const liveUnplug = meta.unplug ?? telemetry?.unplug ?? raw.unplug ?? false;
+  const liveSleepMode = meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
+  const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
+  const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
+  const liveDrivingState = meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle.driving_state;
+  const liveBatteryV = meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle.voltage;
+  const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
+  const liveExtV = meta.external_voltage ?? telemetry?.external_voltage ?? raw.external_voltage ?? vehicle.ext_voltage;
+  const liveEngineTemp = meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle.temp ?? 0;
+  const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
+  const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
+  const liveMileage = meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
+  const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
+  const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
+  const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
+  const liveConfidence = meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
 
   // Fuel — API endpoint > WS telemetry > prop
   const apiFuel = currentFuelData?.data?.fuel_level;
@@ -349,7 +366,7 @@ export function TelemetryDrawer({
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Alert Badges */}
-        {(liveJamming || liveImmobilizer || liveIdling) && (
+        {(liveJamming || liveImmobilizer || liveIdling || liveUnplug || liveSleepMode) && (
           <div className="flex flex-wrap gap-2">
             {liveJamming && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
@@ -364,6 +381,16 @@ export function TelemetryDrawer({
             {liveIdling && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
                 <Activity className="h-3 w-3" /> Idling
+              </span>
+            )}
+            {liveUnplug && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
+                <Zap className="h-3 w-3" /> Unplugged
+              </span>
+            )}
+            {liveSleepMode && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
+                <Activity className="h-3 w-3" /> Sleep Mode
               </span>
             )}
           </div>
@@ -505,15 +532,34 @@ export function TelemetryDrawer({
               className="col-span-2"
             />
 
-            {/* Trip mileage (if available) */}
+            {/* Trip odometer */}
+            {liveTripOdo != null && (
+              <StatTile
+                icon={Navigation}
+                label="Trip Odometer"
+                value={liveTripOdo.toLocaleString()}
+                unit="km"
+                className="col-span-2"
+              />
+            )}
+
+            {/* Total mileage */}
             {liveMileage != null && (
               <StatTile
                 icon={Navigation}
-                label="Trip Distance"
+                label="Total Mileage"
                 value={liveMileage.toLocaleString()}
                 unit="km"
                 className="col-span-2"
               />
+            )}
+
+            {/* Odometer source */}
+            {liveOdoSource && (
+              <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Odo Source</span>
+                <span className="text-[9px] font-black text-slate-700 uppercase">{liveOdoSource}</span>
+              </div>
             )}
           </div>
         </div>
@@ -596,13 +642,27 @@ export function TelemetryDrawer({
                 value={
                   liveFuelRate != null ? `${liveFuelRate.toFixed(1)}` : "---"
                 }
-                unit={liveFuelRate != null ? "L/100km" : undefined}
+                unit={liveFuelRate != null ? "L/h" : undefined}
               />
               <StatTile
                 icon={RotateCcw}
                 label="Engine RPM"
                 value={liveRpm != null ? liveRpm.toLocaleString() : "---"}
               />
+              {liveRpmObd != null && (
+                <StatTile
+                  icon={RotateCcw}
+                  label="RPM (OBD)"
+                  value={liveRpmObd.toLocaleString()}
+                />
+              )}
+              {liveOilLevel != null && (
+                <StatTile
+                  icon={Droplets}
+                  label="Oil Level"
+                  value={String(liveOilLevel)}
+                />
+              )}
               <StatTile
                 icon={Thermometer}
                 label="Engine Temp"
@@ -617,6 +677,36 @@ export function TelemetryDrawer({
                 }
                 unit={liveAltitude != null ? "m" : undefined}
               />
+              {liveFuelConsumed != null && (
+                <StatTile
+                  icon={Droplets}
+                  label="Consumed"
+                  value={`${liveFuelConsumed.toFixed(1)}`}
+                  unit="L"
+                />
+              )}
+              {liveFuelUsedGps != null && (
+                <StatTile
+                  icon={Droplets}
+                  label="Used (GPS)"
+                  value={`${liveFuelUsedGps.toFixed(1)}`}
+                  unit="L"
+                />
+              )}
+              {liveFuelLevelObd != null && (
+                <StatTile
+                  icon={Droplets}
+                  label="Level (OBD)"
+                  value={`${liveFuelLevelObd}`}
+                  unit="%"
+                />
+              )}
+              {liveFuelSource && (
+                <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fuel Source</span>
+                  <span className="text-[9px] font-black text-slate-700 uppercase">{liveFuelSource}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -638,6 +728,13 @@ export function TelemetryDrawer({
               label="Ext. Voltage"
               value={liveExtV != null ? `${liveExtV}V` : "---"}
             />
+            {liveBatteryCurrent != null && (
+              <StatTile
+                icon={Zap}
+                label="Batt. Current"
+                value={`${liveBatteryCurrent}A`}
+              />
+            )}
             <StatTile
               icon={Signal}
               label="Signal"
@@ -660,12 +757,41 @@ export function TelemetryDrawer({
                     : "---"
               }
             />
+            {liveConfidence != null && (
+              <StatTile
+                icon={Satellite}
+                label="Confidence"
+                value={String(liveConfidence)}
+                className={liveBatteryCurrent != null ? "" : "col-span-2"}
+              />
+            )}
+            {liveProtocol && (
+              <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Protocol</span>
+                <span className="text-[9px] font-black text-slate-700 uppercase">{liveProtocol}</span>
+              </div>
+            )}
             <StatTile
               icon={Activity}
               label="OBD Status"
               value={isLoadingSensors ? "..." : health.obd_status || "---"}
               className="col-span-2"
             />
+            {liveDoorStatus && (
+              <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Door Status</span>
+                <span className="text-[9px] font-black text-slate-700 capitalize">{liveDoorStatus}</span>
+              </div>
+            )}
+            {liveLoadWeight != null && (
+              <StatTile
+                icon={Gauge}
+                label="Load Weight"
+                value={`${liveLoadWeight}`}
+                unit="kg"
+                className="col-span-2"
+              />
+            )}
           </div>
         </div>
 

@@ -3,7 +3,7 @@
 import React from 'react'
 import { VehicleTable } from '@/components/vehicles/VehicleTable'
 import { Button } from '@/components/ui/button'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useQuery } from '@tanstack/react-query'
 import { getVehicles } from '@/lib/api/vehicles'
@@ -13,8 +13,10 @@ import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
 import { Vehicle } from '@/types'
 import { VehicleFiltersComponent, VehicleFilters } from '@/components/vehicles/VehicleFilters'
+import { useAuthStore } from '@/store/authStore'
 
 export default function VehiclesPage() {
+    const { token } = useAuthStore()
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
     const [filters, setFilters] = React.useState<VehicleFilters>({})
@@ -27,6 +29,7 @@ export default function VehiclesPage() {
     const { data, isLoading } = useQuery({
         queryKey: ['vehicles', search, page, filters],
         queryFn: () => getVehicles({ q: search, page, ...filters }),
+        enabled: !!token,
     })
 
     const handleSearch = (val: string) => {

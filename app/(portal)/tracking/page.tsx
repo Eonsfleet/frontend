@@ -64,6 +64,46 @@ const getMarkerSVG = (bodyType: string) => {
   }
 };
 
+// Derive canonical movement status from device state + vehicle-level fallback
+function deriveVehicleStatus(loc: any, vehicle: any): string {
+  const state = (loc?.state ?? "").toLowerCase();
+  if (state === "moving") return "in_transit";
+  if (state === "idle") return "idle";
+  if (state === "parked") return "parked";
+  // no device state — fall back to vehicle-level status
+  const vs = (vehicle as any)?.attributes?.status ?? "";
+  if (vs === "in_transit") return "in_transit";
+  return "parked"; // active/maintenance/etc with no device movement data = parked
+}
+
+// Format a timestamp as "MMM d, HH:mm" in the user's local timezone.
+// If today, just "HH:mm:ss". Falls back to raw string if parsing fails.
+function fmtTimestamp(ts: string | null | undefined): string {
+  if (!ts) return "N/A";
+  try {
+    const d = new Date(
+      ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z",
+    );
+    if (isNaN(d.getTime())) return ts;
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) {
+      return d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
+    return (
+      d.toLocaleDateString([], { month: "short", day: "numeric" }) +
+      " " +
+      d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
+  } catch {
+    return ts;
+  }
+}
+
 const getVehicleIcon = (bodyType: string, status: string) => {
   const isMoving = status === "moving";
   switch (bodyType?.toLowerCase()) {
@@ -102,7 +142,7 @@ export default function TrackingPage() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "moving" | "stopped" | "online" | "offline"
+    "all" | "moving" | "idle" | "parked" | "online" | "offline"
   >("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null,
@@ -147,14 +187,6 @@ export default function TrackingPage() {
   const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
     queryKey: ["vehicles-tracking"],
     queryFn: () => api.getVehiclesBatched(),
-    enabled: !!token,
-    refetchInterval: 60_000,
-  });
-
-  // Seed all vehicle locations on load — /vehicles/locations returns full telemetry for every vehicle
-  const { data: vehicleLocationsData } = useQuery({
-    queryKey: ["vehicles-locations-seed"],
-    queryFn: () => api.getVehiclesLocationsBatched(),
     enabled: !!token,
     refetchInterval: 30_000,
     staleTime: 0,
@@ -224,10 +256,10 @@ export default function TrackingPage() {
       result = result.filter((v: Vehicle) => {
         const loc = locations[v.id];
         if (statusFilter === "moving") return loc?.status === "in_transit";
-        if (statusFilter === "stopped")
-          return loc?.status === "stopped" || loc?.status === "parked";
+        if (statusFilter === "idle") return loc?.status === "idle";
+        if (statusFilter === "parked") return loc?.status === "parked";
         if (statusFilter === "online") return loc?.is_online === true;
-        if (statusFilter === "offline") return !loc?.is_online;
+        if (statusFilter === "offline") return loc?.is_online === false || !loc;
         return false;
       });
     }
@@ -334,85 +366,75 @@ export default function TrackingPage() {
     fetchPlayback();
   }, [isReplayOpen, selectedVehicleId, playbackType, ongoingTripsData]);
 
-  // Seed locations from /vehicles/locations (full telemetry, always populated)
+  // Seed locations from /vehicles — relationships.current_location.attributes has full telemetry
   useEffect(() => {
-    const list = vehicleLocationsData as any;
-    if (!list?.length) return;
+    if (!vehicles.length) return;
     setLocations((prev) => {
       const next = { ...prev };
-      list.forEach((vl: any) => {
-        const telemetry =
-          vl.attributes?.telemetry ||
-          vl.location ||
-          vl.attributes?.current_location;
-        if (!telemetry) return;
+      vehicles.forEach((v: Vehicle) => {
+        const rel = (v as any).relationships;
+        const locAttrs = rel?.current_location?.attributes ?? null;
+        const device = rel?.device ?? null;
+        const isOnline =
+          device?.is_online ??
+          (v as any).attributes?.is_online ??
+          false;
 
-        const loc = normalizeTelemetry(telemetry, {
-          deviceStatus:
-            vl.attributes?.deviceStatus ||
-            vl.attributes?.device_status ||
-            vl.device?.status,
-        });
-        if (!loc?.lat) return;
+        if (!locAttrs) {
+          // Still refresh device online status and last packet even without location
+          if (next[v.id]) {
+            next[v.id] = {
+              ...next[v.id],
+              is_online: isOnline,
+              lastPacket: device?.last_packet_received_at ?? next[v.id]?.lastPacket,
+            };
+          }
+          return;
+        }
 
-        // Priority Check: Only update if no live WS data already present for this vehicle
-        // or if the seeded data is reasonably fresh and WS hasn't received anything yet.
-        next[vl.id] = {
-          ...loc,
-          ...next[vl.id],
-          lat: next[vl.id]?.lat ?? loc.lat,
-          lng: next[vl.id]?.lng ?? loc.lng,
-          speed: next[vl.id]?.speed ?? loc.speed ?? 0,
-          heading: next[vl.id]?.heading ?? loc.heading ?? 0,
-          status: next[vl.id]?.status ?? loc.status ?? "active",
-          is_online:
-            next[vl.id]?.is_online ??
-            loc.is_online ??
-            vl.attributes?.is_online ??
-            vl.attributes?.deviceStatus === "online",
-          lastUpdate: next[vl.id]?.lastUpdate ?? loc.gps_datetime,
+        const lat = locAttrs.coordinates?.latitude;
+        const lng = locAttrs.coordinates?.longitude;
+        const derivedStatus = deriveVehicleStatus(locAttrs, v);
+
+        const restData = {
+          lat: lat ?? 0,
+          lng: lng ?? 0,
+          speed: locAttrs.speed ?? 0,
+          heading: locAttrs.heading ?? locAttrs.angle ?? 0,
+          status: derivedStatus,
+          state: locAttrs.state,
+          is_online: isOnline,
+          fuel: locAttrs.fuel_level_percent,
+          fuel_liters: locAttrs.fuel_level_liters,
+          odometer: locAttrs.odometer,
+          lastUpdate: locAttrs.gps_datetime,
+          lastPacket: device?.last_packet_received_at,
+          satellites: locAttrs.satellites,
+          address: locAttrs.address,
           ignition:
-            next[vl.id]?.ignition ??
-            (loc.ignition === "on" || loc.ignition === "1"),
+            locAttrs.ignition === true ||
+            locAttrs.ignition === "on" ||
+            locAttrs.ignition === "1",
+          raw: locAttrs,
+        };
+
+        if (!lat || !lng) {
+          // No coordinates yet, but update metadata
+          next[v.id] = { ...restData, ...next[v.id], is_online: isOnline, raw: locAttrs, lastPacket: device?.last_packet_received_at };
+          return;
+        }
+
+        // WS live data takes priority for positional fields; REST is authoritative for is_online & raw
+        next[v.id] = {
+          ...restData,
+          ...next[v.id],
+          is_online: isOnline,
+          raw: locAttrs,
+          lastPacket: device?.last_packet_received_at,
         };
       });
       return next;
     });
-  }, [vehicleLocationsData]);
-
-  // Also seed from vehicle.relationships.current_location if available
-  useEffect(() => {
-    if (vehicles.length > 0) {
-      setLocations((prev) => {
-        const next = { ...prev };
-        let changed = false;
-        vehicles.forEach((v: Vehicle) => {
-          const tel = v.relationships?.current_location as any;
-          const attrs = v.attributes as any;
-
-          if (tel?.latitude && !next[v.id]) {
-            next[v.id] = {
-              lat: tel.latitude,
-              lng: tel.longitude,
-              speed: tel.speed || 0,
-              heading: tel.heading || 0,
-              status: tel.status || "active",
-              is_online: attrs.is_online || false,
-              fuel: tel.fuel_level_percent,
-              fuel_liters: tel.fuel_level_liters,
-              odometer: tel.odometer,
-              lastUpdate: tel.gps_datetime,
-              satellites: tel.satellites,
-              address: tel.address,
-              ignition: tel.ignition === "on",
-              metadata: tel.metadata,
-            };
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-    }
   }, [vehicles]);
 
   // Merge per-vehicle current location when a vehicle is selected
@@ -420,6 +442,11 @@ export default function TrackingPage() {
     if (!currentLocData || !selectedVehicleId) return;
     const loc = (currentLocData as any).location || currentLocData;
     if (!loc?.latitude) return;
+    // is_online from device field — do NOT assume online just because data was fetched
+    const deviceOnline =
+      (currentLocData as any).attributes?.is_online ??
+      (currentLocData as any).device?.status === "online" ??
+      undefined;
     setLocations((prev) => ({
       ...prev,
       [selectedVehicleId]: {
@@ -428,16 +455,18 @@ export default function TrackingPage() {
         lng: loc.longitude,
         speed: loc.speed || 0,
         heading: loc.heading || 0,
-        status: loc.status || "active",
-        is_online: true,
+        status: deriveVehicleStatus(loc, null),
+        state: loc.state,
+        is_online: deviceOnline ?? prev[selectedVehicleId]?.is_online ?? false,
         fuel: loc.fuel_level_percent,
         fuel_liters: loc.fuel_level_liters,
         odometer: loc.odometer,
         lastUpdate: loc.gps_datetime,
+        lastPacket: (currentLocData as any).device?.last_packet_received_at ?? prev[selectedVehicleId]?.lastPacket,
         satellites: loc.satellites,
         address: loc.address,
-        ignition: loc.ignition === "on",
-        metadata: loc.metadata,
+        ignition: loc.ignition === "on" || loc.ignition === true,
+        raw: loc,
       },
     }));
   }, [currentLocData, selectedVehicleId]);
@@ -458,16 +487,25 @@ export default function TrackingPage() {
       (packet: any) => {
         if (packet.vehicle_id) {
           const normalized = normalizeTelemetry(packet);
+          const status = deriveVehicleStatus(
+            { state: packet.state, speed: packet.speed },
+            null,
+          ) ?? normalized.status;
           setLocations((prev) => ({
             ...prev,
             [packet.vehicle_id]: {
-              // Old data as base, new WS data on top so fresh values always win
               ...prev[packet.vehicle_id],
               ...normalized,
-              is_online: true,
+              status,
+              state: packet.state ?? prev[packet.vehicle_id]?.state,
+              is_online: true, // receiving live WS data → device must be online
               lastUpdate: packet.gps_datetime || packet.timestamp_utc,
               ignition:
-                normalized.ignition === "on" || normalized.ignition === "1",
+                normalized.ignition === "on" ||
+                normalized.ignition === "1" ||
+                normalized.ignition === true,
+              // preserve raw REST snapshot; WS data itself is the live update
+              raw: prev[packet.vehicle_id]?.raw,
             },
           }));
         }
@@ -521,7 +559,7 @@ export default function TrackingPage() {
 
     const pusher = echo.connector.pusher;
     const handleReconnect = () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicles-locations-seed"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] });
     };
     pusher.connection.bind("connected", handleReconnect);
     return () => {
@@ -609,11 +647,12 @@ export default function TrackingPage() {
                   <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                     {(
                       [
-                        { key: "all", label: "All" },
-                        { key: "moving", label: "Moving" },
-                        { key: "stopped", label: "Stopped" },
-                        { key: "online", label: "Online" },
+                        { key: "all",     label: "All" },
+                        { key: "online",  label: "Online" },
                         { key: "offline", label: "Offline" },
+                        { key: "moving",  label: "Moving" },
+                        { key: "idle",    label: "Idle" },
+                        { key: "parked",  label: "Parked" },
                       ] as const
                     ).map(({ key: s, label }) => {
                       const count =
@@ -621,29 +660,26 @@ export default function TrackingPage() {
                           ? vehicles.length
                           : vehicles.filter((v: Vehicle) => {
                               const loc = locations[v.id];
-                              if (s === "moving")
-                                return loc?.status === "in_transit";
-                              if (s === "stopped")
-                                return (
-                                  loc?.status === "stopped" ||
-                                  loc?.status === "parked"
-                                );
-                              if (s === "online")
-                                return loc?.is_online === true;
-                              if (s === "offline") return !loc?.is_online;
+                              if (s === "moving") return loc?.status === "in_transit";
+                              if (s === "idle")   return loc?.status === "idle";
+                              if (s === "parked") return loc?.status === "parked";
+                              if (s === "online") return loc?.is_online === true;
+                              if (s === "offline") return loc?.is_online === false || !loc;
                               return false;
                             }).length;
 
                       const activeColor =
                         s === "moving"
                           ? "bg-emerald-600 border-emerald-600 text-white"
-                          : s === "stopped"
-                            ? "bg-slate-500 border-slate-500 text-white"
-                            : s === "online"
-                              ? "bg-blue-600 border-blue-600 text-white"
-                              : s === "offline"
-                                ? "bg-rose-600 border-rose-600 text-white"
-                                : "bg-slate-900 border-slate-900 text-white";
+                          : s === "idle"
+                            ? "bg-amber-500 border-amber-500 text-white"
+                            : s === "parked"
+                              ? "bg-slate-500 border-slate-500 text-white"
+                              : s === "online"
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : s === "offline"
+                                  ? "bg-rose-600 border-rose-600 text-white"
+                                  : "bg-slate-900 border-slate-900 text-white";
 
                       return (
                         <button
@@ -677,28 +713,23 @@ export default function TrackingPage() {
                           String(selectedVehicleId) === String(v.id);
                         const status =
                           loc?.status || (v as any).location?.status;
+                        // Prefer last_packet_received_at (device event), fall back to gps_datetime
                         const rawUpdate =
-                          loc?.lastUpdate || (v as any).location?.gps_datetime;
-                        const lastUpdate = rawUpdate
-                          ? new Date(
-                              rawUpdate.endsWith("Z") || rawUpdate.includes("+")
-                                ? rawUpdate
-                                : rawUpdate + "Z",
-                            ).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })
-                          : "N/A";
-                        const fuel = loc?.fuel_level_percent ?? null;
+                          loc?.lastPacket ||
+                          loc?.lastUpdate ||
+                          (v as any).location?.gps_datetime;
+                        const lastUpdate = fmtTimestamp(rawUpdate);
+                        // REST seed uses 'fuel'/'fuel_liters'; WS spread uses original names
+                        const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
+                        const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
                         const statusLabel = !loc?.is_online
                           ? "Offline"
                           : status === "in_transit"
                             ? "Moving"
-                            : status === "stopped" || status === "parked"
-                              ? "Stopped"
-                              : status === "idle"
-                                ? "Idling"
+                            : status === "idle"
+                              ? "Idling"
+                              : status === "parked"
+                                ? "Parked"
                                 : "Online";
 
                         return (
@@ -752,11 +783,10 @@ export default function TrackingPage() {
                                         ? "bg-rose-100 text-rose-600"
                                         : status === "in_transit"
                                           ? "bg-emerald-100 text-emerald-700"
-                                          : status === "stopped" ||
-                                              status === "parked"
-                                            ? "bg-slate-100 text-slate-500"
-                                            : status === "idle"
-                                              ? "bg-amber-100 text-amber-700"
+                                          : status === "idle"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : status === "parked"
+                                              ? "bg-slate-100 text-slate-500"
                                               : "bg-blue-100 text-blue-700",
                                   )}
                                 >
@@ -769,10 +799,11 @@ export default function TrackingPage() {
                                       ? "bg-rose-500 shadow-rose-500/50"
                                       : status === "in_transit"
                                         ? "bg-emerald-500 shadow-emerald-500/50"
-                                        : status === "stopped" ||
-                                            status === "parked"
-                                          ? "bg-slate-400 shadow-slate-400/50"
-                                          : "bg-blue-500 shadow-blue-500/50",
+                                        : status === "idle"
+                                          ? "bg-amber-400 shadow-amber-400/50"
+                                          : status === "parked"
+                                            ? "bg-slate-400 shadow-slate-400/50"
+                                            : "bg-blue-500 shadow-blue-500/50",
                                   )}
                                 />
                               </div>
@@ -789,18 +820,23 @@ export default function TrackingPage() {
                                 {lastUpdate}
                               </span>
                               <div className="flex items-center gap-3">
-                                {fuel != null && (
+                                {(fuelPct != null || fuelL != null) && (
                                   <span
                                     className={cn(
                                       "text-[7px] font-black uppercase tracking-widest",
                                       isSelected
                                         ? "text-blue-200"
-                                        : fuel < 20
+                                        : fuelPct != null && fuelPct < 20
                                           ? "text-rose-500"
                                           : "text-slate-400",
                                     )}
                                   >
-                                    ⛽ {fuel}%
+                                    ⛽{" "}
+                                    {fuelPct != null && fuelL != null
+                                      ? `${fuelPct}% · ${fuelL.toFixed(1)}L`
+                                      : fuelPct != null
+                                        ? `${fuelPct}%`
+                                        : `${fuelL!.toFixed(1)}L`}
                                   </span>
                                 )}
                                 <span
@@ -1280,45 +1316,44 @@ export default function TrackingPage() {
                   model: selectedVehicle.attributes.model,
                   device_id: selectedVehicle.attributes.device_id ?? null,
                   imei:
-                    (selectedVehicle.relationships?.device as any)?.data
-                      ?.imei ?? null,
-                  altitude: loc?.altitude ?? null,
+                    (selectedVehicle.relationships?.device as any)?.imei ??
+                    (selectedVehicle.relationships?.device as any)?.data?.imei ??
+                    null,
+                  altitude: loc?.altitude ?? rel?.altitude ?? null,
                   movement: loc?.movement ?? null,
                   speed: loc?.speed ?? rel?.speed ?? 0,
-                  // normalizeTelemetry flattens metadata to top-level on loc
-                  fuel: loc?.fuel_level_percent ?? rel?.fuel_level_percent ?? 0,
-                  fuel_liters: loc?.fuel_level_liters ?? rel?.fuel_level_liters,
+                  fuel: loc?.fuel ?? loc?.fuel_level_percent ?? rel?.fuel_level_percent ?? 0,
+                  fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters ?? rel?.fuel_level_liters,
                   temp:
                     loc?.engine_temperature ??
-                    rel?.metadata?.engine_temperature ??
+                    rel?.engine_temperature ??
                     0,
-                  status: loc?.status ?? rel?.status,
+                  status: loc?.status ?? deriveVehicleStatus(rel, selectedVehicle),
                   voltage:
-                    loc?.battery_voltage ?? rel?.metadata?.battery_voltage,
+                    loc?.battery_voltage ?? rel?.battery_voltage,
                   ext_voltage:
-                    loc?.external_voltage ?? rel?.metadata?.external_voltage,
+                    loc?.external_voltage ?? rel?.external_voltage,
                   signal:
                     loc?.satellites != null
                       ? `${loc.satellites} Sats`
                       : rel?.satellites != null
                         ? `${rel.satellites} Sats`
                         : "---",
-                  ignition: loc?.ignition ?? rel?.ignition === "on",
+                  ignition: loc?.ignition ?? (rel?.ignition === "on" || rel?.ignition === true),
                   odometer: loc?.odometer ?? rel?.odometer,
-                  lat: loc?.lat ?? rel?.latitude,
-                  lng: loc?.lng ?? rel?.longitude,
+                  lat: loc?.lat ?? rel?.coordinates?.latitude,
+                  lng: loc?.lng ?? rel?.coordinates?.longitude,
                   lastUpdate: loc?.lastUpdate ?? rel?.gps_datetime,
                   address: loc?.address ?? rel?.address,
-                  heading: loc?.heading ?? rel?.heading ?? 0,
-                  rpm: loc?.engine_rpm ?? rel?.metadata?.engine_rpm,
-                  fuel_rate: loc?.fuel_rate_gps ?? rel?.metadata?.fuel_rate_gps,
-                  eco_score: loc?.eco_score ?? rel?.metadata?.eco_score,
-                  idling: loc?.idling ?? rel?.metadata?.idling ?? false,
-                  jamming: loc?.jamming ?? rel?.metadata?.jamming ?? false,
-                  immobilizer:
-                    loc?.immobilizer ?? rel?.metadata?.immobilizer ?? false,
-                  driving_state:
-                    loc?.driving_state ?? rel?.metadata?.driving_state,
+                  heading: loc?.heading ?? rel?.heading ?? rel?.angle ?? 0,
+                  rpm: loc?.engine_rpm ?? rel?.engine_rpm,
+                  fuel_rate: loc?.fuel_rate ?? rel?.fuel_rate,
+                  eco_score: loc?.eco_score ?? rel?.eco_score,
+                  idling: loc?.idling ?? rel?.idling ?? false,
+                  jamming: loc?.jamming ?? rel?.jamming ?? false,
+                  immobilizer: loc?.immobilizer ?? rel?.immobilizer ?? false,
+                  driving_state: loc?.driving_state ?? rel?.driving_state,
+                  raw: loc?.raw ?? rel,
                 };
               })()
             : null

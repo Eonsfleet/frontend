@@ -1,27 +1,27 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
-// Fix for default Leaflet markers in Next.js
-const customIcon = L.icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-})
+const statusColors: Record<string, string> = {
+    in_transit: '#10b981',
+    idle: '#f59e0b',
+    parked: '#6b7280',
+    online: '#3b82f6',
+    offline: '#ef4444',
+}
 
 interface VehicleLocation {
     id: string
     name: string
     lat: number
     lng: number
-    status: 'moving' | 'idle' | 'stopped'
+    status: 'in_transit' | 'idle' | 'parked' | 'online' | 'offline'
+    speed?: number
+    heading?: number | null
+    address?: string | null
 }
 
 const MapController = ({ locations }: { locations: VehicleLocation[] }) => {
@@ -52,10 +52,6 @@ export default function DashboardMapComponent({ locations }: { locations: Vehicl
         )
     }
 
-    const center: [number, number] = locations.length > 0
-        ? [locations[0].lat, locations[0].lng]
-        : [39.8283, -98.5795] // Default to US center if no locations
-
     return (
         <div className="w-full h-full relative z-0">
             <MapContainer
@@ -70,18 +66,32 @@ export default function DashboardMapComponent({ locations }: { locations: Vehicl
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 {locations.map((loc) => (
-                    <Marker
+                    <CircleMarker
                         key={loc.id}
-                        position={[loc.lat, loc.lng]}
-                        icon={customIcon}
+                        center={[loc.lat, loc.lng]}
+                        radius={8}
+                        pathOptions={{
+                            color: '#fff',
+                            weight: 2,
+                            fillColor: statusColors[loc.status] ?? '#6b7280',
+                            fillOpacity: 1,
+                        }}
                     >
                         <Popup>
-                            <div className="text-sm">
+                            <div className="text-sm space-y-1 min-w-[140px]">
                                 <p className="font-semibold text-slate-900">{loc.name}</p>
-                                <p className="text-slate-600 capitalize">Status: {loc.status}</p>
+                                <p className="capitalize" style={{ color: statusColors[loc.status] ?? '#6b7280' }}>
+                                    ● {loc.status}
+                                </p>
+                                {loc.speed !== undefined && loc.speed > 0 && (
+                                    <p className="text-slate-500">{loc.speed} km/h</p>
+                                )}
+                                {loc.address && (
+                                    <p className="text-slate-500 text-xs leading-tight">{loc.address}</p>
+                                )}
                             </div>
                         </Popup>
-                    </Marker>
+                    </CircleMarker>
                 ))}
             </MapContainer>
         </div>
