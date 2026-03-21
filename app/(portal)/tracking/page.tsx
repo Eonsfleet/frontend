@@ -443,10 +443,11 @@ export default function TrackingPage() {
     const loc = (currentLocData as any).location || currentLocData;
     if (!loc?.latitude) return;
     // is_online from device field — do NOT assume online just because data was fetched
-    const deviceOnline =
+    const deviceOnline: boolean | undefined =
       (currentLocData as any).attributes?.is_online ??
-      (currentLocData as any).device?.status === "online" ??
-      undefined;
+      ((currentLocData as any).device?.status != null
+        ? (currentLocData as any).device.status === "online"
+        : undefined);
     setLocations((prev) => ({
       ...prev,
       [selectedVehicleId]: {
