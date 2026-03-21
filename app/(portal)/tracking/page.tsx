@@ -720,9 +720,18 @@ export default function TrackingPage() {
                           loc?.lastUpdate ||
                           (v as any).location?.gps_datetime;
                         const lastUpdate = fmtTimestamp(rawUpdate);
-                        // REST seed uses 'fuel'/'fuel_liters'; WS spread uses original names
-                        const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
-                        const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
+                        // REST seed → 'fuel'/'fuel_liters'; WS spread → original names; ultimate fallback → embedded vehicle data
+                        const embeddedLoc = (v as any).relationships?.current_location?.attributes;
+                        const fuelPct =
+                          loc?.fuel ??
+                          loc?.fuel_level_percent ??
+                          embeddedLoc?.fuel_level_percent ??
+                          null;
+                        const fuelL =
+                          loc?.fuel_liters ??
+                          loc?.fuel_level_liters ??
+                          embeddedLoc?.fuel_level_liters ??
+                          null;
                         const statusLabel = !loc?.is_online
                           ? "Offline"
                           : status === "in_transit"
@@ -834,10 +843,10 @@ export default function TrackingPage() {
                                   >
                                     ⛽{" "}
                                     {fuelPct != null && fuelL != null
-                                      ? `${fuelPct}% · ${fuelL.toFixed(1)}L`
+                                      ? `${fuelPct}% · ${Number(fuelL).toFixed(1)}L`
                                       : fuelPct != null
                                         ? `${fuelPct}%`
-                                        : `${fuelL!.toFixed(1)}L`}
+                                        : `${Number(fuelL).toFixed(1)}L`}
                                   </span>
                                 )}
                                 <span
