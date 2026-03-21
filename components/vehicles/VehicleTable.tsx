@@ -164,7 +164,7 @@ export function VehicleTable({
             cell: ({ row }) => {
                 const deviceId = row.original.attributes.device_id
                 const device = (row.original.relationships as any)?.device
-                const deviceStatus = (device?.status ?? row.original.attributes.deviceStatus ?? '').toLowerCase()
+                const deviceStatus = (device?.status ?? (row.original.attributes as any).deviceStatus ?? '').toLowerCase()
                 const statusConfig = DEVICE_STATUS_STYLES[deviceStatus]
 
                 if (!deviceId) {
