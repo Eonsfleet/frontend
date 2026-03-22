@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area, LineChart, Line
+    AreaChart, Area, LineChart, Line, PieChart, Pie, Cell
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
@@ -525,6 +525,82 @@ export default function FuelAnalyticsPage() {
                                 <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No efficiency data</p>
                             )
                         })()}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Fuel Anomaly Report */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Anomaly Breakdown</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Fuel events by type</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-8 pt-6">
+                        {anomalyData?.by_type?.length > 0 ? (
+                            <div className="flex flex-col gap-4">
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <PieChart>
+                                        <Pie data={anomalyData.by_type} dataKey="count" nameKey="type" cx="50%" cy="50%" outerRadius={70} innerRadius={40}>
+                                            {anomalyData.by_type.map((_: any, i: number) => (
+                                                <Cell key={i} fill={['#3b82f6','#f59e0b','#ef4444','#10b981'][i % 4]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip contentStyle={{ fontSize: 10, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {anomalyData.by_type.map((item: any, i: number) => (
+                                        <div key={i} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl">
+                                            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ['#3b82f6','#f59e0b','#ef4444','#10b981'][i % 4] }} />
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest truncate">
+                                                    {item.type.replace(/_/g, ' ')}
+                                                </p>
+                                                <p className="text-sm font-black text-slate-900">{item.count}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-40 flex items-center justify-center">
+                                <p className="text-[11px] font-black text-slate-400 uppercase">No anomaly data</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Theft Trend</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Monthly fuel theft incidents</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6 pr-6">
+                        {anomalyData?.theft_trend?.labels?.length > 0 ? (
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart
+                                    data={anomalyData.theft_trend.labels.map((label: string, i: number) => ({
+                                        name: label,
+                                        count: anomalyData.theft_trend.data[i] ?? 0,
+                                    }))}
+                                    margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                                    <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <Tooltip
+                                        contentStyle={{ fontSize: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                                        formatter={(val: any) => [val, 'Incidents']}
+                                    />
+                                    <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-[220px] flex items-center justify-center">
+                                <p className="text-[11px] font-black text-slate-400 uppercase">No theft trend data</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
