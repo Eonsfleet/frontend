@@ -79,7 +79,7 @@ export default function FuelAnalyticsPage() {
         fleet_efficiency_l_per_100km: 0,
     }
 
-    const topDrivers: any[] = driverEffData?.top_10_pct ?? []
+    const topDrivers: any[] = driverEffData?.drivers ?? []
     const anomalyTypes: any[] = anomalyData?.by_type ?? []
 
     const isLoading = isConsLoading || isKpiLoading || isAnomalyLoading || isDriverEffLoading
@@ -238,15 +238,44 @@ export default function FuelAnalyticsPage() {
                 </CardHeader>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
+                        {/* Fleet summary bar */}
+                        {driverEffData?.fleet_baseline_l100 != null && (
+                            <div className="px-8 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-6">
+                                <div>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fleet Baseline</p>
+                                    <p className="text-sm font-black text-slate-900">{Number(driverEffData.fleet_baseline_l100).toFixed(2)} L/100km</p>
+                                </div>
+                                {driverEffData.top_10_benchmark_l100 != null && (
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Top 10% Benchmark</p>
+                                        <p className="text-sm font-black text-emerald-600">{Number(driverEffData.top_10_benchmark_l100).toFixed(2)} L/100km</p>
+                                    </div>
+                                )}
+                                {driverEffData.avg_cost_per_liter != null && (
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Avg Cost/Liter</p>
+                                        <p className="text-sm font-black text-slate-900">₦{Number(driverEffData.avg_cost_per_liter).toFixed(2)}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <thead>
                             <tr className="bg-slate-50/50">
                                 <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Driver</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Efficiency (L/100km)</th>
-                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Fleet Avg Savings</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">L/100km</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">vs Baseline</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Savings Potential</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {topDrivers.length > 0 ? topDrivers.map((d: any, i: number) => (
+                            {topDrivers.length > 0 ? topDrivers.map((d: any, i: number) => {
+                                const segmentColor = d.segment === 'exemplary'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : d.segment === 'needs_improvement'
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                const vsBaseline = d.vs_baseline
+                                return (
                                 <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-3">
@@ -255,21 +284,31 @@ export default function FuelAnalyticsPage() {
                                             </div>
                                             <div>
                                                 <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{d.driver_name || 'Unknown'}</p>
-                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">#{d.driver_id}</p>
+                                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md ${segmentColor}`}>
+                                                    {(d.segment ?? '').replace(/_/g, ' ')}
+                                                </span>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-8 py-5 text-right font-black text-[11px] text-emerald-600">
-                                        {d.efficiency != null ? `${Number(d.efficiency).toFixed(2)} L/100km` : '—'}
+                                    <td className="px-8 py-5 text-right font-black text-[11px] text-slate-900">
+                                        {d.liters_per_100km != null ? `${Number(d.liters_per_100km).toFixed(2)}` : '—'}
                                     </td>
-                                    <td className="px-8 py-5 text-right font-black text-[11px] text-slate-500 uppercase text-[10px]">
-                                        {driverEffData?.savings_potential_naira != null
-                                            ? `₦${Number(driverEffData.savings_potential_naira).toLocaleString()} (fleet)`
-                                            : '—'
+                                    <td className="px-8 py-5 text-right font-black text-[11px]">
+                                        {vsBaseline != null ? (
+                                            <span className={vsBaseline <= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                                {vsBaseline > 0 ? '+' : ''}{Number(vsBaseline).toFixed(2)}
+                                            </span>
+                                        ) : '—'}
+                                    </td>
+                                    <td className="px-8 py-5 text-right font-black text-[11px] text-slate-500">
+                                        {d.savings_potential_cost != null
+                                            ? `₦${Number(d.savings_potential_cost).toFixed(2)}`
+                                            : <span className="text-emerald-600 text-[10px]">Exemplary</span>
                                         }
                                     </td>
                                 </tr>
-                            )) : (
+                                )
+                            }) : (
                                 <tr>
                                     <td colSpan={3} className="px-8 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center space-y-3">
