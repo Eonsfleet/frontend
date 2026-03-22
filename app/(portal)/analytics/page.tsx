@@ -363,7 +363,7 @@ function OverviewInner() {
                                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                                     <Tooltip
                                         contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                                        formatter={(val: any, name: string) => [
+                                        formatter={(val: any, name: any) => [
                                             name === 'distance' ? `${Number(val).toLocaleString()} km` : val,
                                             name === 'distance' ? 'Distance' : 'Trips'
                                         ]}
