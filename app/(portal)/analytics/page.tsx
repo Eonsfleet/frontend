@@ -1,15 +1,13 @@
 'use client'
 
 import { AnalyticsChart } from '@/components/analytics/AnalyticsChart'
-import { AIInsights, type InsightItem } from '@/components/analytics/AIInsights'
 import { ReportBuilderWizard } from '@/components/analytics/ReportBuilderWizard'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { TrendingUp, Truck, Fuel, AlertTriangle, Plus, LayoutGrid, Calendar, Filter } from 'lucide-react'
+import { TrendingUp, TrendingDown, Truck, Fuel, Plus, LayoutGrid, Calendar, Filter, Activity, ShieldCheck } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
-import * as trackingApi from '@/lib/api/tracking'
 
 const fleetTrendData = [
     { name: 'Mon', active: 65, idle: 20, comparison: 72 },
@@ -30,32 +28,6 @@ const costData = [
     { name: 'Jun', fuel: 2390, maintenance: 3800 },
 ]
 
-const aiInsights: InsightItem[] = [
-    {
-        id: 'i1',
-        type: 'optimization',
-        title: 'Route Optimization Opportunity',
-        description: 'LND-123-XY frequently takes longer routes during peak hours. Potential 12% fuel saving detected.',
-        impact: '₦45,000 / mo',
-        actionLabel: 'Apply New Route'
-    },
-    {
-        id: 'i2',
-        type: 'risk',
-        title: 'Predictive Service Warning',
-        description: 'ABJ-567-ZZ engine vibration patterns match early-stage alternator failure profiles.',
-        impact: 'High Risk',
-        actionLabel: 'Schedule Now'
-    },
-    {
-        id: 'i3',
-        type: 'efficiency',
-        title: 'Idle Time Reduction',
-        description: 'Lagos Cluster idle time is 18% higher than the national average between 10 AM - 2 PM.',
-        impact: '8.5% Efficiency',
-        actionLabel: 'View Drivers'
-    }
-]
 
 export default function AnalyticsOverviewPage() {
     const [isComparisonMode, setIsComparisonMode] = useState(false)
@@ -67,42 +39,29 @@ export default function AnalyticsOverviewPage() {
         queryFn: () => analyticsApi.getFuelConsumptionReport({ filter: '30d' })
     })
 
-    // Fetch Fuel Efficiency (KPI)
-    const { data: efficiencyData } = useQuery({
-        queryKey: ['fuel-efficiency'],
-        queryFn: () => analyticsApi.getFuelEfficiencyReport()
+    const { data: utilizationSummary } = useQuery({
+        queryKey: ['analytics-utilization-summary'],
+        queryFn: () => analyticsApi.getFleetUtilizationSummary(),
     })
 
-    // Fetch Anomalies (AI Insights)
-    const { data: anomalyData } = useQuery({
-        queryKey: ['anomalies'],
-        queryFn: () => analyticsApi.detectAnomalies({ days: 30 })
+    const { data: fleetHealthScore } = useQuery({
+        queryKey: ['analytics-fleet-health-score'],
+        queryFn: () => analyticsApi.getFleetHealthScore(),
     })
 
-    // Fetch General Metrics
-    const { data: metricsData } = useQuery({
-        queryKey: ['tracking-metrics'],
-        queryFn: () => trackingApi.getTrackingMetrics()
+    const { data: fuelKpis } = useQuery({
+        queryKey: ['analytics-fuel-kpis'],
+        queryFn: () => analyticsApi.getFuelExecutiveKpis(),
     })
 
-    const metrics = metricsData?.data || { moving_assets: 0, total_active_assets: 0, idle_assets: 0 }
-    const utilization = useMemo(() => {
-        if (!metrics.total_active_assets) return 0
-        return ((metrics.moving_assets / metrics.total_active_assets) * 100).toFixed(1)
-    }, [metrics])
-
-    // Normalize AI Insights
-    const dynamicInsights: InsightItem[] = useMemo(() => {
-        if (!anomalyData?.data?.anomalies) return aiInsights // fallback
-        return anomalyData.data.anomalies.map((a: any) => ({
-            id: String(a.id),
-            type: (a.severity === 'critical' ? 'risk' : 'optimization') as any,
-            title: a.title,
-            description: a.description,
-            impact: a.impact_score > 8 ? 'High Risk' : `₦${a.potential_saving || '0'} / mo`,
-            actionLabel: a.severity === 'critical' ? 'Schedule Now' : 'Apply New Route'
-        }))
-    }, [anomalyData])
+    const utilizationRate = utilizationSummary?.utilization_rate_pct ?? null
+    const completionRate = utilizationSummary?.completion_rate_pct ?? null
+    const healthScore = fleetHealthScore?.score ?? null
+    const healthRating = fleetHealthScore?.rating ?? null
+    const fuelCostThisMonth = fuelKpis?.total_fuel_cost_this_month ?? null
+    const fuelCostChange = fuelKpis?.cost_vs_last_month_percent ?? null
+    const fuelMatchRate = fuelKpis?.reconciliation_match_rate_percent ?? null
+    const fuelTheftCount = fuelKpis?.theft_incidents_this_month ?? null
 
     // Normalize OpEx Data (Fuel vs Maintenance)
     // Note: Maintenance data might need another endpoint, using consumption for now
@@ -165,77 +124,110 @@ export default function AnalyticsOverviewPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-slate-200 shadow-sm overflow-hidden group">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avg Utilization</p>
-                            <TrendingUp className="h-4 w-4 text-emerald-500" />
-                        </div>
-                        <h3 className="text-3xl font-black text-slate-900 italic">{utilization}%</h3>
-                        <p className="text-[10px] text-emerald-600 font-bold uppercase mt-1">Real-time status</p>
-                    </CardContent>
-                </Card>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Fleet Utilization */}
                 <Card className="border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost / KM</p>
-                            <Fuel className="h-4 w-4 text-rose-500" />
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fleet Utilization</p>
+                            <Activity className="h-4 w-4 text-blue-500" />
                         </div>
                         <h3 className="text-3xl font-black text-slate-900 italic">
-                            ₦{efficiencyData?.data?.metrics?.avg_cost_per_km?.toFixed(2) || '142.50'}
+                            {utilizationRate != null ? `${Number(utilizationRate).toFixed(1)}%` : '—'}
                         </h3>
-                        <p className="text-[10px] text-rose-600 font-bold uppercase mt-1">vs target baseline</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                            {completionRate != null ? `${Number(completionRate).toFixed(1)}% trip completion` : 'Deployment efficiency'}
+                        </p>
+                        {utilizationSummary?.total_distance_km != null && (
+                            <p className="text-[10px] text-blue-600 font-bold uppercase mt-0.5">
+                                {Number(utilizationSummary.total_distance_km).toLocaleString()} km driven
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
+
+                {/* Fleet Health Score */}
+                <Card className="border-none shadow-sm bg-blue-600 overflow-hidden">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Fleet Health Score</p>
+                            <ShieldCheck className="h-4 w-4 text-blue-200" />
+                        </div>
+                        <h3 className="text-3xl font-black text-white italic">
+                            {healthScore != null ? `${healthScore} / 100` : '—'}
+                        </h3>
+                        {healthScore != null && (
+                            <div className="mt-2 h-1.5 w-full bg-blue-800 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-300 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+                                    style={{ width: `${healthScore}%` }}
+                                />
+                            </div>
+                        )}
+                        {healthRating && (
+                            <p className="text-[10px] text-blue-200 font-bold uppercase mt-1.5 capitalize">{healthRating}</p>
+                        )}
+                        {fleetHealthScore?.components && (
+                            <p className="text-[10px] text-blue-300 font-bold uppercase mt-0.5">
+                                {fleetHealthScore.components.maintenance_compliance ?? 0}% maintenance compliance
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Fuel Cost This Month */}
                 <Card className="border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Critical Incidents</p>
-                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost (Month)</p>
+                            <Fuel className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <h3 className="text-3xl font-black text-slate-900 italic">3</h3>
-                        <p className="text-[10px] text-emerald-600 font-bold uppercase mt-1">Down from 8 last week</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-slate-200 shadow-sm bg-blue-600 border-none group transition-all hover:scale-[1.02]">
-                    <CardContent className="p-6">
-                        <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-2">Fleet Health Score</p>
-                        <h3 className="text-3xl font-black text-white italic">87/100</h3>
-                        <div className="mt-2 h-1.5 w-full bg-blue-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-300 w-[87%] rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]" />
-                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 italic">
+                            {fuelCostThisMonth != null ? `₦${Number(fuelCostThisMonth).toLocaleString()}` : '—'}
+                        </h3>
+                        {fuelCostChange != null && (
+                            <div className={cn(
+                                'flex items-center gap-1 mt-1',
+                                fuelCostChange <= 0 ? 'text-emerald-600' : 'text-rose-600'
+                            )}>
+                                {fuelCostChange <= 0
+                                    ? <TrendingDown className="h-3 w-3" />
+                                    : <TrendingUp className="h-3 w-3" />}
+                                <span className="text-[10px] font-bold uppercase">
+                                    {Math.abs(fuelCostChange).toFixed(1)}% vs last month
+                                </span>
+                            </div>
+                        )}
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                            {fuelMatchRate != null ? `${fuelMatchRate}% reconciled` : ''}
+                            {fuelTheftCount != null ? ` · ${fuelTheftCount} theft incidents` : ''}
+                        </p>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-2 space-y-6">
-                    <AnalyticsChart
-                        title="Fleet Activity & Utilization"
-                        description="Real-time occupancy and motion dynamics"
-                        data={fleetTrendData}
-                        dataKeys={[
-                            { key: 'active', color: '#4f46e5', label: 'Active Fleet' },
-                            { key: 'idle', color: '#f59e0b', label: 'Idle Fleet' },
-                            ...(isComparisonMode ? [{ key: 'comparison', color: '#10b981', label: 'LND-123-XY' }] : [])
-                        ]}
-                        allowComparison
-                    />
-                    <AnalyticsChart
-                        title="OpEx Expenditure Overview"
-                        description="Maintenance vs Fuel cost distribution"
-                        data={dynamicCostData}
-                        height={300}
-                        dataKeys={[
-                            { key: 'fuel', color: '#0ea5e9', label: 'Fuel Spend' },
-                            { key: 'maintenance', color: '#f59e0b', label: 'Maintenance' }
-                        ]}
-                    />
-                </div>
-                <div className="flex flex-col gap-6">
-                    <AIInsights insights={dynamicInsights} />
-                </div>
+            <div className="space-y-6">
+                <AnalyticsChart
+                    title="Fleet Activity & Utilization"
+                    description="Real-time occupancy and motion dynamics"
+                    data={fleetTrendData}
+                    dataKeys={[
+                        { key: 'active', color: '#4f46e5', label: 'Active Fleet' },
+                        { key: 'idle', color: '#f59e0b', label: 'Idle Fleet' },
+                        ...(isComparisonMode ? [{ key: 'comparison', color: '#10b981', label: 'LND-123-XY' }] : [])
+                    ]}
+                    allowComparison
+                />
+                <AnalyticsChart
+                    title="OpEx Expenditure Overview"
+                    description="Maintenance vs Fuel cost distribution"
+                    data={dynamicCostData}
+                    height={300}
+                    dataKeys={[
+                        { key: 'fuel', color: '#0ea5e9', label: 'Fuel Spend' },
+                        { key: 'maintenance', color: '#f59e0b', label: 'Maintenance' }
+                    ]}
+                />
             </div>
 
             <ReportBuilderWizard

@@ -39,7 +39,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getCurrentDriver, getVehicleDriverHistory } from '@/lib/api/vehicles'
 import { getVehicleMaintenanceSchedules } from '@/lib/api/maintenance'
 import { getVehicleDocuments, downloadDocument } from '@/lib/api/documents'
-import { getVehicleCurrentFuel } from '@/lib/api/fuel'
+import { getVehicleCurrentFuel, getVehicleFuelHistory } from '@/lib/api/fuel'
 import { getDriverTrips } from '@/lib/api/drivers'
 import { UploadDocumentDialog } from '@/components/vehicles/UploadDocumentDialog'
 import { toast } from 'sonner'
@@ -102,6 +102,11 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         queryKey: ['vehicle-fuel', vehicle.id],
         queryFn: () => getVehicleCurrentFuel(Number(vehicle.id)),
         refetchInterval: 30000,
+    })
+
+    const { data: fuelHistoryResponse, isLoading: isLoadingFuelHistory } = useQuery({
+        queryKey: ['vehicle-fuel-history', vehicle.id],
+        queryFn: () => getVehicleFuelHistory(Number(vehicle.id)),
     })
 
     // Try embedded current_driver array first, fall back to query result
@@ -836,6 +841,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             const fuelPercent = fuelLevel?.fuel_level_percent ?? 0
                             const tankCapacity = fuelLevel?.tank_capacity ?? vehicle.attributes.fuel_capacity
                             return (
+                                <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <Card className="md:col-span-2 shadow-sm border-slate-200">
                                         <CardHeader className="flex flex-row items-start justify-between pb-4">
@@ -976,6 +982,90 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                             </CardContent>
                                         </Card>
                                     </div>
+                                </div>
+
+                                {/* ── Fuel History Table ─────────────────── */}
+                                <Card className="shadow-sm border-slate-200">
+                                    <CardHeader className="flex flex-row items-center justify-between pb-4">
+                                        <div>
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <History className="w-4 h-4 text-slate-500" /> Fuel Level History
+                                            </CardTitle>
+                                            <CardDescription>Recent sensor readings from the onboard fuel monitor.</CardDescription>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {isLoadingFuelHistory ? (
+                                            <div className="py-10 flex justify-center">
+                                                <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                                            </div>
+                                        ) : (fuelHistoryResponse?.data?.history?.length ?? 0) === 0 ? (
+                                            <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
+                                                <Fuel className="w-8 h-8 text-slate-300" />
+                                                <p className="text-sm font-semibold text-slate-500">No history available</p>
+                                                <p className="text-xs text-slate-400">Fuel sensor readings will appear here once recorded.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-slate-50 border-b border-slate-100">
+                                                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
+                                                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Level (%)</th>
+                                                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Volume (L)</th>
+                                                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Quality</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-50">
+                                                        {fuelHistoryResponse!.data.history.map((row, i) => {
+                                                            const pct = row.fuel_level_percent ?? 0
+                                                            const quality = row.data_quality_score ?? 0
+                                                            return (
+                                                                <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                                                                    <td className="px-6 py-3 text-xs text-slate-700 font-medium whitespace-nowrap">
+                                                                        {format(new Date(row.timestamp), 'MMM d, yyyy HH:mm:ss')}
+                                                                    </td>
+                                                                    <td className="px-6 py-3 text-right">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
+                                                                                <div
+                                                                                    className={cn(
+                                                                                        'h-full rounded-full',
+                                                                                        pct < 15 ? 'bg-rose-500' : pct < 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                                                    )}
+                                                                                    style={{ width: `${pct}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <span className={cn(
+                                                                                'text-xs font-bold tabular-nums',
+                                                                                pct < 15 ? 'text-rose-600' : pct < 30 ? 'text-amber-600' : 'text-slate-700'
+                                                                            )}>
+                                                                                {pct}%
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-3 text-right text-xs text-slate-700 font-medium tabular-nums">
+                                                                        {row.fuel_level_liters != null ? `${Number(row.fuel_level_liters).toFixed(1)} L` : '—'}
+                                                                    </td>
+                                                                    <td className="px-6 py-3 text-right">
+                                                                        <Badge variant="outline" className={cn(
+                                                                            'text-[10px] font-bold',
+                                                                            quality >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                                                                quality >= 50 ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                                                    'bg-rose-50 text-rose-600 border-rose-100'
+                                                                        )}>
+                                                                            {quality}%
+                                                                        </Badge>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
                                 </div>
                             )
                         })()}

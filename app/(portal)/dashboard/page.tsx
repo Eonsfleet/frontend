@@ -400,14 +400,12 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* KPI Cards */}
+            {/* KPI Cards — Row 1 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     title="Total Vehicles"
                     value={String(totalVehicles)}
                     icon={Car}
-                    // stats={dynamicVehicleStats}
-                    // onDrillDown={() => setIsFleetModalOpen(true)}
                     trend={{ value: Number(totalVehicleData?.change_percent) || 0, label: 'vs last month', isPositive: true }}
                 />
                 <StatCard
@@ -438,7 +436,7 @@ export default function DashboardPage() {
                         <MaintenanceHeatmap data={normalizedForecast} />
                         <VehicleStatusChart data={dynamicStatusData} />
                     </div>
-                    <ActivityFeed activities={normalizedActivities} />
+                    <ActivityFeed activities={normalizedActivities} />  
                 </div>
                 {/* Right: live feed — alerts + activity, both scrollable */}
                 <div className="space-y-6">

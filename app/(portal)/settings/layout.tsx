@@ -4,9 +4,10 @@ import React from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Users, Shield, Key, Network, UserCircle, Activity } from 'lucide-react'
+import { Building2, Users, Shield, Key, Network, UserCircle, Activity, Bell } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
+import { usePermission } from '@/hooks/usePermission'
 
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     const { user } = useAuthStore()
 
     const { hasCapability } = useSubscription()
+    const { can } = usePermission()
     const userRole = user?.attributes?.role
     const isAdmin = Array.isArray(userRole) ? userRole.includes('administrator') : userRole === 'administrator'
 
@@ -25,6 +27,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true },
         { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' },
         { name: 'Developer API Keys', href: '/settings/api-keys', icon: Key, show: isAdmin },
+        { name: 'Notification Settings', href: '/settings/notifications', icon: Bell, show: isAdmin },
         { name: 'Webhooks', href: '/settings/webhooks', icon: Activity, show: true },
     ]
 

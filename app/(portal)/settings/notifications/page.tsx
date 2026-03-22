@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/notifications'
 import { useSubscription } from '@/hooks/useSubscription'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
+import { RoleGate } from '@/components/shared/RoleGate'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -182,6 +183,7 @@ export default function NotificationRulesPage() {
     )
 
     return (
+        <RoleGate allowedRoles={['administrator']} fallbackMessage="Custom notification settings are restricted to Administrators only.">
         <div className="space-y-6 max-w-6xl mx-auto pb-10">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -638,6 +640,7 @@ export default function NotificationRulesPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </RoleGate>
     )
 }
 

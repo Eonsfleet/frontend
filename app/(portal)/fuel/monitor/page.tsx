@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import {
     Loader2, Search, Radio, Wifi, WifiOff, AlertTriangle,
     ShieldAlert, ArrowDownCircle, Wrench, CheckCircle2 as CheckCircleIcon,
-    ShieldCheck, Fuel, Clock,
+    ShieldCheck, Fuel, Clock, TrendingDown, TrendingUp, GitCompare, Zap,
 } from 'lucide-react'
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
@@ -19,10 +19,12 @@ import {
 import { Label } from '@/components/ui/label'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import * as api from '@/lib/api/fuel'
+import * as analyticsApi from '@/lib/api/analytics'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { FuelVehicle } from '@/types'
-import { extractApiError } from '@/lib/utils'
+import { extractApiError, cn } from '@/lib/utils'
+import { useAuthStore } from '@/store/authStore'
 
 
 function FuelGauge({ percent, online }: { percent: number | null; online: boolean }) {
@@ -260,6 +262,16 @@ export default function LiveMonitorPage() {
     const [search, setSearch] = useState('')
     const [selectedVehicle, setSelectedVehicle] = useState<FuelVehicle | null>(null)
     const observerTarget = React.useRef<HTMLDivElement>(null)
+    const { token } = useAuthStore()
+
+    const { data: execKpis } = useQuery({
+        queryKey: ['fuel-executive-kpis-monitor'],
+        queryFn: () => analyticsApi.getFuelExecutiveKpis(),
+        enabled: !!token,
+        refetchInterval: 60_000,
+    })
+
+    const kpis = execKpis ?? null
 
     const {
         data,
@@ -319,6 +331,112 @@ export default function LiveMonitorPage() {
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
+            </div>
+
+            {/* Executive KPI Banner */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Fuel Cost This Month */}
+                <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost (Month)</p>
+                            <Fuel className="h-3.5 w-3.5 text-emerald-500" />
+                        </div>
+                        <p className="text-xl font-black text-slate-900">
+                            {kpis?.total_fuel_cost_this_month != null
+                                ? `₦${Number(kpis.total_fuel_cost_this_month).toLocaleString()}`
+                                : '—'}
+                        </p>
+                        {kpis?.cost_vs_last_month_percent != null && (
+                            <div className={cn(
+                                'flex items-center gap-1 mt-1.5',
+                                kpis.cost_vs_last_month_percent <= 0 ? 'text-emerald-600' : 'text-rose-600'
+                            )}>
+                                {kpis.cost_vs_last_month_percent <= 0
+                                    ? <TrendingDown className="h-3 w-3" />
+                                    : <TrendingUp className="h-3 w-3" />}
+                                <span className="text-[10px] font-bold">
+                                    {Math.abs(kpis.cost_vs_last_month_percent).toFixed(1)}% vs last month
+                                </span>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Theft Incidents */}
+                <Card className={cn(
+                    'shadow-sm',
+                    kpis?.theft_incidents_this_month > 0 ? 'border-rose-200 bg-rose-50/40' : 'border-slate-200'
+                )}>
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Theft Incidents</p>
+                            <ShieldCheck className={cn('h-3.5 w-3.5', kpis?.theft_incidents_this_month > 0 ? 'text-rose-500' : 'text-emerald-500')} />
+                        </div>
+                        <p className={cn(
+                            'text-xl font-black',
+                            kpis?.theft_incidents_this_month > 0 ? 'text-rose-600' : 'text-slate-900'
+                        )}>
+                            {kpis?.theft_incidents_this_month ?? '—'}
+                        </p>
+                        {kpis?.theft_vs_last_month_percent != null && (
+                            <div className={cn(
+                                'flex items-center gap-1 mt-1.5',
+                                kpis.theft_vs_last_month_percent <= 0 ? 'text-emerald-600' : 'text-rose-600'
+                            )}>
+                                {kpis.theft_vs_last_month_percent <= 0
+                                    ? <TrendingDown className="h-3 w-3" />
+                                    : <TrendingUp className="h-3 w-3" />}
+                                <span className="text-[10px] font-bold">
+                                    {kpis.theft_vs_last_month_percent === 0
+                                        ? 'No change vs last month'
+                                        : `${Math.abs(kpis.theft_vs_last_month_percent).toFixed(1)}% vs last month`}
+                                </span>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Reconciliation Match Rate */}
+                <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Match Rate</p>
+                            <GitCompare className="h-3.5 w-3.5 text-blue-500" />
+                        </div>
+                        <p className="text-xl font-black text-slate-900">
+                            {kpis?.reconciliation_match_rate_percent != null
+                                ? `${kpis.reconciliation_match_rate_percent}%`
+                                : '—'}
+                        </p>
+                        {kpis?.unmatched_transactions_count != null && (
+                            <p className={cn(
+                                'text-[10px] font-bold mt-1.5',
+                                kpis.unmatched_transactions_count > 0 ? 'text-amber-600' : 'text-emerald-600'
+                            )}>
+                                {kpis.unmatched_transactions_count} unmatched transaction{kpis.unmatched_transactions_count !== 1 ? 's' : ''}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Fleet Efficiency */}
+                <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fleet Efficiency</p>
+                            <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        </div>
+                        <p className="text-xl font-black text-slate-900">
+                            {kpis?.avg_fleet_efficiency_l100 != null
+                                ? `${Number(kpis.avg_fleet_efficiency_l100).toFixed(1)} L/100km`
+                                : '—'}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1.5 uppercase tracking-widest">
+                            Avg fleet consumption
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
 
             {isLoading ? (

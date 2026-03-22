@@ -4,13 +4,14 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/notifications'
 import { toast } from 'sonner'
 import { Bell, CheckCheck, Loader2, Mail, Smartphone, AppWindow, Settings2, BellRing, Info, AlertTriangle, Route, ShieldAlert, Wrench, Users as UsersIcon, CalendarClock, Target, Plus, ShieldCheck } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { Switch } from '@/components/ui/switch'
 import { useSubscription } from '@/hooks/useSubscription'
+import { usePermission } from '@/hooks/usePermission'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export default function NotificationsPage() {
     const queryClient = useQueryClient()
     const { hasCapability } = useSubscription()
+    const { can } = usePermission()
     const [activeTab, setActiveTab] = useState('inbox')
     const [managementTab, setManagementTab] = useState('rules')
     const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -42,12 +44,42 @@ export default function NotificationsPage() {
         reason: ''
     })
 
-    const isAdvancedUser = hasCapability('notification_routing') || hasCapability('notification_groups') || hasCapability('notification_delegation')
+    const isAdvancedUser = can('notifications:configure') && (
+        hasCapability('notification_routing') || hasCapability('notification_groups') || hasCapability('notification_delegation')
+    )
 
-    const { data: inboxData, isLoading: isLoadingInbox } = useQuery({
+    const sentinelRef = React.useRef<HTMLDivElement>(null)
+
+    const {
+        data: inboxData,
+        isLoading: isLoadingInbox,
+        isFetchingNextPage,
+        hasNextPage,
+        fetchNextPage,
+    } = useInfiniteQuery({
         queryKey: ['notifications-inbox'],
-        queryFn: () => api.getInbox({ page: 1 })
+        queryFn: ({ pageParam = 1 }) => api.getInbox({ page: pageParam }),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            const { current_page, last_page } = lastPage.data.pagination
+            return current_page < last_page ? current_page + 1 : undefined
+        },
     })
+
+    const notifications = inboxData?.pages.flatMap(p => p.data.notifications) ?? []
+
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                    fetchNextPage()
+                }
+            },
+            { threshold: 0.1 }
+        )
+        if (sentinelRef.current) observer.observe(sentinelRef.current)
+        return () => observer.disconnect()
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const { data: prefData, isLoading: isLoadingPref } = useQuery({
         queryKey: ['notifications-prefs'],
@@ -107,7 +139,7 @@ export default function NotificationsPage() {
     const markAllReadMutation = useMutation({
         mutationFn: api.markAllAsRead,
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications-inbox'] })
+            queryClient.resetQueries({ queryKey: ['notifications-inbox'] })
             toast.success('All messages marked as read')
         }
     })
@@ -249,7 +281,7 @@ export default function NotificationsPage() {
                                 size="sm"
                                 className="h-8 text-xs bg-white"
                                 onClick={() => markAllReadMutation.mutate()}
-                                disabled={markAllReadMutation.isPending || !inboxData?.data?.notifications?.length}
+                                disabled={markAllReadMutation.isPending || !notifications.length}
                             >
                                 {markAllReadMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCheck className="w-4 h-4 mr-2 text-emerald-600" />}
                                 Mark all as read
@@ -258,7 +290,7 @@ export default function NotificationsPage() {
                         <CardContent className="p-0">
                             {isLoadingInbox ? (
                                 <div className="py-20 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-300" /></div>
-                            ) : !inboxData?.data?.notifications?.length ? (
+                            ) : !notifications.length ? (
                                 <div className="py-24 text-center text-slate-500">
                                     <BellRing className="w-12 h-12 text-slate-200 mx-auto mb-4" />
                                     <p className="font-medium text-slate-400">Everything clear!</p>
@@ -266,7 +298,7 @@ export default function NotificationsPage() {
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-100">
-                                    {inboxData?.data?.notifications?.map((notification) => (
+                                    {notifications.map((notification) => (
                                         <div
                                             key={notification.id}
                                             className={`p-4 flex gap-4 transition-colors cursor-pointer ${!notification.attributes.is_read ? 'bg-indigo-50/20' : 'bg-white hover:bg-slate-50'}`}
@@ -295,6 +327,16 @@ export default function NotificationsPage() {
                                             )}
                                         </div>
                                     ))}
+                                    {/* Infinite scroll sentinel */}
+                                    <div ref={sentinelRef} className="py-4 flex justify-center">
+                                        {isFetchingNextPage ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-slate-300" />
+                                        ) : hasNextPage ? (
+                                            <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Scroll for more</span>
+                                        ) : (
+                                            <span className="text-[10px] text-slate-200 font-bold uppercase tracking-widest">All caught up</span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </CardContent>

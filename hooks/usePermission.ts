@@ -1,23 +1,10 @@
 import { useAuthStore } from '@/store/authStore'
 
-export const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     administrator: ['*'],
 
-    fleet_manager: [
-        'vehicles:read', 'vehicles:write', 'vehicles:delete', 'vehicles:assign',
-        'drivers:read', 'drivers:write', 'drivers:performance',
-        'trips:read', 'trips:write',
-        'tracking:read',
-        'maintenance:read', 'maintenance:write',
-        'geofences:read', 'geofences:write',
-        'incidents:read', 'incidents:write',
-        'fuel:read', 'fuel:write',
-        'analytics:read',
-        'notifications:read', 'notifications:configure',
-        'vendors:read', 'vendors:write',
-        'users:read',
-        'reports:read', 'reports:export',
-    ],
+    // Fleet manager has full admin access; denied permissions are listed in ROLE_DENIED_PERMISSIONS
+    fleet_manager: ['*'],
 
     dispatcher: [
         'vehicles:read', 'tracking:read',
@@ -57,7 +44,15 @@ export const ROLE_PERMISSIONS = {
         'vendors:read', 'vendors:write',
         'workshop:read', 'workshop:write',
     ],
-} as const
+}
+
+/**
+ * Explicit permission denials per role.
+ * These take precedence over wildcard grants.
+ */
+export const ROLE_DENIED_PERMISSIONS: Record<string, readonly string[]> = {
+    fleet_manager: ['notifications:configure'],
+}
 
 type Permission = string
 
@@ -67,7 +62,12 @@ export function usePermission() {
     const can = (permission: Permission): boolean => {
         if (!role) return false
         const roleStr = Array.isArray(role) ? role[0] : role
-        const perms = ROLE_PERMISSIONS[roleStr as keyof typeof ROLE_PERMISSIONS] as readonly string[] || []
+
+        // Check deny-list first — always wins over wildcard
+        const denied = ROLE_DENIED_PERMISSIONS[roleStr] ?? []
+        if (denied.includes(permission)) return false
+
+        const perms = ROLE_PERMISSIONS[roleStr] ?? []
         if (perms.includes('*')) return true
         return perms.includes(permission)
     }
