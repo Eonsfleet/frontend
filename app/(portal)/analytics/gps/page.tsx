@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
-import { Loader2, MapPin, Navigation, Map, Ruler, ChevronRight, Activity } from 'lucide-react'
+import { Loader2, MapPin, Navigation, Map, Ruler, ChevronRight, Activity, Wifi } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,11 @@ export default function GpsAnalyticsPage() {
     const { data: geofenceData, isLoading: isGeoLoading } = useQuery({
         queryKey: ['gps-geofence-activity', filter],
         queryFn: () => analyticsApi.getGeofenceActivity({ filter })
+    })
+
+    const { data: deviceStatus } = useQuery({
+        queryKey: ['gps-device-status'],
+        queryFn: () => analyticsApi.getDeviceStatusSummary()
     })
 
     const trendData = useMemo(() => {
@@ -94,7 +99,7 @@ export default function GpsAnalyticsPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard
                     title="Total Distance"
                     value={`${tripSummary?.total_distance_km?.toLocaleString()} km`}
@@ -118,6 +123,12 @@ export default function GpsAnalyticsPage() {
                     value={geofenceData?.top_breach_zones?.length || 0}
                     icon={Map}
                     description="Zones with recorded alerts"
+                />
+                <StatCard
+                    title="Online Devices"
+                    value={deviceStatus ? `${deviceStatus.online ?? deviceStatus.online_count ?? 0} / ${deviceStatus.total ?? deviceStatus.total_count ?? 0}` : '—'}
+                    icon={Wifi}
+                    description="GPS trackers actively reporting"
                 />
             </div>
 

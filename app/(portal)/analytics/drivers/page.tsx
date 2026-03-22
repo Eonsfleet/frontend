@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
-import { getTopDriversByTrips, getDriverWorkloadDistribution, getDriverCompliance, getDriverIncidentHistory, getDriverTripSummary } from '@/lib/api/analytics'
+import { getTopDriversByTrips, getDriverWorkloadDistribution, getDriverCompliance, getDriverIncidentHistory, getDriverTripSummary, getDriverRiskRanking } from '@/lib/api/analytics'
 import { Loader2, User, Award, ShieldAlert, FileCheck, ChevronRight, FileWarning, CheckCircle2, AlertCircle } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
@@ -37,6 +37,11 @@ export default function DriverAnalyticsPage() {
     const { data: incidentHistoryData, isLoading: isIncidentsLoading } = useQuery({
         queryKey: ['driver-incident-history'],
         queryFn: () => getDriverIncidentHistory({ limit: 20 })
+    })
+
+    const { data: riskRankingData } = useQuery({
+        queryKey: ['driver-risk-ranking'],
+        queryFn: () => getDriverRiskRanking({ limit: 10 })
     })
 
     const complianceChart = useMemo(() => {
@@ -279,6 +284,67 @@ export default function DriverAnalyticsPage() {
                                             </div>
                                             <p className="text-[11px] font-black text-slate-900 uppercase">No Driver Data</p>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No trips recorded in this period</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+
+            <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Driver Risk Rankings</CardTitle>
+                            <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Drivers ranked by operational risk score</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/50">
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Driver</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Risk Score</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Risk Level</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {riskRankingData?.drivers?.length > 0 ? riskRankingData.drivers.map((d: any, i: number) => (
+                                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center border-2 border-white shadow-sm text-[10px] font-black text-slate-400 uppercase italic">
+                                                {d.driver_name?.split(' ').map((n: string) => n[0]).join('') || '?'}
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{d.driver_name || 'Unknown'}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">#{d.driver_id}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                        <span className="text-[11px] font-black text-slate-700">{d.risk_score ?? '—'}</span>
+                                    </td>
+                                    <td className="px-8 py-5 text-right">
+                                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${
+                                            d.risk_level === 'high' || d.risk_level === 'critical' ? 'bg-rose-100 text-rose-700'
+                                            : d.risk_level === 'medium' ? 'bg-amber-100 text-amber-700'
+                                            : 'bg-emerald-100 text-emerald-700'
+                                        }`}>{d.risk_level ?? 'low'}</span>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={3} className="px-8 py-16 text-center">
+                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                <AlertCircle className="h-5 w-5 text-slate-400" />
+                                            </div>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">No Risk Data</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No driver risk profiles available</p>
                                         </div>
                                     </td>
                                 </tr>

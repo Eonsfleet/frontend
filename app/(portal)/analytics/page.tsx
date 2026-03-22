@@ -4,10 +4,11 @@ import { AnalyticsChart } from '@/components/analytics/AnalyticsChart'
 import { ReportBuilderWizard } from '@/components/analytics/ReportBuilderWizard'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Truck, Fuel, Plus, LayoutGrid, Calendar, Filter, Activity, ShieldCheck } from 'lucide-react'
+import { TrendingUp, TrendingDown, Truck, Fuel, Plus, LayoutGrid, Calendar, Filter, Activity, ShieldCheck, Gauge } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
+import { format } from 'date-fns'
 
 const fleetTrendData = [
     { name: 'Mon', active: 65, idle: 20, comparison: 72 },
@@ -54,6 +55,21 @@ export default function AnalyticsOverviewPage() {
         queryFn: () => analyticsApi.getFuelExecutiveKpis(),
     })
 
+    const { data: availabilityTrend } = useQuery({
+        queryKey: ['analytics-availability-trend'],
+        queryFn: () => analyticsApi.getFleetAvailabilityTrend({ filter: '30d' }),
+    })
+
+    const { data: maintenanceCost } = useQuery({
+        queryKey: ['analytics-maintenance-cost'],
+        queryFn: () => analyticsApi.getMaintenanceCostReport({ filter: '30d' }),
+    })
+
+    const { data: costPerKm } = useQuery({
+        queryKey: ['analytics-cost-per-km'],
+        queryFn: () => analyticsApi.getCostPerKmTrend({ filter: '30d' }),
+    })
+
     const utilizationRate = utilizationSummary?.utilization_rate_pct ?? null
     const completionRate = utilizationSummary?.completion_rate_pct ?? null
     const healthScore = fleetHealthScore?.score ?? null
@@ -63,16 +79,50 @@ export default function AnalyticsOverviewPage() {
     const fuelMatchRate = fuelKpis?.reconciliation_match_rate_percent ?? null
     const fuelTheftCount = fuelKpis?.theft_incidents_this_month ?? null
 
-    // Normalize OpEx Data (Fuel vs Maintenance)
-    // Note: Maintenance data might need another endpoint, using consumption for now
-    const dynamicCostData = useMemo(() => {
-        if (!fuelConsData?.data?.report) return costData
-        return fuelConsData.data.report.map((item: any) => ({
-            name: item.period_label,
-            fuel: item.total_cost,
-            maintenance: item.total_cost * 0.3 // estimated ratio for demo
+    // Fleet Activity chart data from availability trend
+    const fleetActivityData = useMemo(() => {
+        const trend = availabilityTrend?.data?.trend
+        const totalVehicles = availabilityTrend?.data?.total_vehicles ?? 0
+        if (!trend?.length) return fleetTrendData
+        return trend.map((item: any) => ({
+            name: format(new Date(item.period), 'MMM d'),
+            active: item.active_vehicles,
+            idle: totalVehicles - item.active_vehicles,
+            availability: item.availability_pct,
         }))
-    }, [fuelConsData])
+    }, [availabilityTrend])
+
+    const latestCostPerKm = useMemo(() => {
+        if (!costPerKm?.trend?.length) return costPerKm?.avg_cost_per_km ?? null
+        const last = costPerKm.trend[costPerKm.trend.length - 1]
+        return last?.avg_cost_per_km ?? last?.cost_per_km ?? null
+    }, [costPerKm])
+
+    // OpEx data — merge fuel consumption + real maintenance cost by period
+    const dynamicCostData = useMemo(() => {
+        const fuelReport = fuelConsData?.report ?? fuelConsData?.data?.report
+        const maintTrend = maintenanceCost?.trend
+
+        if (!fuelReport?.length) return costData
+
+        // Build a lookup of maintenance cost by period label
+        const maintByPeriod: Record<string, number> = {}
+        if (maintTrend?.length) {
+            maintTrend.forEach((item: any) => {
+                const label = format(new Date(item.period), 'MMM d')
+                maintByPeriod[label] = (item.cost_kobo ?? 0) / 100
+            })
+        }
+
+        return fuelReport.map((item: any) => {
+            const label = item.period_label
+            return {
+                name: label,
+                fuel: item.total_cost,
+                maintenance: maintByPeriod[label] ?? 0,
+            }
+        })
+    }, [fuelConsData, maintenanceCost])
 
 
     return (
@@ -124,7 +174,7 @@ export default function AnalyticsOverviewPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Fleet Utilization */}
                 <Card className="border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-6">
@@ -204,13 +254,36 @@ export default function AnalyticsOverviewPage() {
                         </p>
                     </CardContent>
                 </Card>
+
+                {/* Cost Per KM */}
+                <Card className="border-slate-200 shadow-sm overflow-hidden">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cost Per KM</p>
+                            <Gauge className="h-4 w-4 text-violet-500" />
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 italic">
+                            {latestCostPerKm != null ? `₦${Number(latestCostPerKm).toFixed(2)}` : '—'}
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                            {costPerKm?.avg_cost_per_km != null
+                                ? `₦${Number(costPerKm.avg_cost_per_km).toFixed(2)} avg`
+                                : 'Fleet operational cost rate'}
+                        </p>
+                        {costPerKm?.trend?.length > 0 && (
+                            <p className="text-[10px] text-violet-600 font-bold uppercase mt-0.5">
+                                {costPerKm.trend.length} period trend
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="space-y-6">
                 <AnalyticsChart
                     title="Fleet Activity & Utilization"
                     description="Real-time occupancy and motion dynamics"
-                    data={fleetTrendData}
+                    data={fleetActivityData}
                     dataKeys={[
                         { key: 'active', color: '#4f46e5', label: 'Active Fleet' },
                         { key: 'idle', color: '#f59e0b', label: 'Idle Fleet' },

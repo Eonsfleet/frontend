@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
-import { Loader2, Fuel, Zap, AlertTriangle, TrendingDown, ChevronRight, Droplets, ShieldCheck } from 'lucide-react'
+import { Loader2, Fuel, Zap, AlertTriangle, TrendingDown, ChevronRight, Droplets, ShieldCheck, CreditCard, BarChart2 } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +34,31 @@ export default function FuelAnalyticsPage() {
     const { data: driverEffData, isLoading: isDriverEffLoading } = useQuery({
         queryKey: ['fuel-driver-efficiency', filter],
         queryFn: () => analyticsApi.getFuelDriverEfficiency({ period: filter })
+    })
+
+    const { data: costReport } = useQuery({
+        queryKey: ['fuel-cost-report'],
+        queryFn: () => analyticsApi.getFuelCostReport()
+    })
+
+    const { data: efficiencyReport } = useQuery({
+        queryKey: ['fuel-efficiency-report'],
+        queryFn: () => analyticsApi.getFuelEfficiencyReport()
+    })
+
+    const { data: cardTransactions } = useQuery({
+        queryKey: ['fuel-card-transactions'],
+        queryFn: () => analyticsApi.getFuelCardTransactions()
+    })
+
+    const { data: topBottomVehicles } = useQuery({
+        queryKey: ['fuel-top-bottom-vehicles'],
+        queryFn: () => analyticsApi.getFuelTopBottomVehicles()
+    })
+
+    const { data: misuseProbability } = useQuery({
+        queryKey: ['fuel-misuse-probability'],
+        queryFn: () => analyticsApi.getFuelMisuseProbability()
     })
 
     const consumptionTrend = useMemo(() => {
@@ -270,6 +295,213 @@ export default function FuelAnalyticsPage() {
                     </table>
                 </div>
             </Card>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Most Efficient Vehicles</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Lowest fuel consumption per 100km</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50">
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">L/100km</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {topBottomVehicles?.top?.length > 0 ? topBottomVehicles.top.slice(0, 5).map((v: any, i: number) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.registration}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-[11px] text-emerald-600">
+                                            {v.efficiency_l_per_100km?.toFixed(2) ?? v.l_per_100km?.toFixed(2) ?? '—'}
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={2} className="px-6 py-10 text-center text-[11px] font-black text-slate-400 uppercase">No data</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Least Efficient Vehicles</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Highest fuel consumption — review required</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50">
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">L/100km</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {topBottomVehicles?.bottom?.length > 0 ? topBottomVehicles.bottom.slice(0, 5).map((v: any, i: number) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.registration}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-[11px] text-rose-600">
+                                            {v.efficiency_l_per_100km?.toFixed(2) ?? v.l_per_100km?.toFixed(2) ?? '—'}
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={2} className="px-6 py-10 text-center text-[11px] font-black text-slate-400 uppercase">No data</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Fuel Misuse Risk</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Vehicles with elevated misuse probability</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-8 pt-0 space-y-3">
+                        {misuseProbability?.vehicles?.length > 0 ? (
+                            misuseProbability.vehicles.slice(0, 6).map((v: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div>
+                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration ?? v.vehicle_registration}</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`text-sm font-black ${
+                                            (v.probability ?? v.misuse_probability ?? 0) > 70 ? 'text-rose-600'
+                                            : (v.probability ?? v.misuse_probability ?? 0) > 40 ? 'text-amber-600'
+                                            : 'text-emerald-600'
+                                        }`}>{v.probability ?? v.misuse_probability ?? 0}%</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">probability</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-40 text-center space-y-3">
+                                <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                                    <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                                </div>
+                                <p className="text-[11px] font-black text-slate-900 uppercase">No Misuse Risk Detected</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                                <CreditCard className="h-4 w-4 text-slate-600" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Card Transactions</CardTitle>
+                                <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-0.5">Recent fuel card activity</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50">
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Card / Vehicle</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Volume</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {cardTransactions?.transactions?.length > 0 ? cardTransactions.transactions.slice(0, 6).map((t: any, i: number) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{t.card_number ?? t.card_id ?? 'Card'}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{t.vehicle_registration ?? t.date ?? ''}</p>
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-[11px] text-slate-700">
+                                            {t.amount_naira != null ? `₦${Number(t.amount_naira).toLocaleString()}` : t.amount != null ? `₦${Number(t.amount).toLocaleString()}` : '—'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-[11px] text-blue-600">
+                                            {t.liters != null ? `${t.liters} L` : t.volume_liters != null ? `${t.volume_liters} L` : '—'}
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={3} className="px-6 py-10 text-center text-[11px] font-black text-slate-400 uppercase">No transactions</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-3xl overflow-hidden">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost Report</p>
+                            <BarChart2 className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="space-y-2">
+                            {costReport?.total_cost != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Cost</span>
+                                    <span className="text-sm font-black text-slate-900">₦{Number(costReport.total_cost).toLocaleString()}</span>
+                                </div>
+                            )}
+                            {costReport?.avg_cost_per_fill != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Avg Cost/Fill</span>
+                                    <span className="text-sm font-black text-blue-600">₦{Number(costReport.avg_cost_per_fill).toLocaleString()}</span>
+                                </div>
+                            )}
+                            {costReport?.total_fills != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Fills</span>
+                                    <span className="text-sm font-black text-slate-700">{costReport.total_fills}</span>
+                                </div>
+                            )}
+                            {!costReport && <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No cost report data</p>}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-3xl overflow-hidden">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Efficiency Report</p>
+                            <TrendingDown className="h-4 w-4 text-emerald-500" />
+                        </div>
+                        <div className="space-y-2">
+                            {efficiencyReport?.fleet_avg_l_per_100km != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Fleet Avg</span>
+                                    <span className="text-sm font-black text-emerald-600">{Number(efficiencyReport.fleet_avg_l_per_100km).toFixed(2)} L/100km</span>
+                                </div>
+                            )}
+                            {efficiencyReport?.best_vehicle != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Best Vehicle</span>
+                                    <span className="text-sm font-black text-slate-900">{efficiencyReport.best_vehicle}</span>
+                                </div>
+                            )}
+                            {efficiencyReport?.worst_vehicle != null && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Worst Vehicle</span>
+                                    <span className="text-sm font-black text-rose-600">{efficiencyReport.worst_vehicle}</span>
+                                </div>
+                            )}
+                            {!efficiencyReport && <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No efficiency data</p>}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     )
 }

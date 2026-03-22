@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
-import { Loader2, Wrench, Clock, DollarSign, ShieldCheck, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Loader2, Wrench, Clock, DollarSign, ShieldCheck, ChevronRight, AlertCircle, CheckCircle2, Brain, FileText } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -42,6 +42,21 @@ export default function MaintenanceAnalyticsPage() {
     const { data: workshopSummary, isLoading: isWorkshopLoading } = useQuery({
         queryKey: ['maintenance-workshop-summary'],
         queryFn: () => analyticsApi.getMaintenanceWorkshopSummary()
+    })
+
+    const { data: documentCompliance } = useQuery({
+        queryKey: ['maintenance-document-compliance'],
+        queryFn: () => analyticsApi.getMaintenanceDocumentCompliance()
+    })
+
+    const { data: predictiveInsights } = useQuery({
+        queryKey: ['maintenance-predictive-insights'],
+        queryFn: () => analyticsApi.getMaintenancePredictiveInsights()
+    })
+
+    const { data: mlPredictions } = useQuery({
+        queryKey: ['ml-predictive-maintenance'],
+        queryFn: () => analyticsApi.getPredictiveMaintenance()
     })
 
     const costTrend = useMemo(() => {
@@ -294,6 +309,160 @@ export default function MaintenanceAnalyticsPage() {
                     </div>
                 </Card>
             </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Document Compliance</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Maintenance documentation coverage</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-8 pt-0 space-y-4">
+                        {documentCompliance?.compliance_rate != null && (
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Overall Compliance</span>
+                                    <span className="text-sm font-black text-slate-900">{documentCompliance.compliance_rate}%</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-blue-500 rounded-full"
+                                        style={{ width: `${Math.min(100, documentCompliance.compliance_rate)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            {[
+                                { label: 'Compliant', value: documentCompliance?.compliant ?? documentCompliance?.compliant_count, color: 'text-emerald-600' },
+                                { label: 'Missing Docs', value: documentCompliance?.missing ?? documentCompliance?.missing_count, color: 'text-rose-600' },
+                                { label: 'Expiring Soon', value: documentCompliance?.expiring_soon, color: 'text-amber-600' },
+                                { label: 'Total Checked', value: documentCompliance?.total ?? documentCompliance?.total_count, color: 'text-slate-700' },
+                            ].map(item => item.value != null && (
+                                <div key={item.label} className="p-4 bg-slate-50 rounded-2xl">
+                                    <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{item.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                        {!documentCompliance && (
+                            <div className="flex items-center justify-center h-32">
+                                <p className="text-[11px] font-black text-slate-400 uppercase">No compliance data</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-xl bg-blue-50 flex items-center justify-center">
+                                <FileText className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Predictive Insights</CardTitle>
+                                <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-0.5">Forecasted maintenance events</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-8 pt-0 space-y-3">
+                        {predictiveInsights?.insights?.length > 0 ? (
+                            predictiveInsights.insights.slice(0, 5).map((insight: any, i: number) => (
+                                <div key={i} className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                                    <div className="h-7 w-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                                        <AlertCircle className="h-3.5 w-3.5 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{insight.vehicle_registration ?? insight.vehicle ?? 'Fleet'}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 mt-0.5">{insight.message ?? insight.insight ?? insight.description ?? 'Maintenance predicted'}</p>
+                                        {insight.predicted_date && (
+                                            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Due: {insight.predicted_date}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-40 text-center space-y-3">
+                                <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                </div>
+                                <p className="text-[11px] font-black text-slate-900 uppercase">No Upcoming Predictions</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">All vehicles within service parameters</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <Brain className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">ML Predictive Maintenance</CardTitle>
+                            <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-0.5">AI-powered failure probability rankings</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/50">
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Failure Probability</th>
+                                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Recommended Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {mlPredictions?.vehicles?.length > 0 ? mlPredictions.vehicles.slice(0, 8).map((v: any, i: number) => (
+                                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-8 py-5">
+                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration ?? v.vehicle_registration}</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                    </td>
+                                    <td className="px-8 py-5 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            <span className={`text-[11px] font-black ${
+                                                (v.failure_probability ?? v.probability ?? 0) > 70 ? 'text-rose-600'
+                                                : (v.failure_probability ?? v.probability ?? 0) > 40 ? 'text-amber-600'
+                                                : 'text-emerald-600'
+                                            }`}>
+                                                {v.failure_probability ?? v.probability ?? '—'}%
+                                            </span>
+                                            <div className="h-1 w-20 bg-slate-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full ${
+                                                        (v.failure_probability ?? v.probability ?? 0) > 70 ? 'bg-rose-500'
+                                                        : (v.failure_probability ?? v.probability ?? 0) > 40 ? 'bg-amber-500'
+                                                        : 'bg-emerald-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(100, v.failure_probability ?? v.probability ?? 0)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-right text-[10px] font-bold text-slate-600 uppercase">
+                                        {v.recommended_action ?? v.action ?? '—'}
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={3} className="px-8 py-12 text-center">
+                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                <Brain className="h-5 w-5 text-slate-400" />
+                                            </div>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">No ML Predictions Available</p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Insufficient data for predictive modeling</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
     )
 }

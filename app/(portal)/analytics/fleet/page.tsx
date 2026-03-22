@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
-import { getFleetUtilizationSummary, getFleetAvailabilitySnapshot, getFleetAvailabilityTrend, getFleetVehicleList } from '@/lib/api/analytics'
+import { getFleetUtilizationSummary, getFleetAvailabilitySnapshot, getFleetAvailabilityTrend, getFleetVehicleList, getFleetTopVehicles, getFleetAssetPerformance } from '@/lib/api/analytics'
 import { Loader2, Truck, Activity, CheckCircle2, AlertCircle, Calendar, ChevronRight } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,16 @@ export default function FleetAnalyticsPage() {
     const { data: vehicleListData, isLoading: isListLoading } = useQuery({
         queryKey: ['fleet-vehicle-list', filter],
         queryFn: () => getFleetVehicleList({ filter, limit: 5 })
+    })
+
+    const { data: topVehiclesData } = useQuery({
+        queryKey: ['fleet-top-vehicles', filter],
+        queryFn: () => getFleetTopVehicles({ limit: 5, filter })
+    })
+
+    const { data: assetPerformance } = useQuery({
+        queryKey: ['fleet-asset-performance'],
+        queryFn: () => getFleetAssetPerformance({ limit: 5 })
     })
 
     const summary = summaryData || { total_vehicles: 0, active_vehicles: 0, utilization_rate_pct: 0, total_trips: 0, completed_trips: 0, completion_rate_pct: 0, total_distance_km: 0 }
@@ -287,6 +297,86 @@ export default function FleetAnalyticsPage() {
                     </table>
                 </div>
             </Card>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Top Vehicles by Distance</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Highest mileage assets in period</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50">
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Distance</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Trips</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {topVehiclesData?.vehicles?.length > 0 ? topVehiclesData.vehicles.map((v: any, i: number) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-8 py-4">
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.registration}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                        </td>
+                                        <td className="px-8 py-4 text-right font-black text-[11px] text-blue-600">{v.total_km?.toLocaleString()} km</td>
+                                        <td className="px-8 py-4 text-right font-black text-[11px] text-slate-700">{v.trips_count ?? '—'}</td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-10 text-center">
+                                            <p className="text-[11px] font-black text-slate-400 uppercase">No data available</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+
+                <Card className="border-slate-200 shadow-sm bg-white rounded-[32px] overflow-hidden">
+                    <CardHeader className="p-8 pb-4 border-b border-slate-50">
+                        <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Asset Performance</CardTitle>
+                        <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Individual fleet asset efficiency scores</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50/50">
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Score</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {assetPerformance?.assets?.length > 0 ? assetPerformance.assets.map((a: any, i: number) => (
+                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-8 py-4">
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{a.registration}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{a.make} {a.model}</p>
+                                        </td>
+                                        <td className="px-8 py-4 text-right font-black text-[11px] text-blue-600">{a.performance_score ?? a.score ?? '—'}</td>
+                                        <td className="px-8 py-4 text-right">
+                                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${
+                                                (a.status ?? a.performance_status) === 'good' ? 'bg-emerald-100 text-emerald-700'
+                                                : (a.status ?? a.performance_status) === 'poor' ? 'bg-rose-100 text-rose-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                            }`}>{a.status ?? a.performance_status ?? 'N/A'}</span>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-10 text-center">
+                                            <p className="text-[11px] font-black text-slate-400 uppercase">No performance data</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
         </div>
     )
 }
