@@ -360,23 +360,44 @@ export default function FuelAnalyticsPage() {
                         <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Vehicles with elevated misuse probability</CardDescription>
                     </CardHeader>
                     <CardContent className="p-8 pt-0 space-y-3">
+                        {misuseProbability?.summary && (
+                            <div className="flex items-center gap-3 mb-1">
+                                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700">
+                                    {misuseProbability.summary.high_risk} High Risk
+                                </span>
+                                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700">
+                                    {misuseProbability.summary.medium_risk} Medium Risk
+                                </span>
+                            </div>
+                        )}
                         {misuseProbability?.vehicles?.length > 0 ? (
-                            misuseProbability.vehicles.slice(0, 6).map((v: any, i: number) => (
-                                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                    <div>
-                                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration ?? v.vehicle_registration}</p>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                            misuseProbability.vehicles.slice(0, 6).map((v: any, i: number) => {
+                                const prob = v.misuse_probability ?? 'unknown'
+                                const colorClass = prob === 'high' ? 'text-rose-600'
+                                    : prob === 'medium' ? 'text-amber-600'
+                                    : prob === 'low' ? 'text-emerald-600'
+                                    : 'text-slate-400'
+                                const bgClass = prob === 'high' ? 'bg-rose-50 border-rose-100'
+                                    : prob === 'medium' ? 'bg-amber-50 border-amber-100'
+                                    : 'bg-slate-50 border-slate-100'
+                                return (
+                                    <div key={i} className={`flex items-center justify-between p-4 rounded-2xl border ${bgClass}`}>
+                                        <div>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{v.registration_number}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{[v.make, v.model].filter(Boolean).join(' ') || '—'}</p>
+                                            {v.divergence_pct != null && (
+                                                <p className="text-[9px] font-bold text-slate-500 mt-0.5">{v.divergence_pct}% GPS/card divergence</p>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={`text-sm font-black capitalize ${colorClass}`}>{prob}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                                {v.gps_fuel_liters != null ? `${v.gps_fuel_liters}L GPS` : ''}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className={`text-sm font-black ${
-                                            (v.probability ?? v.misuse_probability ?? 0) > 70 ? 'text-rose-600'
-                                            : (v.probability ?? v.misuse_probability ?? 0) > 40 ? 'text-amber-600'
-                                            : 'text-emerald-600'
-                                        }`}>{v.probability ?? v.misuse_probability ?? 0}%</p>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">probability</p>
-                                    </div>
-                                </div>
-                            ))
+                                )
+                            })
                         ) : (
                             <div className="flex flex-col items-center justify-center h-40 text-center space-y-3">
                                 <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
