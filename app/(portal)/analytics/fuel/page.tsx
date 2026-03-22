@@ -302,14 +302,14 @@ export default function FuelAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {topBottomVehicles?.top?.length > 0 ? topBottomVehicles.top.slice(0, 5).map((v: any, i: number) => (
+                                {topBottomVehicles?.top_5_most_efficient?.length > 0 ? topBottomVehicles.top_5_most_efficient.map((v: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.registration}</p>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.vehicle_name ?? '—'}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.fuel_liters}L · {v.distance_km} km</p>
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-[11px] text-emerald-600">
-                                            {v.efficiency_l_per_100km?.toFixed(2) ?? v.l_per_100km?.toFixed(2) ?? '—'}
+                                            {v.liters_per_100km?.toFixed(2) ?? '—'}
                                         </td>
                                     </tr>
                                 )) : (
@@ -334,14 +334,14 @@ export default function FuelAnalyticsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {topBottomVehicles?.bottom?.length > 0 ? topBottomVehicles.bottom.slice(0, 5).map((v: any, i: number) => (
+                                {topBottomVehicles?.bottom_5_least_efficient?.length > 0 ? topBottomVehicles.bottom_5_least_efficient.map((v: any, i: number) => (
                                     <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.registration}</p>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.make} {v.model}</p>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase">{v.vehicle_name ?? '—'}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{v.fuel_liters}L · {v.distance_km} km</p>
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-[11px] text-rose-600">
-                                            {v.efficiency_l_per_100km?.toFixed(2) ?? v.l_per_100km?.toFixed(2) ?? '—'}
+                                            {v.liters_per_100km?.toFixed(2) ?? '—'}
                                         </td>
                                     </tr>
                                 )) : (
