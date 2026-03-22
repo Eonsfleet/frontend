@@ -100,11 +100,17 @@ function OverviewInner() {
     const distanceTrendData = useMemo(() => {
         const trend = tripsOverTime?.trend ?? tripsOverTime?.data ?? []
         if (!Array.isArray(trend) || !trend.length) return []
-        return trend.map((item: any) => ({
-            name: item.period_label ?? format(new Date(item.period), 'MMM d'),
+        return trend.map((item: any) => {
+            let name = item.period_label
+            if (!name && item.period) {
+                try { name = format(new Date(item.period), 'MMM d') } catch { name = item.period }
+            }
+            return {
+            name: name ?? '—',
             trips: item.total_trips ?? item.trips ?? 0,
             distance: item.total_distance_km ?? item.distance_km ?? 0,
-        }))
+        }
+        })
     }, [tripsOverTime])
 
     const deviceDonut = useMemo(() => {
@@ -501,7 +507,7 @@ function OverviewInner() {
                                                             ? 'bg-amber-100 text-amber-700'
                                                             : 'bg-slate-100 text-slate-600'
                                                     )}>
-                                                        {item.due_date
+                                                        {item.due_date && !isNaN(new Date(item.due_date).getTime())
                                                             ? format(new Date(item.due_date), 'MMM d')
                                                             : item.days_until_due != null
                                                             ? `${item.days_until_due}d`
