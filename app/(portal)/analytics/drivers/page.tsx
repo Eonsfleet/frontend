@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
@@ -8,11 +9,13 @@ import { getTopDriversByTrips, getDriverWorkloadDistribution, getDriverComplianc
 import { Loader2, User, Award, ShieldAlert, FileCheck, ChevronRight, FileWarning, CheckCircle2, AlertCircle } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
+import { AnalyticsFilterBar } from '@/components/analytics/AnalyticsFilterBar'
 
 const COMPLIANCE_COLORS = ['#10b981', '#f59e0b', '#ef4444']
 
 export default function DriverAnalyticsPage() {
-    const [filter, setFilter] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
+    const searchParams = useSearchParams()
+    const filter = (searchParams.get('filter') ?? '30d') as '7d' | '30d' | '90d' | '1y'
 
     const { data: tripSummaryData, isLoading: isTripSummaryLoading } = useQuery({
         queryKey: ['driver-trip-summary', filter],
@@ -94,21 +97,9 @@ export default function DriverAnalyticsPage() {
                         Operational Safety • Behavior Analytics • Compliance
                     </p>
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    {(['7d', '30d', '90d', '1y'] as const).map((p) => (
-                        <button
-                            key={p}
-                            onClick={() => setFilter(p)}
-                            className={cn(
-                                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                                filter === p ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            {p}
-                        </button>
-                    ))}
-                </div>
             </div>
+
+            <AnalyticsFilterBar reportType="drivers.trip-summary" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard

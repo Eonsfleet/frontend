@@ -52,7 +52,7 @@ export const deleteCustomReport = async (id: number | string) => {
 }
 
 export const getRecommendedReports = async () => {
-    const res = await apiClient.get('/reports/custom/recommended')
+    const res = await apiClient.get('/reports/recommended')
     return res.data?.data ?? res.data
 }
 
@@ -115,7 +115,7 @@ export const deleteScheduledReport = async (id: number | string) => {
 
 export const exportReport = async (params: {
     report_type: string
-    format?: 'pdf' | 'csv'
+    format?: 'pdf' | 'csv' | 'excel'
     filter?: '7d' | '30d' | '90d' | '1y'
     limit?: number
 }) => {
@@ -123,5 +123,24 @@ export const exportReport = async (params: {
         params,
         responseType: 'blob',
     })
+    return res.data
+}
+
+// ── Report History ─────────────────────────────────────────────────────────────
+
+export const getReportHistory = async (params?: { page?: number; per_page?: number }) => {
+    const res = await apiClient.get('/analytics/reports/history', { params })
+    return res.data?.data ?? res.data
+}
+
+export const downloadReportHistory = async (id: number | string) => {
+    const res = await apiClient.get(`/analytics/reports/history/${id}/download`, {
+        responseType: 'blob',
+    })
+    return res.data
+}
+
+export const deleteReportHistory = async (id: number | string) => {
+    const res = await apiClient.delete(`/analytics/reports/history/${id}`)
     return res.data
 }

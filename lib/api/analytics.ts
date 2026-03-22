@@ -32,6 +32,11 @@ export const getFleetAssetPerformance = async (params?: { limit?: number }): Pro
     return res.data?.data ?? res.data
 }
 
+export const getFleetActiveIdleTrend = async (params?: { filter?: '7d' | '30d' | '90d' | '1y' }): Promise<any> => {
+    const res = await apiClient.get('/analytics/fleet/active-idle-trend', { params })
+    return res.data?.data ?? res.data
+}
+
 // ── 4. Driver Performance ────────────────────────────────────────────────────
 
 export const getDriverTripSummary = async (params?: { filter?: string; limit?: number }): Promise<any> => {

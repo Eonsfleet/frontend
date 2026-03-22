@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -12,6 +13,7 @@ import { Loader2, ShieldAlert, AlertTriangle, Clock, TrendingUp, ChevronRight, A
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { AnalyticsFilterBar } from '@/components/analytics/AnalyticsFilterBar'
 
 const SEVERITY_COLORS: Record<string, string> = {
     'critical': '#ef4444',
@@ -21,7 +23,8 @@ const SEVERITY_COLORS: Record<string, string> = {
 }
 
 export default function IncidentsAnalyticsPage() {
-    const [filter, setFilter] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
+    const searchParams = useSearchParams()
+    const filter = (searchParams.get('filter') ?? '30d') as '7d' | '30d' | '90d' | '1y'
 
     const { data: summaryData, isLoading: isSummaryLoading } = useQuery({
         queryKey: ['incident-summary'],
@@ -99,21 +102,9 @@ export default function IncidentsAnalyticsPage() {
                         Safety Events • Risk Distribution • Resolution Performance
                     </p>
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    {(['7d', '30d', '90d', '1y'] as const).map((p) => (
-                        <button
-                            key={p}
-                            onClick={() => setFilter(p)}
-                            className={cn(
-                                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                                filter === p ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            {p}
-                        </button>
-                    ))}
-                </div>
             </div>
+
+            <AnalyticsFilterBar reportType="incidents.summary" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard

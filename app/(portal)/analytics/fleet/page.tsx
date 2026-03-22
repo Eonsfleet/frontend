@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
@@ -9,11 +10,13 @@ import { Loader2, Truck, Activity, CheckCircle2, AlertCircle, Calendar, ChevronR
 import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
+import { AnalyticsFilterBar } from '@/components/analytics/AnalyticsFilterBar'
 
 const COLORS = ['#10b981', '#4f46e5', '#f59e0b', '#ef4444']
 
 export default function FleetAnalyticsPage() {
-    const [filter, setFilter] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
+    const searchParams = useSearchParams()
+    const filter = (searchParams.get('filter') ?? '30d') as '7d' | '30d' | '90d' | '1y'
 
     const { data: summaryData, isLoading: isSummaryLoading } = useQuery({
         queryKey: ['fleet-utilization-summary', filter],
@@ -96,21 +99,9 @@ export default function FleetAnalyticsPage() {
                         Deployment Ratios • Fleet Performance Analytics
                     </p>
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    {(['7d', '30d', '90d', '1y'] as const).map((p) => (
-                        <button
-                            key={p}
-                            onClick={() => setFilter(p)}
-                            className={cn(
-                                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                                filter === p ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            {p}
-                        </button>
-                    ))}
-                </div>
             </div>
+
+            <AnalyticsFilterBar reportType="fleet.utilization-summary" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
