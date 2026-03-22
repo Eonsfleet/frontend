@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area
+    AreaChart, Area, LineChart, Line
 } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import * as analyticsApi from '@/lib/api/analytics'
@@ -487,30 +487,37 @@ export default function FuelAnalyticsPage() {
                 <Card className="border-slate-200 shadow-sm bg-white rounded-3xl overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Efficiency Report</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Efficiency Trend</p>
                             <TrendingDown className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <div className="space-y-2">
-                            {efficiencyReport?.fleet_avg_l_per_100km != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Fleet Avg</span>
-                                    <span className="text-sm font-black text-emerald-600">{Number(efficiencyReport.fleet_avg_l_per_100km).toFixed(2)} L/100km</span>
-                                </div>
-                            )}
-                            {efficiencyReport?.best_vehicle != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Best Vehicle</span>
-                                    <span className="text-sm font-black text-slate-900">{efficiencyReport.best_vehicle}</span>
-                                </div>
-                            )}
-                            {efficiencyReport?.worst_vehicle != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Worst Vehicle</span>
-                                    <span className="text-sm font-black text-rose-600">{efficiencyReport.worst_vehicle}</span>
-                                </div>
-                            )}
-                            {!efficiencyReport && <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No efficiency data</p>}
-                        </div>
+                        {(() => {
+                            const labels: string[] = efficiencyReport?.labels ?? []
+                            const values: (number | null)[] = efficiencyReport?.data ?? []
+                            const chartData = labels.map((label: string, i: number) => ({ name: label, value: values[i] ?? null }))
+                            const latestValue = [...values].reverse().find((v) => v != null)
+                            return chartData.length > 0 ? (
+                                <>
+                                    {latestValue != null && (
+                                        <p className="text-2xl font-black text-emerald-600 italic mb-3">
+                                            {Number(latestValue).toFixed(2)} <span className="text-xs font-bold text-slate-400">L/100km</span>
+                                        </p>
+                                    )}
+                                    <ResponsiveContainer width="100%" height={100}>
+                                        <LineChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                                            <XAxis dataKey="name" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                                            <YAxis tick={{ fontSize: 8 }} tickLine={false} axisLine={false} />
+                                            <Tooltip
+                                                contentStyle={{ fontSize: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                                                formatter={(val: any) => [val != null ? `${Number(val).toFixed(2)} L/100km` : '—', 'Efficiency']}
+                                            />
+                                            <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </>
+                            ) : (
+                                <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No efficiency data</p>
+                            )
+                        })()}
                     </CardContent>
                 </Card>
             </div>
