@@ -457,30 +457,37 @@ export default function FuelAnalyticsPage() {
                 <Card className="border-slate-200 shadow-sm bg-white rounded-3xl overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-3">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost Report</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fuel Cost Trend</p>
                             <BarChart2 className="h-4 w-4 text-blue-500" />
                         </div>
-                        <div className="space-y-2">
-                            {costReport?.total_cost != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Cost</span>
-                                    <span className="text-sm font-black text-slate-900">₦{Number(costReport.total_cost).toLocaleString()}</span>
-                                </div>
-                            )}
-                            {costReport?.avg_cost_per_fill != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Avg Cost/Fill</span>
-                                    <span className="text-sm font-black text-blue-600">₦{Number(costReport.avg_cost_per_fill).toLocaleString()}</span>
-                                </div>
-                            )}
-                            {costReport?.total_fills != null && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Fills</span>
-                                    <span className="text-sm font-black text-slate-700">{costReport.total_fills}</span>
-                                </div>
-                            )}
-                            {!costReport && <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No cost report data</p>}
-                        </div>
+                        {(() => {
+                            const labels: string[] = costReport?.labels ?? []
+                            const values: number[] = costReport?.data ?? []
+                            const chartData = labels.map((label: string, i: number) => ({ name: label, value: values[i] ?? 0 }))
+                            const latestValue = [...values].reverse().find((v) => v != null && v > 0)
+                            return chartData.length > 0 ? (
+                                <>
+                                    {latestValue != null && (
+                                        <p className="text-2xl font-black text-blue-600 italic mb-3">
+                                            ₦{Number(latestValue).toLocaleString()} <span className="text-xs font-bold text-slate-400">latest</span>
+                                        </p>
+                                    )}
+                                    <ResponsiveContainer width="100%" height={100}>
+                                        <LineChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                                            <XAxis dataKey="name" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                                            <YAxis tick={{ fontSize: 8 }} tickLine={false} axisLine={false} />
+                                            <Tooltip
+                                                contentStyle={{ fontSize: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                                                formatter={(val: any) => [`₦${Number(val).toLocaleString()}`, 'Cost']}
+                                            />
+                                            <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </>
+                            ) : (
+                                <p className="text-[11px] font-black text-slate-400 uppercase text-center py-4">No cost data</p>
+                            )
+                        })()}
                     </CardContent>
                 </Card>
 
