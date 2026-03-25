@@ -46,6 +46,25 @@ const fmtTime = (ts: string | null | undefined) => {
     : null;
 };
 
+// Format voltage values: handle strings like "12.998000000000001v" or numbers
+const formatVoltage = (value: number | string | null | undefined): string => {
+  if (value == null) return "---";
+  
+  // If string, strip any trailing 'v' or 'V' and convert to number
+  let numValue: number;
+  if (typeof value === "string") {
+    const cleaned = value.toLowerCase().replace(/v$/, "").trim();
+    numValue = parseFloat(cleaned);
+  } else {
+    numValue = value;
+  }
+  
+  // Check if valid number
+  if (isNaN(numValue)) return "---";
+  
+  return `${numValue.toFixed(3)}V`;
+};
+
 interface TelemetryDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -154,6 +173,8 @@ export function TelemetryDrawer({
   vehicle,
 }: TelemetryDrawerProps) {
   const [address, setAddress] = useState<string>("Searching...");
+  const [lastKnownBatteryV, setLastKnownBatteryV] = useState<number | string | null>(null);
+  const [lastKnownExtV, setLastKnownExtV] = useState<number | string | null>(null);
 
   const { data: sensorData, isLoading: isLoadingSensors } = useQuery({
     queryKey: ["sensor-health", vehicleId],
@@ -196,6 +217,13 @@ export function TelemetryDrawer({
     vehicle?.lng,
   ]);
 
+  // Compute resolved fuel before early return (used internally in drawer)
+  const apiFuel = currentFuelData?.data?.fuel_level;
+  const resolvedFuel =
+    apiFuel?.fuel_level_percent ??
+    telemetry?.fuel_level_percent ??
+    vehicle?.fuel;
+
   if (!vehicle) return null;
 
   // ── Resolved values: WS telemetry > prop fallback > raw REST snapshot ──
@@ -234,9 +262,26 @@ export function TelemetryDrawer({
   const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
   const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
   const liveDrivingState = meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle.driving_state;
-  const liveBatteryV = meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle.voltage;
+  
+  // Voltage values with persistence - keep last known good value to prevent flickering
+  const currentBatteryV = meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle.voltage;
+  const currentExtV = meta.external_voltage ?? telemetry?.external_voltage ?? raw.external_voltage ?? vehicle.ext_voltage;
+  
+  // Update last known values if we have valid data (not '---')
+  useEffect(() => {
+    if (currentBatteryV != null && currentBatteryV !== '---') {
+      setLastKnownBatteryV(currentBatteryV);
+    }
+    if (currentExtV != null && currentExtV !== '---') {
+      setLastKnownExtV(currentExtV);
+    }
+  }, [currentBatteryV, currentExtV]);
+  
+  // Use last known value if current is invalid
+  const liveBatteryV = (currentBatteryV != null && currentBatteryV !== '---') ? currentBatteryV : lastKnownBatteryV;
+  const liveExtV = (currentExtV != null && currentExtV !== '---') ? currentExtV : lastKnownExtV;
+  
   const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
-  const liveExtV = meta.external_voltage ?? telemetry?.external_voltage ?? raw.external_voltage ?? vehicle.ext_voltage;
   const liveEngineTemp = meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle.temp ?? 0;
   const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
   const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
@@ -246,12 +291,8 @@ export function TelemetryDrawer({
   const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
   const liveConfidence = meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
 
-  // Fuel — API endpoint > WS telemetry > prop
-  const apiFuel = currentFuelData?.data?.fuel_level;
-  const liveFuel =
-    apiFuel?.fuel_level_percent ??
-    telemetry?.fuel_level_percent ??
-    vehicle.fuel;
+  // Fuel — API endpoint > WS telemetry > prop (already computed as resolvedFuel above)
+  const liveFuel = resolvedFuel;
   const liveFuelLiters =
     apiFuel?.fuel_level_liters ??
     telemetry?.fuel_level_liters ??
@@ -292,7 +333,18 @@ export function TelemetryDrawer({
         : liveEcoScore >= 40
           ? "#d97706"
           : "#dc2626";
-  const batteryWarn = liveBatteryV != null && Number(liveBatteryV) < 11.8;
+  
+  // Parse voltage values properly for warning check
+  const parsedBatteryV = (() => {
+    if (liveBatteryV == null) return null;
+    if (typeof liveBatteryV === "string") {
+      const cleaned = liveBatteryV.toLowerCase().replace(/v$/, "").trim();
+      return parseFloat(cleaned);
+    }
+    return Number(liveBatteryV);
+  })();
+  
+  const batteryWarn = parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
   const tempWarn = liveEngineTemp > 105;
 
   const compassLabel = (deg: number) => {
@@ -720,19 +772,19 @@ export function TelemetryDrawer({
             <StatTile
               icon={Battery}
               label="Battery"
-              value={liveBatteryV != null ? `${liveBatteryV}V` : "---"}
+              value={formatVoltage(liveBatteryV)}
               warn={batteryWarn}
             />
             <StatTile
               icon={Zap}
               label="Ext. Voltage"
-              value={liveExtV != null ? `${liveExtV}V` : "---"}
+              value={formatVoltage(liveExtV)}
             />
             {liveBatteryCurrent != null && (
               <StatTile
                 icon={Zap}
                 label="Batt. Current"
-                value={`${liveBatteryCurrent}A`}
+                value={`${liveBatteryCurrent} A`}
               />
             )}
             <StatTile

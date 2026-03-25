@@ -13,7 +13,7 @@ import {
     PlayCircle
 } from 'lucide-react'
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import * as api from '@/lib/api/vehicles'
 import { cn, normalizeTelemetry } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,7 @@ import { useFleetTracking } from '@/hooks/useFleetTracking'
 import { getGeofences } from '@/lib/api/geofencing'
 import { getActiveTripForVehicle, getTripRoutes, getLastTripForVehicle } from '@/lib/api/trips'
 import { getTripPlayback } from '@/lib/api/tracking'
+import { getVehicleCurrentFuel } from '@/lib/api/fuel'
 
 const LiveMapComponent = dynamic(
     () => import('@/components/live/LiveMapComponent'),
@@ -135,6 +136,35 @@ export default function LiveTrackingPage() {
 
     console.log("trackedVehicles: ", trackedVehicles)
 
+    // Fetch fuel data for all tracked vehicles from the fuel endpoint
+    const fuelQueries = useQueries({
+        queries: trackedVehicles.map((vehicle) => ({
+            queryKey: ['vehicle-fuel', vehicle.id],
+            queryFn: () => getVehicleCurrentFuel(Number(vehicle.id)),
+            enabled: !!token && !!vehicle.id,
+            refetchInterval: 30_000, // Refresh every 30 seconds
+            staleTime: 25_000,
+        })),
+    })
+
+    // Build a map of vehicle ID to fuel data from the fuel endpoint
+    const fuelDataMap = useMemo(() => {
+        const map: Record<string, { percent: number; liters: number; capacity: number }> = {}
+        fuelQueries.forEach((query, index) => {
+            const vehicle = trackedVehicles[index]
+            if (query.data?.data?.fuel_level) {
+                const fuelLevel = query.data.data.fuel_level
+                map[vehicle.id] = {
+                    percent: fuelLevel.fuel_level_percent ?? 0,
+                    liters: fuelLevel.fuel_level_liters ?? 0,
+                    capacity: fuelLevel.tank_capacity ?? 0,
+                }
+            }
+        })
+        return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [JSON.stringify(fuelQueries.map(q => q.data)), trackedVehicles.length])
+
     // Derived selected vehicle object
     const selectedVehicle = useMemo(() =>
         trackedVehicles.find(v => v.id === selectedVehicleId) || null
@@ -198,44 +228,63 @@ export default function LiveTrackingPage() {
                             Active Trips
                             <span className="text-blue-600">VIEW ALL</span>
                         </label>
-                        {MOCK_TRIPS.map((trip) => (
-                            <div
-                                key={trip.id}
-                                onClick={() => {
-                                    const v = trackedVehicles.find(v => v.registration_number === trip.plate)
-                                    if (v) setSelectedVehicleId(v.id)
-                                }}
-                                className={cn(
-                                    "p-4 rounded-2xl border transition-all cursor-pointer group",
-                                    selectedVehicle?.registration_number === trip.plate
-                                        ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100"
-                                        : "bg-white border-slate-100 hover:border-blue-200"
-                                )}
-                            >
-                                <div className="flex items-center justify-between mb-2">
-                                    <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
-                                        {trip.plate}
-                                    </h4>
-                                    <Badge className={cn(
-                                        "text-[8px] font-black border-none",
-                                        trip.status === 'on-time' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                                    )}>
-                                        {trip.status.toUpperCase()}
-                                    </Badge>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                                    <Navigation className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
-                                    <span className={cn("truncate", selectedVehicle?.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
-                                </div>
-                                <div className="mt-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                        <Clock className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
-                                        <span className={cn("text-[10px] font-black", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
+                        {MOCK_TRIPS.map((trip) => {
+                            const tripVehicle = trackedVehicles.find(v => v.registration_number === trip.plate)
+                            const fuelData = tripVehicle ? fuelDataMap[tripVehicle.id] : null
+                            const displayFuel = fuelData?.percent ?? (tripVehicle ? tripVehicle.fuel : null)
+                            const fuelColor = displayFuel !== null && displayFuel < 20 ? 'text-rose-500' : displayFuel !== null && displayFuel < 40 ? 'text-amber-500' : 'text-emerald-500'
+                            
+                            return (
+                                <div
+                                    key={trip.id}
+                                    onClick={() => {
+                                        const v = trackedVehicles.find(v => v.registration_number === trip.plate)
+                                        if (v) setSelectedVehicleId(v.id)
+                                    }}
+                                    className={cn(
+                                        "p-4 rounded-2xl border transition-all cursor-pointer group",
+                                        selectedVehicle?.registration_number === trip.plate
+                                            ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100"
+                                            : "bg-white border-slate-100 hover:border-blue-200"
+                                    )}
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
+                                            {trip.plate}
+                                        </h4>
+                                        <div className="flex items-center gap-2">
+                                            {displayFuel !== null && (
+                                                <span className={cn(
+                                                    "text-[9px] font-black px-2 py-0.5 rounded-full",
+                                                    selectedVehicle?.registration_number === trip.plate 
+                                                        ? "bg-white/20 text-white" 
+                                                        : `${fuelColor} bg-slate-50`
+                                                )}>
+                                                    ⛽ {displayFuel}% {fuelData && `(${fuelData.liters.toFixed(1)}L)`}
+                                                </span>
+                                            )}
+                                            <Badge className={cn(
+                                                "text-[8px] font-black border-none",
+                                                trip.status === 'on-time' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                            )}>
+                                                {trip.status.toUpperCase()}
+                                            </Badge>
+                                        </div>
                                     </div>
-                                    <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
+                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                        <Navigation className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
+                                        <span className={cn("truncate", selectedVehicle?.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
+                                    </div>
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
+                                            <span className={cn("text-[10px] font-black", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
+                                        </div>
+                                        <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
 
                     <div className="h-[1px] bg-slate-100 my-4" />
@@ -243,22 +292,46 @@ export default function LiveTrackingPage() {
                     {/* All Vehicles Simple List */}
                     <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Idle Fleet</label>
-                        {filteredVehicles.map((v) => (
-                            <div
-                                key={v.id}
-                                onClick={() => setSelectedVehicleId(v.id)}
-                                className={cn(
-                                    "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
-                                    selectedVehicleId === v.id ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-50 hover:border-slate-200"
-                                )}
-                            >
-                                <span className="text-[10px] font-black uppercase italic tracking-tight">{v.registration_number}</span>
-                                <div className={cn(
-                                    "h-1.5 w-1.5 rounded-full",
-                                    v.status === 'online' ? "bg-emerald-500" : "bg-slate-300"
-                                )} />
-                            </div>
-                        ))}
+                        {filteredVehicles.map((v) => {
+                            const fuelData = fuelDataMap[v.id]
+                            const displayFuel = fuelData?.percent ?? v.fuel
+                            const fuelColor = displayFuel < 20 ? 'text-rose-500' : displayFuel < 40 ? 'text-amber-500' : 'text-emerald-500'
+                            
+                            return (
+                                <div
+                                    key={v.id}
+                                    onClick={() => setSelectedVehicleId(v.id)}
+                                    className={cn(
+                                        "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
+                                        selectedVehicleId === v.id ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-50 hover:border-slate-200"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <span className="text-[10px] font-black uppercase italic tracking-tight">{v.registration_number}</span>
+                                        <div className={cn(
+                                            "h-1.5 w-1.5 rounded-full",
+                                            v.status === 'online' ? "bg-emerald-500" : "bg-slate-300"
+                                        )} />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className={cn(
+                                            "text-[9px] font-black",
+                                            selectedVehicleId === v.id ? "text-white" : fuelColor
+                                        )}>
+                                            {displayFuel}%
+                                        </span>
+                                        {fuelData && (
+                                            <span className={cn(
+                                                "text-[8px] font-bold",
+                                                selectedVehicleId === v.id ? "text-slate-400" : "text-slate-400"
+                                            )}>
+                                                ({fuelData.liters.toFixed(1)}L)
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
 
@@ -316,7 +389,7 @@ export default function LiveTrackingPage() {
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Fuel Remaining</p>
-                                        <p className="text-xl font-black text-slate-900 italic">{selectedVehicle.fuel}<span className="text-[10px] font-bold text-slate-500 ml-1">%</span></p>
+                                        <p className="text-xl font-black text-slate-900 italic">{fuelDataMap[selectedVehicle.id]?.percent ?? selectedVehicle.fuel}<span className="text-[10px] font-bold text-slate-500 ml-1">%</span></p>
                                     </div>
                                     <div className="text-center">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ignition</p>
