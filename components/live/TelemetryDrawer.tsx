@@ -49,7 +49,7 @@ const fmtTime = (ts: string | null | undefined) => {
 // Format voltage values: handle strings like "12.998000000000001v" or numbers
 const formatVoltage = (value: number | string | null | undefined): string => {
   if (value == null) return "---";
-  
+
   // If string, strip any trailing 'v' or 'V' and convert to number
   let numValue: number;
   if (typeof value === "string") {
@@ -58,10 +58,10 @@ const formatVoltage = (value: number | string | null | undefined): string => {
   } else {
     numValue = value;
   }
-  
+
   // Check if valid number
   if (isNaN(numValue)) return "---";
-  
+
   return `${numValue.toFixed(3)}V`;
 };
 
@@ -173,8 +173,12 @@ export function TelemetryDrawer({
   vehicle,
 }: TelemetryDrawerProps) {
   const [address, setAddress] = useState<string>("Searching...");
-  const [lastKnownBatteryV, setLastKnownBatteryV] = useState<number | string | null>(null);
-  const [lastKnownExtV, setLastKnownExtV] = useState<number | string | null>(null);
+  const [lastKnownBatteryV, setLastKnownBatteryV] = useState<
+    number | string | null
+  >(null);
+  const [lastKnownExtV, setLastKnownExtV] = useState<number | string | null>(
+    null,
+  );
 
   const { data: sensorData, isLoading: isLoadingSensors } = useQuery({
     queryKey: ["sensor-health", vehicleId],
@@ -224,72 +228,133 @@ export function TelemetryDrawer({
     telemetry?.fuel_level_percent ??
     vehicle?.fuel;
 
-  if (!vehicle) return null;
-
   // ── Resolved values: WS telemetry > prop fallback > raw REST snapshot ──
-  const raw = vehicle.raw ?? {};
-  const liveSpeed = telemetry?.speed ?? vehicle.speed;
-  const liveHeading = telemetry?.heading ?? vehicle.heading ?? 0;
+  const raw = vehicle?.raw ?? {};
+  const liveSpeed = telemetry?.speed ?? vehicle?.speed;
+  const liveHeading = telemetry?.heading ?? vehicle?.heading ?? 0;
   const liveIgnition = telemetry
-    ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
-    : vehicle.ignition;
-  const liveMovement = telemetry?.movement ?? vehicle.movement;
-  const liveStatus = telemetry?.status ?? vehicle.status;
-  const liveLat = telemetry?.latitude ?? vehicle.lat;
-  const liveLng = telemetry?.longitude ?? vehicle.lng;
-  const liveAltitude = telemetry?.altitude ?? vehicle.altitude ?? raw.altitude;
+    ? telemetry.ignition === "on" ||
+      telemetry.ignition === "1" ||
+      telemetry.ignition === true
+    : vehicle?.ignition;
+  const liveMovement = telemetry?.movement ?? vehicle?.movement;
+  const liveStatus = telemetry?.status ?? vehicle?.status;
+  const liveLat = telemetry?.latitude ?? vehicle?.lat;
+  const liveLng = telemetry?.longitude ?? vehicle?.lng;
+  const liveAltitude = telemetry?.altitude ?? vehicle?.altitude ?? raw.altitude;
   const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
-  const liveOdo = telemetry?.odometer ?? vehicle.odometer ?? raw.odometer;
-  const liveLastUpdate = telemetry?.gps_datetime ?? vehicle.lastUpdate;
+  const liveOdo = telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
+  const liveLastUpdate = telemetry?.gps_datetime ?? vehicle?.lastUpdate;
 
   // Metadata fields — WS flattens metadata to top-level after normalizeTelemetry;
   // raw WS keeps them under metadata; REST snapshot is in raw.*
   const meta = telemetry?.metadata ?? {};
-  const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle.rpm;
-  const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
+  const liveRpm =
+    meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
+  const liveRpmObd =
+    meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
   const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
-  const liveFuelRate = meta.fuel_rate_gps ?? meta.fuel_rate ?? telemetry?.fuel_rate ?? raw.fuel_rate ?? vehicle.fuel_rate;
-  const liveFuelConsumed = meta.fuel_consumed ?? telemetry?.fuel_consumed ?? raw.fuel_consumed;
-  const liveFuelUsedGps = meta.fuel_used_gps ?? telemetry?.fuel_used_gps ?? raw.fuel_used_gps;
-  const liveFuelLevelObd = meta.fuel_level_obd ?? telemetry?.fuel_level_obd ?? raw.fuel_level_obd;
-  const liveFuelSource = meta.fuel_source ?? telemetry?.fuel_source ?? raw.fuel_source;
-  const liveEcoScore = meta.eco_score ?? telemetry?.eco_score ?? raw.eco_score ?? vehicle.eco_score;
-  const liveIdling = meta.idling ?? telemetry?.idling ?? raw.idling ?? vehicle.idling ?? false;
-  const liveJamming = meta.jamming ?? telemetry?.jamming ?? raw.jamming ?? vehicle.jamming ?? false;
-  const liveImmobilizer = meta.immobilizer ?? telemetry?.immobilizer ?? raw.immobilizer ?? vehicle.immobilizer ?? false;
+  const liveFuelRate =
+    meta.fuel_rate_gps ??
+    meta.fuel_rate ??
+    telemetry?.fuel_rate ??
+    raw.fuel_rate ??
+    vehicle?.fuel_rate;
+  const liveFuelConsumed =
+    meta.fuel_consumed ?? telemetry?.fuel_consumed ?? raw.fuel_consumed;
+  const liveFuelUsedGps =
+    meta.fuel_used_gps ?? telemetry?.fuel_used_gps ?? raw.fuel_used_gps;
+  const liveFuelLevelObd =
+    meta.fuel_level_obd ?? telemetry?.fuel_level_obd ?? raw.fuel_level_obd;
+  const liveFuelSource =
+    meta.fuel_source ?? telemetry?.fuel_source ?? raw.fuel_source;
+  const liveEcoScore =
+    meta.eco_score ??
+    telemetry?.eco_score ??
+    raw.eco_score ??
+    vehicle?.eco_score;
+  const liveIdling =
+    meta.idling ?? telemetry?.idling ?? raw.idling ?? vehicle?.idling ?? false;
+  const liveJamming =
+    meta.jamming ??
+    telemetry?.jamming ??
+    raw.jamming ??
+    vehicle?.jamming ??
+    false;
+  const liveImmobilizer =
+    meta.immobilizer ??
+    telemetry?.immobilizer ??
+    raw.immobilizer ??
+    vehicle?.immobilizer ??
+    false;
   const liveUnplug = meta.unplug ?? telemetry?.unplug ?? raw.unplug ?? false;
-  const liveSleepMode = meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
-  const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
-  const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
-  const liveDrivingState = meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle.driving_state;
-  
+  const liveSleepMode =
+    meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
+  const liveDoorStatus =
+    meta.door_status ?? telemetry?.door_status ?? raw.door_status;
+  const liveLoadWeight =
+    meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
+  const liveDrivingState =
+    meta.driving_state ??
+    telemetry?.driving_state ??
+    raw.driving_state ??
+    vehicle?.driving_state;
+
   // Voltage values with persistence - keep last known good value to prevent flickering
-  const currentBatteryV = meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle.voltage;
-  const currentExtV = meta.external_voltage ?? telemetry?.external_voltage ?? raw.external_voltage ?? vehicle.ext_voltage;
-  
+  const currentBatteryV =
+    meta.battery_voltage ??
+    telemetry?.battery_voltage ??
+    raw.battery_voltage ??
+    vehicle?.voltage;
+  const currentExtV =
+    meta.external_voltage ??
+    telemetry?.external_voltage ??
+    raw.external_voltage ??
+    vehicle?.ext_voltage;
+
   // Update last known values if we have valid data (not '---')
   useEffect(() => {
-    if (currentBatteryV != null && currentBatteryV !== '---') {
+    if (currentBatteryV != null && currentBatteryV !== "---") {
       setLastKnownBatteryV(currentBatteryV);
     }
-    if (currentExtV != null && currentExtV !== '---') {
+    if (currentExtV != null && currentExtV !== "---") {
       setLastKnownExtV(currentExtV);
     }
   }, [currentBatteryV, currentExtV]);
-  
+
+  if (!vehicle) return null;
+
   // Use last known value if current is invalid
-  const liveBatteryV = (currentBatteryV != null && currentBatteryV !== '---') ? currentBatteryV : lastKnownBatteryV;
-  const liveExtV = (currentExtV != null && currentExtV !== '---') ? currentExtV : lastKnownExtV;
-  
-  const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
-  const liveEngineTemp = meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle.temp ?? 0;
+  const liveBatteryV =
+    currentBatteryV != null && currentBatteryV !== "---"
+      ? currentBatteryV
+      : lastKnownBatteryV;
+  const liveExtV =
+    currentExtV != null && currentExtV !== "---" ? currentExtV : lastKnownExtV;
+
+  const liveBatteryCurrent =
+    meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
+  const liveEngineTemp =
+    meta.engine_temperature ??
+    telemetry?.engine_temperature ??
+    raw.engine_temperature ??
+    vehicle.temp ??
+    0;
   const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
   const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
-  const liveMileage = meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
-  const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
-  const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
-  const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
-  const liveConfidence = meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
+  const liveMileage =
+    meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
+  const liveTripOdo =
+    meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
+  const liveOdoSource =
+    meta.odometer_source ??
+    telemetry?.odometer_source ??
+    raw.odometer_source ??
+    null;
+  const liveProtocol =
+    meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
+  const liveConfidence =
+    meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
 
   // Fuel — API endpoint > WS telemetry > prop (already computed as resolvedFuel above)
   const liveFuel = resolvedFuel;
@@ -333,7 +398,7 @@ export function TelemetryDrawer({
         : liveEcoScore >= 40
           ? "#d97706"
           : "#dc2626";
-  
+
   // Parse voltage values properly for warning check
   const parsedBatteryV = (() => {
     if (liveBatteryV == null) return null;
@@ -343,8 +408,9 @@ export function TelemetryDrawer({
     }
     return Number(liveBatteryV);
   })();
-  
-  const batteryWarn = parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
+
+  const batteryWarn =
+    parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
   const tempWarn = liveEngineTemp > 105;
 
   const compassLabel = (deg: number) => {
@@ -418,7 +484,11 @@ export function TelemetryDrawer({
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Alert Badges */}
-        {(liveJamming || liveImmobilizer || liveIdling || liveUnplug || liveSleepMode) && (
+        {(liveJamming ||
+          liveImmobilizer ||
+          liveIdling ||
+          liveUnplug ||
+          liveSleepMode) && (
           <div className="flex flex-wrap gap-2">
             {liveJamming && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
@@ -609,8 +679,12 @@ export function TelemetryDrawer({
             {/* Odometer source */}
             {liveOdoSource && (
               <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Odo Source</span>
-                <span className="text-[9px] font-black text-slate-700 uppercase">{liveOdoSource}</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                  Odo Source
+                </span>
+                <span className="text-[9px] font-black text-slate-700 uppercase">
+                  {liveOdoSource}
+                </span>
               </div>
             )}
           </div>
@@ -755,8 +829,12 @@ export function TelemetryDrawer({
               )}
               {liveFuelSource && (
                 <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fuel Source</span>
-                  <span className="text-[9px] font-black text-slate-700 uppercase">{liveFuelSource}</span>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                    Fuel Source
+                  </span>
+                  <span className="text-[9px] font-black text-slate-700 uppercase">
+                    {liveFuelSource}
+                  </span>
                 </div>
               )}
             </div>
@@ -819,8 +897,12 @@ export function TelemetryDrawer({
             )}
             {liveProtocol && (
               <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Protocol</span>
-                <span className="text-[9px] font-black text-slate-700 uppercase">{liveProtocol}</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                  Protocol
+                </span>
+                <span className="text-[9px] font-black text-slate-700 uppercase">
+                  {liveProtocol}
+                </span>
               </div>
             )}
             <StatTile
@@ -831,8 +913,12 @@ export function TelemetryDrawer({
             />
             {liveDoorStatus && (
               <div className="col-span-2 flex items-center justify-between px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Door Status</span>
-                <span className="text-[9px] font-black text-slate-700 capitalize">{liveDoorStatus}</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                  Door Status
+                </span>
+                <span className="text-[9px] font-black text-slate-700 capitalize">
+                  {liveDoorStatus}
+                </span>
               </div>
             )}
             {liveLoadWeight != null && (
