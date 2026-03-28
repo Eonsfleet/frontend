@@ -12,7 +12,8 @@ import * as z from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/settings'
 import { toast } from 'sonner'
-import { Loader2, Building, Globe, Mail, Phone, Upload } from 'lucide-react'
+import { Loader2, Building, Globe, Phone, Upload } from 'lucide-react'
+import { QueryError } from '@/components/shared/QueryError'
 
 const orgSchema = z.object({
     name: z.string().min(2, 'Organization name is required'),
@@ -31,6 +32,11 @@ export default function OrganizationSettingsPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
+                e.target.value = ''
+                return
+            }
             toast.promise(
                 new Promise((resolve) => {
                     setTimeout(() => {
@@ -50,7 +56,7 @@ export default function OrganizationSettingsPage() {
     const userRole = user?.attributes?.role
     const isAdmin = Array.isArray(userRole) ? userRole.includes('administrator') : userRole === 'administrator'
 
-    const { data: orgData, isLoading } = useQuery({
+    const { data: orgData, isLoading, isError, refetch } = useQuery({
         queryKey: ['settings-organization', currentOrg?.id],
         queryFn: () => api.getOrganization(currentOrg!.id),
         enabled: !!currentOrg?.id
@@ -94,7 +100,11 @@ export default function OrganizationSettingsPage() {
     }
 
     if (isLoading) {
-        return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
+        return <div role="status" aria-label="Loading" className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
+    }
+
+    if (isError) {
+        return <div className="p-12 max-w-4xl"><QueryError message="Failed to load organization settings." onRetry={refetch} /></div>
     }
 
     return (

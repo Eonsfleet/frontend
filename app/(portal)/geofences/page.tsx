@@ -10,6 +10,8 @@ import { Plus, List, Map as MapIcon, Filter, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getGeofences } from '@/lib/api/geofencing'
 import { getVehicles } from '@/lib/api/vehicles'
+import { QueryError } from '@/components/shared/QueryError'
+import { PAGE_SIZE_DROPDOWN } from '@/lib/config'
 
 const GeofenceOverviewMap = dynamic(
     () => import('@/components/geofencing/GeofenceOverviewMap'),
@@ -29,15 +31,15 @@ export default function GeofencesPage() {
     const [searchTerm, setSearchTerm] = useState('')
 
     // Fetch all geofences for map view (no pagination needed — map shows all)
-    const { data: allGeofencesData, isLoading: isLoadingMapData } = useQuery({
+    const { data: allGeofencesData, isLoading: isLoadingMapData, isError: isMapError, refetch: refetchMap } = useQuery({
         queryKey: ['geofences-all'],
-        queryFn: () => getGeofences({ per_page: 100 }),
+        queryFn: () => getGeofences({ per_page: PAGE_SIZE_DROPDOWN }),
         enabled: view === 'map',
     })
 
     const { data: vehiclesData } = useQuery({
         queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: 100 }),
+        queryFn: () => getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
         enabled: view === 'map',
     })
 
@@ -116,6 +118,10 @@ export default function GeofencesPage() {
                         {isLoadingMapData ? (
                             <div className="h-full flex items-center justify-center">
                                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                            </div>
+                        ) : isMapError ? (
+                            <div className="h-full flex items-center justify-center p-6">
+                                <QueryError message="Failed to load geofences." onRetry={refetchMap} />
                             </div>
                         ) : allGeofences.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center">

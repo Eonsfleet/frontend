@@ -24,6 +24,7 @@ import { JobWorkflowActions } from '@/components/shared/JobWorkflowActions'
 import { getVendors } from '@/lib/api/vendors'
 import { assignMaintenanceJob } from '@/lib/api/maintenance'
 import { usePermission } from '@/hooks/usePermission'
+import { QueryError } from '@/components/shared/QueryError'
 
 export default function MaintenanceJobDetailPage() {
     const params = useParams()
@@ -31,7 +32,7 @@ export default function MaintenanceJobDetailPage() {
     const queryClient = useQueryClient()
     const [message, setMessage] = useState('')
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['maintenance-job', jobId],
         queryFn: () => getMaintenanceJobById(jobId),
         enabled: !!jobId,
@@ -69,6 +70,10 @@ export default function MaintenanceJobDetailPage() {
         return <div className="p-8 text-center text-slate-500">Loading job details...</div>
     }
 
+    if (isError) {
+        return <div className="p-8"><QueryError message="Failed to load job details." onRetry={refetch} /></div>
+    }
+
     const job = data?.data
 
     if (!job) {
@@ -76,9 +81,9 @@ export default function MaintenanceJobDetailPage() {
     }
 
     const cost = costData?.data?.cost_summary
-    const history = (historyData?.data?.history ?? []).map((e: any) => ({
+    const history = (historyData?.data?.history ?? []).map((e: { to_status?: string; status?: string; actor?: string | { name: string }; created_at?: string; timestamp?: string; reason?: string | null; notes?: string }) => ({
         status: e.to_status ?? e.status ?? '',
-        actor: e.actor?.name ?? e.actor ?? 'System',
+        actor: typeof e.actor === 'object' ? e.actor?.name ?? 'System' : e.actor ?? 'System',
         timestamp: e.created_at ?? e.timestamp ?? '',
         reason: e.reason ?? e.notes ?? null,
     }))
@@ -91,7 +96,7 @@ export default function MaintenanceJobDetailPage() {
     const toNaira = (kobo: number) => (kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })
 
     const vehicleLabel = (() => {
-        const v = job.relationships?.vehicle as any
+        const v = job.relationships?.vehicle as { registration_number?: string; data?: { id: string } } | undefined
         if (!v) return 'N/A'
         return v.registration_number ?? v.data?.id ?? 'N/A'
     })()
@@ -241,7 +246,7 @@ export default function MaintenanceJobDetailPage() {
                         <CardContent className="p-6 space-y-4">
                             <div className="space-y-3 max-h-96 overflow-y-auto">
                                 {messages.length ? (
-                                    messages.map((msg: any) => (
+                                    messages.map((msg: { id: string | number; sender?: { name: string }; created_at?: string; body: string }) => (
                                         <div key={msg.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-xs font-semibold text-slate-700">{msg.sender?.name ?? 'User'}</span>
@@ -308,7 +313,7 @@ function WorkshopAssignmentSection({ jobId }: { jobId: string | number }) {
         onError: () => toast.error('Failed to assign workshop'),
     })
 
-    if (isLoading) return <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-300" /></div>
+    if (isLoading) return <div role="status" aria-label="Loading" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-300" /></div>
 
     const vendors = vendorsData?.data || []
 
@@ -320,7 +325,7 @@ function WorkshopAssignmentSection({ jobId }: { jobId: string | number }) {
             </CardHeader>
             <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {vendors.map((vendor: any) => (
+                    {vendors.map((vendor: { id: string | number; name?: string; address?: string }) => (
                         <div key={vendor.id} className="p-4 rounded-2xl border border-slate-100 bg-white hover:border-[#0055FF] hover:shadow-lg transition-all group relative">
                             <div className="flex justify-between items-start mb-3">
                                 <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center group-hover:bg-[#0055FF]/10 transition-colors">

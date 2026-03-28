@@ -3,11 +3,9 @@
 import { TelemetryDrawer } from '@/components/live/TelemetryDrawer'
 import { TripPlaybackTimeline } from '@/components/live/TripPlaybackTimeline'
 import {
-    Navigation,
     Truck,
     RefreshCw,
     Search,
-    Clock,
     Activity,
     ChevronRight,
     PlayCircle
@@ -24,17 +22,13 @@ import { getGeofences } from '@/lib/api/geofencing'
 import { getActiveTripForVehicle, getTripRoutes, getLastTripForVehicle } from '@/lib/api/trips'
 import { getTripPlayback } from '@/lib/api/tracking'
 import { getVehicleCurrentFuel } from '@/lib/api/fuel'
+import { QueryError } from '@/components/shared/QueryError'
+import { PAGE_SIZE_FULL, REFETCH_INTERVAL_MAP, STALE_TIME_REALTIME } from '@/lib/config'
 
 const LiveMapComponent = dynamic(
     () => import('@/components/live/LiveMapComponent'),
     { ssr: false }
 )
-
-const MOCK_TRIPS = [
-    { id: 't1', plate: 'LND-123-XY', destination: 'Lagos Terminal', eta: '14:20 PM', status: 'on-time' },
-    { id: 't2', plate: 'ABJ-456-ZZ', destination: 'Abuja Depot', eta: '16:45 PM', status: 'delayed' },
-    { id: 't3', plate: 'PH-789-BC', destination: 'Port Harcourt', eta: '11:15 AM', status: 'on-time' },
-]
 
 export default function LiveTrackingPage() {
     const [searchQuery, setSearchQuery] = useState('')
@@ -49,9 +43,9 @@ export default function LiveTrackingPage() {
     const { token } = useAuthStore()
 
     // 1. Fetch initial vehicle locations
-    const { data: routeData } = useQuery({
-        queryKey: ['vehicle-locations', { per_page: 1000 }],
-        queryFn: () => api.getVehiclesLocations({ per_page: 1000 }),
+    const { data: routeData, isError: isLocationsError, refetch: refetchLocations } = useQuery({
+        queryKey: ['vehicle-locations', { per_page: PAGE_SIZE_FULL }],
+        queryFn: () => api.getVehiclesLocations({ per_page: PAGE_SIZE_FULL }),
         enabled: !!token,
     })
 
@@ -59,8 +53,6 @@ export default function LiveTrackingPage() {
 
     // 2. Real-time updates via WebSocket
     const { telemetryMap } = useFleetTracking()
-
-    console.log("telemetry: ",telemetryMap)
 
     // 3. Fetch geofences
     const { data: geofenceData } = useQuery({
@@ -134,16 +126,14 @@ export default function LiveTrackingPage() {
         })
     }, [initialVehicles, telemetryMap])
 
-    console.log("trackedVehicles: ", trackedVehicles)
-
     // Fetch fuel data for all tracked vehicles from the fuel endpoint
     const fuelQueries = useQueries({
         queries: trackedVehicles.map((vehicle) => ({
             queryKey: ['vehicle-fuel', vehicle.id],
             queryFn: () => getVehicleCurrentFuel(Number(vehicle.id)),
             enabled: !!token && !!vehicle.id,
-            refetchInterval: 30_000, // Refresh every 30 seconds
-            staleTime: 25_000,
+            refetchInterval: REFETCH_INTERVAL_MAP,
+            staleTime: STALE_TIME_REALTIME,
         })),
     })
 
@@ -176,8 +166,6 @@ export default function LiveTrackingPage() {
             v.registration_number.toLowerCase().includes(searchQuery.toLowerCase())
         )
     }, [trackedVehicles, searchQuery])
-
-    console.log(filteredVehicles)
 
     return (
         <div className="h-[calc(100vh-64px)] -m-6 md:-m-8 flex overflow-hidden bg-slate-100 relative">
@@ -225,66 +213,63 @@ export default function LiveTrackingPage() {
                     {/* Active Trips Section */}
                     <div className="space-y-3">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
-                            Active Trips
-                            <span className="text-blue-600">VIEW ALL</span>
+                            In Transit
+                            <span className="text-blue-600">{trackedVehicles.filter(v => v.status === 'in_transit').length} ACTIVE</span>
                         </label>
-                        {MOCK_TRIPS.map((trip) => {
-                            const tripVehicle = trackedVehicles.find(v => v.registration_number === trip.plate)
-                            const fuelData = tripVehicle ? fuelDataMap[tripVehicle.id] : null
-                            const displayFuel = fuelData?.percent ?? (tripVehicle ? tripVehicle.fuel : null)
-                            const fuelColor = displayFuel !== null && displayFuel < 20 ? 'text-rose-500' : displayFuel !== null && displayFuel < 40 ? 'text-amber-500' : 'text-emerald-500'
-                            
+                        {isLocationsError && (
+                            <QueryError message="Failed to load fleet." onRetry={refetchLocations} />
+                        )}
+                        {trackedVehicles.filter(v => v.status === 'in_transit').map((v) => {
+                            const fuelData = fuelDataMap[v.id]
+                            const displayFuel = fuelData?.percent ?? v.fuel
+                            const fuelColor = displayFuel < 20 ? 'text-rose-500' : displayFuel < 40 ? 'text-amber-500' : 'text-emerald-500'
+
                             return (
                                 <div
-                                    key={trip.id}
-                                    onClick={() => {
-                                        const v = trackedVehicles.find(v => v.registration_number === trip.plate)
-                                        if (v) setSelectedVehicleId(v.id)
-                                    }}
+                                    key={v.id}
+                                    onClick={() => setSelectedVehicleId(v.id)}
                                     className={cn(
                                         "p-4 rounded-2xl border transition-all cursor-pointer group",
-                                        selectedVehicle?.registration_number === trip.plate
+                                        selectedVehicleId === v.id
                                             ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-100"
                                             : "bg-white border-slate-100 hover:border-blue-200"
                                     )}
                                 >
                                     <div className="flex items-center justify-between mb-2">
-                                        <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>
-                                            {trip.plate}
+                                        <h4 className={cn("text-[11px] font-black uppercase italic", selectedVehicleId === v.id ? "text-white" : "text-slate-900")}>
+                                            {v.registration_number}
                                         </h4>
                                         <div className="flex items-center gap-2">
-                                            {displayFuel !== null && (
-                                                <span className={cn(
-                                                    "text-[9px] font-black px-2 py-0.5 rounded-full",
-                                                    selectedVehicle?.registration_number === trip.plate 
-                                                        ? "bg-white/20 text-white" 
-                                                        : `${fuelColor} bg-slate-50`
-                                                )}>
-                                                    ⛽ {displayFuel}% {fuelData && `(${fuelData.liters.toFixed(1)}L)`}
-                                                </span>
-                                            )}
-                                            <Badge className={cn(
-                                                "text-[8px] font-black border-none",
-                                                trip.status === 'on-time' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                            <span className={cn(
+                                                "text-[9px] font-black px-2 py-0.5 rounded-full",
+                                                selectedVehicleId === v.id
+                                                    ? "bg-white/20 text-white"
+                                                    : `${fuelColor} bg-slate-50`
                                             )}>
-                                                {trip.status.toUpperCase()}
+                                                ⛽ {displayFuel}% {fuelData && `(${fuelData.liters.toFixed(1)}L)`}
+                                            </span>
+                                            <Badge className="text-[8px] font-black border-none bg-emerald-50 text-emerald-600">
+                                                ON ROUTE
                                             </Badge>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                                        <Navigation className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-blue-500")} />
-                                        <span className={cn("truncate", selectedVehicle?.registration_number === trip.plate ? "text-blue-100" : "text-slate-500")}>TO: {trip.destination}</span>
+                                    <div className="flex items-center gap-2 text-[10px] font-bold">
+                                        <Truck className={cn("h-3 w-3 shrink-0", selectedVehicleId === v.id ? "text-blue-200" : "text-blue-500")} />
+                                        <span className={cn("truncate", selectedVehicleId === v.id ? "text-blue-100" : "text-slate-500")}>{v.address}</span>
                                     </div>
                                     <div className="mt-3 flex items-center justify-between">
                                         <div className="flex items-center gap-1.5">
-                                            <Clock className={cn("h-3 w-3", selectedVehicle?.registration_number === trip.plate ? "text-blue-200" : "text-slate-300")} />
-                                            <span className={cn("text-[10px] font-black", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-900")}>ETA: {trip.eta}</span>
+                                            <Activity className={cn("h-3 w-3", selectedVehicleId === v.id ? "text-blue-200" : "text-slate-300")} />
+                                            <span className={cn("text-[10px] font-black", selectedVehicleId === v.id ? "text-white" : "text-slate-900")}>{v.speed} KPH</span>
                                         </div>
-                                        <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicle?.registration_number === trip.plate ? "text-white" : "text-slate-300")} />
+                                        <ChevronRight className={cn("h-3 w-3 transition-transform group-hover:translate-x-1", selectedVehicleId === v.id ? "text-white" : "text-slate-300")} />
                                     </div>
                                 </div>
                             )
                         })}
+                        {trackedVehicles.filter(v => v.status === 'in_transit').length === 0 && !isLocationsError && (
+                            <p className="text-[10px] font-bold text-slate-400 text-center py-4">No vehicles currently in transit</p>
+                        )}
                     </div>
 
                     <div className="h-[1px] bg-slate-100 my-4" />

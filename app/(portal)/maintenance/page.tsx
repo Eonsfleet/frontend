@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { CreateMaintenanceScheduleModal } from '@/components/maintenance/CreateScheduleModal'
+import { QueryError } from '@/components/shared/QueryError'
 
 const BRAND_BLUE = "text-[#0055FF]"
 const BRAND_BLUE_BG = "bg-[#0055FF]"
@@ -25,28 +26,28 @@ export default function MaintenanceDashboardPage() {
     const [statusFilter, setStatusFilter] = React.useState<string | undefined>(undefined)
     const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
 
-    const { data: scheduleData, isLoading: isLoadingSchedules } = useQuery({
+    const { data: scheduleData, isLoading: isLoadingSchedules, isError: isScheduleError, refetch: refetchSchedules } = useQuery({
         queryKey: ['maintenance-schedules', schedulePage, statusFilter],
         queryFn: () => getMaintenances({ page: schedulePage, status: statusFilter }),
     })
 
-    const { data: alertData, isLoading: isLoadingAlerts } = useQuery({
+    const { data: alertData, isLoading: isLoadingAlerts, isError: isAlertError, refetch: refetchAlerts } = useQuery({
         queryKey: ['maintenance-alerts'],
         queryFn: () => getMaintenanceAlerts(),
     })
 
-    const { data: statsData, isLoading: isLoadingStats } = useQuery({
+    const { data: statsData, isLoading: isLoadingStats, isError: isStatsError, refetch: refetchStats } = useQuery({
         queryKey: ['maintenance-stats'],
         queryFn: () => getMaintenanceStats(),
     })
 
-    const { data: upcomingData, isLoading: isLoadingUpcoming } = useQuery({
+    const { data: upcomingData, isLoading: isLoadingUpcoming, isError: isUpcomingError, refetch: refetchUpcoming } = useQuery({
         queryKey: ['maintenance-upcoming'],
         queryFn: () => getUpcomingMaintenance(),
     })
 
     const stats = statsData?.data || {}
-    const upcomingCount = upcomingData?.data?.forecast?.reduce((acc: number, f: any) => acc + f.count, 0) || 0
+    const upcomingCount = upcomingData?.data?.forecast?.reduce((acc: number, f: { count: number }) => acc + f.count, 0) || 0
 
     const kpiCards = [
         {
@@ -120,6 +121,14 @@ export default function MaintenanceDashboardPage() {
                 </div>
             </div>
 
+            {(isStatsError || isUpcomingError || isAlertError) && (
+                <div className="space-y-2">
+                    {isStatsError && <QueryError message="Failed to load maintenance stats." onRetry={refetchStats} />}
+                    {isUpcomingError && <QueryError message="Failed to load upcoming maintenance." onRetry={refetchUpcoming} />}
+                    {isAlertError && <QueryError message="Failed to load maintenance alerts." onRetry={refetchAlerts} />}
+                </div>
+            )}
+
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {kpiCards.map((card, idx) => (
@@ -187,6 +196,11 @@ export default function MaintenanceDashboardPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
+                            {isScheduleError && (
+                                <div className="p-6">
+                                    <QueryError message="Failed to load maintenance schedules." onRetry={refetchSchedules} />
+                                </div>
+                            )}
                             <MaintenanceScheduleTable
                                 data={scheduleData?.data?.schedules || []}
                                 isLoading={isLoadingSchedules}

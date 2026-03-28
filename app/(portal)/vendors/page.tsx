@@ -55,6 +55,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/shared/RoleGate";
+import { QueryError } from "@/components/shared/QueryError";
 import Link from "next/link";
 
 const inviteSchema = z.object({
@@ -70,7 +71,7 @@ export default function VendorDirectoryPage() {
   const [search, setSearch] = useState("");
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
-  const { data: vendorsData, isLoading } = useQuery({
+  const { data: vendorsData, isLoading, isError, refetch } = useQuery({
     queryKey: ["vendors-directory"],
     queryFn: () => api.getVendors(),
   });
@@ -242,9 +243,11 @@ export default function VendorDirectoryPage() {
           </div>
         </div>
 
+        {isError && <QueryError message="Failed to load vendor directory." onRetry={refetch} />}
+
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {isLoading ? (
-            <div className="py-20 flex justify-center">
+            <div role="status" aria-label="Loading" className="py-20 flex justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
           ) : filteredVendors.length === 0 ? (

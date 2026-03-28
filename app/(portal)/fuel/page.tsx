@@ -23,7 +23,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { extractApiError } from '@/lib/utils'
+import { QueryError } from '@/components/shared/QueryError'
 import { useAuthStore } from '@/store/authStore'
+import { PAGE_SIZE_DEFAULT, PAGE_SIZE_DROPDOWN } from '@/lib/config'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -182,7 +184,7 @@ function LogExpenseDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
     const { data: vehiclesData } = useQuery({
         queryKey: ['vehicles', 1, ''],
-        queryFn: () => getVehicles({ per_page: 100 }),
+        queryFn: () => getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
         enabled: open,
     })
 
@@ -278,11 +280,11 @@ export default function FuelExpensesPage() {
     const [rejectId, setRejectId] = useState<string | number | null>(null)
     const [logOpen, setLogOpen] = useState(false)
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['fuel-expenses', { page, search, statusFilter, startDate, endDate }],
         queryFn: () => api.getFuelExpenses({
             page,
-            per_page: 15,
+            per_page: PAGE_SIZE_DEFAULT,
             q: search || undefined,
             status: statusFilter || undefined,
             start_date: startDate || undefined,
@@ -456,6 +458,12 @@ export default function FuelExpensesPage() {
                                             <td colSpan={6} className="px-6 py-4 h-16 bg-slate-50/30" />
                                         </tr>
                                     ))
+                                ) : isError ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-6">
+                                            <QueryError message="Failed to load fuel expenses." onRetry={refetch} />
+                                        </td>
+                                    </tr>
                                 ) : expenses.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-20 text-center text-slate-400">

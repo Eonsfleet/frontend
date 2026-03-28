@@ -22,6 +22,8 @@ import { useRouter } from 'next/navigation'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
+import { PAGE_SIZE_DROPDOWN } from '@/lib/config'
+import { QueryError } from '@/components/shared/QueryError'
 import {
     Tooltip,
     TooltipContent,
@@ -77,9 +79,9 @@ export default function PlaybackPage() {
         setSidebarCollapsed(true)
     }, [])
 
-    const { data: vehicleData } = useQuery<{ data: Vehicle[] }>({
-        queryKey: ['vehicles', { per_page: 50 }],
-        queryFn: () => vehicleApi.getVehicles({ per_page: 50 }),
+    const { data: vehicleData, isError: isVehicleError, refetch: refetchVehicles } = useQuery<{ data: Vehicle[] }>({
+        queryKey: ['vehicles', { per_page: PAGE_SIZE_DROPDOWN }],
+        queryFn: () => vehicleApi.getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
     })
 
     const vehicles = vehicleData?.data || []
@@ -99,13 +101,13 @@ export default function PlaybackPage() {
         })
     }, [tripsData, selectedVehicleId])
 
-    const { data: tripPlaybackData, isLoading: isLoadingTripPlayback } = useQuery({
+    const { data: tripPlaybackData, isLoading: isLoadingTripPlayback, isError: isTripPlaybackError, refetch: refetchTripPlayback } = useQuery({
         queryKey: ['playback-trip', selectedVehicleId, selectedTripId],
         queryFn: () => trackingApi.getTripPlayback(selectedVehicleId!, selectedTripId!),
         enabled: !!selectedVehicleId && !!selectedTripId,
     })
 
-    const { data: vehiclePlaybackData, isLoading: isLoadingVehiclePlayback } = useQuery({
+    const { data: vehiclePlaybackData, isLoading: isLoadingVehiclePlayback, isError: isVehiclePlaybackError, refetch: refetchVehiclePlayback } = useQuery({
         queryKey: ['playback-vehicle', selectedVehicleId, syncKey],
         queryFn: () => trackingApi.getVehiclePlayback(selectedVehicleId!, startTime, endTime),
         enabled: !!selectedVehicleId && !selectedTripId && syncKey > 0,
@@ -255,6 +257,14 @@ export default function PlaybackPage() {
                             </div>
                         </div>
 
+                        {isVehicleError && <QueryError message="Failed to load vehicles." onRetry={refetchVehicles} />}
+                        {(isTripPlaybackError || isVehiclePlaybackError) && (
+                            <QueryError
+                                message="Failed to load playback data."
+                                onRetry={isTripPlaybackError ? refetchTripPlayback : refetchVehiclePlayback}
+                            />
+                        )}
+
                         <Button
                             className="w-full bg-slate-900 hover:bg-black font-black text-[10px] uppercase tracking-widest h-10 shadow-lg"
                             disabled={!selectedVehicleId || isLoadingPlayback}
@@ -321,7 +331,7 @@ export default function PlaybackPage() {
             </aside>
 
             {/* Map Environment Card */}
-            <div className="flex-1 relative bg-slate-200 overflow-hidden">
+            <div role="region" aria-label="Trip playback map" className="flex-1 relative bg-slate-200 overflow-hidden">
                 {typeof window !== 'undefined' && (
                     <MapContainer
                         center={[6.5244, 3.3792]}
