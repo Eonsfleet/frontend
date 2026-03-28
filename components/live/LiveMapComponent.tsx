@@ -182,7 +182,7 @@ export default function LiveMapComponent({
                         return (
                             <Circle
                                 key={gf.id}
-                                center={coordinates as [number, number]}
+                                center={coordinates as unknown as [number, number]}
                                 radius={radius}
                                 pathOptions={pathOptions}
                             >

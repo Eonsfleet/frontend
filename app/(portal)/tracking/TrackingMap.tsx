@@ -132,7 +132,7 @@ export default function TrackingMap({
 
   const currentPlayback = playbackData[playbackIndex];
   return (
-    <>
+    <div role="region" aria-label="Vehicle tracking map" className="h-full w-full">
       <MapContainer
         center={[6.5244, 3.3792]}
         zoom={12}
@@ -505,6 +505,6 @@ export default function TrackingMap({
           transform: scale(1.1);
         }
       `}</style>
-    </>
+    </div>
   );
 }

@@ -646,7 +646,7 @@ export default function NotificationRulesPage() {
 
 function LoadingState() {
     return (
-        <div className="py-20 flex flex-col items-center justify-center gap-3">
+        <div role="status" aria-label="Loading" className="py-20 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
             <p className="text-sm text-slate-400 font-medium">Synchronizing configurations...</p>
         </div>

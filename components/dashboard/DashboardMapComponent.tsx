@@ -53,7 +53,7 @@ export default function DashboardMapComponent({ locations }: { locations: Vehicl
     }
 
     return (
-        <div className="w-full h-full relative z-0">
+        <div className="w-full h-full relative z-0" role="region" aria-label="Fleet location map">
             <MapContainer
                 center={[0, 0]}
                 zoom={2}

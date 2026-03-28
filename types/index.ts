@@ -1,3 +1,11 @@
+export interface Address {
+    street?: string
+    city?: string
+    state?: string
+    country?: string
+    postal_code?: string
+}
+
 export interface UserProfile {
     id: string
     attributes: {
@@ -16,7 +24,7 @@ export interface UserProfile {
         joined_date: string | null
     }
     relationships: {
-        address: any | null
+        address: Address | null
         organization: Organization | null
     }
 }
@@ -96,6 +104,7 @@ export interface Paginated<T> {
     pagination: {
         current: number
         lastPage: number
+        last_page?: number   // API returns snake_case; prefer lastPage, fall back to last_page
         perPage: number
         total: number
         next_page_url: string | null
@@ -140,8 +149,11 @@ export interface VehicleAttributes {
     }
     organization: string
     organization_id: number
-    in_transit: any | null
+    in_transit: Record<string, unknown> | null
     updated_at: string
+    /** Denormalized online state sometimes included in list responses */
+    is_online?: boolean
+    deviceStatus?: string
 }
 
 export interface Cluster {
@@ -191,14 +203,37 @@ export interface VehicleCurrentLocation {
     }
 }
 
+/** Device relationship — API returns fields directly (not JSON:API wrapped) */
+export interface VehicleDevice {
+    id?: string
+    imei?: string
+    serial_number?: string
+    status?: string
+    is_online?: boolean
+    has_fuel?: boolean
+    phone?: string
+    country?: string
+    last_packet_received_at?: string
+    /** Fallback: some responses still use JSON:API data wrapper */
+    data?: { id: string; type: 'devices'; imei?: string; serial_number?: string }
+}
+
 export interface Vehicle {
     id: string
     attributes: VehicleAttributes
     relationships: {
         driver?: { data: { id: string; type: 'users'; name?: string } }
         cluster?: { data: { id: string; type: 'clusters'; name?: string } }
-        device?: { data: { id: string; type: 'devices'; serial_number?: string; imei?: string } }
-        current_location?: VehicleCurrentLocation
+        device?: VehicleDevice
+        /** Current driver(s) embedded in list responses */
+        current_driver?: Array<{ id: string; attributes: Record<string, unknown> }>
+        /** Current location wrapped in JSON:API attributes envelope */
+        current_location?: {
+            attributes: VehicleCurrentLocation & {
+                state?: string
+                coordinates?: { latitude: number; longitude: number }
+            }
+        }
     }
 }
 
@@ -224,6 +259,9 @@ export interface TripAttributes {
     is_editable: boolean
     vehicle_id?: string
     driver_id?: string
+    /** @deprecated Use relationships.vehicle.id instead */
+    vehicleId?: string | number
+    created_at?: string
     routes?: Array<{
         route_order: number
         location_name: string
@@ -242,7 +280,8 @@ export interface Trip {
     id: string
     attributes: TripAttributes
     relationships: {
-        vehicle?: { data: { id: string; type: 'vehicles' } }
+        /** API returns vehicle fields directly (not JSON:API data-wrapped) */
+        vehicle?: { id: string; type?: string; registration_number?: string }
         driver?: { data: { id: string; type: 'users' } }
     }
 }
@@ -269,12 +308,15 @@ export interface MaintenanceSchedule {
         is_master_schedule?: boolean
         created_at: string
         updated_at?: string
-        // Deprecated/Compatibility fields
+        /** @deprecated Use relationships.vehicle instead */
         vehicle_id?: string | number
+        /** @deprecated Use due_date instead */
         last_service_date?: string | null
         last_service_odometer?: number | null
+        /** @deprecated Use due_date instead */
         next_service_date?: string | null
         next_service_odometer?: number | null
+        /** @deprecated Use description instead */
         notes?: string | null
     }
     relationships?: {
@@ -329,10 +371,13 @@ export interface MaintenanceJob {
         started_at?: string | null
         completed_at?: string | null
         created_at?: string
-        // Legacy / backward-compat
+        /** @deprecated Use reference instead */
         reference_number?: string
+        /** @deprecated Use started_at instead */
         scheduled_date?: string
+        /** @deprecated Use completed_at instead */
         completed_date?: string | null
+        /** @deprecated Use actual_cost instead */
         total_cost?: number
         labor_cost?: number
         parts_cost?: number
@@ -445,6 +490,28 @@ export interface WorkflowHistoryEntry {
     created_at: string
 }
 
+/** Coordinate payload — shape depends on geofence type */
+export type GeofenceCoordinates =
+    | { lat: number; lng: number }                  // circle center
+    | { type: string; coordinates: number[][][] }   // GeoJSON polygon geometry
+    | number[][]                                    // legacy raw [lng, lat] pairs
+
+export interface GeofenceSchedule {
+    start_time?: string   // HH:mm
+    end_time?: string     // HH:mm
+    days?: number[]       // 0=Sun … 6=Sat
+}
+
+export interface GeofenceAlert {
+    vehicle_id: string
+    geofence_id?: string
+    geofence_name?: string
+    event_type: 'enter' | 'exit'
+    timestamp: string
+    latitude?: number
+    longitude?: number
+}
+
 export interface Geofence {
     id: string
     attributes: {
@@ -453,11 +520,11 @@ export interface Geofence {
         type: 'polygon' | 'circle'
         trigger_type: 'enter' | 'exit' | 'both'
         location?: string | null
-        coordinates: any // GeoJSON or custom format
+        coordinates: GeofenceCoordinates
         radius?: number // Required if type is circle
-        speed: number // Speed limit threshold (km/h); 0 means no limit
+        speed: number   // Speed limit threshold (km/h); 0 means no limit
         is_active: boolean
-        schedule: any | null
+        schedule: GeofenceSchedule | null
     }
     relationships: {
         vehicles?: { data: { id: string; type: 'vehicles' }[] }
@@ -520,6 +587,141 @@ export interface Incident {
         reported_by?: IncidentPerson | { data: { id: string; type: 'users' } }
         assignee?: IncidentPerson | { data: { id: string; type: 'users' } }
         address?: { street?: string; state?: string; city?: string }
+    }
+}
+
+// ── Form Payload Types ───────────────────────────────────────────────────────
+
+export interface VehiclePayload {
+    make: string
+    model: string
+    registration_number: string
+    chasis_number?: string
+    display_number?: string
+    body_type: string
+    color: string
+    fuel_type: string
+    year: string | number
+    type?: string
+    image?: string | null
+    device_id?: string | null
+    odometer_when_join?: number
+    gvm?: number
+    fuel_capacity?: number
+    fuel_capacity_unit?: string
+    fuel_sensor_conversion_factor?: number
+    tire_psi?: VehicleAttributes['tire_psi']
+}
+
+export interface DriverPayload {
+    f_name: string
+    l_name: string
+    email: string
+    phone_number?: string | null
+    date_of_birth?: string | null
+    employee_id?: string | null
+    avatar?: string | null
+    role?: RoleSlug
+}
+
+export interface CreateTripPayload {
+    vehicle_id?: string
+    driver_id?: string
+    start_location: {
+        name: string
+        coords: { latitude: number; longitude: number }
+    }
+    end_location: {
+        name: string
+        coords: { latitude: number; longitude: number }
+    }
+    planned_start_time: string
+    planned_end_time?: string | null
+    eta?: string | null
+    recurring_type?: 'one_time' | 'daily' | 'weekly' | 'monthly'
+    routes?: TripAttributes['routes']
+}
+
+// ── Real-time WebSocket Packet Types ─────────────────────────────────────────
+
+/** Shape of `.current.recent` packets from the location WebSocket channel */
+export interface VehicleTelemetry {
+    vehicle_id: string
+    latitude: number
+    longitude: number
+    speed: number
+    heading: number
+    status: string
+    fuel_level_percent: number
+    fuel_level_liters: number
+    gps_datetime: string
+    address: string
+    /** Can be "on"/"off"/"1"/"0" or boolean depending on device protocol */
+    ignition: string | boolean
+    movement: string
+    odometer: number
+    // Optional fields — presence depends on device capabilities / protocol
+    altitude?: number
+    satellites?: number
+    engine_rpm?: number
+    engine_rpm_obd?: number
+    oil_level?: number
+    fuel_rate?: number
+    fuel_consumed?: number
+    fuel_used_gps?: number
+    fuel_level_obd?: number
+    fuel_source?: string
+    eco_score?: number
+    idling?: boolean
+    jamming?: boolean
+    immobilizer?: boolean
+    unplug?: boolean
+    sleep_mode?: string | boolean
+    door_status?: string
+    load_weight?: number
+    driving_state?: string
+    battery_voltage?: number
+    external_voltage?: number
+    battery_current?: number
+    engine_temperature?: number
+    rssi?: number
+    hdop?: number
+    total_mileage?: number
+    trip_odometer?: number
+    odometer_source?: string
+    protocol_name?: string
+    confidence?: number
+    metadata?: {
+        engine_rpm?: number
+        engine_rpm_obd?: number
+        engine_temperature?: number
+        battery_voltage?: number
+        external_voltage?: number
+        battery_current?: number
+        oil_level?: number
+        fuel_rate?: number
+        fuel_rate_gps?: number
+        fuel_consumed?: number
+        fuel_used_gps?: number
+        fuel_level_obd?: number
+        fuel_source?: string
+        eco_score?: number
+        idling?: boolean
+        jamming?: boolean
+        immobilizer?: boolean
+        unplug?: boolean
+        sleep_mode?: string | boolean
+        door_status?: string
+        load_weight?: number
+        driving_state?: string
+        rssi?: number
+        hdop?: number
+        mileage?: number
+        trip_odometer?: number
+        odometer_source?: string
+        protocol_name?: string
+        confidence?: number
+        [key: string]: unknown
     }
 }
 
@@ -729,7 +931,7 @@ export interface WebhookDelivery {
     event_type: string
     response_code: number
     response_body: string | null
-    payload: any
+    payload: Record<string, unknown>
     duration_ms: number
     created_at: string
 }

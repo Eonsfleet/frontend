@@ -49,7 +49,7 @@ export function normalizeTelemetry(telemetry: any, overrides?: any) {
     normalized.status = 'offline'
   } else if (normalized.status === 'in_transit' || speed > 0) {
     normalized.status = 'in_transit'
-  } else if (ignition === 'on' || ignition === '1' || normalized.engine_rpm > 0) {
+  } else if (ignition === 'on' || ignition === '1' || (normalized.engine_rpm ?? 0) > 0) {
     normalized.status = 'idle'
   } else if (ignition === 'off' || ignition === '0') {
     normalized.status = 'parked'

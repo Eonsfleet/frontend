@@ -8,126 +8,16 @@ import { AlertsPanel, AlertItem } from '@/components/dashboard/AlertsPanel'
 import { MaintenanceHeatmap, MaintenanceDay } from '@/components/dashboard/MaintenanceHeatmap'
 import { FleetOverviewModal } from '@/components/dashboard/FleetOverviewModal'
 import { Car, Route, AlertTriangle, Zap } from 'lucide-react'
-import { addDays, startOfToday, parseISO, format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { parseISO, format } from 'date-fns'
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { REFETCH_INTERVAL_MAP, PAGE_SIZE_DROPDOWN, STALE_TIME_REALTIME } from '@/lib/config'
 import * as dashboardApi from '@/lib/api/dashboard'
 import * as trackingApi from '@/lib/api/tracking'
 import * as analyticsApi from '@/lib/api/analytics'
 import * as vehicleApi from '@/lib/api/vehicles'
 import { useAuthStore } from '@/store/authStore'
 
-// Enhanced Dummy Data for visual demonstration
-const vehicleStatusData = [
-    { name: 'Active', value: 112, color: '#10b981' }, // emerald-500
-    { name: 'Idle', value: 8, color: '#f59e0b' },    // amber-500
-    { name: 'Offline', value: 3, color: '#ef4444' },  // red-500
-    { name: 'Maintenance', value: 1, color: '#3b82f6' } // blue-500
-]
-
-const deviceStatusData = [
-    { name: 'Online', value: 118, color: '#10b981' }, // emerald-500
-    { name: 'Offline', value: 6, color: '#ef4444' },   // red-500
-]
-
-const vehicleStats = [
-    { label: 'Active', value: 112, color: 'bg-emerald-500' },
-    { label: 'Idle', value: 8, color: 'bg-amber-500' },
-    { label: 'Offline', value: 3, color: 'bg-rose-500' },
-    { label: 'Maint.', value: 1, color: 'bg-blue-500' },
-]
-
-const alerts: AlertItem[] = [
-    {
-        id: 'a1',
-        severity: 'critical',
-        title: 'LND-123-XY Offline >2h',
-        description: 'Tracking device heartbeat lost. Last reported near Victoria Island.',
-        timestamp: '09:45 AM',
-        location: 'Victoria Island, Lagos',
-        actions: [
-            { label: 'Ping Device', onClick: () => console.log('Pinged'), variant: 'secondary' },
-            { label: 'Assign Tech', onClick: () => console.log('Assigned'), variant: 'outline' }
-        ]
-    },
-    {
-        id: 'a2',
-        severity: 'critical',
-        title: 'ABJ-567-ZZ Low Fuel <10%',
-        description: 'Immediate refueling required to avoid trip disruption.',
-        timestamp: '10:12 AM',
-        location: 'Lekki Toll Plaza',
-        actions: [
-            { label: 'Alert Sent', onClick: () => { }, variant: 'outline' }
-        ]
-    },
-    {
-        id: 'a3',
-        severity: 'warning',
-        title: '5 Vehicles Due for Service',
-        description: 'Maintenance window opening for Lagos Mainland cluster.',
-        timestamp: '08:00 AM',
-        actions: [
-            { label: 'View Schedule', onClick: () => { } }
-        ]
-    }
-]
-
-const today = startOfToday()
-const maintenanceForecast: MaintenanceDay[] = [
-    { date: today, count: 2, vehicles: [{ id: '1', reg: 'LND-123-XY', service: 'Oil Change' }, { id: '2', reg: 'ABJ-567-ZZ', service: 'Tire Rotation' }] },
-    { date: addDays(today, 1), count: 1, vehicles: [{ id: '3', reg: 'KAN-990-BC', service: 'Brake Check' }] },
-    { date: addDays(today, 2), count: 0, vehicles: [] },
-    {
-        date: addDays(today, 3), count: 4, vehicles: [
-            { id: '4', reg: 'LAG-101-PA', service: 'Annual Inspection' },
-            { id: '5', reg: 'OGU-222-RT', service: 'Battery Replacement' },
-            { id: '6', reg: 'EDO-555-WE', service: 'Engine Tune-up' },
-            { id: '7', reg: 'DEL-444-QR', service: 'AC Service' }
-        ]
-    },
-    { date: addDays(today, 4), count: 1, vehicles: [{ id: '8', reg: 'RIV-001-AA', service: 'Wheel Alignment' }] },
-    {
-        date: addDays(today, 5), count: 3, vehicles: [
-            { id: '9', reg: 'ANA-333-TY', service: 'Transmission Flush' },
-            { id: '10', reg: 'IMO-777-YU', service: 'Full Valet' },
-            { id: '11', reg: 'ABI-888-OP', service: 'Brake Pad Replacement' }
-        ]
-    },
-    { date: addDays(today, 6), count: 0, vehicles: [] },
-]
-
-const recentActivities: ActivityItem[] = [
-    {
-        id: 'act-1',
-        type: 'incident',
-        title: 'Harsh Braking Detected',
-        description: 'Vehicle TRK-042 reported harsh braking on Route 66.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        status: 'pending',
-        location: 'Ikoyi Link Bridge',
-        actions: [{ label: 'View on Map', onClick: () => { } }, { label: 'Alert Driver', onClick: () => { } }]
-    },
-    {
-        id: 'act-2',
-        type: 'maintenance',
-        title: 'Oil Change Completed',
-        description: 'Scheduled maintenance for VAN-019 finished.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        status: 'completed',
-        actions: [{ label: 'View Job Card', onClick: () => { } }]
-    },
-    {
-        id: 'act-3',
-        type: 'system',
-        title: 'Geofence Exit: TRK-088',
-        description: 'Vehicle departed the Central Warehouse Loading Zone.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-        location: 'Lagos-Ibadan Exp',
-        actions: [{ label: 'Acknowledge', onClick: () => { } }]
-    },
-]
 
 export default function DashboardPage() {
     const [isFleetModalOpen, setIsFleetModalOpen] = useState(false)
@@ -149,6 +39,7 @@ export default function DashboardPage() {
         queryKey: ['tracking-metrics'],
         queryFn: () => trackingApi.getTrackingMetrics(),
         enabled: !!token,
+        staleTime: STALE_TIME_REALTIME,
     })
 
     const { data: totalVehicleData } = useQuery({
@@ -195,9 +86,10 @@ export default function DashboardPage() {
 
     const { data: dashboardVehicles } = useQuery({
         queryKey: ['dashboard-vehicles-map'],
-        queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
+        queryFn: () => vehicleApi.getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
         enabled: !!token,
-        refetchInterval: 30_000,
+        staleTime: STALE_TIME_REALTIME,
+        refetchInterval: REFETCH_INTERVAL_MAP,
     })
 
     // Normalize Activity Logs
@@ -244,17 +136,14 @@ export default function DashboardPage() {
         })
     }, [activityLogsData])
 
-    // console.log("totalVehicleData", totalVehicleData, "activeTripsData", activeTripsData, "efficiencyData", efficiencyData, "incidentsData", incidentsData)
     const metrics = metricsData?.data || { total_active_assets: 0, moving_assets: 0, idle_assets: 0, offline_assets: 0 }
-
-    // const vehicleStats = totalVehicleData?.data || []
     const totalVehicles = totalVehicleData?.total || metrics.total_active_assets
     const activeTripsCount = activeTripsData?.count || metrics.moving_assets || 0
     const avgEfficiency = efficiencyData?.efficiency || "0%"
     const recentIncidentsCount = incidentsData?.count || "0"
 
     const dynamicDeviceStatusData = useMemo(() => {
-        if (!deviceStatusSummary) return deviceStatusData
+        if (!deviceStatusSummary) return []
         return [
             { name: 'Online', value: Number(deviceStatusSummary.online) || 0, color: '#10b981' },
             { name: 'Offline', value: Number(deviceStatusSummary.offline) || 0, color: '#ef4444' },
@@ -381,11 +270,6 @@ export default function DashboardPage() {
             })
             .filter(Boolean)
     }, [dashboardVehicles])
-
-
-    // console.log("Normalized Map Locations:", normalizedMapLocations)
-
-    
 
     return (
         <div className="p-8 pb-16 space-y-8 bg-slate-50 min-h-full">

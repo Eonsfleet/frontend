@@ -3,36 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useEcho } from './useEcho'
 import { useAuthStore } from '@/store/authStore'
+import { VehicleTelemetry, GeofenceAlert } from '@/types'
+import { ALERTS_BUFFER_SIZE } from '@/lib/config'
 
-export interface VehicleTelemetry {
-    vehicle_id: string
-    latitude: number
-    longitude: number
-    speed: number
-    heading: number
-    status: string
-    fuel_level_percent: number
-    fuel_level_liters: number
-    gps_datetime: string
-    address: string
-    ignition: string
-    movement: string
-    odometer: number
-    metadata?: {
-        engine_rpm?: number
-        engine_temperature?: number
-        battery_voltage?: number
-        idling?: boolean
-        eco_score?: number
-        [key: string]: unknown
-    }
-}
+export type { VehicleTelemetry }
 
 export function useFleetTracking() {
     const { echo } = useEcho()
     const { organization } = useAuthStore()
     const [telemetryMap, setTelemetryMap] = useState<Record<string, VehicleTelemetry>>({})
-    const [alerts, setAlerts] = useState<any[]>([])
+    const [alerts, setAlerts] = useState<GeofenceAlert[]>([])
 
     const orgIdentifier = organization?.attributes?.identifier || organization?.id
 
@@ -41,7 +21,7 @@ export function useFleetTracking() {
 
         const channel = echo.private(`location.organization.${orgIdentifier}`)
 
-        channel.listen('.current.recent', (packet: any) => {
+        channel.listen('.current.recent', (packet: VehicleTelemetry) => {
             setTelemetryMap(prev => ({
                 ...prev,
                 [packet.vehicle_id]: {
@@ -64,13 +44,13 @@ export function useFleetTracking() {
         })
 
         // Geofence alerts
-        channel.listen('.geofence.monitor', (alert: any) => {
-            setAlerts(prev => [alert, ...prev].slice(0, 50))
+        channel.listen('.geofence.monitor', (alert: GeofenceAlert) => {
+            setAlerts(prev => [alert, ...prev].slice(0, ALERTS_BUFFER_SIZE))
         })
 
         // Status changes
         echo.private(`vehicle.status.${orgIdentifier}`)
-            .listen('.vehicle.status.changed', (event: any) => {
+            .listen('.vehicle.status.changed', (event: { vehicle_id: string; new_status: string }) => {
                 setTelemetryMap(prev => {
                     const existing = prev[event.vehicle_id]
                     if (!existing) return prev

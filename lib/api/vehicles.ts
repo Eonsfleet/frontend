@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { Vehicle, Paginated } from '@/types'
+import { Vehicle, Paginated, VehiclePayload } from '@/types'
 
 export interface ListVehiclesParams {
     page?: number
@@ -18,7 +18,7 @@ export interface VehicleListResponse {
     message: string
     data: {
         vehicles: Vehicle[]
-        pagination: Paginated<any>['pagination']
+        pagination: Paginated<Vehicle>['pagination']
     }
 }
 
@@ -40,12 +40,12 @@ export const getVehicleById = async (id: string | number): Promise<VehicleDetail
     return response.data
 }
 
-export const createVehicle = async (data: any): Promise<{ data: Vehicle }> => {
+export const createVehicle = async (data: VehiclePayload): Promise<{ data: Vehicle }> => {
     const response = await apiClient.post<{ data: Vehicle }>('/vehicles', data)
     return response.data
 }
 
-export const updateVehicle = async (id: string | number, data: any): Promise<{ data: Vehicle }> => {
+export const updateVehicle = async (id: string | number, data: Partial<VehiclePayload>): Promise<{ data: Vehicle }> => {
     const response = await apiClient.put<{ data: Vehicle }>(`/vehicles/${id}`, data)
     return response.data
 }
@@ -139,7 +139,7 @@ export const getVehicleDriverHistory = async (vehicleId: string | number): Promi
 }
 
 export const getVehiclesLocations = async (params?: { page?: number; per_page?: number }): Promise<Paginated<VehicleLocation>> => {
-    const response = await apiClient.get<{ data: { vehicles: VehicleLocation[], pagination: any } }>('/vehicles/locations', { params })
+    const response = await apiClient.get<{ data: { vehicles: VehicleLocation[], pagination: Paginated<VehicleLocation>['pagination'] } }>('/vehicles/locations', { params })
     return {
         data: response.data.data.vehicles,
         pagination: response.data.data.pagination
@@ -154,7 +154,7 @@ export const getVehiclesBatched = async (params: ListVehiclesParams = {}): Promi
     do {
         const response = await getVehicles({ ...params, page: currentPage, per_page: 100 })
         allVehicles = [...allVehicles, ...response.data]
-        lastPage = (response.pagination as any).last_page ?? response.pagination.lastPage ?? 1
+        lastPage = response.pagination.last_page ?? response.pagination.lastPage ?? 1
         currentPage++
     } while (currentPage <= lastPage)
 
@@ -169,7 +169,7 @@ export const getVehiclesLocationsBatched = async (params: { page?: number; per_p
     do {
         const response = await getVehiclesLocations({ ...params, page: currentPage, per_page: 100 })
         allLocations = [...allLocations, ...response.data]
-        lastPage = (response.pagination as any).last_page ?? response.pagination.lastPage ?? 1
+        lastPage = response.pagination.last_page ?? response.pagination.lastPage ?? 1
         currentPage++
     } while (currentPage <= lastPage)
 

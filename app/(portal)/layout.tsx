@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscriptionStore } from '@/store/subscriptionStore'
 import { getOrganizationSubscription } from '@/lib/api/billing'
+import { STALE_TIME_STATIC } from '@/lib/config'
 import AppShell from '@/components/layout/AppShell'
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
     const [mounted, setMounted] = useState(false)
     const router = useRouter()
-    const { token } = useAuthStore()
+    const { token, clearAuth } = useAuthStore()
     const setSubscription = useSubscriptionStore((s) => s.setSubscription)
 
     useEffect(() => {
@@ -19,17 +20,16 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
     useEffect(() => {
         if (mounted && !token) {
-            // Delete cookie to break infinite redirect loop with middleware
-            document.cookie = 'ef-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+            clearAuth()
             router.replace('/login')
         }
-    }, [mounted, token, router])
+    }, [mounted, token, router, clearAuth])
 
     const { data: sub } = useQuery({
         queryKey: ['org-subscription'],
         queryFn: getOrganizationSubscription,
         enabled: !!token,
-        staleTime: 5 * 60 * 1000,
+        staleTime: STALE_TIME_STATIC,
     })
 
     useEffect(() => {

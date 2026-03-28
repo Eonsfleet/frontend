@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { UserProfile, Paginated } from '@/types'
+import { UserProfile, Paginated, DriverPayload } from '@/types'
 
 export interface ListDriversParams {
     page?: number
@@ -12,7 +12,7 @@ export interface DriverListResponse {
     message: string
     data: {
         users: UserProfile[]
-        pagination: Paginated<any>['pagination']
+        pagination: Paginated<UserProfile>['pagination']
     }
 }
 
@@ -31,12 +31,12 @@ export const getDriverById = async (id: string | number): Promise<{ data: UserPr
     return response.data
 }
 
-export const createDriver = async (data: any): Promise<{ data: UserProfile }> => {
+export const createDriver = async (data: DriverPayload): Promise<{ data: UserProfile }> => {
     const response = await apiClient.post<{ data: UserProfile }>('/users', { ...data, role: 'driver' })
     return response.data
 }
 
-export const updateDriver = async (id: string | number, data: any): Promise<{ data: UserProfile }> => {
+export const updateDriver = async (id: string | number, data: Partial<DriverPayload>): Promise<{ data: UserProfile }> => {
     const response = await apiClient.put<{ data: UserProfile }>(`/users/${id}`, data)
     return response.data
 }

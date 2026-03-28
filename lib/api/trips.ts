@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { Trip, Paginated } from '@/types'
+import { Trip, Paginated, CreateTripPayload, TripAttributes } from '@/types'
 
 export interface TripListParams {
     page?: number
@@ -30,7 +30,7 @@ export const getTripById = async (id: string): Promise<TripDetailResponse> => {
     return response.data
 }
 
-export const createTrip = async (data: any): Promise<TripDetailResponse> => {
+export const createTrip = async (data: CreateTripPayload): Promise<TripDetailResponse> => {
     const response = await apiClient.post<TripDetailResponse>('/trips', data)
     return response.data
 }
@@ -39,7 +39,8 @@ export const updateTripStatus = async (id: string, status: string): Promise<Trip
     const response = await apiClient.patch<TripDetailResponse>(`/trips/${id}/change-status`, { status })
     return response.data
 }
-export const updateTrip = async (id: string, data: any): Promise<TripDetailResponse> => {
+
+export const updateTrip = async (id: string, data: Partial<TripAttributes>): Promise<TripDetailResponse> => {
     const response = await apiClient.patch<TripDetailResponse>(`/trips/${id}`, data)
     return response.data
 }

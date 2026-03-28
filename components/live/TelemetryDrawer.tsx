@@ -468,10 +468,10 @@ export function TelemetryDrawer({
           <span
             className={cn(
               "px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest",
-              statusPill(liveStatus),
+              statusPill(liveStatus ?? ""),
             )}
           >
-            {isDeviceOnline ? statusLabel(liveStatus) : "Offline"}
+            {isDeviceOnline ? statusLabel(liveStatus ?? "") : "Offline"}
           </span>
           <button
             onClick={onClose}

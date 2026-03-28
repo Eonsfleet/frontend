@@ -82,12 +82,18 @@ export default function LoginPage() {
           plugins={[plugin.current]}
           className="w-full h-full"
           opts={{ loop: true }}
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Fleet showcase"
         >
-          <CarouselContent className="h-full">
+          <CarouselContent className="h-full" aria-live="off">
             {CAROUSEL_IMAGES.map((image, index) => (
               <CarouselItem
                 key={index}
                 className="h-full relative flex-[0_0_100%] border-none"
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`Slide ${index + 1} of ${CAROUSEL_IMAGES.length}`}
               >
                 <div className="relative w-full h-screen">
                   <Image
@@ -148,17 +154,20 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit((d) => mutate(d))} className="space-y-6">
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-900">
+                <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-900">
                   Email
                 </label>
                 <input
+                  id="email"
                   type="email"
                   {...register("email")}
+                  aria-describedby={errors.email ? "email-error" : undefined}
+                  aria-invalid={!!errors.email}
                   className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent mt-1.5 transition-shadow"
                   placeholder="name@company.com"
                 />
                 {errors.email && (
-                  <p className="text-xs text-red-500 mt-1.5 font-medium">
+                  <p id="email-error" role="alert" className="text-xs text-red-500 mt-1.5 font-medium">
                     {errors.email.message}
                   </p>
                 )}
@@ -166,7 +175,7 @@ export default function LoginPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-900">
+                  <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-900">
                     Password
                   </label>
                   <a
@@ -177,13 +186,16 @@ export default function LoginPage() {
                   </a>
                 </div>
                 <input
+                  id="password"
                   type="password"
                   {...register("password")}
+                  aria-describedby={errors.password ? "password-error" : undefined}
+                  aria-invalid={!!errors.password}
                   className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
                   placeholder="••••••••"
                 />
                 {errors.password && (
-                  <p className="text-xs text-red-500 mt-1.5 font-medium">
+                  <p id="password-error" role="alert" className="text-xs text-red-500 mt-1.5 font-medium">
                     {errors.password.message}
                   </p>
                 )}

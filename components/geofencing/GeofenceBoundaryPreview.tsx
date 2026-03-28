@@ -42,8 +42,10 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
         const { type, coordinates, radius } = geofence.attributes
 
         if (type === 'circle' && coordinates) {
-            const lat = coordinates.lat ?? coordinates[1]
-            const lng = coordinates.lng ?? coordinates[0]
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const c = coordinates as any
+            const lat: number | undefined = c.lat ?? c[1]
+            const lng: number | undefined = c.lng ?? c[0]
             if (lat != null && lng != null) {
                 const circle = L.circle([lat, lng], {
                     radius: radius ?? 500,
@@ -57,13 +59,15 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
         } else if (type === 'polygon' && coordinates) {
             // coordinates can be GeoJSON Geometry { type: 'Polygon', coordinates: [...] }
             // or a raw array of latlng pairs
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const c = coordinates as any
             let latlngs: L.LatLngExpression[]
 
-            if (coordinates.type === 'Polygon' && Array.isArray(coordinates.coordinates)) {
+            if (c.type === 'Polygon' && Array.isArray(c.coordinates)) {
                 // GeoJSON: coordinates[0] is the outer ring, each point is [lng, lat]
-                latlngs = coordinates.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
-            } else if (Array.isArray(coordinates)) {
-                latlngs = coordinates.map((pt: any) =>
+                latlngs = c.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
+            } else if (Array.isArray(c)) {
+                latlngs = c.map((pt: any) =>
                     Array.isArray(pt) ? [pt[1], pt[0]] : [pt.lat, pt.lng]
                 )
             } else {

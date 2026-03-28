@@ -13,6 +13,7 @@ import { AssignTrackerDialog } from '@/components/vehicles/AssignTrackerDialog'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
 import { Vehicle } from '@/types'
 import { VehicleFiltersComponent, VehicleFilters } from '@/components/vehicles/VehicleFilters'
+import { QueryError } from '@/components/shared/QueryError'
 import { useAuthStore } from '@/store/authStore'
 
 export default function VehiclesPage() {
@@ -26,7 +27,7 @@ export default function VehiclesPage() {
     const [isVehicleModalOpen, setIsVehicleModalOpen] = React.useState(false)
     const [editingVehicle, setEditingVehicle] = React.useState<Vehicle | null>(null)
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['vehicles', search, page, filters],
         queryFn: () => getVehicles({ q: search, page, ...filters }),
         enabled: !!token,
@@ -76,6 +77,8 @@ export default function VehiclesPage() {
                 </div>
                 <VehicleFiltersComponent filters={filters} onFiltersChange={handleFiltersChange} />
             </div>
+
+            {isError && <QueryError message="Failed to load vehicles." onRetry={refetch} />}
 
             <VehicleTable
                 data={data?.data || []}

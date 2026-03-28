@@ -11,6 +11,7 @@ import Link from 'next/link'
 
 import { TripStatusModal } from '@/components/trips/TripStatusModal'
 import { EditTripModal } from '@/components/trips/EditTripModal'
+import { QueryError } from '@/components/shared/QueryError'
 import { Trip } from '@/types'
 
 export default function TripsPage() {
@@ -19,7 +20,7 @@ export default function TripsPage() {
     const [statusTrip, setStatusTrip] = React.useState<Trip | null>(null)
     const [editingTrip, setEditingTrip] = React.useState<Trip | null>(null)
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['trips', search, page],
         queryFn: () => getTrips({ q: search, page }),
     })
@@ -57,6 +58,8 @@ export default function TripsPage() {
                     <Filter className="mr-2 h-4 w-4" /> All Statuses
                 </Button>
             </div>
+
+            {isError && <QueryError message="Failed to load trips." onRetry={refetch} />}
 
             <TripTable
                 data={data?.data.trips || []}

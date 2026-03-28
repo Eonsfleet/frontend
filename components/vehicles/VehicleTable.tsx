@@ -131,7 +131,7 @@ export function VehicleTable({
                     <span className="text-xs font-medium text-slate-700">{row.original.attributes.body_type}</span>
                     <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-slate-500 uppercase">{row.original.attributes.fuel_type}</span>
-                        {(row.original.attributes as any).fuel_sensor_conversion_factor > 0 && (
+                        {(row.original.attributes.fuel_sensor_conversion_factor ?? 0) > 0 && (
                             <div className="h-3.5 w-3.5 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100" title="Fuel Monitoring Supported">
                                 <Fuel className="h-2 w-2 text-emerald-600" />
                             </div>
@@ -144,7 +144,7 @@ export function VehicleTable({
             id: 'odometer',
             header: 'Odometer',
             cell: ({ row }) => {
-                const loc = (row.original.relationships as any)?.current_location?.attributes
+                const loc = row.original.relationships?.current_location?.attributes
                 const value = loc?.odometer ?? loc?.total_odometer ?? row.original.attributes.total_odometer
                 return (
                     <div className="flex flex-col">
@@ -163,8 +163,8 @@ export function VehicleTable({
             header: 'Tracker / Device',
             cell: ({ row }) => {
                 const deviceId = row.original.attributes.device_id
-                const device = (row.original.relationships as any)?.device
-                const deviceStatus = (device?.status ?? (row.original.attributes as any).deviceStatus ?? '').toLowerCase()
+                const device = row.original.relationships?.device
+                const deviceStatus = (device?.status ?? row.original.attributes.deviceStatus ?? '').toLowerCase()
                 const statusConfig = DEVICE_STATUS_STYLES[deviceStatus]
 
                 if (!deviceId) {

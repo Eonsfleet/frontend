@@ -80,7 +80,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
     const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false)
 
     // Location is now read directly from the vehicle relationship — no query needed
-    const currentLocation = (vehicle as any).relationships?.current_location ?? null
+    const currentLocation = vehicle.relationships?.current_location ?? null
     const loc = currentLocation?.attributes ?? null
 
     const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
@@ -110,7 +110,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
     })
 
     // Try embedded current_driver array first, fall back to query result
-    const embeddedDriverArr = (vehicle as any).relationships?.current_driver
+    const embeddedDriverArr = vehicle.relationships?.current_driver
     const embeddedDriver = Array.isArray(embeddedDriverArr) && embeddedDriverArr.length > 0
         ? embeddedDriverArr[0]
         : null
@@ -120,7 +120,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
     const documents = documentsResponse?.data?.documents || []
 
     // GPS device from relationships
-    const device = (vehicle as any).relationships?.device ?? null
+    const device = vehicle.relationships?.device ?? null
 
     // Location tab coordinates
     const lat = currentLocation?.attributes?.coordinates?.latitude ?? 0
@@ -368,7 +368,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                             </CardHeader>
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-12">
                                 <DetailItem label="VIN / Chasis Number" value={vehicle.attributes.chasis_number || 'Not Recorded'} />
-                                <DetailItem label="Gross Vehicle Mass (GVM)" value={(vehicle.attributes as any).gvm ? `${(vehicle.attributes as any).gvm} kg` : 'N/A'} />
+                                <DetailItem label="Gross Vehicle Mass (GVM)" value={vehicle.attributes.gvm ? `${vehicle.attributes.gvm} kg` : 'N/A'} />
                                 <DetailItem label="Fuel Capacity" value={vehicle.attributes.fuel_capacity ? `${vehicle.attributes.fuel_capacity} ${vehicle.attributes.fuel_capacity_unit || 'L'}` : 'N/A'} />
                                 <DetailItem label="Odometer When Joined" value={vehicle.attributes.odometer_when_join ? `${vehicle.attributes.odometer_when_join.toLocaleString()} km` : 'N/A'} />
                                 <DetailItem label="Fuel Conversion Factor" value={vehicle.attributes.fuel_sensor_conversion_factor?.toString() || 'N/A'} />
@@ -382,23 +382,23 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                 <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tire Pressure Reference (PSI)</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {(vehicle.attributes as any).tire_psi ? (
+                                {vehicle.attributes.tire_psi ? (
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Front Left</p>
-                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.front_left}</p>
+                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.front_left}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Front Right</p>
-                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.front_right}</p>
+                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.front_right}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Rear Left</p>
-                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.rear_left}</p>
+                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.rear_left}</p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">Rear Right</p>
-                                            <p className="text-sm font-black text-slate-900">{(vehicle.attributes as any).tire_psi.rear_right}</p>
+                                            <p className="text-sm font-black text-slate-900">{vehicle.attributes.tire_psi.rear_right}</p>
                                         </div>
                                     </div>
                                 ) : (
@@ -471,7 +471,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                             name: vehicle.attributes.registration_number,
                                             lat: lat || 6.5244,
                                             lng: lng || 3.3792,
-                                            status: (locationState as any) || 'moving',
+                                            status: (locationState as 'in_transit' | 'idle' | 'parked' | 'online' | 'offline') || 'parked',
                                             address: loc.address ?? (lat !== 0 || lng !== 0 ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : undefined),
                                         }]}
                                     />

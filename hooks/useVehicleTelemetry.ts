@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getEcho } from '@/lib/echo'
 import { useAuthStore } from '@/store/authStore'
+import { VehicleTelemetry } from '@/types'
 
 export function useVehicleTelemetry(
     vehicleId: string | null,
@@ -10,7 +11,7 @@ export function useVehicleTelemetry(
     imei?: string | null        // vehicle.relationships.device.data.imei → location.{imei}
 ) {
     const { organization } = useAuthStore()
-    const [telemetry, setTelemetry] = useState<any>(null)
+    const [telemetry, setTelemetry] = useState<VehicleTelemetry | null>(null)
     const [deviceStatus, setDeviceStatus] = useState<string | null>(null)
 
     const orgIdentifier = organization?.attributes?.identifier || organization?.id
@@ -21,25 +22,25 @@ export function useVehicleTelemetry(
 
         // Layer 2a: Per-vehicle location stream
         const vehicleChannel = echo.private(`location.vehicle.${vehicleId}`)
-        vehicleChannel.listen('.current.recent', (packet: any) => {
+        vehicleChannel.listen('.current.recent', (packet: VehicleTelemetry) => {
             setTelemetry(packet)
         })
 
         // Layer 2b: Location by device IMEI (raw device stream)
-        let imeiChannel: any = null
+        let imeiChannel: ReturnType<typeof echo.private> | null = null
         if (imei) {
             imeiChannel = echo.private(`location.${imei}`)
-            imeiChannel.listen('.current.recent', (packet: any) => {
+            imeiChannel.listen('.current.recent', (packet: VehicleTelemetry) => {
                 // Only apply if no vehicle-level data has arrived yet
-                setTelemetry((prev: any) => prev ?? packet)
+                setTelemetry((prev) => prev ?? packet)
             })
         }
 
         // Layer 2c: Device status (online/offline)
-        let statusChannel: any = null
+        let statusChannel: ReturnType<typeof echo.private> | null = null
         if (deviceId) {
             statusChannel = echo.private(`devicestatus.${orgIdentifier}.${deviceId}`)
-            statusChannel.listen('.device.status', (event: any) => {
+            statusChannel.listen('.device.status', (event: { status: string }) => {
                 setDeviceStatus(event.status)
             })
         }

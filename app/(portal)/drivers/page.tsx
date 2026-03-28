@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getDrivers } from '@/lib/api/drivers'
 import { PermissionGate } from '@/components/shared/PermissionGate'
 import { AssignVehicleDialog } from '@/components/drivers/AssignVehicleDialog'
+import { QueryError } from '@/components/shared/QueryError'
 import { UserProfile } from '@/types'
 
 export default function DriversPage() {
@@ -18,7 +19,7 @@ export default function DriversPage() {
     const [selectedDriver, setSelectedDriver] = React.useState<UserProfile | null>(null)
     const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false)
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['drivers', search, page],
         queryFn: () => getDrivers({ q: search, page }),
     })
@@ -57,6 +58,8 @@ export default function DriversPage() {
                     <Filter className="mr-2 h-4 w-4" /> Status All
                 </Button>
             </div>
+
+            {isError && <QueryError message="Failed to load drivers." onRetry={refetch} />}
 
             <DriverTable
                 data={data?.data || []}

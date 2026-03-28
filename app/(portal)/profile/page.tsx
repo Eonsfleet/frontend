@@ -40,6 +40,11 @@ export default function ProfilePage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
+                e.target.value = ''
+                return
+            }
             toast.promise(
                 new Promise((resolve) => {
                     setTimeout(() => {
@@ -121,7 +126,7 @@ export default function ProfilePage() {
         })
     }
 
-    if (!user) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
+    if (!user) return <div role="status" aria-label="Loading" className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
 
     const userRoleStr = String(Array.isArray(user.attributes.role) ? user.attributes.role[0] : user.attributes.role)
 

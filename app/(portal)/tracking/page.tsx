@@ -71,9 +71,12 @@ function deriveVehicleStatus(loc: any, vehicle: any): string {
   if (state === "idle") return "idle";
   if (state === "parked") return "parked";
   // no device state — fall back to vehicle-level status
-  const vs = (vehicle as any)?.attributes?.status ?? "";
+  const vs = ((vehicle as any)?.attributes?.status ?? "").toLowerCase();
   if (vs === "in_transit") return "in_transit";
-  return "parked"; // active/maintenance/etc with no device movement data = parked
+  if (vs === "idle") return "idle";
+  if (vs === "online") return "online";
+  if (vs === "offline") return "offline";
+  return "parked"; // maintenance/active/etc with no device signal
 }
 
 // Format a timestamp as "MMM d, HH:mm" in the user's local timezone.
@@ -217,14 +220,14 @@ export default function TrackingPage() {
     enabled: !!token && showGeofences,
   });
 
-  const vehicles = useMemo(() => (vehicleData as any) || [], [vehicleData]);
+  const vehicles = useMemo(() => vehicleData ?? [], [vehicleData]);
   const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData]);
   const clusters = useMemo(
-    () => (clustersData as any)?.data?.clusters || [],
+    () => clustersData?.data?.clusters || [],
     [clustersData],
   );
   const geofences = useMemo(
-    () => (geofencesData as any)?.data?.geofences || [],
+    () => geofencesData?.data?.geofences || [],
     [geofencesData],
   );
 
@@ -283,13 +286,13 @@ export default function TrackingPage() {
   ]);
 
   const ongoingTripsData = useMemo(() => {
-    return ongoingTrips.map((trip: any) => {
+    return ongoingTrips.map((trip: Trip) => {
       // API Structure confirmed via raw dump: trip.relationships.vehicle.id (direct)
-      const relVehicle = trip.relationships?.vehicle as any;
+      const relVehicle = trip.relationships?.vehicle;
       const bestVehicleId =
         relVehicle?.id ||
-        (trip.attributes as any)?.vehicleId ||
-        (trip.attributes as any)?.vehicle_id;
+        trip.attributes?.vehicleId ||
+        trip.attributes?.vehicle_id;
 
       // Link to fleet vehicle if possible for live telemetry synchronization
       const fleetVehicle = bestVehicleId
@@ -305,7 +308,7 @@ export default function TrackingPage() {
         vehicleId: bestVehicleId ? String(bestVehicleId) : null,
         startTime:
           trip.attributes.planned_start_time ||
-          (trip.attributes as any)?.created_at,
+          trip.attributes?.created_at,
         endTime: trip.attributes.planned_end_time || new Date().toISOString(),
       };
     });
@@ -372,12 +375,12 @@ export default function TrackingPage() {
     setLocations((prev) => {
       const next = { ...prev };
       vehicles.forEach((v: Vehicle) => {
-        const rel = (v as any).relationships;
+        const rel = v.relationships;
         const locAttrs = rel?.current_location?.attributes ?? null;
         const device = rel?.device ?? null;
         const isOnline =
           device?.is_online ??
-          (v as any).attributes?.is_online ??
+          v.attributes?.is_online ??
           false;
 
         if (!locAttrs) {
@@ -440,13 +443,13 @@ export default function TrackingPage() {
   // Merge per-vehicle current location when a vehicle is selected
   useEffect(() => {
     if (!currentLocData || !selectedVehicleId) return;
-    const loc = (currentLocData as any).location || currentLocData;
+    const loc = currentLocData.location;
     if (!loc?.latitude) return;
     // is_online from device field — do NOT assume online just because data was fetched
     const deviceOnline: boolean | undefined =
-      (currentLocData as any).attributes?.is_online ??
-      ((currentLocData as any).device?.status != null
-        ? (currentLocData as any).device.status === "online"
+      currentLocData.attributes?.is_online ??
+      (currentLocData.device?.status != null
+        ? currentLocData.device.status === "online"
         : undefined);
     setLocations((prev) => ({
       ...prev,
@@ -463,7 +466,7 @@ export default function TrackingPage() {
         fuel_liters: loc.fuel_level_liters,
         odometer: loc.odometer,
         lastUpdate: loc.gps_datetime,
-        lastPacket: (currentLocData as any).device?.last_packet_received_at ?? prev[selectedVehicleId]?.lastPacket,
+        lastPacket: currentLocData.device?.last_packet_received_at ?? prev[selectedVehicleId]?.lastPacket,
         satellites: loc.satellites,
         address: loc.address,
         ignition: loc.ignition === "on" || loc.ignition === true,
@@ -536,7 +539,6 @@ export default function TrackingPage() {
       ".fuel.event",
       (alert: any) => {
         // Optional: Show toast or update local state for fuel warnings
-        console.log("Fuel Event:", alert);
       },
     );
 
@@ -712,16 +714,14 @@ export default function TrackingPage() {
                         const loc = locations[v.id];
                         const isSelected =
                           String(selectedVehicleId) === String(v.id);
-                        const status =
-                          loc?.status || (v as any).location?.status;
+                        const status = loc?.status;
                         // Prefer last_packet_received_at (device event), fall back to gps_datetime
                         const rawUpdate =
                           loc?.lastPacket ||
-                          loc?.lastUpdate ||
-                          (v as any).location?.gps_datetime;
+                          loc?.lastUpdate;
                         const lastUpdate = fmtTimestamp(rawUpdate);
                         // REST seed → 'fuel'/'fuel_liters'; WS spread → original names; ultimate fallback → embedded vehicle data
-                        const embeddedLoc = (v as any).relationships?.current_location?.attributes;
+                        const embeddedLoc = v.relationships?.current_location?.attributes;
                         const fuelPct =
                           loc?.fuel ??
                           loc?.fuel_level_percent ??
@@ -1319,15 +1319,15 @@ export default function TrackingPage() {
             ? (() => {
                 const loc = locations[selectedVehicle.id];
                 const rel = selectedVehicle.relationships
-                  ?.current_location as any;
+                  ?.current_location;
                 return {
                   plate: selectedVehicle.attributes.registration_number,
                   make: selectedVehicle.attributes.make,
                   model: selectedVehicle.attributes.model,
                   device_id: selectedVehicle.attributes.device_id ?? null,
                   imei:
-                    (selectedVehicle.relationships?.device as any)?.imei ??
-                    (selectedVehicle.relationships?.device as any)?.data?.imei ??
+                    selectedVehicle.relationships?.device?.imei ??
+                    selectedVehicle.relationships?.device?.data?.imei ??
                     null,
                   altitude: loc?.altitude ?? rel?.altitude ?? null,
                   movement: loc?.movement ?? null,

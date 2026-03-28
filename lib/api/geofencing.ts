@@ -1,6 +1,12 @@
 import apiClient from './client'
 import { Paginated, Geofence, Vehicle } from '@/types'
 
+/** Form data type — accepts alert_type (UI field name) which is mapped to trigger_type before sending */
+export interface GeofenceFormData extends Omit<Partial<Geofence['attributes']>, 'trigger_type'> {
+    alert_type?: 'enter' | 'exit' | 'both'
+    trigger_type?: 'enter' | 'exit' | 'both'
+}
+
 export interface GeofenceListResponse {
     message: string
     data: {
@@ -30,23 +36,16 @@ export const getGeofenceById = async (id: string): Promise<GeofenceDetailRespons
     return response.data
 }
 
-export const createGeofence = async (data: Partial<Geofence['attributes']>): Promise<GeofenceDetailResponse> => {
-    // If the data has alert_type, rename it to trigger_type for backend compatibility
-    const payload = { ...data }
-    if ((payload as any).alert_type) {
-        (payload as any).trigger_type = (payload as any).alert_type
-        delete (payload as any).alert_type
-    }
+export const createGeofence = async (data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
+    const { alert_type, ...rest } = data
+    const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
     const response = await apiClient.post<GeofenceDetailResponse>('/geofences', payload)
     return response.data
 }
 
-export const updateGeofence = async (id: string, data: Partial<Geofence['attributes']>): Promise<GeofenceDetailResponse> => {
-    const payload = { ...data }
-    if ((payload as any).alert_type) {
-        (payload as any).trigger_type = (payload as any).alert_type
-        delete (payload as any).alert_type
-    }
+export const updateGeofence = async (id: string, data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
+    const { alert_type, ...rest } = data
+    const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
     const response = await apiClient.put<GeofenceDetailResponse>(`/geofences/${id}`, payload)
     return response.data
 }

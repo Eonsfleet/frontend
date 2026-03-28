@@ -42,8 +42,10 @@ export default function GeofenceOverviewMap({ geofences, vehicles }: Props) {
             const { type, coordinates, radius, name } = g.attributes
 
             if (type === 'circle' && coordinates) {
-                const lat = coordinates.lat ?? coordinates[1]
-                const lng = coordinates.lng ?? coordinates[0]
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const c = coordinates as any
+                const lat: number | undefined = c.lat ?? c[1]
+                const lng: number | undefined = c.lng ?? c[0]
                 if (lat != null && lng != null) {
                     const circle = L.circle([lat, lng], {
                         radius: radius ?? 500,
@@ -58,11 +60,13 @@ export default function GeofenceOverviewMap({ geofences, vehicles }: Props) {
                     bounds.push(circle.getBounds())
                 }
             } else if (type === 'polygon' && coordinates) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const c = coordinates as any
                 let latlngs: L.LatLngExpression[]
-                if (coordinates.type === 'Polygon' && Array.isArray(coordinates.coordinates)) {
-                    latlngs = coordinates.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
-                } else if (Array.isArray(coordinates)) {
-                    latlngs = coordinates.map((pt: any) =>
+                if (c.type === 'Polygon' && Array.isArray(c.coordinates)) {
+                    latlngs = c.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
+                } else if (Array.isArray(c)) {
+                    latlngs = c.map((pt: any) =>
                         Array.isArray(pt) ? [pt[1], pt[0]] : [pt.lat, pt.lng]
                     )
                 } else {

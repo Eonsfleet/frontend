@@ -30,10 +30,12 @@ const MapCenterer = ({ initialGeofence }: { initialGeofence?: Geofence }) => {
         if (!initialGeofence) return
 
         const { type, coordinates, radius } = initialGeofence.attributes
-        if (type === 'circle' && coordinates?.lat && coordinates?.lng) {
-            map.setView([coordinates.lat, coordinates.lng], 15)
-        } else if (type === 'polygon' && coordinates?.type === 'Polygon') {
-            const bounds = L.geoJSON(coordinates as any).getBounds()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const c = coordinates as any
+        if (type === 'circle' && c?.lat && c?.lng) {
+            map.setView([c.lat, c.lng], 15)
+        } else if (type === 'polygon' && c?.type === 'Polygon') {
+            const bounds = L.geoJSON(c).getBounds()
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [50, 50] })
             }
@@ -86,18 +88,20 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
     const renderInitialLayer = () => {
         if (!initialGeofence) return null
         const { type, coordinates, radius } = initialGeofence.attributes
-        if (type === 'circle' && coordinates?.lat && coordinates?.lng) {
-            return <Circle center={[coordinates.lat, coordinates.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const c = coordinates as any
+        if (type === 'circle' && c?.lat && c?.lng) {
+            return <Circle center={[c.lat, c.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
         }
-        if (type === 'polygon' && coordinates?.type === 'Polygon') {
-            const latlngs = (coordinates.coordinates[0] as any[]).map(p => [p[1], p[0]] as [number, number])
+        if (type === 'polygon' && c?.type === 'Polygon') {
+            const latlngs = (c.coordinates[0] as any[]).map((p: any) => [p[1], p[0]] as [number, number])
             return <Polygon positions={latlngs} color="#2563eb" fillOpacity={0.2} />
         }
         return null
     }
 
     return (
-        <div style={{ height }} className="w-full rounded-md border border-slate-200 overflow-hidden relative z-0">
+        <div style={{ height }} role="region" aria-label="Geofence boundary editor map" className="w-full rounded-md border border-slate-200 overflow-hidden relative z-0">
             <MapContainer
                 center={DefaultPosition}
                 zoom={11}

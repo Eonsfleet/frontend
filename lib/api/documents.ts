@@ -1,5 +1,4 @@
 import apiClient from './client'
-import { useAuthStore } from '@/store/authStore'
 
 export interface DocumentAttributes {
     title: string
@@ -70,8 +69,8 @@ export const uploadFile = async (file: File): Promise<{ url: string }> => {
 
     const response = await apiClient.post<any>('/file/upload', payload)
 
-    // Handle structured response: { data: { file: { url: '...' } } }
-    const url = response.data?.data?.file?.url || response.data?.url || response.data?.data?.url
+    // Response shape priority: { data: { file: { url } } } → { data: { url } } → { url }
+    const url = response.data?.data?.file?.url || response.data?.data?.url || response.data?.url
     if (!url) {
         console.error('Upload response missing URL:', response.data)
         throw new Error('Upload failed: No URL returned from server')
@@ -94,12 +93,16 @@ export const getVehicleDocuments = async (vehicleId: string | number): Promise<D
     return response.data
 }
 
-export const downloadDocument = (documentId: string | number) => {
-    // In many cases, we just want to open the download link in a new tab
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-    const { token } = (useAuthStore.getState() as any) // Assuming we need the token if the download endpoint is protected
-    const downloadUrl = `${baseUrl}/documents/${documentId}/download?token=${token}`
-    window.open(downloadUrl, '_blank')
+export const downloadDocument = async (documentId: string | number, filename?: string) => {
+    const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(response.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename || `document-${documentId}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
 }
 
 // Alternatively, if we need to fetch it as a blob:
