@@ -89,11 +89,8 @@ apiClient.interceptors.response.use(
                 return apiClient(original)
             } catch (err) {
                 processQueue(err, null)
-                const { _hasHydrated, token } = useAuthStore.getState()
-                // Only force-logout if the store is fully hydrated AND the token
-                // is genuinely absent — avoids clearing auth due to a missing
-                // refreshToken when the user still has a valid access token.
-                if (_hasHydrated && !token) {
+                const { _hasHydrated } = useAuthStore.getState()
+                if (_hasHydrated) {
                     useAuthStore.getState().clearAuth()
                     if (typeof window !== 'undefined') {
                         window.location.href = '/login'
