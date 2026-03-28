@@ -32,8 +32,8 @@ const MapCenterer = ({ initialGeofence }: { initialGeofence?: Geofence }) => {
         const { type, coordinates, radius } = initialGeofence.attributes
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const c = coordinates as any
-        if (type === 'circle' && c?.lat && c?.lng) {
-            map.setView([c.lat, c.lng], 15)
+        if (type === 'circle' && (c?.latitude ?? c?.lat) && (c?.longitude ?? c?.lng)) {
+            map.setView([c.latitude ?? c.lat, c.longitude ?? c.lng], 15)
         } else if (type === 'polygon' && c?.type === 'Polygon') {
             const bounds = L.geoJSON(c).getBounds()
             if (bounds.isValid()) {
@@ -71,7 +71,7 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
             const radius = layer.getRadius()
             onChange({
                 type: 'circle',
-                coordinates: { lat: center.lat, lng: center.lng },
+                coordinates: { latitude: center.lat, longitude: center.lng },
                 radius: radius
             })
         } else if (layer instanceof L.Polygon) {
@@ -90,8 +90,8 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
         const { type, coordinates, radius } = initialGeofence.attributes
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const c = coordinates as any
-        if (type === 'circle' && c?.lat && c?.lng) {
-            return <Circle center={[c.lat, c.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
+        if (type === 'circle' && (c?.latitude ?? c?.lat) && (c?.longitude ?? c?.lng)) {
+            return <Circle center={[c.latitude ?? c.lat, c.longitude ?? c.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
         }
         if (type === 'polygon' && c?.type === 'Polygon') {
             const latlngs = (c.coordinates[0] as any[]).map((p: any) => [p[1], p[0]] as [number, number])

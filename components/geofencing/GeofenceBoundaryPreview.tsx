@@ -44,8 +44,8 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
         if (type === 'circle' && coordinates) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const c = coordinates as any
-            const lat: number | undefined = c.lat ?? c[1]
-            const lng: number | undefined = c.lng ?? c[0]
+            const lat: number | undefined = c.latitude ?? c.lat ?? c[1]
+            const lng: number | undefined = c.longitude ?? c.lng ?? c[0]
             if (lat != null && lng != null) {
                 const circle = L.circle([lat, lng], {
                     radius: radius ?? 500,
