@@ -38,12 +38,14 @@ apiClient.interceptors.response.use(
     async (error) => {
         const original = error.config
 
-        // Prevent infinite reload loop or clearing auth on failed login attempt
-        // Also exclude broadcasting/auth to prevent WebSocket auth failures from triggering logout
+        // Prevent infinite reload loop or clearing auth on failed login attempt.
+        // Also exclude broadcasting/auth (WebSocket) and the subscription endpoint —
+        // a subscription 401 should degrade gracefully, not force a full logout.
         if (
             original.url?.includes('/auth/login') ||
             original.url?.includes('/auth/refresh') ||
-            original.url?.includes('/broadcasting/auth')
+            original.url?.includes('/broadcasting/auth') ||
+            original.url?.includes('/subscriptions/organization/current')
         ) {
             return Promise.reject(error)
         }
@@ -87,8 +89,11 @@ apiClient.interceptors.response.use(
                 return apiClient(original)
             } catch (err) {
                 processQueue(err, null)
-                const { _hasHydrated } = useAuthStore.getState()
-                if (_hasHydrated) {
+                const { _hasHydrated, token } = useAuthStore.getState()
+                // Only force-logout if the store is fully hydrated AND the token
+                // is genuinely absent — avoids clearing auth due to a missing
+                // refreshToken when the user still has a valid access token.
+                if (_hasHydrated && !token) {
                     useAuthStore.getState().clearAuth()
                     if (typeof window !== 'undefined') {
                         window.location.href = '/login'
