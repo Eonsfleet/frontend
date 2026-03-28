@@ -11,7 +11,7 @@ import AppShell from '@/components/layout/AppShell'
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
     const [mounted, setMounted] = useState(false)
     const router = useRouter()
-    const { token, clearAuth } = useAuthStore()
+    const { token, clearAuth, _hasHydrated } = useAuthStore()
     const setSubscription = useSubscriptionStore((s) => s.setSubscription)
 
     useEffect(() => {
@@ -19,11 +19,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     }, [])
 
     useEffect(() => {
-        if (mounted && !token) {
+        if (mounted && _hasHydrated && !token) {
             clearAuth()
             router.replace('/login')
         }
-    }, [mounted, token, router, clearAuth])
+    }, [mounted, _hasHydrated, token, router, clearAuth])
 
     const { data: sub } = useQuery({
         queryKey: ['org-subscription'],
@@ -43,7 +43,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         }
     }, [sub, setSubscription])
 
-    if (!mounted || !token) return null
+    if (!mounted || !_hasHydrated) return null
+    if (!token) return null
 
     return <AppShell>{children}</AppShell>
 }
