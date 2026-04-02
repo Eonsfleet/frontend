@@ -224,9 +224,9 @@ export function TelemetryDrawer({
   // Compute resolved fuel before early return (used internally in drawer)
   const apiFuel = currentFuelData?.data?.fuel_level;
   const resolvedFuel =
-    apiFuel?.fuel_level_percent ??
+    vehicle?.fuel ??
     telemetry?.fuel_level_percent ??
-    vehicle?.fuel;
+    apiFuel?.fuel_level_percent;
 
   // ── Resolved values: WS telemetry > prop fallback > raw REST snapshot ──
   const raw = vehicle?.raw ?? {};
@@ -356,12 +356,12 @@ export function TelemetryDrawer({
   const liveConfidence =
     meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
 
-  // Fuel — API endpoint > WS telemetry > prop (already computed as resolvedFuel above)
+  // Fuel — Prop (WS/current_location) > WS telemetry directly > API endpoint (already computed as resolvedFuel above)
   const liveFuel = resolvedFuel;
   const liveFuelLiters =
-    apiFuel?.fuel_level_liters ??
+    vehicle?.fuel_liters ??
     telemetry?.fuel_level_liters ??
-    vehicle.fuel_liters;
+    apiFuel?.fuel_level_liters;
   const fuelTankCap = apiFuel?.tank_capacity ?? null;
   const fuelQuality = apiFuel?.data_quality_score ?? null;
   const fuelLastUpdate = apiFuel?.last_updated ?? null;

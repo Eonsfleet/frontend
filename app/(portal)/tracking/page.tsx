@@ -79,6 +79,16 @@ function deriveVehicleStatus(loc: any, vehicle: any): string {
   return "parked"; // maintenance/active/etc with no device signal
 }
 
+function isStaleOffline(isOnline: boolean | undefined, timestamp: string | undefined | null): boolean {
+  if (isOnline || !timestamp) return false;
+  try {
+    const d = new Date(timestamp.endsWith("Z") || timestamp.includes("+") ? timestamp : timestamp + "Z");
+    return !isNaN(d.getTime()) && d < startOfDay(new Date());
+  } catch {
+    return false;
+  }
+}
+
 // Format a timestamp as "MMM d, HH:mm" in the user's local timezone.
 // If today, just "HH:mm:ss". Falls back to raw string if parsing fails.
 function fmtTimestamp(ts: string | null | undefined): string {
@@ -383,13 +393,18 @@ export default function TrackingPage() {
           v.attributes?.is_online ??
           false;
 
+        const lastPacketTs = device?.last_packet_received_at;
+        const lastUpdateTs = locAttrs?.updated_at ?? locAttrs?.gps_datetime;
+        const staleOffline = isStaleOffline(isOnline, lastPacketTs || lastUpdateTs);
+        
         if (!locAttrs) {
           // Still refresh device online status and last packet even without location
           if (next[v.id]) {
             next[v.id] = {
               ...next[v.id],
               is_online: isOnline,
-              lastPacket: device?.last_packet_received_at ?? next[v.id]?.lastPacket,
+              status: staleOffline ? "offline" : next[v.id]?.status,
+              lastPacket: lastPacketTs ?? next[v.id]?.lastPacket,
             };
           }
           return;
@@ -397,7 +412,7 @@ export default function TrackingPage() {
 
         const lat = locAttrs.coordinates?.latitude;
         const lng = locAttrs.coordinates?.longitude;
-        const derivedStatus = deriveVehicleStatus(locAttrs, v);
+        const derivedStatus = staleOffline ? "offline" : deriveVehicleStatus(locAttrs, v);
 
         const restData = {
           lat: lat ?? 0,
@@ -410,8 +425,8 @@ export default function TrackingPage() {
           fuel: locAttrs.fuel_level_percent,
           fuel_liters: locAttrs.fuel_level_liters,
           odometer: locAttrs.odometer,
-          lastUpdate: locAttrs.gps_datetime,
-          lastPacket: device?.last_packet_received_at,
+          lastUpdate: lastUpdateTs,
+          lastPacket: lastPacketTs,
           satellites: locAttrs.satellites,
           address: locAttrs.address,
           ignition:
@@ -423,7 +438,7 @@ export default function TrackingPage() {
 
         if (!lat || !lng) {
           // No coordinates yet, but update metadata
-          next[v.id] = { ...restData, ...next[v.id], is_online: isOnline, raw: locAttrs, lastPacket: device?.last_packet_received_at };
+          next[v.id] = { ...restData, ...next[v.id], is_online: isOnline, status: derivedStatus, raw: locAttrs, lastPacket: lastPacketTs };
           return;
         }
 
@@ -431,9 +446,10 @@ export default function TrackingPage() {
         next[v.id] = {
           ...restData,
           ...next[v.id],
+          status: derivedStatus,
           is_online: isOnline,
           raw: locAttrs,
-          lastPacket: device?.last_packet_received_at,
+          lastPacket: lastPacketTs,
         };
       });
       return next;
@@ -459,13 +475,13 @@ export default function TrackingPage() {
         lng: loc.longitude,
         speed: loc.speed || 0,
         heading: loc.heading || 0,
-        status: deriveVehicleStatus(loc, null),
+        status: isStaleOffline(deviceOnline ?? prev[selectedVehicleId]?.is_online ?? false, currentLocData.device?.last_packet_received_at ?? loc.updated_at ?? loc.gps_datetime) ? "offline" : deriveVehicleStatus(loc, null),
         state: loc.state,
         is_online: deviceOnline ?? prev[selectedVehicleId]?.is_online ?? false,
         fuel: loc.fuel_level_percent,
         fuel_liters: loc.fuel_level_liters,
         odometer: loc.odometer,
-        lastUpdate: loc.gps_datetime,
+        lastUpdate: loc.updated_at ?? loc.gps_datetime,
         lastPacket: currentLocData.device?.last_packet_received_at ?? prev[selectedVehicleId]?.lastPacket,
         satellites: loc.satellites,
         address: loc.address,
@@ -503,7 +519,10 @@ export default function TrackingPage() {
               status,
               state: packet.state ?? prev[packet.vehicle_id]?.state,
               is_online: true, // receiving live WS data → device must be online
-              lastUpdate: packet.gps_datetime || packet.timestamp_utc,
+              lastUpdate: packet.updated_at || packet.gps_datetime || packet.timestamp_utc,
+              lastPacket: packet.last_packet_received_at ?? prev[packet.vehicle_id]?.lastPacket,
+              fuel: packet.fuel_level_percent ?? packet.fuel ?? prev[packet.vehicle_id]?.fuel,
+              fuel_liters: packet.fuel_level_liters ?? packet.fuel_liters ?? prev[packet.vehicle_id]?.fuel_liters,
               ignition:
                 normalized.ignition === "on" ||
                 normalized.ignition === "1" ||
@@ -745,9 +764,10 @@ export default function TrackingPage() {
                         return (
                           <div
                             key={v.id}
-                            onClick={() =>
-                              setSelectedVehicleId(isSelected ? null : v.id)
-                            }
+                            onClick={() => {
+                              setSelectedVehicleId(isSelected ? null : v.id);
+                              setIsTelemetryOpen(false);
+                            }}
                             className={cn(
                               "group flex flex-col p-3 rounded-xl border transition-all cursor-pointer gap-2",
                               isSelected
