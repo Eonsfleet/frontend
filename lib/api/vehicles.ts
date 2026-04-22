@@ -89,16 +89,19 @@ export interface VehicleLocation {
         longitude: number
         timestamp_utc: string
         gps_datetime: string
+        updated_at?: string | null
         speed: number
-        ignition: 'on' | 'off'
-        movement: 'on' | 'off'
+        ignition: 'on' | 'off' | '1' | '0' | boolean | null
+        movement: 'on' | 'off' | '1' | '0' | boolean | null
         fuel_level_liters: number | null
         fuel_level_percent: number | null
         odometer: number | null
         altitude: number | null
         heading: number | null
+        angle?: number | null
         satellites: number | null
         address: string | null
+        state?: string | null
         status: string
         metadata: {
             movement: 'on' | 'off'

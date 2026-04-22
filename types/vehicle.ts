@@ -63,9 +63,10 @@ export interface VehicleCurrentLocation {
     longitude: number | null
     speed: number | null
     heading: number | null
+    angle?: number | null
     status: string
-    ignition: 'on' | 'off' | null
-    movement: 'on' | 'off' | null
+    ignition: 'on' | 'off' | '1' | '0' | boolean | null
+    movement: 'on' | 'off' | '1' | '0' | boolean | null
     fuel_level_percent: number | null
     fuel_level_liters: number | null
     odometer: number | null
@@ -73,6 +74,35 @@ export interface VehicleCurrentLocation {
     satellites: number | null
     address: string | null
     gps_datetime: string | null
+    updated_at?: string | null
+    engine_temperature?: number | null
+    engine_rpm?: number | null
+    engine_rpm_obd?: number | null
+    battery_voltage?: number | null
+    battery_current?: number | null
+    external_voltage?: number | null
+    fuel_rate?: number | null
+    fuel_rate_gps?: number | null
+    fuel_consumed?: number | null
+    fuel_used_gps?: number | null
+    fuel_level_obd?: number | null
+    fuel_source?: string | null
+    eco_score?: number | null
+    idling?: boolean | null
+    jamming?: boolean | null
+    immobilizer?: boolean | null
+    unplug?: boolean | null
+    sleep_mode?: boolean | null
+    driving_state?: string | null
+    odometer_source?: string | null
+    protocol_name?: string | null
+    total_odometer?: number | null
+    total_mileage?: number | null
+    trip_odometer?: number | null
+    load_weight?: number | null
+    oil_level?: number | null
+    door_status?: string | null
+    confidence?: number | null
     metadata?: {
         engine_temperature?: number
         engine_rpm?: number

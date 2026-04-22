@@ -24,7 +24,7 @@ import {
   SlidersHorizontal,
   Check,
 } from "lucide-react";
-import { Vehicle } from "@/types";
+import { Vehicle, Trip } from "@/types";
 import { cn, normalizeTelemetry } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
@@ -1339,7 +1339,7 @@ export default function TrackingPage() {
             ? (() => {
                 const loc = locations[selectedVehicle.id];
                 const rel = selectedVehicle.relationships
-                  ?.current_location;
+                  ?.current_location?.attributes;
                 return {
                   plate: selectedVehicle.attributes.registration_number,
                   make: selectedVehicle.attributes.make,
