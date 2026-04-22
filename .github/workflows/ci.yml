@@ -1,0 +1,25 @@
+name: CI
+
+  on:
+    push:
+      branches: [main, sandbox]                                                                                                                               
+    pull_request:
+      branches: [main, sandbox]                                                                                                                               
+                                                            
+  jobs:
+    build:                                                                                                                                                    
+      runs-on: ubuntu-latest                                
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-node@v4                                                                                                                         
+          with:
+            node-version: 20                                                                                                                                  
+            cache: 'npm'                                    
+        - run: npm ci
+        - run: npm run build
+          env:                                                                                                                                                
+            NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_WEBSOCKET_HOST_URL: ${{ secrets.NEXT_PUBLIC_WEBSOCKET_HOST_URL }}                                                                     
+            NEXT_PUBLIC_PUSHER_APP_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_KEY }}                                                                             
+            NEXT_PUBLIC_PUSHER_HOST: ${{ secrets.NEXT_PUBLIC_PUSHER_HOST }}
+            NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}    
