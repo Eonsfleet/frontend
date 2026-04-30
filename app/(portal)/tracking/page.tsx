@@ -79,10 +79,17 @@ function deriveVehicleStatus(loc: any, vehicle: any): string {
   return "parked"; // maintenance/active/etc with no device signal
 }
 
-function isStaleOffline(isOnline: boolean | undefined, timestamp: string | undefined | null): boolean {
+function isStaleOffline(
+  isOnline: boolean | undefined,
+  timestamp: string | undefined | null,
+): boolean {
   if (isOnline || !timestamp) return false;
   try {
-    const d = new Date(timestamp.endsWith("Z") || timestamp.includes("+") ? timestamp : timestamp + "Z");
+    const d = new Date(
+      timestamp.endsWith("Z") || timestamp.includes("+")
+        ? timestamp
+        : timestamp + "Z",
+    );
     return !isNaN(d.getTime()) && d < startOfDay(new Date());
   } catch {
     return false;
@@ -94,9 +101,7 @@ function isStaleOffline(isOnline: boolean | undefined, timestamp: string | undef
 function fmtTimestamp(ts: string | null | undefined): string {
   if (!ts) return "N/A";
   try {
-    const d = new Date(
-      ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z",
-    );
+    const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
     if (isNaN(d.getTime())) return ts;
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
@@ -205,13 +210,6 @@ export default function TrackingPage() {
     staleTime: 0,
   });
 
-  const { data: currentLocData } = useQuery({
-    queryKey: ["vehicle-current-location", selectedVehicleId],
-    queryFn: () => api.getCurrentLocation(selectedVehicleId!),
-    enabled: !!selectedVehicleId,
-    staleTime: 0,
-  });
-
   const { data: clustersData } = useQuery({
     queryKey: ["clusters-tracking"],
     queryFn: () => getClusters({ per_page: 100 }),
@@ -317,8 +315,7 @@ export default function TrackingPage() {
           "N/A",
         vehicleId: bestVehicleId ? String(bestVehicleId) : null,
         startTime:
-          trip.attributes.planned_start_time ||
-          trip.attributes?.created_at,
+          trip.attributes.planned_start_time || trip.attributes?.created_at,
         endTime: trip.attributes.planned_end_time || new Date().toISOString(),
       };
     });
@@ -388,15 +385,15 @@ export default function TrackingPage() {
         const rel = v.relationships;
         const locAttrs = rel?.current_location?.attributes ?? null;
         const device = rel?.device ?? null;
-        const isOnline =
-          device?.is_online ??
-          v.attributes?.is_online ??
-          false;
+        const isOnline = device?.is_online ?? v.attributes?.is_online ?? false;
 
         const lastPacketTs = device?.last_packet_received_at;
         const lastUpdateTs = locAttrs?.updated_at ?? locAttrs?.gps_datetime;
-        const staleOffline = isStaleOffline(isOnline, lastPacketTs || lastUpdateTs);
-        
+        const staleOffline = isStaleOffline(
+          isOnline,
+          lastPacketTs || lastUpdateTs,
+        );
+
         if (!locAttrs) {
           // Still refresh device online status and last packet even without location
           if (next[v.id]) {
@@ -412,7 +409,9 @@ export default function TrackingPage() {
 
         const lat = locAttrs.coordinates?.latitude;
         const lng = locAttrs.coordinates?.longitude;
-        const derivedStatus = staleOffline ? "offline" : deriveVehicleStatus(locAttrs, v);
+        const derivedStatus = staleOffline
+          ? "offline"
+          : deriveVehicleStatus(locAttrs, v);
 
         const restData = {
           lat: lat ?? 0,
@@ -438,7 +437,14 @@ export default function TrackingPage() {
 
         if (!lat || !lng) {
           // No coordinates yet, but update metadata
-          next[v.id] = { ...restData, ...next[v.id], is_online: isOnline, status: derivedStatus, raw: locAttrs, lastPacket: lastPacketTs };
+          next[v.id] = {
+            ...restData,
+            ...next[v.id],
+            is_online: isOnline,
+            status: derivedStatus,
+            raw: locAttrs,
+            lastPacket: lastPacketTs,
+          };
           return;
         }
 
@@ -456,40 +462,7 @@ export default function TrackingPage() {
     });
   }, [vehicles]);
 
-  // Merge per-vehicle current location when a vehicle is selected
-  useEffect(() => {
-    if (!currentLocData || !selectedVehicleId) return;
-    const loc = currentLocData.location;
-    if (!loc?.latitude) return;
-    // is_online from device field — do NOT assume online just because data was fetched
-    const deviceOnline: boolean | undefined =
-      currentLocData.attributes?.is_online ??
-      (currentLocData.device?.status != null
-        ? currentLocData.device.status === "online"
-        : undefined);
-    setLocations((prev) => ({
-      ...prev,
-      [selectedVehicleId]: {
-        ...prev[selectedVehicleId],
-        lat: loc.latitude,
-        lng: loc.longitude,
-        speed: loc.speed || 0,
-        heading: loc.heading || 0,
-        status: isStaleOffline(deviceOnline ?? prev[selectedVehicleId]?.is_online ?? false, currentLocData.device?.last_packet_received_at ?? loc.updated_at ?? loc.gps_datetime) ? "offline" : deriveVehicleStatus(loc, null),
-        state: loc.state,
-        is_online: deviceOnline ?? prev[selectedVehicleId]?.is_online ?? false,
-        fuel: loc.fuel_level_percent,
-        fuel_liters: loc.fuel_level_liters,
-        odometer: loc.odometer,
-        lastUpdate: loc.updated_at ?? loc.gps_datetime,
-        lastPacket: currentLocData.device?.last_packet_received_at ?? prev[selectedVehicleId]?.lastPacket,
-        satellites: loc.satellites,
-        address: loc.address,
-        ignition: loc.ignition === "on" || loc.ignition === true,
-        raw: loc,
-      },
-    }));
-  }, [currentLocData, selectedVehicleId]);
+
 
   // WebSocket Telemetry Subscription
   const { organization } = useAuthStore();
@@ -507,10 +480,11 @@ export default function TrackingPage() {
       (packet: any) => {
         if (packet.vehicle_id) {
           const normalized = normalizeTelemetry(packet);
-          const status = deriveVehicleStatus(
-            { state: packet.state, speed: packet.speed },
-            null,
-          ) ?? normalized.status;
+          const status =
+            deriveVehicleStatus(
+              { state: packet.state, speed: packet.speed },
+              null,
+            ) ?? normalized.status;
           setLocations((prev) => ({
             ...prev,
             [packet.vehicle_id]: {
@@ -519,10 +493,21 @@ export default function TrackingPage() {
               status,
               state: packet.state ?? prev[packet.vehicle_id]?.state,
               is_online: true, // receiving live WS data → device must be online
-              lastUpdate: packet.updated_at || packet.gps_datetime || packet.timestamp_utc,
-              lastPacket: packet.last_packet_received_at ?? prev[packet.vehicle_id]?.lastPacket,
-              fuel: packet.fuel_level_percent ?? packet.fuel ?? prev[packet.vehicle_id]?.fuel,
-              fuel_liters: packet.fuel_level_liters ?? packet.fuel_liters ?? prev[packet.vehicle_id]?.fuel_liters,
+              lastUpdate:
+                packet.updated_at ||
+                packet.gps_datetime ||
+                packet.timestamp_utc,
+              lastPacket:
+                packet.last_packet_received_at ??
+                prev[packet.vehicle_id]?.lastPacket,
+              fuel:
+                packet.fuel_level_percent ??
+                packet.fuel ??
+                prev[packet.vehicle_id]?.fuel,
+              fuel_liters:
+                packet.fuel_level_liters ??
+                packet.fuel_liters ??
+                prev[packet.vehicle_id]?.fuel_liters,
               ignition:
                 normalized.ignition === "on" ||
                 normalized.ignition === "1" ||
@@ -669,12 +654,12 @@ export default function TrackingPage() {
                   <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                     {(
                       [
-                        { key: "all",     label: "All" },
-                        { key: "online",  label: "Online" },
+                        { key: "all", label: "All" },
+                        { key: "online", label: "Online" },
                         { key: "offline", label: "Offline" },
-                        { key: "moving",  label: "Moving" },
-                        { key: "idle",    label: "Idle" },
-                        { key: "parked",  label: "Parked" },
+                        { key: "moving", label: "Moving" },
+                        { key: "idle", label: "Idle" },
+                        { key: "parked", label: "Parked" },
                       ] as const
                     ).map(({ key: s, label }) => {
                       const count =
@@ -682,11 +667,15 @@ export default function TrackingPage() {
                           ? vehicles.length
                           : vehicles.filter((v: Vehicle) => {
                               const loc = locations[v.id];
-                              if (s === "moving") return loc?.status === "in_transit";
-                              if (s === "idle")   return loc?.status === "idle";
-                              if (s === "parked") return loc?.status === "parked";
-                              if (s === "online") return loc?.is_online === true;
-                              if (s === "offline") return loc?.is_online === false || !loc;
+                              if (s === "moving")
+                                return loc?.status === "in_transit";
+                              if (s === "idle") return loc?.status === "idle";
+                              if (s === "parked")
+                                return loc?.status === "parked";
+                              if (s === "online")
+                                return loc?.is_online === true;
+                              if (s === "offline")
+                                return loc?.is_online === false || !loc;
                               return false;
                             }).length;
 
@@ -735,12 +724,11 @@ export default function TrackingPage() {
                           String(selectedVehicleId) === String(v.id);
                         const status = loc?.status;
                         // Prefer last_packet_received_at (device event), fall back to gps_datetime
-                        const rawUpdate =
-                          loc?.lastPacket ||
-                          loc?.lastUpdate;
+                        const rawUpdate = loc?.lastPacket || loc?.lastUpdate;
                         const lastUpdate = fmtTimestamp(rawUpdate);
                         // REST seed → 'fuel'/'fuel_liters'; WS spread → original names; ultimate fallback → embedded vehicle data
-                        const embeddedLoc = v.relationships?.current_location?.attributes;
+                        const embeddedLoc =
+                          v.relationships?.current_location?.attributes;
                         const fuelPct =
                           loc?.fuel ??
                           loc?.fuel_level_percent ??
@@ -1338,8 +1326,8 @@ export default function TrackingPage() {
           selectedVehicle
             ? (() => {
                 const loc = locations[selectedVehicle.id];
-                const rel = selectedVehicle.relationships
-                  ?.current_location?.attributes;
+                const rel =
+                  selectedVehicle.relationships?.current_location?.attributes;
                 return {
                   plate: selectedVehicle.attributes.registration_number,
                   make: selectedVehicle.attributes.make,
@@ -1352,24 +1340,29 @@ export default function TrackingPage() {
                   altitude: loc?.altitude ?? rel?.altitude ?? null,
                   movement: loc?.movement ?? null,
                   speed: loc?.speed ?? rel?.speed ?? 0,
-                  fuel: loc?.fuel ?? loc?.fuel_level_percent ?? rel?.fuel_level_percent ?? 0,
-                  fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters ?? rel?.fuel_level_liters,
-                  temp:
-                    loc?.engine_temperature ??
-                    rel?.engine_temperature ??
+                  fuel:
+                    loc?.fuel ??
+                    loc?.fuel_level_percent ??
+                    rel?.fuel_level_percent ??
                     0,
-                  status: loc?.status ?? deriveVehicleStatus(rel, selectedVehicle),
-                  voltage:
-                    loc?.battery_voltage ?? rel?.battery_voltage,
-                  ext_voltage:
-                    loc?.external_voltage ?? rel?.external_voltage,
+                  fuel_liters:
+                    loc?.fuel_liters ??
+                    loc?.fuel_level_liters ??
+                    rel?.fuel_level_liters,
+                  temp: loc?.engine_temperature ?? rel?.engine_temperature ?? 0,
+                  status:
+                    loc?.status ?? deriveVehicleStatus(rel, selectedVehicle),
+                  voltage: loc?.battery_voltage ?? rel?.battery_voltage,
+                  ext_voltage: loc?.external_voltage ?? rel?.external_voltage,
                   signal:
                     loc?.satellites != null
                       ? `${loc.satellites} Sats`
                       : rel?.satellites != null
                         ? `${rel.satellites} Sats`
                         : "---",
-                  ignition: loc?.ignition ?? (rel?.ignition === "on" || rel?.ignition === true),
+                  ignition:
+                    loc?.ignition ??
+                    (rel?.ignition === "on" || rel?.ignition === true),
                   odometer: loc?.odometer ?? rel?.odometer,
                   lat: loc?.lat ?? rel?.coordinates?.latitude,
                   lng: loc?.lng ?? rel?.coordinates?.longitude,
