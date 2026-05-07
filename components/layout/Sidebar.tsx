@@ -362,7 +362,13 @@ export default function Sidebar() {
             )}
           >
             <div className="h-9 w-9 rounded-full bg-slate-100 shrink-0 overflow-hidden border-2 border-white shadow-sm">
-              <img src="/api/placeholder/100/100" alt="User" />
+              <img
+                src={
+                  user?.attributes?.avatar ??
+                  "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original"
+                }
+                alt="User-avatar"
+              />
             </div>
             {!isSidebarCollapsed && (
               <div className="min-w-0">
