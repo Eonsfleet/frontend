@@ -39,6 +39,7 @@ import { useAuthStore } from "@/store/authStore";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 const NAV_SECTIONS = [
   {
@@ -363,6 +364,7 @@ export default function Sidebar() {
           >
             <div className="h-9 w-9 rounded-full bg-slate-100 shrink-0 overflow-hidden border-2 border-white shadow-sm">
               <img
+                className=" h-full w-ful"
                 src={
                   user?.attributes?.avatar ??
                   "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original"

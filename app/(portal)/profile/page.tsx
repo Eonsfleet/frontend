@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { Loader2, UserCircle, Upload, Shield, Calendar, Phone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
+import { useUpdateUser, useUpdatePassword, useUploadFile } from '@/lib/hooks/useUpdateUser'
 
 const profileSchema = z.object({
     first_name: z.string().min(2, 'Required'),
@@ -34,33 +35,51 @@ const passwordSchema = z.object({
 type PasswordFormValues = z.infer<typeof passwordSchema>
 
 export default function ProfilePage() {
-    const { user, updateUser } = useAuthStore()
+    const { user, updateUser: updateUserStore } = useAuthStore()
     const fileInputRef = React.useRef<HTMLInputElement>(null)
+    
+    // React Query mutations
+    const updateUserMutation = useUpdateUser() // For profile updates
+    const updatePasswordMutation = useUpdatePassword()
+    const uploadFileMutation = useUploadFile()
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
-                e.target.value = ''
-                return
-            }
-            toast.promise(
-                new Promise((resolve) => {
-                    setTimeout(() => {
-                        const objectUrl = URL.createObjectURL(file)
-                        updateUser({
-                            attributes: { ...user!.attributes, avatar: objectUrl }
-                        })
-                        resolve(true)
-                    }, 1500)
-                }),
-                {
-                    loading: 'Uploading new avatar...',
-                    success: 'Avatar updated successfully',
-                    error: 'Failed to upload image'
-                }
-            )
+        if (!file) return
+        
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
+            e.target.value = ''
+            return
+        }
+        
+        // Show loading toast
+        const uploadToast = toast.loading('Uploading avatar...')
+        
+        try {
+            // Step 1: Upload file to get URL (waits for completion)
+            const uploadResponse = await uploadFileMutation.mutateAsync({ file, folder: 'avatar' })
+            
+            // Step 2: Get the uploaded file URL from response
+            const uploadedFileUrl = uploadResponse.data.file[0]
+            
+            // Update toast to show we're saving
+            toast.loading('Saving avatar...', { id: uploadToast })
+            
+            // Step 3: Update user with the avatar URL (only runs after upload succeeds)
+            await updateUserMutation.mutateAsync({ 
+                id: user!.id, 
+                data: { avatar: uploadedFileUrl } 
+            })
+            
+            // Step 4: Update local store with new avatar URL
+            updateUserStore({
+                attributes: { ...user!.attributes, avatar: uploadedFileUrl }
+            })
+            
+            toast.success('Avatar updated successfully', { id: uploadToast })
+        } catch (error) {
+            toast.error('Failed to update avatar', { id: uploadToast })
         }
     }
 
@@ -98,32 +117,47 @@ export default function ProfilePage() {
     }, [user, reset])
 
     const onSubmitProfile = async (data: ProfileFormValues) => {
-        // Mock API call to update profile
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                updateUser({
-                    attributes: {
-                        ...user!.attributes,
-                        ...data,
-                        full_name: `${data.first_name} ${data.last_name}`
-                    }
-                })
-                toast.success('Profile updated successfully')
-                reset(data) // Reset dirty state
-                resolve(true)
-            }, 800)
-        })
+        // Transform data to match API payload
+        const payload = {
+            f_name: data.first_name,
+            l_name: data.last_name,
+            phone_number: data.phone_number || null,
+        }
+
+        updateUserMutation.mutate(
+            { id: user!.id, data: payload },
+            {
+                onSuccess: (response) => {
+                    // Update local store with new user data
+                    updateUserStore({
+                        attributes: {
+                            ...user!.attributes,
+                            first_name: data.first_name,
+                            last_name: data.last_name,
+                            full_name: `${data.first_name} ${data.last_name}`,
+                            phone_number: data.phone_number || null,
+                        }
+                    })
+                    reset(data) // Reset dirty state
+                }
+            }
+        )
     }
 
     const onSubmitPassword = async (data: PasswordFormValues) => {
-        // Mock API call
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                toast.success('Password changed securely')
-                resetPassword()
-                resolve(true)
-            }, 1000)
-        })
+        const payload = {
+            current_password: data.current_password,
+            new_password: data.new_password,
+        }
+
+        updatePasswordMutation.mutate(
+            { id: user!.id, data: payload },
+            {
+                onSuccess: () => {
+                    resetPassword()
+                }
+            }
+        )
     }
 
     if (!user) return <div role="status" aria-label="Loading" className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
@@ -215,8 +249,11 @@ export default function ProfilePage() {
                                 </div>
                             </CardContent>
                             <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex justify-end">
-                                <Button type="submit" disabled={!isDirty || isSubmitting}>
-                                    {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                <Button 
+                                    type="submit" 
+                                    disabled={!isDirty || isSubmitting || updateUserMutation.isPending}
+                                >
+                                    {(isSubmitting || updateUserMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                     Save Profile
                                 </Button>
                             </CardFooter>
@@ -252,8 +289,12 @@ export default function ProfilePage() {
                                 </div>
                             </CardContent>
                             <CardFooter className="bg-white px-6 pb-6 pt-0 flex justify-start">
-                                <Button type="submit" variant="secondary" disabled={isSubmittingPassword}>
-                                    {isSubmittingPassword && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                <Button 
+                                    type="submit" 
+                                    variant="secondary" 
+                                    disabled={isSubmittingPassword || updatePasswordMutation.isPending}
+                                >
+                                    {(isSubmittingPassword || updatePasswordMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                     Update Password
                                 </Button>
                             </CardFooter>
