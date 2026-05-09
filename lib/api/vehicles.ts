@@ -116,11 +116,6 @@ export interface VehicleLocationResponse {
     status: number
 }
 
-export const getCurrentLocation = async (vehicleId: string | number): Promise<VehicleLocation> => {
-    const response = await apiClient.get<VehicleLocationResponse>(`/vehicles/${vehicleId}/location/current`)
-    return response.data.data
-}
-
 export const assignCluster = async (vehicleId: string | number, clusterId: string | number): Promise<{ message: string }> => {
     const response = await apiClient.put<{ message: string }>(`/vehicles/${vehicleId}/assign-cluster`, { cluster_id: clusterId })
     return response.data
