@@ -9,7 +9,7 @@ export interface VehicleAttributes {
     make: string
     model: string
     image: string | null
-    total_odometer: number
+    total_odometer: number | null
     chasis_number: string
     registration_number: string
     display_number: string
@@ -36,8 +36,14 @@ export interface VehicleAttributes {
     organization_id: number
     in_transit: Record<string, unknown> | null
     updated_at: string
-    /** Denormalized online state sometimes included in list responses */
+    /** Online state — now a first-class field on all list responses */
     is_online?: boolean
+    /** Device connectivity status (e.g. "active", "inactive") */
+    device_status?: string | null
+    device_connected?: boolean
+    is_assigned_to_driver?: boolean
+    /** Timestamp of last telemetry packet — moved from device relationship to attributes */
+    last_packet_received_at?: string | null
     deviceStatus?: string
 }
 
@@ -124,13 +130,26 @@ export interface VehicleDevice {
     imei?: string
     serial_number?: string
     status?: string
-    is_online?: boolean
     has_fuel?: boolean
     phone?: string
     country?: string
-    last_packet_received_at?: string
+    /** @deprecated Moved to VehicleAttributes.is_online; may still appear on detail endpoint responses */
+    is_online?: boolean
     /** Fallback: some responses still use JSON:API data wrapper */
     data?: { id: string; type: 'devices'; imei?: string; serial_number?: string }
+}
+
+/**
+ * Flat location shape returned by the updated vehicle listing endpoint.
+ * Only basic position + timestamp — rich telemetry comes from WebSocket packets.
+ */
+export interface VehicleRestLocation {
+    latitude?: number | null
+    longitude?: number | null
+    speed?: number | null
+    protocol_type?: string | null
+    last_packet_received_at?: string | null
+    created_at?: string | null
 }
 
 export interface Vehicle {
@@ -139,16 +158,13 @@ export interface Vehicle {
     relationships: {
         driver?: { data: { id: string; type: 'users'; name?: string } }
         cluster?: { data: { id: string; type: 'clusters'; name?: string } }
-        device?: VehicleDevice
-        /** Current driver(s) embedded in list responses */
-        current_driver?: Array<{ id: string; attributes: Record<string, unknown> }>
-        /** Current location wrapped in JSON:API attributes envelope */
-        current_location?: {
-            attributes: VehicleCurrentLocation & {
-                state?: string
-                coordinates?: { latitude: number; longitude: number }
-            }
-        }
+        device?: VehicleDevice | null
+        /** Assigned driver — object when assigned, empty array when unassigned */
+        current_driver?:
+            | { id: number | string; name: string; avatar?: string | null; assigned_date?: string }
+            | Array<{ id: string; attributes?: Record<string, unknown> }>
+            | null
+        current_location?: VehicleRestLocation | null
     }
 }
 

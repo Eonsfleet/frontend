@@ -93,9 +93,11 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const [isAssignTrackerOpen, setIsAssignTrackerOpen] = React.useState(false);
   const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false);
 
-  // Location is now read directly from the vehicle relationship — no query needed
+  // Location is read from the vehicle relationship.
+  // Detail endpoint may still return the old {attributes: {...}} envelope;
+  // list endpoint returns the new flat shape. Support both.
   const currentLocation = vehicle.relationships?.current_location ?? null;
-  const loc = currentLocation?.attributes ?? null;
+  const loc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
 
   const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
     queryKey: ["vehicle-current-driver", vehicle.id],
@@ -140,10 +142,10 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   // GPS device from relationships
   const device = vehicle.relationships?.device ?? null;
 
-  // Location tab coordinates
-  const lat = currentLocation?.attributes?.coordinates?.latitude ?? 0;
-  const lng = currentLocation?.attributes?.coordinates?.longitude ?? 0;
-  const locationState = currentLocation?.attributes?.state ?? "offline";
+  // Location tab coordinates — support both old {attributes:{coordinates:{}}} and new flat format
+  const lat = loc?.coordinates?.latitude ?? loc?.latitude ?? 0;
+  const lng = loc?.coordinates?.longitude ?? loc?.longitude ?? 0;
+  const locationState = loc?.state ?? "offline";
 
   return (
     <div className="space-y-6">

@@ -232,29 +232,23 @@ export default function DashboardPage() {
             .map((v: any) => {
                 const loc = v.relationships?.current_location
                 if (!loc) return null
-                const attrs = loc.attributes
-                const coords = attrs?.coordinates
-                const lat = parseFloat(coords?.latitude ?? 0)
-                const lng = parseFloat(coords?.longitude ?? 0)
+                // New API: lat/lng are flat on current_location (no .attributes wrapper)
+                const lat = parseFloat(String(loc.latitude ?? 0))
+                const lng = parseFloat(String(loc.longitude ?? 0))
                 if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null
 
-                const deviceStatus = (v.attributes?.deviceStatus || v.relationships?.device?.status || '').toLowerCase()
-                const isOnline = deviceStatus === 'online'
-                const state = attrs?.state
-                const ignition = attrs?.ignition
+                const isOnline = v.attributes?.is_online ?? false
                 const vehicleStatus = (v.attributes?.status || '').toLowerCase()
 
                 let status: string
                 if (!isOnline) {
                     status = 'offline'
-                } else if (state === 'moving' || (attrs?.speed ?? 0) > 0 || vehicleStatus === 'in_transit') {
+                } else if ((loc.speed ?? 0) > 0 || vehicleStatus === 'in_transit') {
                     status = 'in_transit'
                 } else if (vehicleStatus === 'under_maintenance') {
                     status = 'parked'
-                } else if (ignition === 'on' || vehicleStatus === 'active') {
-                    status = 'idle'
                 } else {
-                    status = 'parked'
+                    status = 'idle'
                 }
 
                 return {
@@ -263,9 +257,9 @@ export default function DashboardPage() {
                     lat,
                     lng,
                     status,
-                    speed: attrs?.speed ?? 0,
-                    heading: attrs?.angle ? parseFloat(attrs.angle) : null,
-                    address: attrs?.address ?? null,
+                    speed: loc.speed ?? 0,
+                    heading: null,
+                    address: null,
                 }
             })
             .filter(Boolean)
