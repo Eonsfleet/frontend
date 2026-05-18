@@ -144,16 +144,13 @@ export function VehicleTable({
             id: 'odometer',
             header: 'Odometer',
             cell: ({ row }) => {
-                const loc = row.original.relationships?.current_location?.attributes
-                const value = loc?.odometer ?? loc?.total_odometer ?? row.original.attributes.total_odometer
+                // New API: odometer is on attributes.total_odometer (not in location)
+                const value = row.original.attributes.total_odometer
                 return (
                     <div className="flex flex-col">
                         <span className="text-sm text-slate-700 font-medium">
                             {value != null ? `${Number(value).toLocaleString()} km` : '—'}
                         </span>
-                        {loc?.odometer_source && (
-                            <span className="text-[10px] text-slate-400 uppercase">{loc.odometer_source}</span>
-                        )}
                     </div>
                 )
             },
