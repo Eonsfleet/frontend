@@ -18,7 +18,11 @@ export interface UpdatePasswordPayload {
 export interface FileUploadResponse {
     message: string
     data: {
-        file: string[]
+        file: {
+            path: string
+            url: string
+            mime: string
+        }
     }
 }
 

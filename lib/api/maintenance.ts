@@ -407,8 +407,13 @@ export const createMaintenanceJob = async (data: {
 }
 
 export const getMaintenanceJobById = async (id: string | number): Promise<MaintenanceJobDetailResponse> => {
-    const response = await apiClient.get<MaintenanceJobDetailResponse>(`/maintenance/jobs/${id}`)
-    return response.data
+    const response = await apiClient.get<any>(`/maintenance/jobs/${id}`)
+    const raw = response.data
+    // API may return { data: { job: MaintenanceJob } } — normalize to { data: MaintenanceJob }
+    return {
+        message: raw.message,
+        data: raw.data?.job ?? raw.data,
+    }
 }
 
 // B1 fix: payload key is `to_status`, not `status`

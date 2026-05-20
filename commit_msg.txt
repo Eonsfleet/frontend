@@ -1,0 +1,48 @@
+fix: api response normalization, UI fixes and feature completions
+
+Auth & Session
+- Add logoutUser API call (POST /auth/logout)
+- Move logout to nav as last item with loader/success toast
+- Clear Zustand store, React Query cache and localStorage on logout
+
+Profile
+- Wire profile update and password change to backend via useUpdateUser/useUpdatePassword hooks
+- Fix avatar upload: POST /file/upload first, extract data.file.url, then PATCH user
+- Fix FileUploadResponse type to match actual API shape { file: { url, path, mime } }
+
+Drivers
+- Fix DriverFilters: rename VehicleFilters to DriverFilters, correct status options
+  (active/inactive/pending_approval), instant filter on select, popover with reset icon
+- Fix DriverDialog edit mode: normalize date_of_birth from "YYYY/MM/DD" to "YYYY-MM-DD"
+  for date input compatibility
+
+Geofences
+- Normalize getGeofenceById, createGeofence, updateGeofence responses (data.geofence wrapper)
+- Fix GeofenceBuilder vehicle attachment: createGeofence now returns correct id for bulkAssignVehicles
+- Fix EditGeofencePage: guard attributes access, seed is_active from status field,
+  seed assigned vehicles from relationships fallback
+
+Maintenance Jobs
+- Normalize getMaintenanceJobById response (data.job wrapper)
+- Fix job board status bucketing: add draft to submitted, needs_inspection/pending_approval
+  to inspection, closed/completed/cancelled to closed column
+- Fix JobCard: use attrs.title and attrs.created_at instead of service_type/scheduled_at
+- Add status badge to JobCard with colour-coded STATUS_STYLES map
+- Fix drag-and-drop transitions: map column toStatus correctly
+  (submitted to needs_inspection, inspection to pending_approval, approved to assigned,
+  in_progress to pending_verification)
+- Add loading/success/error toast on job status transition
+
+Tracking
+- Wire + / - zoom buttons in TrackingControlDeck to window.leafletMap.zoomIn/zoomOut
+
+Incidents
+- Replace vehicle Select with searchable VehicleCombobox (filter by plate/make/model)
+- Add LocationAutocomplete to incident form; auto-fill street, city, state, coords on select
+
+WorkflowTimeline
+- Guard against invalid/empty timestamps to prevent RangeError from date-fns format
+
+Geofence Edit Page
+- Fix "Geofence not found" by normalizing API response wrapper
+- Guard attributes access throughout (useEffect, mutation, render guard)
