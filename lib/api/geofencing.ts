@@ -32,22 +32,37 @@ export const getGeofences = async (params?: GeofenceListParams): Promise<Geofenc
 }
 
 export const getGeofenceById = async (id: string): Promise<GeofenceDetailResponse> => {
-    const response = await apiClient.get<GeofenceDetailResponse>(`/geofences/${id}`)
-    return response.data
+    const response = await apiClient.get<any>(`/geofences/${id}`)
+    // API returns { data: { geofence: Geofence } } — normalize to { data: Geofence }
+    const raw = response.data
+    return {
+        message: raw.message,
+        data: raw.data?.geofence ?? raw.data,
+    }
 }
 
 export const createGeofence = async (data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
     const { alert_type, ...rest } = data
     const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
-    const response = await apiClient.post<GeofenceDetailResponse>('/geofences', payload)
-    return response.data
+    const response = await apiClient.post<any>('/geofences', payload)
+    // API returns { data: { geofence: Geofence } } — normalize to { data: Geofence }
+    const raw = response.data
+    return {
+        message: raw.message,
+        data: raw.data?.geofence ?? raw.data,
+    }
 }
 
 export const updateGeofence = async (id: string, data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
     const { alert_type, ...rest } = data
     const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
-    const response = await apiClient.put<GeofenceDetailResponse>(`/geofences/${id}`, payload)
-    return response.data
+    const response = await apiClient.put<any>(`/geofences/${id}`, payload)
+    // API returns { data: { geofence: Geofence } } — normalize to { data: Geofence }
+    const raw = response.data
+    return {
+        message: raw.message,
+        data: raw.data?.geofence ?? raw.data,
+    }
 }
 
 export const deleteGeofence = async (id: string): Promise<void> => {

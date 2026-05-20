@@ -133,9 +133,8 @@ export function AssignVehicleDialog({
                       {vehiclesResponse?.data
                         ?.filter(
                           (v) =>
-                            !v?.relationships?.current_driver ||
-                            (Array.isArray(v.relationships.current_driver) &&
-                              v.relationships.current_driver.length === 0),
+                            (v?.attributes as any)?.is_assigned_to_driver !==
+                            true,
                         )
                         ?.map((vehicle) => (
                           <CommandItem
