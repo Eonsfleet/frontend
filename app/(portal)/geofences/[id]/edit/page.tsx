@@ -68,26 +68,33 @@ export default function EditGeofencePage() {
     // Seed form when data loads
     useEffect(() => {
         const g = geofenceData?.data
-        if (!g) return
+        if (!g?.attributes) return
         setFormData({
-            name: g.attributes.name,
+            name: g.attributes.name ?? '',
             description: g.attributes.description ?? '',
-            trigger_type: g.attributes.trigger_type,
-            location_name: g.attributes.location || '',
+            trigger_type: g.attributes.trigger_type ?? 'both',
+            location_name: g.attributes.location ?? '',
             speed: g.attributes.speed ?? 0,
-            is_active: g.attributes.is_active,
+            // API may return `status` (boolean) instead of `is_active`
+            is_active: (g.attributes as any).status ?? g.attributes.is_active ?? true,
             vehicle_ids: [],
         })
     }, [geofenceData])
 
-    // Seed selected vehicles from existing assignments
+    // Seed selected vehicles — prefer dedicated endpoint, fall back to relationships on the geofence
     useEffect(() => {
-        if (!assignedVehiclesData?.data) return
-        setFormData(prev => ({
-            ...prev,
-            vehicle_ids: assignedVehiclesData.data.map((v: any) => v.id.toString()),
-        }))
-    }, [assignedVehiclesData])
+        if (assignedVehiclesData?.data) {
+            setFormData(prev => ({
+                ...prev,
+                vehicle_ids: assignedVehiclesData.data.map((v: any) => v.id.toString()),
+            }))
+        } else if (geofenceData?.data?.relationships?.vehicles?.data) {
+            setFormData(prev => ({
+                ...prev,
+                vehicle_ids: geofenceData.data.relationships.vehicles!.data.map((v: any) => v.id.toString()),
+            }))
+        }
+    }, [assignedVehiclesData, geofenceData])
 
     const { mutate: handleUpdate, isPending } = useMutation({
         mutationFn: async () => {
@@ -108,7 +115,7 @@ export default function EditGeofencePage() {
                 if (mapData.type === 'circle' && mapData.radius != null) {
                     payload.radius = mapData.radius
                 }
-            } else if (geofenceData?.data) {
+            } else if (geofenceData?.data?.attributes) {
                 const attrs = geofenceData.data.attributes
                 payload.type = attrs.type
                 payload.coordinates = attrs.coordinates
@@ -158,7 +165,7 @@ export default function EditGeofencePage() {
         )
     }
 
-    if (!geofenceData?.data) {
+    if (!geofenceData?.data?.attributes) {
         return (
             <div className="flex h-full items-center justify-center bg-slate-50">
                 <p className="text-slate-500">Geofence not found.</p>
@@ -294,7 +301,7 @@ export default function EditGeofencePage() {
                                             </span>
                                         ) : (
                                             <span className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-md font-medium uppercase tracking-wider">
-                                                Current: {geofenceData.data.attributes.type}
+                                                Current: {geofenceData.data.attributes?.type ?? '—'}
                                             </span>
                                         )}
                                     </CardTitle>

@@ -19,6 +19,10 @@ export const loginUser = async (data: Record<string, string>): Promise<LoginResp
     return response.data
 }
 
+export const logoutUser = async (): Promise<void> => {
+    await apiClient.post('/auth/logout')
+}
+
 export const requestPasswordReset = async (data: { email: string }): Promise<{ message: string }> => {
     const response = await apiClient.post('/auth/password/new-otp', data)
     return response.data

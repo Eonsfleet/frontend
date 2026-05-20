@@ -1,206 +1,54 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { subDays, startOfDay, endOfDay } from "date-fns";
+import { subDays } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Loader2,
-  Navigation,
-  Truck,
-  RefreshCw,
-  Layers,
-  Search,
-  Activity,
-  History,
-  Eye,
-  EyeOff,
-  X,
-  MapPin,
-  Crosshair,
-  ShieldCheck,
-  Map as MapIcon,
-  SlidersHorizontal,
-  Check,
-} from "lucide-react";
 import { Vehicle, Trip } from "@/types";
-import { cn, normalizeTelemetry } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useEcho } from "@/hooks/useEcho";
-import { getEcho } from "@/lib/echo";
 import * as api from "@/lib/api/vehicles";
 import * as tripApi from "@/lib/api/trips";
-import * as trackingApi from "@/lib/api/tracking";
 import { getClusters } from "@/lib/api/settings";
 import { getGeofences } from "@/lib/api/geofencing";
 import TrackingMap from "./TrackingMap";
 import { TelemetryDrawer } from "@/components/live/TelemetryDrawer";
 import { TripPlaybackTimeline } from "@/components/live/TripPlaybackTimeline";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-const getMarkerSVG = (bodyType: string) => {
-  switch (bodyType?.toLowerCase()) {
-    case "truck":
-      return '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18h3a5 5 0 0 0 5-5v-1h-8v6Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>';
-    case "van":
-      return '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M18 18h2"/><path d="M4 18h2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M7 6v12"/><path d="M17 6v12"/>';
-    default:
-      return '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9C2.1 11.1 2 11.3 2 11.5V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>';
-  }
-};
-
-// Derive canonical movement status from device state + vehicle-level fallback
-function deriveVehicleStatus(loc: any, vehicle: any): string {
-  const state = (loc?.state ?? "").toLowerCase();
-  if (state === "moving") return "in_transit";
-  if (state === "idle") return "idle";
-  if (state === "parked") return "parked";
-  // no device state — fall back to vehicle-level status
-  const vs = ((vehicle as any)?.attributes?.status ?? "").toLowerCase();
-  if (vs === "in_transit") return "in_transit";
-  if (vs === "idle") return "idle";
-  if (vs === "online") return "online";
-  if (vs === "offline") return "offline";
-  return "parked"; // maintenance/active/etc with no device signal
-}
-
-function isStaleOffline(
-  isOnline: boolean | undefined,
-  timestamp: string | undefined | null,
-): boolean {
-  if (isOnline || !timestamp) return false;
-  try {
-    const d = new Date(
-      timestamp.endsWith("Z") || timestamp.includes("+")
-        ? timestamp
-        : timestamp + "Z",
-    );
-    return !isNaN(d.getTime()) && d < startOfDay(new Date());
-  } catch {
-    return false;
-  }
-}
-
-// Format a timestamp as "MMM d, HH:mm" in the user's local timezone.
-// If today, just "HH:mm:ss". Falls back to raw string if parsing fails.
-function fmtTimestamp(ts: string | null | undefined): string {
-  if (!ts) return "N/A";
-  try {
-    const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
-    if (isNaN(d.getTime())) return ts;
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) {
-      return d.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    }
-    return (
-      d.toLocaleDateString([], { month: "short", day: "numeric" }) +
-      " " +
-      d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    );
-  } catch {
-    return ts;
-  }
-}
-
-const getVehicleIcon = (bodyType: string, status: string) => {
-  const isMoving = status === "moving";
-  switch (bodyType?.toLowerCase()) {
-    case "truck":
-      return (
-        <Truck
-          className={cn(
-            "h-4 w-4",
-            isMoving ? "text-emerald-500" : "text-slate-400",
-          )}
-        />
-      );
-    case "van":
-      return (
-        <Layers
-          className={cn(
-            "h-4 w-4",
-            isMoving ? "text-emerald-500" : "text-slate-400",
-          )}
-        />
-      );
-    default:
-      return (
-        <Navigation
-          className={cn(
-            "h-4 w-4",
-            isMoving ? "text-emerald-500" : "text-slate-400",
-          )}
-        />
-      );
-  }
-};
+import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, deriveVehicleStatus } from "./utils";
+import { useVehicleLocations } from "./hooks/useVehicleLocations";
+import { usePlaybackData } from "./hooks/usePlaybackData";
+import { TrackingSidebar } from "./components/TrackingSidebar";
+import { TrackingControlDeck } from "./components/TrackingControlDeck";
+import { SelectedVehicleBar } from "./components/SelectedVehicleBar";
+import { ClusterFilterModal } from "./components/ClusterFilterModal";
+import { StatusFilter } from "./components/StatusFilters";
 
 export default function TrackingPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "moving" | "idle" | "parked" | "online" | "offline"
-  >("all");
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
-    null,
-  );
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [isTelemetryOpen, setIsTelemetryOpen] = useState(false);
   const [isReplayOpen, setIsReplayOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "focused">("all");
-  const [locations, setLocations] = useState<Record<string, any>>({});
-  const [mapStyle, setMapStyle] = useState<"standard" | "satellite" | "hybrid">(
-    "standard",
-  );
+  const [mapStyle, setMapStyle] = useState<"standard" | "satellite" | "hybrid">("standard");
   const [clusterModalOpen, setClusterModalOpen] = useState(false);
   const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
-
-  const resetZoom = () => setZoomResetKey((prev) => prev + 1);
-
-  // Playback state
-  const [playbackData, setPlaybackData] = useState<any[]>([]);
-  const [playbackIndex, setPlaybackIndex] = useState(0);
-  const [isPlayingPlayback, setIsPlayingPlayback] = useState(false);
-  const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackType, setPlaybackType] = useState<"trip" | "history">("trip");
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 1), // exactly 24h ago — stays within API max window
+    from: subDays(new Date(), 1),
     to: new Date(),
   });
 
-  const MAP_LAYERS = {
-    standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    satellite:
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    hybrid: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", // Needs special handling for Google
-  };
+  const resetZoom = () => setZoomResetKey((prev) => prev + 1);
 
-  const { token } = useAuthStore();
+  const { token, organization } = useAuthStore();
   const { setSidebarCollapsed } = useUIStore();
-
-  // Auto-collapse nav menu logic moved to main effect for cleanup
+  const { subscribePrivate } = useEcho();
 
   const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
     queryKey: ["vehicles-tracking"],
@@ -230,26 +78,24 @@ export default function TrackingPage() {
 
   const vehicles = useMemo(() => vehicleData ?? [], [vehicleData]);
   const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData]);
-  const clusters = useMemo(
-    () => clustersData?.data?.clusters || [],
-    [clustersData],
-  );
-  const geofences = useMemo(
-    () => geofencesData?.data?.geofences || [],
-    [geofencesData],
-  );
+  const clusters = useMemo(() => clustersData?.data?.clusters || [], [clustersData]);
+  const geofences = useMemo(() => geofencesData?.data?.geofences || [], [geofencesData]);
+
+  const { locations } = useVehicleLocations({
+    vehicles,
+    token,
+    organization,
+    subscribePrivate,
+  });
 
   const selectedVehicle = useMemo(
     () =>
-      vehicles.find(
-        (v: Vehicle) => String(v.id) === String(selectedVehicleId),
-      ) || null,
+      vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)) || null,
     [vehicles, selectedVehicleId],
   );
 
   const filteredVehicles = useMemo(() => {
     let result = vehicles;
-    // Cluster filter
     if (selectedClusterIds.length > 0) {
       result = result.filter((v: Vehicle) => {
         const clusterId = String(v.relationships?.cluster?.data?.id || "");
@@ -284,29 +130,18 @@ export default function TrackingPage() {
       if (sv) result = [...result, sv];
     }
     return result;
-  }, [
-    vehicles,
-    searchQuery,
-    statusFilter,
-    locations,
-    selectedVehicleId,
-    selectedClusterIds,
-  ]);
+  }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId, selectedClusterIds]);
 
   const ongoingTripsData = useMemo(() => {
     return ongoingTrips.map((trip: Trip) => {
-      // API Structure confirmed via raw dump: trip.relationships.vehicle.id (direct)
       const relVehicle = trip.relationships?.vehicle;
       const bestVehicleId =
         relVehicle?.id ||
         trip.attributes?.vehicleId ||
         trip.attributes?.vehicle_id;
-
-      // Link to fleet vehicle if possible for live telemetry synchronization
       const fleetVehicle = bestVehicleId
         ? vehicles.find((v: Vehicle) => String(v.id) === String(bestVehicleId))
         : null;
-
       return {
         ...trip,
         vehiclePlate:
@@ -314,267 +149,27 @@ export default function TrackingPage() {
           relVehicle?.registration_number ||
           "N/A",
         vehicleId: bestVehicleId ? String(bestVehicleId) : null,
-        startTime:
-          trip.attributes.planned_start_time || trip.attributes?.created_at,
+        startTime: trip.attributes.planned_start_time || trip.attributes?.created_at,
         endTime: trip.attributes.planned_end_time || new Date().toISOString(),
       };
     });
   }, [ongoingTrips, vehicles]);
 
-  // Unified Playback Fetch Logic
-  useEffect(() => {
-    const fetchPlayback = async () => {
-      if (!isReplayOpen || !selectedVehicleId) {
-        setPlaybackData([]);
-        setPlaybackIndex(0);
-        setIsPlayingPlayback(false);
-        return;
-      }
+  const {
+    playbackData,
+    playbackIndex,
+    setPlaybackIndex,
+    isPlayingPlayback,
+    setIsPlayingPlayback,
+    isLoadingPlayback,
+  } = usePlaybackData({
+    isReplayOpen,
+    selectedVehicleId,
+    playbackType,
+    ongoingTripsData,
+    dateRange,
+  });
 
-      setIsLoadingPlayback(true);
-      try {
-        const selectedTrip = ongoingTripsData.find(
-          (t) => t.vehicleId === selectedVehicleId,
-        );
-
-        if (playbackType === "trip" && selectedTrip) {
-          const res = await trackingApi.getTripPlayback(
-            selectedVehicleId,
-            selectedTrip.id,
-          );
-          setPlaybackData(res.data?.gps_points || res.gps_points || []);
-        } else {
-          // GPS history playback — API enforces 24h max window
-          const end = dateRange?.to ?? new Date();
-          const maxStart = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-          const from = dateRange?.from ?? maxStart;
-          // Clamp: if range exceeds 24h, pull start forward to stay within limit
-          const start = from < maxStart ? maxStart : from;
-          const res = await trackingApi.getVehiclePlayback(
-            selectedVehicleId,
-            start.toISOString(),
-            end.toISOString(),
-          );
-          const raw: any[] = res.data || res || [];
-          setPlaybackData(
-            raw.map((p: any) => ({
-              lat: p.latitude ?? p.lat,
-              lng: p.longitude ?? p.lng,
-              speed: p.speed ?? 0,
-              heading: p.heading ?? 0,
-              timestamp: p.timestamp ?? p.gps_datetime,
-            })),
-          );
-        }
-        setPlaybackIndex(0);
-      } catch (err) {
-        console.error("Failed to fetch playback telemetry:", err);
-      } finally {
-        setIsLoadingPlayback(false);
-      }
-    };
-    fetchPlayback();
-  }, [isReplayOpen, selectedVehicleId, playbackType, ongoingTripsData]);
-
-  // Seed locations from /vehicles — relationships.current_location.attributes has full telemetry
-  useEffect(() => {
-    if (!vehicles.length) return;
-    setLocations((prev) => {
-      const next = { ...prev };
-      vehicles.forEach((v: Vehicle) => {
-        const rel = v.relationships;
-        const locAttrs = rel?.current_location?.attributes ?? null;
-        const device = rel?.device ?? null;
-        const isOnline = device?.is_online ?? v.attributes?.is_online ?? false;
-
-        const lastPacketTs = device?.last_packet_received_at;
-        const lastUpdateTs = locAttrs?.updated_at ?? locAttrs?.gps_datetime;
-        const staleOffline = isStaleOffline(
-          isOnline,
-          lastPacketTs || lastUpdateTs,
-        );
-
-        if (!locAttrs) {
-          // Still refresh device online status and last packet even without location
-          if (next[v.id]) {
-            next[v.id] = {
-              ...next[v.id],
-              is_online: isOnline,
-              status: staleOffline ? "offline" : next[v.id]?.status,
-              lastPacket: lastPacketTs ?? next[v.id]?.lastPacket,
-            };
-          }
-          return;
-        }
-
-        const lat = locAttrs.coordinates?.latitude;
-        const lng = locAttrs.coordinates?.longitude;
-        const derivedStatus = staleOffline
-          ? "offline"
-          : deriveVehicleStatus(locAttrs, v);
-
-        const restData = {
-          lat: lat ?? 0,
-          lng: lng ?? 0,
-          speed: locAttrs.speed ?? 0,
-          heading: locAttrs.heading ?? locAttrs.angle ?? 0,
-          status: derivedStatus,
-          state: locAttrs.state,
-          is_online: isOnline,
-          fuel: locAttrs.fuel_level_percent,
-          fuel_liters: locAttrs.fuel_level_liters,
-          odometer: locAttrs.odometer,
-          lastUpdate: lastUpdateTs,
-          lastPacket: lastPacketTs,
-          satellites: locAttrs.satellites,
-          address: locAttrs.address,
-          ignition:
-            locAttrs.ignition === true ||
-            locAttrs.ignition === "on" ||
-            locAttrs.ignition === "1",
-          raw: locAttrs,
-        };
-
-        if (!lat || !lng) {
-          // No coordinates yet, but update metadata
-          next[v.id] = {
-            ...restData,
-            ...next[v.id],
-            is_online: isOnline,
-            status: derivedStatus,
-            raw: locAttrs,
-            lastPacket: lastPacketTs,
-          };
-          return;
-        }
-
-        // WS live data takes priority for positional fields; REST is authoritative for is_online & raw
-        next[v.id] = {
-          ...restData,
-          ...next[v.id],
-          status: derivedStatus,
-          is_online: isOnline,
-          raw: locAttrs,
-          lastPacket: lastPacketTs,
-        };
-      });
-      return next;
-    });
-  }, [vehicles]);
-
-
-
-  // WebSocket Telemetry Subscription
-  const { organization } = useAuthStore();
-  const { subscribePrivate } = useEcho();
-
-  useEffect(() => {
-    const orgIdentifier =
-      organization?.attributes?.identifier || organization?.id;
-    if (!token || !orgIdentifier) return;
-
-    // 1. Subscribe to Org-wide location updates
-    const locationUnsubscribe = subscribePrivate(
-      `location.organization.${orgIdentifier}`,
-      ".current.recent",
-      (packet: any) => {
-        if (packet.vehicle_id) {
-          const normalized = normalizeTelemetry(packet);
-          const status =
-            deriveVehicleStatus(
-              { state: packet.state, speed: packet.speed },
-              null,
-            ) ?? normalized.status;
-          setLocations((prev) => ({
-            ...prev,
-            [packet.vehicle_id]: {
-              ...prev[packet.vehicle_id],
-              ...normalized,
-              status,
-              state: packet.state ?? prev[packet.vehicle_id]?.state,
-              is_online: true, // receiving live WS data → device must be online
-              lastUpdate:
-                packet.updated_at ||
-                packet.gps_datetime ||
-                packet.timestamp_utc,
-              lastPacket:
-                packet.last_packet_received_at ??
-                prev[packet.vehicle_id]?.lastPacket,
-              fuel:
-                packet.fuel_level_percent ??
-                packet.fuel ??
-                prev[packet.vehicle_id]?.fuel,
-              fuel_liters:
-                packet.fuel_level_liters ??
-                packet.fuel_liters ??
-                prev[packet.vehicle_id]?.fuel_liters,
-              ignition:
-                normalized.ignition === "on" ||
-                normalized.ignition === "1" ||
-                normalized.ignition === true,
-              // preserve raw REST snapshot; WS data itself is the live update
-              raw: prev[packet.vehicle_id]?.raw,
-            },
-          }));
-        }
-      },
-    );
-
-    // 2. Subscribe to Vehicle Status Changes
-    const statusUnsubscribe = subscribePrivate(
-      `vehicle.status.${orgIdentifier}`,
-      ".vehicle.status.changed",
-      (data: any) => {
-        if (data.vehicle_id) {
-          setLocations((prev) => ({
-            ...prev,
-            [data.vehicle_id]: {
-              ...prev[data.vehicle_id],
-              status: data.new_status,
-            },
-          }));
-        }
-      },
-    );
-
-    // 3. Subscribe to Fuel Alerts
-    const fuelUnsubscribe = subscribePrivate(
-      `fuel.alerts.${orgIdentifier}`,
-      ".fuel.event",
-      (alert: any) => {
-        // Optional: Show toast or update local state for fuel warnings
-      },
-    );
-
-    return () => {
-      if (locationUnsubscribe) locationUnsubscribe();
-      if (statusUnsubscribe) statusUnsubscribe();
-      if (fuelUnsubscribe) fuelUnsubscribe();
-    };
-  }, [
-    token,
-    organization?.attributes?.identifier,
-    subscribePrivate,
-    queryClient,
-  ]);
-
-  // Reconnect: refetch vehicle locations when WS reconnects
-  useEffect(() => {
-    if (!token || !organization?.attributes?.identifier) return;
-    const echo = getEcho();
-    if (!echo?.connector?.pusher) return;
-
-    const pusher = echo.connector.pusher;
-    const handleReconnect = () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] });
-    };
-    pusher.connection.bind("connected", handleReconnect);
-    return () => {
-      pusher.connection.unbind("connected", handleReconnect);
-    };
-  }, [token, organization?.attributes?.identifier, queryClient]);
-
-  // Auto-collapse sidebar on mount
   useEffect(() => {
     setSidebarCollapsed(true);
     return () => setSidebarCollapsed(false);
@@ -587,7 +182,6 @@ export default function TrackingPage() {
       description="Monitor your fleet in real-time with precise telemetry and location data."
     >
       <div className="h-screen w-full flex overflow-hidden bg-slate-100 relative">
-        {/* Immersive Background Map */}
         <div className="absolute inset-0 z-0 h-full w-full">
           <TrackingMap
             filteredVehicles={filteredVehicles}
@@ -605,716 +199,59 @@ export default function TrackingPage() {
           />
         </div>
 
-        {/* Dynamic Sidebar Overlay */}
-        <div className="absolute left-6 top-6 bottom-6 z-20 flex flex-col pointer-events-none">
-          <div
-            className={cn(
-              "w-72 h-full border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out",
-              viewMode === "focused"
-                ? "bg-white"
-                : "bg-white/95 backdrop-blur-xl",
-            )}
-          >
-            {/* Sidebar Header */}
-            <div className="p-6 border-b border-slate-100/50">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight italic flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-blue-600" />
-                  {viewMode === "all" ? "Fleet" : "Active"}{" "}
-                  <span className="text-blue-600">
-                    {viewMode === "all" ? "Listing" : "Trips"}
-                  </span>
-                </h2>
-                <Badge className="bg-blue-50 text-blue-600 border-none text-[8px] font-black uppercase tracking-widest">
-                  {viewMode === "all"
-                    ? `${vehicles.length} Assets`
-                    : `${ongoingTrips.length} Active`}
-                </Badge>
-              </div>
+        <TrackingSidebar
+          viewMode={viewMode}
+          vehicles={vehicles}
+          filteredVehicles={filteredVehicles}
+          locations={locations}
+          selectedVehicleId={selectedVehicleId}
+          setSelectedVehicleId={setSelectedVehicleId}
+          setIsTelemetryOpen={setIsTelemetryOpen}
+          isLoadingVehicles={isLoadingVehicles}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          ongoingTripsCount={ongoingTrips.length}
+          ongoingTripsData={ongoingTripsData}
+          setIsReplayOpen={setIsReplayOpen}
+          isLoadingTrips={isLoadingTrips}
+        />
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder={
-                    viewMode === "all" ? "SEARCH ASSETS..." : "SEARCH TRIPS..."
-                  }
-                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
+        <TrackingControlDeck
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          mapStyle={mapStyle}
+          setMapStyle={setMapStyle}
+          showGeofences={showGeofences}
+          setShowGeofences={setShowGeofences}
+          selectedClusterIds={selectedClusterIds}
+          onOpenClusterModal={() => setClusterModalOpen(true)}
+          onRefresh={() =>
+            queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })
+          }
+        />
 
-            {/* Sidebar Content */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
-              {viewMode === "all" ? (
-                <>
-                  {/* Status Quick Filters */}
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                    {(
-                      [
-                        { key: "all", label: "All" },
-                        { key: "online", label: "Online" },
-                        { key: "offline", label: "Offline" },
-                        { key: "moving", label: "Moving" },
-                        { key: "idle", label: "Idle" },
-                        { key: "parked", label: "Parked" },
-                      ] as const
-                    ).map(({ key: s, label }) => {
-                      const count =
-                        s === "all"
-                          ? vehicles.length
-                          : vehicles.filter((v: Vehicle) => {
-                              const loc = locations[v.id];
-                              if (s === "moving")
-                                return loc?.status === "in_transit";
-                              if (s === "idle") return loc?.status === "idle";
-                              if (s === "parked")
-                                return loc?.status === "parked";
-                              if (s === "online")
-                                return loc?.is_online === true;
-                              if (s === "offline")
-                                return loc?.is_online === false || !loc;
-                              return false;
-                            }).length;
-
-                      const activeColor =
-                        s === "moving"
-                          ? "bg-emerald-600 border-emerald-600 text-white"
-                          : s === "idle"
-                            ? "bg-amber-500 border-amber-500 text-white"
-                            : s === "parked"
-                              ? "bg-slate-500 border-slate-500 text-white"
-                              : s === "online"
-                                ? "bg-blue-600 border-blue-600 text-white"
-                                : s === "offline"
-                                  ? "bg-rose-600 border-rose-600 text-white"
-                                  : "bg-slate-900 border-slate-900 text-white";
-
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => setStatusFilter(s)}
-                          className={cn(
-                            "px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
-                            statusFilter === s
-                              ? activeColor
-                              : "bg-white border-slate-100 text-slate-400 hover:border-slate-200",
-                          )}
-                        >
-                          {label} ({count})
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-2">
-                    {isLoadingVehicles ? (
-                      <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">
-                          Hydrating Fleet...
-                        </span>
-                      </div>
-                    ) : (
-                      filteredVehicles.map((v: Vehicle) => {
-                        const loc = locations[v.id];
-                        const isSelected =
-                          String(selectedVehicleId) === String(v.id);
-                        const status = loc?.status;
-                        // Prefer last_packet_received_at (device event), fall back to gps_datetime
-                        const rawUpdate = loc?.lastPacket || loc?.lastUpdate;
-                        const lastUpdate = fmtTimestamp(rawUpdate);
-                        // REST seed → 'fuel'/'fuel_liters'; WS spread → original names; ultimate fallback → embedded vehicle data
-                        const embeddedLoc =
-                          v.relationships?.current_location?.attributes;
-                        const fuelPct =
-                          loc?.fuel ??
-                          loc?.fuel_level_percent ??
-                          embeddedLoc?.fuel_level_percent ??
-                          null;
-                        const fuelL =
-                          loc?.fuel_liters ??
-                          loc?.fuel_level_liters ??
-                          embeddedLoc?.fuel_level_liters ??
-                          null;
-                        const statusLabel = !loc?.is_online
-                          ? "Offline"
-                          : status === "in_transit"
-                            ? "Moving"
-                            : status === "idle"
-                              ? "Idling"
-                              : status === "parked"
-                                ? "Parked"
-                                : "Online";
-
-                        return (
-                          <div
-                            key={v.id}
-                            onClick={() => {
-                              setSelectedVehicleId(isSelected ? null : v.id);
-                              setIsTelemetryOpen(false);
-                            }}
-                            className={cn(
-                              "group flex flex-col p-3 rounded-xl border transition-all cursor-pointer gap-2",
-                              isSelected
-                                ? "bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100 scale-[1.01]"
-                                : "bg-white border-slate-50 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50",
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={cn(
-                                    "p-2 rounded-lg transition-colors",
-                                    isSelected
-                                      ? "bg-white/20"
-                                      : "bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500",
-                                  )}
-                                >
-                                  <Truck className="h-3.5 w-3.5" />
-                                </div>
-                                <div>
-                                  <h4 className="text-[10px] font-black uppercase italic tracking-tight leading-none mb-1">
-                                    {v.attributes.registration_number}
-                                  </h4>
-                                  <p
-                                    className={cn(
-                                      "text-[8px] font-bold uppercase",
-                                      isSelected
-                                        ? "text-blue-100"
-                                        : "text-slate-400",
-                                    )}
-                                  >
-                                    {v.attributes.make} {v.attributes.model}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={cn(
-                                    "text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full",
-                                    isSelected
-                                      ? "bg-white/20 text-white"
-                                      : !loc?.is_online
-                                        ? "bg-rose-100 text-rose-600"
-                                        : status === "in_transit"
-                                          ? "bg-emerald-100 text-emerald-700"
-                                          : status === "idle"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : status === "parked"
-                                              ? "bg-slate-100 text-slate-500"
-                                              : "bg-blue-100 text-blue-700",
-                                  )}
-                                >
-                                  {statusLabel}
-                                </span>
-                                <div
-                                  className={cn(
-                                    "h-1.5 w-1.5 rounded-full shadow-[0_0_8px]",
-                                    !loc?.is_online
-                                      ? "bg-rose-500 shadow-rose-500/50"
-                                      : status === "in_transit"
-                                        ? "bg-emerald-500 shadow-emerald-500/50"
-                                        : status === "idle"
-                                          ? "bg-amber-400 shadow-amber-400/50"
-                                          : status === "parked"
-                                            ? "bg-slate-400 shadow-slate-400/50"
-                                            : "bg-blue-500 shadow-blue-500/50",
-                                  )}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                              <span
-                                className={cn(
-                                  "text-[7px] font-black uppercase tracking-widest",
-                                  isSelected
-                                    ? "text-blue-200"
-                                    : "text-slate-400",
-                                )}
-                              >
-                                {lastUpdate}
-                              </span>
-                              <div className="flex items-center gap-3">
-                                {(fuelPct != null || fuelL != null) && (
-                                  <span
-                                    className={cn(
-                                      "text-[7px] font-black uppercase tracking-widest",
-                                      isSelected
-                                        ? "text-blue-200"
-                                        : fuelPct != null && fuelPct < 20
-                                          ? "text-rose-500"
-                                          : "text-slate-400",
-                                    )}
-                                  >
-                                    ⛽{" "}
-                                    {fuelPct != null && fuelL != null
-                                      ? `${fuelPct}% · ${Number(fuelL).toFixed(1)}L`
-                                      : fuelPct != null
-                                        ? `${fuelPct}%`
-                                        : `${Number(fuelL).toFixed(1)}L`}
-                                  </span>
-                                )}
-                                <span
-                                  className={cn(
-                                    "text-[7px] font-black uppercase tracking-widest",
-                                    isSelected
-                                      ? "text-blue-200"
-                                      : "text-slate-400",
-                                  )}
-                                >
-                                  {loc?.speed ?? 0} KPH
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-2">
-                  {isLoadingTrips ? (
-                    <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
-                      <Loader2 className="h-8 w-8 animate-spin" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">
-                        Scanning Missions...
-                      </span>
-                    </div>
-                  ) : ongoingTripsData.length === 0 ? (
-                    <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                      <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        No ongoing missions
-                      </p>
-                    </div>
-                  ) : (
-                    ongoingTripsData.map((trip) => {
-                      const isSelected =
-                        String(selectedVehicleId) === String(trip.vehicleId);
-                      return (
-                        <div
-                          key={trip.id}
-                          onClick={() => {
-                            if (trip.vehicleId) {
-                              setSelectedVehicleId(trip.vehicleId);
-                              setIsReplayOpen(true);
-                            }
-                          }}
-                          className={cn(
-                            "group p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
-                            isSelected
-                              ? "bg-blue-50 border-blue-200 shadow-sm scale-[1.01]"
-                              : "bg-white border-slate-100 hover:border-blue-100 shadow-sm",
-                          )}
-                        >
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h4
-                                className={cn(
-                                  "text-[10px] font-black uppercase tracking-tighter",
-                                  isSelected
-                                    ? "text-blue-600"
-                                    : "text-slate-400",
-                                )}
-                              >
-                                {trip.vehiclePlate}
-                              </h4>
-                              <Badge
-                                className={cn(
-                                  "text-[8px] font-black border-none px-2 mt-1",
-                                  isSelected
-                                    ? "bg-blue-100 text-blue-700"
-                                    : "bg-emerald-500/10 text-emerald-600",
-                                )}
-                              >
-                                ETA: {trip.attributes.eta || "N/A"}
-                              </Badge>
-                            </div>
-                            <div className="text-right">
-                              <p
-                                className={cn(
-                                  "text-[8px] font-black uppercase tracking-widest",
-                                  isSelected
-                                    ? "text-blue-400"
-                                    : "text-slate-400",
-                                )}
-                              >
-                                Mission #
-                              </p>
-                              <p
-                                className={cn(
-                                  "text-[10px] font-black italic",
-                                  isSelected
-                                    ? "text-blue-700"
-                                    : "text-slate-900",
-                                )}
-                              >
-                                {trip.attributes.trip_number}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div
-                            className={cn(
-                              "relative h-1.5 w-full rounded-full overflow-hidden mb-3",
-                              isSelected ? "bg-blue-200/50" : "bg-slate-100",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "absolute inset-y-0 left-0 rounded-full transition-all duration-1000",
-                                isSelected
-                                  ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                                  : "bg-blue-400",
-                              )}
-                              style={{ width: "65%" }}
-                            />
-                          </div>
-                          <div
-                            className={cn(
-                              "flex justify-between items-center text-[7px] font-black uppercase tracking-widest mt-1",
-                              isSelected ? "text-blue-500" : "text-slate-400",
-                            )}
-                          >
-                            <span>
-                              {locations[trip.vehicleId!]?.speed || 0} KPH
-                            </span>
-                            <span>TRACKING ACTIVE</span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side Controls Command Deck */}
-        <div className="absolute right-6 top-6 z-30 flex flex-col gap-4">
-          <TooltipProvider delayDuration={0}>
-            <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-2 overflow-hidden items-center">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setViewMode("all")}
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      viewMode === "all"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                        : "text-slate-400 hover:bg-slate-50 hover:text-blue-600",
-                    )}
-                  >
-                    <MapIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Global Fleet Tracking
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setViewMode("focused")}
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      viewMode === "focused"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                        : "text-slate-400 hover:bg-slate-50 hover:text-blue-600",
-                    )}
-                  >
-                    <Crosshair className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Focus Mission Tracking
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
-            <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-2 overflow-hidden items-center">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="h-12 w-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-emerald-500 transition-all group">
-                    <ShieldCheck className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Toggle Active Geofences
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      if (viewMode === "all") {
-                        router.push("/tracking/playback");
-                      }
-                    }}
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      viewMode === "all"
-                        ? "text-slate-400 hover:bg-slate-50 hover:text-purple-500"
-                        : "text-slate-200 cursor-not-allowed",
-                    )}
-                  >
-                    <History className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Fleet Playback Router
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() =>
-                      setMapStyle(
-                        mapStyle === "standard" ? "satellite" : "standard",
-                      )
-                    }
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      mapStyle === "satellite"
-                        ? "bg-blue-600 text-white shadow-lg"
-                        : "text-slate-400 hover:bg-slate-50 hover:text-blue-600",
-                    )}
-                  >
-                    <MapIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Toggle Satellite View
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() =>
-                      queryClient.invalidateQueries({
-                        queryKey: ["vehicles-tracking"],
-                      })
-                    }
-                    className="h-12 w-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-all group"
-                  >
-                    <RefreshCw className="h-5 w-5 group-hover:rotate-180 transition-transform duration-500" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Re-Sync Fleet Data
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setClusterModalOpen(true)}
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      selectedClusterIds.length > 0
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                        : "text-slate-400 hover:bg-slate-50 hover:text-blue-600",
-                    )}
-                  >
-                    <SlidersHorizontal className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Filter by Cluster
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setShowGeofences(!showGeofences)}
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                      showGeofences
-                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
-                        : "text-slate-400 hover:bg-slate-50 hover:text-emerald-600",
-                    )}
-                  >
-                    <ShieldCheck className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="left"
-                  className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
-                >
-                  Toggle Geofences
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
-            <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-1 overflow-hidden items-center">
-              <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors border-b border-slate-50">
-                +
-              </button>
-              <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors">
-                -
-              </button>
-            </div>
-          </TooltipProvider>
-        </div>
-
-        {/* Overlays: Selected Info Bottom Bar */}
         {selectedVehicle && !isReplayOpen && (
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in slide-in-from-bottom-5 duration-500 delay-100 w-full max-w-xl">
-            <div className="bg-white/95 backdrop-blur-2xl rounded-[28px] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.3)] border border-white/50 p-4 flex items-center gap-6 pointer-events-auto">
-              <div className="flex items-center gap-4 flex-1">
-                <div className="p-3.5 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
-                  <Truck className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tighter truncate">
-                      {selectedVehicle.attributes.registration_number}
-                    </h3>
-                    <div
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full shrink-0",
-                        locations[selectedVehicle.id]?.status === "moving" ||
-                          locations[selectedVehicle.id]?.speed > 0
-                          ? "bg-emerald-500 animate-pulse"
-                          : "bg-slate-300",
-                      )}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="h-2.5 w-2.5 text-blue-500" />
-                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest truncate">
-                      {(() => {
-                        const ts = locations[selectedVehicle.id]?.lastUpdate;
-                        if (!ts) return "SYNCED REAL-TIME";
-                        const d = new Date(
-                          ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z",
-                        );
-                        return d.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        });
-                      })()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-10 w-px bg-slate-100 shrink-0" />
-
-              <div className="flex items-center gap-5 shrink-0 px-2">
-                <div className="text-center">
-                  <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-0.5">
-                    Velocity
-                  </p>
-                  <p className="text-base font-black text-slate-900 italic tracking-tighter leading-none">
-                    {locations[selectedVehicle.id]?.speed || 0}
-                    <span className="text-[8px] font-bold text-slate-400 ml-0.5 font-sans not-italic">
-                      KPH
-                    </span>
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-0.5">
-                    Fuel
-                  </p>
-                  <p className="text-base font-black text-slate-900 italic tracking-tighter leading-none">
-                    {locations[selectedVehicle.id]?.fuel || 0}
-                    <span className="text-[8px] font-bold text-slate-400 ml-0.5 font-sans not-italic">
-                      %
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => {
-                          const hasTrip = ongoingTripsData.some(
-                            (t) => t.vehicleId === selectedVehicleId,
-                          );
-                          setPlaybackType(hasTrip ? "trip" : "history");
-                          setIsReplayOpen(true);
-                        }}
-                        className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center border border-blue-100"
-                      >
-                        <History className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-slate-900 text-white border-none font-black text-[9px] uppercase tracking-widest">
-                      Replay
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => setIsTelemetryOpen(true)}
-                        className="h-10 w-10 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all flex items-center justify-center shadow-lg"
-                      >
-                        <Activity className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-slate-900 text-white border-none font-black text-[9px] uppercase tracking-widest">
-                      Sensors
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <div className="h-8 w-px bg-slate-100 mx-1" />
-
-                <button
-                  onClick={() => {
-                    setSelectedVehicleId(null);
-                    resetZoom();
-                  }}
-                  className="h-10 w-10 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          </div>
+          <SelectedVehicleBar
+            selectedVehicle={selectedVehicle}
+            locations={locations}
+            onReplay={() => {
+              const hasTrip = ongoingTripsData.some(
+                (t) => t.vehicleId === selectedVehicleId,
+              );
+              setPlaybackType(hasTrip ? "trip" : "history");
+              setIsReplayOpen(true);
+            }}
+            onTelemetry={() => setIsTelemetryOpen(true)}
+            onClose={() => {
+              setSelectedVehicleId(null);
+              resetZoom();
+            }}
+          />
         )}
       </div>
 
-      {/* Sub-Components / Drawers */}
       <TelemetryDrawer
         isOpen={isTelemetryOpen}
         onClose={() => {
@@ -1326,8 +263,8 @@ export default function TrackingPage() {
           selectedVehicle
             ? (() => {
                 const loc = locations[selectedVehicle.id];
-                const rel =
-                  selectedVehicle.relationships?.current_location?.attributes;
+                // New API: current_location is flat (no .attributes wrapper)
+                const rel = selectedVehicle.relationships?.current_location;
                 return {
                   plate: selectedVehicle.attributes.registration_number,
                   make: selectedVehicle.attributes.make,
@@ -1337,45 +274,44 @@ export default function TrackingPage() {
                     selectedVehicle.relationships?.device?.imei ??
                     selectedVehicle.relationships?.device?.data?.imei ??
                     null,
-                  altitude: loc?.altitude ?? rel?.altitude ?? null,
+                  altitude: loc?.altitude ?? null,
                   movement: loc?.movement ?? null,
                   speed: loc?.speed ?? rel?.speed ?? 0,
-                  fuel:
-                    loc?.fuel ??
-                    loc?.fuel_level_percent ??
-                    rel?.fuel_level_percent ??
-                    0,
-                  fuel_liters:
-                    loc?.fuel_liters ??
-                    loc?.fuel_level_liters ??
-                    rel?.fuel_level_liters,
-                  temp: loc?.engine_temperature ?? rel?.engine_temperature ?? 0,
+                  fuel: loc?.fuel ?? loc?.fuel_level_percent ?? 0,
+                  fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters,
+                  temp: loc?.engine_temperature ?? 0,
                   status:
-                    loc?.status ?? deriveVehicleStatus(rel, selectedVehicle),
-                  voltage: loc?.battery_voltage ?? rel?.battery_voltage,
-                  ext_voltage: loc?.external_voltage ?? rel?.external_voltage,
+                    loc?.status ??
+                    deriveVehicleStatus(
+                      { speed: rel?.speed },
+                      selectedVehicle,
+                    ),
+                  voltage: loc?.battery_voltage,
+                  ext_voltage: loc?.external_voltage,
                   signal:
                     loc?.satellites != null
                       ? `${loc.satellites} Sats`
-                      : rel?.satellites != null
-                        ? `${rel.satellites} Sats`
-                        : "---",
-                  ignition:
-                    loc?.ignition ??
-                    (rel?.ignition === "on" || rel?.ignition === true),
-                  odometer: loc?.odometer ?? rel?.odometer,
-                  lat: loc?.lat ?? rel?.coordinates?.latitude,
-                  lng: loc?.lng ?? rel?.coordinates?.longitude,
-                  lastUpdate: loc?.lastUpdate ?? rel?.gps_datetime,
-                  address: loc?.address ?? rel?.address,
-                  heading: loc?.heading ?? rel?.heading ?? rel?.angle ?? 0,
-                  rpm: loc?.engine_rpm ?? rel?.engine_rpm,
-                  fuel_rate: loc?.fuel_rate ?? rel?.fuel_rate,
-                  eco_score: loc?.eco_score ?? rel?.eco_score,
-                  idling: loc?.idling ?? rel?.idling ?? false,
-                  jamming: loc?.jamming ?? rel?.jamming ?? false,
-                  immobilizer: loc?.immobilizer ?? rel?.immobilizer ?? false,
-                  driving_state: loc?.driving_state ?? rel?.driving_state,
+                      : "---",
+                  ignition: loc?.ignition ?? false,
+                  odometer:
+                    loc?.odometer ??
+                    selectedVehicle.attributes?.total_odometer,
+                  lat: loc?.lat ?? rel?.latitude,
+                  lng: loc?.lng ?? rel?.longitude,
+                  lastUpdate:
+                    loc?.lastUpdate ??
+                    selectedVehicle.attributes?.last_packet_received_at ??
+                    rel?.last_packet_received_at ??
+                    rel?.created_at,
+                  address: loc?.address ?? null,
+                  heading: loc?.heading ?? 0,
+                  rpm: loc?.engine_rpm,
+                  fuel_rate: loc?.fuel_rate,
+                  eco_score: loc?.eco_score,
+                  idling: loc?.idling ?? false,
+                  jamming: loc?.jamming ?? false,
+                  immobilizer: loc?.immobilizer ?? false,
+                  driving_state: loc?.driving_state,
                   raw: loc?.raw ?? rel,
                 };
               })()
@@ -1383,66 +319,13 @@ export default function TrackingPage() {
         }
       />
 
-      {/* Cluster Filter Modal */}
-      <Dialog open={clusterModalOpen} onOpenChange={setClusterModalOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
-          <DialogHeader className="p-6 border-b border-slate-100">
-            <DialogTitle className="text-sm font-black uppercase tracking-tight italic flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-blue-600" />
-              Filter by <span className="text-blue-600">Cluster</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
-            {clusters.length === 0 ? (
-              <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-8">
-                No clusters found
-              </p>
-            ) : (
-              clusters.map((c: any) => {
-                const id = String(c.id);
-                const isSelected = selectedClusterIds.includes(id);
-                return (
-                  <button
-                    key={id}
-                    onClick={() =>
-                      setSelectedClusterIds((prev) =>
-                        isSelected
-                          ? prev.filter((x) => x !== id)
-                          : [...prev, id],
-                      )
-                    }
-                    className={cn(
-                      "w-full flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left",
-                      isSelected
-                        ? "bg-blue-600 border-blue-600 text-white"
-                        : "bg-white border-slate-100 text-slate-700 hover:border-blue-200",
-                    )}
-                  >
-                    <span className="text-[11px] font-black uppercase tracking-widest">
-                      {c.attributes?.name || c.name || `Cluster ${id}`}
-                    </span>
-                    {isSelected && <Check className="h-3.5 w-3.5" />}
-                  </button>
-                );
-              })
-            )}
-          </div>
-          <div className="p-4 border-t border-slate-100 flex gap-2">
-            <button
-              onClick={() => setSelectedClusterIds([])}
-              className="flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all"
-            >
-              Clear All
-            </button>
-            <button
-              onClick={() => setClusterModalOpen(false)}
-              className="flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 transition-all"
-            >
-              Apply ({selectedClusterIds.length})
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ClusterFilterModal
+        open={clusterModalOpen}
+        onOpenChange={setClusterModalOpen}
+        clusters={clusters}
+        selectedClusterIds={selectedClusterIds}
+        setSelectedClusterIds={setSelectedClusterIds}
+      />
 
       <TripPlaybackTimeline
         isOpen={isReplayOpen}
