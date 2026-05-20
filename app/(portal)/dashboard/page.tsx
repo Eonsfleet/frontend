@@ -159,12 +159,15 @@ export default function DashboardPage() {
 
     const STATUS_COLORS: Record<string, string> = {
         active: '#10b981',
+        available: '#10b981',
         in_transit: '#3b82f6',
         under_maintenance: '#f59e0b',
         maintenance: '#f59e0b',
         disbursed: '#8b5cf6',
         inactive: '#6b7280',
         offline: '#ef4444',
+        stopped: '#ef4444',
+        parked: '#ef4444',
     }
 
     const dynamicStatusData = useMemo(() => {
