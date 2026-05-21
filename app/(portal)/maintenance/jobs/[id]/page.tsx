@@ -76,7 +76,7 @@ export default function MaintenanceJobDetailPage() {
 
     const job = data?.data
 
-    if (!job) {
+    if (!job?.attributes) {
         return <div className="p-8 text-center text-rose-500">Job not found</div>
     }
 
@@ -84,7 +84,7 @@ export default function MaintenanceJobDetailPage() {
     const history = (historyData?.data?.history ?? []).map((e: { to_status?: string; status?: string; actor?: string | { name: string }; created_at?: string; timestamp?: string; reason?: string | null; notes?: string }) => ({
         status: e.to_status ?? e.status ?? '',
         actor: typeof e.actor === 'object' ? e.actor?.name ?? 'System' : e.actor ?? 'System',
-        timestamp: e.created_at ?? e.timestamp ?? '',
+        timestamp: e.created_at ?? e.timestamp ?? null,
         reason: e.reason ?? e.notes ?? null,
     }))
     const messages = convData?.data?.conversation?.messages ?? []
