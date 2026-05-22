@@ -17,7 +17,7 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Trip } from '@/types'
-import { MoreHorizontal, Eye, Edit, MapPin, Route } from 'lucide-react'
+import { MoreHorizontal, Eye, Edit, MapPin, Route, XCircle, Loader2 } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,6 +30,9 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { TripStatusBadge } from './TripStatusBadge'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { updateTripStatus } from '@/lib/api/trips'
+import { toast } from 'sonner'
 
 import {
     Pagination,
@@ -61,6 +64,20 @@ export function TripTable({
     onEdit,
     onChangeStatus
 }: TripTableProps) {
+    const [cancelTarget, setCancelTarget] = React.useState<Trip | null>(null)
+    const queryClient = useQueryClient()
+
+    const { mutate: doCancel, isPending: isCancelling } = useMutation({
+        mutationFn: (trip: Trip) => updateTripStatus(trip.id, 'cancelled'),
+        onSuccess: () => {
+            toast.success('Trip cancelled successfully.')
+            queryClient.invalidateQueries({ queryKey: ['trips'] })
+            setCancelTarget(null)
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.message || 'Failed to cancel trip.')
+        },
+    })
     const columns: ColumnDef<Trip>[] = React.useMemo(() => [
         {
             accessorKey: 'attributes.trip_number',
@@ -157,8 +174,12 @@ export function TripTable({
                                 <Route className="mr-2 h-4 w-4" /> Change Status
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
-                                Cancel Trip
+                            <DropdownMenuItem
+                                className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
+                                onClick={() => setCancelTarget(trip)}
+                                disabled={trip.attributes.status === 'cancelled'}
+                            >
+                                <XCircle className="mr-2 h-4 w-4" /> Cancel Trip
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -280,6 +301,44 @@ export function TripTable({
                             </PaginationItem>
                         </PaginationContent>
                     </Pagination>
+                </div>
+            )}
+
+            {/* Cancel confirmation */}
+            {cancelTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 space-y-6">
+                        <div className="text-center space-y-2">
+                            <div className="h-14 w-14 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <XCircle className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900">Cancel Trip</h3>
+                            <p className="text-sm text-slate-500">
+                                Are you sure you want to cancel trip{' '}
+                                <span className="font-semibold text-slate-700">
+                                    {cancelTarget.attributes.trip_number}
+                                </span>
+                                ? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setCancelTarget(null)}
+                                disabled={isCancelling}
+                            >
+                                No, Keep It
+                            </Button>
+                            <Button
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                onClick={() => doCancel(cancelTarget)}
+                                disabled={isCancelling}
+                            >
+                                {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Cancel'}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

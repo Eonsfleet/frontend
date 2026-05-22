@@ -111,14 +111,14 @@ export function DriverFilters({
               Inactive
             </button>
             <button
-              onClick={() => handleStatusChange("pending_approval")}
+              onClick={() => handleStatusChange("pending_activation")}
               className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
                 filters.status === "pending_approval"
                   ? "bg-blue-50 text-blue-700 font-medium"
                   : "text-slate-700 hover:bg-slate-50"
               }`}
             >
-              Pending Approval
+              Pending Activation
             </button>
           </div>
         </div>

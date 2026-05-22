@@ -27,7 +27,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDrivers } from '@/lib/api/drivers'
 import { assignDriver } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
-import { User, Loader2, Check, ChevronsUpDown, Search } from 'lucide-react'
+import { User, Loader2, Check, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AssignDriverDialogProps {
@@ -47,6 +47,19 @@ export function AssignDriverDialog({ vehicleId, vehicleReg, isOpen, onClose }: A
         queryFn: () => getDrivers({ per_page: 100 }),
         enabled: isOpen,
     })
+
+    // Only show active drivers with no current vehicle assigned
+    const availableDrivers = React.useMemo(
+        () =>
+            (driversResponse?.data ?? []).filter((d) => {
+                const rel = d.relationships as Record<string, unknown>
+                return (
+                    d.attributes.status === 'active' &&
+                    rel?.current_vehicle == null
+                )
+            }),
+        [driversResponse]
+    )
 
     const { mutate: doAssign, isPending: isAssigning } = useMutation({
         mutationFn: () => assignDriver(vehicleId, selectedDriverId),
@@ -69,7 +82,7 @@ export function AssignDriverDialog({ vehicleId, vehicleReg, isOpen, onClose }: A
         doAssign()
     }
 
-    const selectedDriver = driversResponse?.data.find(
+    const selectedDriver = availableDrivers.find(
         (driver) => driver.id.toString() === selectedDriverId
     )
 
@@ -112,9 +125,9 @@ export function AssignDriverDialog({ vehicleId, vehicleReg, isOpen, onClose }: A
                                 <Command>
                                     <CommandInput placeholder="Search driver..." />
                                     <CommandList className="max-h-[200px]">
-                                        <CommandEmpty>No driver found.</CommandEmpty>
+                                        <CommandEmpty>No available drivers found.</CommandEmpty>
                                         <CommandGroup>
-                                            {driversResponse?.data.map((driver) => (
+                                            {availableDrivers.map((driver) => (
                                                 <CommandItem
                                                     key={driver.id}
                                                     value={driver.attributes.full_name}

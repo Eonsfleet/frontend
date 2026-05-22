@@ -21,9 +21,10 @@ import { Button } from '../ui/button'
 
 interface GeofenceListProps {
     searchTerm?: string
+    statusFilter?: 'active' | 'inactive'
 }
 
-export function GeofenceList({ searchTerm = '' }: GeofenceListProps) {
+export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProps) {
     const router = useRouter()
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
@@ -32,8 +33,13 @@ export function GeofenceList({ searchTerm = '' }: GeofenceListProps) {
     const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
     const { data, isLoading } = useQuery({
-        queryKey: ['geofences', { page, searchTerm }],
-        queryFn: () => getGeofences({ page, per_page: 9, q: searchTerm || undefined }),
+        queryKey: ['geofences', { page, searchTerm, statusFilter }],
+        queryFn: () => getGeofences({
+            page,
+            per_page: 9,
+            q: searchTerm || undefined,
+            status: statusFilter ?? undefined,
+        }),
     })
 
     const geofences = data?.data?.geofences || []

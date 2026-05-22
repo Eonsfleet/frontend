@@ -81,9 +81,9 @@ export function AlertsPanel({ alerts = [] }: { alerts?: AlertItem[] }) {
                                                     Acknowledge
                                                 </Button>
                                             )}
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400">
+                                        {/* <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400">
                                             <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
+                                        </Button> */}
                                     </div>
                                 </div>
                             </div>

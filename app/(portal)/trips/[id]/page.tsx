@@ -7,6 +7,8 @@ import { getTripById } from '@/lib/api/trips'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TripStatusBadge } from '@/components/trips/TripStatusBadge'
+import { TripStatusModal } from '@/components/trips/TripStatusModal'
+import { EditTripModal } from '@/components/trips/EditTripModal'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, MapPin, Clock } from 'lucide-react'
 import Link from 'next/link'
@@ -14,6 +16,8 @@ import Link from 'next/link'
 export default function TripDetailPage() {
     const params = useParams()
     const id = params.id as string
+    const [isStatusModalOpen, setIsStatusModalOpen] = React.useState(false)
+    const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
 
     const { data: response, isLoading } = useQuery({
         queryKey: ['trips', id],
@@ -50,8 +54,19 @@ export default function TripDetailPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" className="border-slate-200">Edit Trip</Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700">Update Status</Button>
+                    <Button
+                        variant="outline"
+                        className="border-slate-200"
+                        onClick={() => setIsEditModalOpen(true)}
+                    >
+                        Edit Trip
+                    </Button>
+                    <Button
+                        className="bg-blue-600 hover:bg-blue-700"
+                        onClick={() => setIsStatusModalOpen(true)}
+                    >
+                        Update Status
+                    </Button>
                 </div>
             </div>
 
@@ -116,6 +131,18 @@ export default function TripDetailPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <TripStatusModal
+                isOpen={isStatusModalOpen}
+                onClose={() => setIsStatusModalOpen(false)}
+                trip={trip}
+            />
+
+            <EditTripModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                trip={trip}
+            />
         </div>
     )
 }

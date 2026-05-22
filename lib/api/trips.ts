@@ -41,7 +41,7 @@ export const updateTripStatus = async (id: string, status: string): Promise<Trip
 }
 
 export const updateTrip = async (id: string, data: Partial<TripAttributes>): Promise<TripDetailResponse> => {
-    const response = await apiClient.patch<TripDetailResponse>(`/trips/${id}`, data)
+    const response = await apiClient.put<TripDetailResponse>(`/trips/${id}`, data)
     return response.data
 }
 export const calculateTripEstimate = async (data: {

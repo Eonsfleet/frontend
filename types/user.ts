@@ -31,6 +31,8 @@ export interface UserProfile {
     relationships: {
         address: Address | null
         organization: Organization | null
+        current_vehicle?: { id: string; attributes: Record<string, unknown> } | null
+        cluster?: { id: number; name: string } | null
     }
 }
 
