@@ -39,6 +39,8 @@ import { cn } from '@/lib/utils'
 interface CreateMaintenanceScheduleModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
+    preselectedVehicleId?: string
+    preselectedVehicleReg?: string
 }
 
 const SERVICE_TYPES = [
@@ -46,13 +48,13 @@ const SERVICE_TYPES = [
     { value: 'corrective', label: 'Corrective' },
 ]
 
-export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMaintenanceScheduleModalProps) {
+export function CreateMaintenanceScheduleModal({ open, onOpenChange, preselectedVehicleId, preselectedVehicleReg }: CreateMaintenanceScheduleModalProps) {
     const queryClient = useQueryClient()
     const [step, setStep] = React.useState(1)
 
     // Form State
     const [formData, setFormData] = React.useState({
-        vehicle_id: '',
+        vehicle_id: preselectedVehicleId ?? '',
         service_type: '',
         schedule_type: 'time' as 'time' | 'mileage',
         interval_value: '',
@@ -66,6 +68,13 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
         checklists: [] as number[],
         note: ''
     })
+
+    // Sync vehicle_id if preselectedVehicleId changes (e.g. modal reused)
+    React.useEffect(() => {
+        if (preselectedVehicleId) {
+            setFormData(prev => ({ ...prev, vehicle_id: preselectedVehicleId }))
+        }
+    }, [preselectedVehicleId])
 
     // Queries
     const { data: vehicleData } = useQuery({
@@ -103,7 +112,7 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
     const resetForm = () => {
         setStep(1)
         setFormData({
-            vehicle_id: '',
+            vehicle_id: preselectedVehicleId ?? '',
             service_type: '',
             schedule_type: 'time',
             interval_value: '',
@@ -172,60 +181,73 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Vehicle</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight px-4"
-                                        >
-                                            {formData.vehicle_id ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Car className="h-4 w-4 text-slate-400" />
-                                                    <span>
-                                                        {vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes.registration_number}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-slate-400">Select an Asset</span>
-                                            )}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Search registration number..." />
-                                            <CommandList className="max-h-[250px]">
-                                                <CommandEmpty>No asset found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {vehicleData?.data?.map((v: any) => (
-                                                        <CommandItem
-                                                            key={v.id}
-                                                            value={v.attributes.registration_number}
-                                                            onSelect={() => {
-                                                                setFormData({ ...formData, vehicle_id: v.id.toString() })
-                                                            }}
-                                                            className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
-                                                        >
-                                                            <Check
-                                                                className={cn(
-                                                                    "mr-2 h-4 w-4",
-                                                                    formData.vehicle_id === v.id.toString() ? "opacity-100" : "opacity-0"
-                                                                )}
-                                                            />
-                                                            <div className="flex flex-col">
-                                                                <span>{v.attributes.registration_number}</span>
-                                                                <span className="text-[9px] text-slate-400 italic">
-                                                                    {v.attributes.make} {v.attributes.model}
-                                                                </span>
-                                                            </div>
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                {preselectedVehicleId ? (
+                                    // Locked — vehicle is pre-selected from context
+                                    <div className="flex items-center gap-3 h-12 px-4 rounded-xl border border-slate-100 bg-slate-50/50">
+                                        <Car className="h-4 w-4 text-slate-400 shrink-0" />
+                                        <span className="font-bold uppercase text-xs tracking-tight text-slate-800 flex-1">
+                                            {preselectedVehicleReg ?? preselectedVehicleId}
+                                        </span>
+                                        <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-[9px] font-black uppercase tracking-widest">
+                                            Selected
+                                        </Badge>
+                                    </div>
+                                ) : (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full justify-between h-12 rounded-xl border-slate-100 bg-slate-50/50 focus:ring-slate-900 font-bold uppercase text-xs tracking-tight px-4"
+                                            >
+                                                {formData.vehicle_id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Car className="h-4 w-4 text-slate-400" />
+                                                        <span>
+                                                            {vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes.registration_number}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-400">Select an Asset</span>
+                                                )}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Search registration number..." />
+                                                <CommandList className="max-h-[250px]">
+                                                    <CommandEmpty>No asset found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {vehicleData?.data?.map((v: any) => (
+                                                            <CommandItem
+                                                                key={v.id}
+                                                                value={v.attributes.registration_number}
+                                                                onSelect={() => {
+                                                                    setFormData({ ...formData, vehicle_id: v.id.toString() })
+                                                                }}
+                                                                className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        formData.vehicle_id === v.id.toString() ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span>{v.attributes.registration_number}</span>
+                                                                    <span className="text-[9px] text-slate-400 italic">
+                                                                        {v.attributes.make} {v.attributes.model}
+                                                                    </span>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Category</Label>
@@ -523,7 +545,11 @@ export function CreateMaintenanceScheduleModal({ open, onOpenChange }: CreateMai
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Asset ID</p>
-                                        <p className="text-xs font-bold italic">{vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes?.registration_number || 'None'}</p>
+                                        <p className="text-xs font-bold italic">
+                                            {preselectedVehicleReg
+                                                ?? vehicleData?.data?.find((v: any) => v.id.toString() === formData.vehicle_id)?.attributes?.registration_number
+                                                ?? 'None'}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Interval</p>

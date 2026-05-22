@@ -2,16 +2,14 @@
 
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { getVehicleById } from '@/lib/api/vehicles'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { getVehicleById, deleteVehicle } from '@/lib/api/vehicles'
 import { VehicleDetails } from '@/components/vehicles/VehicleDetails'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Edit, Trash2, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
-import { updateVehicle } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
-import { useQueryClient, useMutation } from '@tanstack/react-query'
 
 export default function VehicleDetailPage() {
     const params = useParams()
@@ -19,6 +17,7 @@ export default function VehicleDetailPage() {
     const id = params.id as string
     const queryClient = useQueryClient()
     const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = React.useState(false)
 
     const { data: response, isLoading, error } = useQuery({
         queryKey: ['vehicle', id],
@@ -26,16 +25,17 @@ export default function VehicleDetailPage() {
         enabled: !!id,
     })
 
-    const { mutate: doUpdate, isPending: isUpdating } = useMutation({
-        mutationFn: (data: any) => updateVehicle(id, data),
+    const { mutate: doDelete, isPending: isDeleting } = useMutation({
+        mutationFn: () => deleteVehicle(id),
         onSuccess: () => {
-            toast.success('Vehicle updated successfully')
-            queryClient.invalidateQueries({ queryKey: ['vehicle', id] })
-            setIsEditModalOpen(false)
+            toast.success('Vehicle deleted successfully.')
+            queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+            router.push('/vehicles')
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to update vehicle')
-        }
+            toast.error(error?.response?.data?.message || 'Failed to delete vehicle.')
+            setIsDeleteConfirmOpen(false)
+        },
     })
 
     if (isLoading) {
@@ -92,7 +92,11 @@ export default function VehicleDetailPage() {
                     >
                         <Edit className="mr-2 h-4 w-4" /> Edit
                     </Button>
-                    <Button variant="outline" className="text-rose-600 border-rose-100 hover:bg-rose-50 hover:text-rose-700">
+                    <Button
+                        variant="outline"
+                        className="text-rose-600 border-rose-100 hover:bg-rose-50 hover:text-rose-700"
+                        onClick={() => setIsDeleteConfirmOpen(true)}
+                    >
                         <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </Button>
                 </div>
@@ -105,6 +109,44 @@ export default function VehicleDetailPage() {
                 onClose={() => setIsEditModalOpen(false)}
                 initialData={vehicle}
             />
+
+            {/* Delete confirmation dialog */}
+            {isDeleteConfirmOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 space-y-6">
+                        <div className="text-center space-y-2">
+                            <div className="h-14 w-14 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900">Delete Vehicle</h3>
+                            <p className="text-sm text-slate-500">
+                                Are you sure you want to delete{' '}
+                                <span className="font-semibold text-slate-700">
+                                    {vehicle.attributes.registration_number}
+                                </span>
+                                ? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setIsDeleteConfirmOpen(false)}
+                                disabled={isDeleting}
+                            >
+                                No, Cancel
+                            </Button>
+                            <Button
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                onClick={() => doDelete()}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Delete'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

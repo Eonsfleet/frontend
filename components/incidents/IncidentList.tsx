@@ -112,15 +112,39 @@ export function IncidentList() {
                                                     {item.attributes.status.replace(/_/g, ' ')}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-slate-500 text-xs">
-                                                {item.attributes.reported_at ? (
-                                                    (() => {
-                                                        const date = new Date(item.attributes.reported_at);
-                                                        return isNaN(date.getTime()) 
-                                                            ? 'Invalid Date' 
-                                                            : format(date, 'MMM d, yyyy HH:mm');
-                                                    })()
-                                                ) : 'N/A'}
+                                            <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">
+                                                {(() => {
+                                                    const rawDate = item.attributes.occured_date
+                                                    const rawTime = item.attributes.occured_time
+
+                                                    if (!rawDate) return 'N/A'
+
+                                                    // Parse date portion from the ISO string
+                                                    const dateObj = new Date(rawDate)
+                                                    if (isNaN(dateObj.getTime())) return 'Invalid Date'
+                                                    const datePart = format(dateObj, 'yyyy-MMM-dd')
+
+                                                    // Parse time: strip trailing am/pm label, split HH:mm:ss
+                                                    let timePart = '—'
+                                                    if (rawTime) {
+                                                        const cleaned = rawTime.replace(/\s*(am|pm)$/i, '').trim()
+                                                        const [hStr, mStr] = cleaned.split(':')
+                                                        const h = parseInt(hStr, 10)
+                                                        const m = parseInt(mStr, 10)
+                                                        if (!isNaN(h) && !isNaN(m)) {
+                                                            const suffix = h >= 12 ? 'PM' : 'AM'
+                                                            const h12 = h % 12 === 0 ? 12 : h % 12
+                                                            timePart = `${h12}:${String(m).padStart(2, '0')}${suffix}`
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <span className="flex flex-col gap-0.5">
+                                                            <span className="font-medium text-slate-700">{datePart}</span>
+                                                            <span className="text-slate-400">{timePart}</span>
+                                                        </span>
+                                                    )
+                                                })()}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">

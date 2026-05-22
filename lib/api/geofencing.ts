@@ -24,6 +24,7 @@ export interface GeofenceListParams {
     page?: number
     per_page?: number
     q?: string
+    status?: string
 }
 
 export const getGeofences = async (params?: GeofenceListParams): Promise<GeofenceListResponse> => {

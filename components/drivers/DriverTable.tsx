@@ -98,7 +98,7 @@ export function DriverTable({
                     </div>
                     <div className="flex flex-col">
                         <span className="font-semibold text-slate-900">{row.original.attributes.full_name}</span>
-                        <span className="text-xs text-slate-500">ID: {row.original.attributes.employee_id || 'N/A'}</span>
+                        <span className="text-xs text-slate-500">ID: {row.original.attributes.employee_id ||row.original.id || 'N/A'}</span>
                     </div>
                 </div>
             ),

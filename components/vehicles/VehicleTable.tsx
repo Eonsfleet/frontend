@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Vehicle } from '@/types'
-import { MoreHorizontal, Eye, Edit, Trash2, UserPlus, LayoutGrid, Cpu, Fuel, Columns3, Check } from 'lucide-react'
+import { MoreHorizontal, Eye, Edit, Trash2, UserPlus, LayoutGrid, Cpu, Fuel, Columns3, Loader2 } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -41,6 +41,9 @@ import {
     PaginationPrevious,
 } from '@/components/ui/pagination'
 import { cn } from '@/lib/utils'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { deleteVehicle } from '@/lib/api/vehicles'
+import { toast } from 'sonner'
 
 interface VehicleTableProps {
     data: Vehicle[]
@@ -82,6 +85,20 @@ export function VehicleTable({
     onPageChange
 }: VehicleTableProps) {
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    const [deleteTarget, setDeleteTarget] = React.useState<Vehicle | null>(null)
+    const queryClient = useQueryClient()
+
+    const { mutate: handleDelete, isPending: isDeleting } = useMutation({
+        mutationFn: (id: string | number) => deleteVehicle(id),
+        onSuccess: () => {
+            toast.success('Vehicle deleted successfully.')
+            queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+            setDeleteTarget(null)
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.message || 'Failed to delete vehicle.')
+        },
+    })
 
     const columns: ColumnDef<Vehicle>[] = React.useMemo(() => [
         {
@@ -144,7 +161,6 @@ export function VehicleTable({
             id: 'odometer',
             header: 'Odometer',
             cell: ({ row }) => {
-                // New API: odometer is on attributes.total_odometer (not in location)
                 const value = row.original.attributes.total_odometer
                 return (
                     <div className="flex flex-col">
@@ -223,7 +239,10 @@ export function VehicleTable({
                             </PermissionGate>
                             <DropdownMenuSeparator />
                             <PermissionGate permission="vehicles:delete">
-                                <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
+                                <DropdownMenuItem
+                                    className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
+                                    onClick={() => setDeleteTarget(vehicle)}
+                                >
                                     <Trash2 className="mr-2 h-4 w-4" /> Delete
                                 </DropdownMenuItem>
                             </PermissionGate>
@@ -372,6 +391,44 @@ export function VehicleTable({
                             </PaginationItem>
                         </PaginationContent>
                     </Pagination>
+                </div>
+            )}
+
+            {/* Delete confirmation dialog */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 space-y-6">
+                        <div className="text-center space-y-2">
+                            <div className="h-14 w-14 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900">Delete Vehicle</h3>
+                            <p className="text-sm text-slate-500">
+                                Are you sure you want to delete{' '}
+                                <span className="font-semibold text-slate-700">
+                                    {deleteTarget.attributes.registration_number}
+                                </span>
+                                ? This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                            >
+                                No, Cancel
+                            </Button>
+                            <Button
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                onClick={() => handleDelete(deleteTarget.id)}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Delete'}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
