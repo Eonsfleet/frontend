@@ -20,6 +20,7 @@ interface GeofenceMapProps {
     onChange: (data: { type: 'polygon' | 'circle'; coordinates: any; radius?: number }) => void
     initialGeofence?: import('@/types').Geofence
     vehicles?: import('@/types').Vehicle[]
+    center?: { lat: number; lng: number }
 }
 
 const GeofenceMap = dynamic<GeofenceMapProps>(
@@ -40,6 +41,7 @@ export default function EditGeofencePage() {
     const id = params.id as string
 
     const [mapData, setMapData] = useState<{ type: 'polygon' | 'circle'; coordinates: any; radius?: number } | null>(null)
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined)
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -214,7 +216,10 @@ export default function EditGeofencePage() {
                                         <label className="text-sm font-medium text-slate-700 italic">Location Label</label>
                                         <LocationAutocomplete 
                                             value={formData.location_name}
-                                            onSelect={(loc) => setFormData({ ...formData, location_name: loc.name })}
+                                            onSelect={(loc) => {
+                                                setFormData({ ...formData, location_name: loc.name })
+                                                setMapCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude })
+                                            }}
                                             placeholder="Search location address..."
                                             icon={<Navigation className="h-4 w-4 text-blue-600" />}
                                         />
@@ -313,6 +318,7 @@ export default function EditGeofencePage() {
                                     <GeofenceMap
                                         onChange={setMapData}
                                         initialGeofence={geofenceData.data}
+                                        center={mapCenter}
                                         vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
                                     />
                                 </CardContent>
