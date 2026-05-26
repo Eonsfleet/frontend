@@ -33,6 +33,7 @@ export function GeofenceBuilder({
         shape: null as { type: 'polygon' | 'circle'; coordinates: any; radius?: number } | null,
         vehicle_ids: [] as string[],
     })
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined)
 
     const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles-builder', { per_page: 100 }],
@@ -71,6 +72,7 @@ export function GeofenceBuilder({
             toast.success('Geofence activated successfully!')
             queryClient.invalidateQueries({ queryKey: ['geofences'] })
             setFormData({ name: '', location_name: '', alert_type: 'both', speed: 0, shape: null, vehicle_ids: [] as string[] })
+            setMapCenter(undefined)
             onClose()
         },
         onError: (err: any) => {
@@ -133,7 +135,10 @@ export function GeofenceBuilder({
                             </label>
                             <LocationAutocomplete 
                                 value={formData.location_name}
-                                onSelect={(loc) => setFormData({ ...formData, location_name: loc.name })}
+                                onSelect={(loc) => {
+                                    setFormData({ ...formData, location_name: loc.name })
+                                    setMapCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude })
+                                }}
                                 placeholder="Search location address..."
                                 icon={<Navigation className="h-3 w-3 text-blue-600" />}
                                 className="h-10 text-[10px]"
@@ -254,6 +259,7 @@ export function GeofenceBuilder({
                             height="100%"
                             onChange={(shape) => setFormData((prev) => ({ ...prev, shape }))}
                             vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
+                            center={mapCenter}
                         />
                     </div>
 

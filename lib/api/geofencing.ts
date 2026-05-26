@@ -7,6 +7,44 @@ export interface GeofenceFormData extends Omit<Partial<Geofence['attributes']>, 
     trigger_type?: 'enter' | 'exit' | 'both'
 }
 
+/**
+ * Maps UI trigger type values to the backend's expected values.
+ * Backend uses: 'entry', 'exit', 'both'  (not 'enter')
+ */
+const normalizeTriggerType = (value?: string): string | undefined => {
+    if (!value) return undefined
+    const map: Record<string, string> = {
+        enter: 'entry',
+        entry: 'entry',
+        exit: 'exit',
+        both: 'both',
+    }
+    return map[value] ?? value
+}
+
+/**
+ * Normalizes coordinates to the format the backend expects:
+ * - polygon: array of { lat, lng } objects
+ * - circle: { lat, lng } object
+ * Handles GeoJSON geometry objects and { latitude, longitude } shapes from older code.
+ */
+const normalizeCoordinates = (coordinates: any, type?: string): any => {
+    if (!coordinates) return coordinates
+
+    // GeoJSON Polygon geometry: { type: 'Polygon', coordinates: [[[lng, lat], ...]] }
+    if (coordinates.type === 'Polygon' && Array.isArray(coordinates.coordinates)) {
+        const ring: number[][] = coordinates.coordinates[0]
+        return ring.map((p: number[]) => ({ lat: p[1], lng: p[0] }))
+    }
+
+    // Circle center with latitude/longitude keys → convert to lat/lng
+    if (type === 'circle' && coordinates.latitude != null && coordinates.longitude != null) {
+        return { lat: coordinates.latitude, lng: coordinates.longitude }
+    }
+
+    return coordinates
+}
+
 export interface GeofenceListResponse {
     message: string
     data: {
@@ -44,7 +82,12 @@ export const getGeofenceById = async (id: string): Promise<GeofenceDetailRespons
 
 export const createGeofence = async (data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
     const { alert_type, ...rest } = data
-    const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
+    const rawTrigger = alert_type ?? rest.trigger_type
+    const payload = {
+        ...rest,
+        trigger_type: normalizeTriggerType(rawTrigger),
+        coordinates: normalizeCoordinates(rest.coordinates, rest.type),
+    }
     const response = await apiClient.post<any>('/geofences', payload)
     // API returns { data: { geofence: Geofence } } — normalize to { data: Geofence }
     const raw = response.data
@@ -56,7 +99,12 @@ export const createGeofence = async (data: GeofenceFormData): Promise<GeofenceDe
 
 export const updateGeofence = async (id: string, data: GeofenceFormData): Promise<GeofenceDetailResponse> => {
     const { alert_type, ...rest } = data
-    const payload = { ...rest, ...(alert_type ? { trigger_type: alert_type } : {}) }
+    const rawTrigger = alert_type ?? rest.trigger_type
+    const payload = {
+        ...rest,
+        trigger_type: normalizeTriggerType(rawTrigger),
+        coordinates: normalizeCoordinates(rest.coordinates, rest.type),
+    }
     const response = await apiClient.put<any>(`/geofences/${id}`, payload)
     // API returns { data: { geofence: Geofence } } — normalize to { data: Geofence }
     const raw = response.data
