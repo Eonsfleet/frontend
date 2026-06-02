@@ -8,14 +8,14 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
         Accept: 'application/json',
         'X-Request-Type': 'client',
-        'X-Tenant': 'dkt',
+        // 'X-Tenant': 'dkt',
     },
 })
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const { token, organization } = useAuthStore.getState()
     if (token) config.headers.Authorization = `Bearer ${token}`
-    if (organization?.attributes?.subdomain) config.headers['X-Tenant'] = organization.attributes.subdomain
+    // if (organization?.attributes?.subdomain) config.headers['X-Tenant'] = organization.attributes.subdomain
     return config
 })
 

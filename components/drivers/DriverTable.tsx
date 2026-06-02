@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import {
     ColumnDef,
     flexRender,
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { UserProfile } from '@/types'
-import { MoreHorizontal, Eye, Mail, Trash2, Truck } from 'lucide-react'
+import { MoreHorizontal, Eye, Mail, Trash2, Truck, Loader2 } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,6 +31,9 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { PermissionGate } from '@/components/shared/PermissionGate'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { updateDriver } from '@/lib/api/drivers'
+import { toast } from 'sonner'
 
 import {
     Pagination,
@@ -88,6 +91,24 @@ export function DriverTable({
     pagination,
     onPageChange
 }: DriverTableProps) {
+    const queryClient = useQueryClient()
+    const [driverToDeactivate, setDriverToDeactivate] = useState<UserProfile | null>(null)
+
+    const { mutate: deactivateDriver, isPending: isDeactivating } = useMutation({
+        mutationFn: (driverId: string | number) => updateDriver(driverId, { status: 'inactive' }),
+        onSuccess: () => {
+            toast.success('Driver deactivated successfully')
+            queryClient.invalidateQueries({ queryKey: ['drivers'] })
+            setDriverToDeactivate(null)
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || 'Failed to deactivate driver')
+        }
+    })
+
+    const handleDeactivate = (driverId: string | number) => {
+        deactivateDriver(driverId)
+    }
     const columns = React.useMemo<ColumnDef<UserProfile>[]>(() => [
         {
             header: 'Name',
@@ -124,10 +145,8 @@ export function DriverTable({
                         variant = 'default'
                         break
                     case 'suspended':
-                        variant = 'destructive'
-                        break
                     case 'inactive':
-                        variant = 'outline'
+                        variant = 'destructive'
                         break
                 }
 
@@ -179,7 +198,7 @@ export function DriverTable({
                                     <Truck className="mr-2 h-4 w-4" /> Assign Vehicle
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
+                                <DropdownMenuItem className="text-rose-600 focus:text-rose-600" onClick={() => setDriverToDeactivate(driver)}>
                                     <Trash2 className="mr-2 h-4 w-4" /> Deactivate
                                 </DropdownMenuItem>
                             </PermissionGate>
@@ -294,6 +313,44 @@ export function DriverTable({
                             </PaginationItem>
                         </PaginationContent>
                     </Pagination>
+                </div>
+            )}
+
+            {/* Deactivate confirmation dialog */}
+            {driverToDeactivate && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 space-y-6">
+                        <div className="text-center space-y-2">
+                            <div className="h-14 w-14 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="h-6 w-6 text-rose-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900">Deactivate Driver</h3>
+                            <p className="text-sm text-slate-500">
+                                Are you sure you want to deactivate{' '}
+                                <span className="font-semibold text-slate-700">
+                                    {driverToDeactivate.attributes.full_name}
+                                </span>
+                                ? This driver will no longer be able to access the system.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setDriverToDeactivate(null)}
+                                disabled={isDeactivating}
+                            >
+                                No, Cancel
+                            </Button>
+                            <Button
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                onClick={() => handleDeactivate(driverToDeactivate.id)}
+                                disabled={isDeactivating}
+                            >
+                                {isDeactivating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Deactivate'}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

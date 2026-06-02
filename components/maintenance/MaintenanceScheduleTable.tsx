@@ -20,7 +20,7 @@ import {
 import { MaintenanceSchedule } from '@/types'
 import { format, differenceInDays, isPast, isToday } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
-import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Wrench } from 'lucide-react'
+import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Wrench, Eye } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteSchedule } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
 interface MaintenanceScheduleTableProps {
     data: MaintenanceSchedule[]
@@ -106,6 +107,7 @@ export function MaintenanceScheduleTable({
     onPageChange
 }: MaintenanceScheduleTableProps) {
     const queryClient = useQueryClient()
+    const router = useRouter()
 
     const { mutate: cancelSchedule, variables: cancellingId } = useMutation({
         mutationFn: (id: string) => deleteSchedule(id),
@@ -218,8 +220,14 @@ export function MaintenanceScheduleTable({
                                                 <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl shadow-2xl border-slate-100">
                                                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 py-2">Schedule Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
+                                                    {/* <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
                                                         <Wrench className="h-3.5 w-3.5" /> Create Work Order
+                                                    </DropdownMenuItem> */}
+                                                    <DropdownMenuItem
+                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
+                                                        onClick={() => router.push(`/maintenance/schedules/${row.id}`)}
+                                                    >
+                                                        <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
                                                         <Clock className="h-3.5 w-3.5" /> Reschedule

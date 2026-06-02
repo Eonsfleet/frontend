@@ -24,96 +24,131 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
     const mapRef = useRef<L.Map | null>(null)
 
     useEffect(() => {
-        if (!containerRef.current || mapRef.current) return
+        const container = containerRef.current
+        if (!container) return
 
-        const map = L.map(containerRef.current, {
-            zoomControl: true,
-            attributionControl: false,
-            dragging: true,
-            scrollWheelZoom: false,
-        })
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; Carto',
-        }).addTo(map)
-
-        mapRef.current = map
-
+        // Compute bounds from raw data before any Leaflet calls
         const { type, coordinates, radius } = geofence.attributes
+        const allPoints: L.LatLngTuple[] = []
 
         if (type === 'circle' && coordinates) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const c = coordinates as any
-            const lat: number | undefined = c.latitude ?? c.lat ?? c[1]
-            const lng: number | undefined = c.longitude ?? c.lng ?? c[0]
+            const lat = c.lat ?? c.latitude
+            const lng = c.lng ?? c.longitude
             if (lat != null && lng != null) {
-                const circle = L.circle([lat, lng], {
-                    radius: radius ?? 500,
-                    color: '#2563eb',
-                    fillColor: '#3b82f6',
-                    fillOpacity: 0.15,
-                    weight: 2,
-                }).addTo(map)
-                map.fitBounds(circle.getBounds(), { padding: [30, 30] })
+                const r = (radius ?? 500) / 111320 // approx degrees
+                allPoints.push([lat + r, lng + r])
+                allPoints.push([lat - r, lng - r])
             }
         } else if (type === 'polygon' && coordinates) {
-            // coordinates can be GeoJSON Geometry { type: 'Polygon', coordinates: [...] }
-            // or a raw array of latlng pairs
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const c = coordinates as any
-            let latlngs: L.LatLngExpression[]
-
-            if (c.type === 'Polygon' && Array.isArray(c.coordinates)) {
-                // GeoJSON: coordinates[0] is the outer ring, each point is [lng, lat]
-                latlngs = c.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
-            } else if (Array.isArray(c)) {
-                latlngs = c.map((pt: any) =>
-                    Array.isArray(pt) ? [pt[1], pt[0]] : [pt.lat, pt.lng]
-                )
-            } else {
-                latlngs = []
-            }
-
-            if (latlngs.length > 0) {
-                const polygon = L.polygon(latlngs as L.LatLngExpression[], {
-                    color: '#2563eb',
-                    fillColor: '#3b82f6',
-                    fillOpacity: 0.15,
-                    weight: 2,
-                }).addTo(map)
-                map.fitBounds(polygon.getBounds(), { padding: [30, 30] })
+            if (Array.isArray(c)) {
+                c.forEach((pt: any) => {
+                    if (Array.isArray(pt)) allPoints.push([pt[1], pt[0]])
+                    else if (pt.lat != null) allPoints.push([pt.lat, pt.lng])
+                })
+            } else if (c?.type === 'Polygon' && Array.isArray(c.coordinates)) {
+                c.coordinates[0].forEach(([lng, lat]: [number, number]) => allPoints.push([lat, lng]))
             }
         }
 
-        // Add vehicle markers
-        if (vehicles && vehicles.length > 0) {
-            vehicles.forEach(v => {
+        const initMap = () => {
+            if (mapRef.current) return
+            if (container.clientWidth === 0 || container.clientHeight === 0) return
+
+            const map = L.map(container, {
+                zoomControl: true,
+                attributionControl: false,
+                dragging: true,
+                scrollWheelZoom: false,
+            })
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; Carto',
+            }).addTo(map)
+
+            mapRef.current = map
+
+            // Set view first so projection is ready
+            if (allPoints.length > 0) {
+                map.fitBounds(L.latLngBounds(allPoints), { padding: [30, 30] })
+            } else {
+                map.setView([6.5244, 3.3792], 10)
+            }
+
+            // Now safe to add layers
+            if (type === 'circle' && coordinates) {
+                const c = coordinates as any
+                const lat = c.lat ?? c.latitude
+                const lng = c.lng ?? c.longitude
+                if (lat != null && lng != null) {
+                    L.circle([lat, lng], {
+                        radius: radius ?? 500,
+                        color: '#2563eb',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.15,
+                        weight: 2,
+                    }).addTo(map)
+                }
+            } else if (type === 'polygon' && coordinates) {
+                const c = coordinates as any
+                let latlngs: L.LatLngExpression[] = []
+
+                if (c?.type === 'Polygon' && Array.isArray(c.coordinates)) {
+                    latlngs = c.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng])
+                } else if (Array.isArray(c)) {
+                    latlngs = c.map((pt: any) =>
+                        Array.isArray(pt) ? [pt[1], pt[0]] : [pt.lat, pt.lng]
+                    )
+                }
+
+                if (latlngs.length > 0) {
+                    L.polygon(latlngs as L.LatLngExpression[], {
+                        color: '#2563eb',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.15,
+                        weight: 2,
+                    }).addTo(map)
+                }
+            }
+
+            // Vehicle markers
+            vehicles?.forEach(v => {
                 const loc = v.relationships?.current_location || v.attributes?.current_location
                 if (loc?.latitude && loc?.longitude) {
-                    const marker = L.marker([loc.latitude, loc.longitude], {
+                    L.marker([loc.latitude, loc.longitude], {
                         icon: L.divIcon({
                             className: 'custom-div-icon',
-                            html: `<div class="p-1 rounded-full bg-blue-600 border-2 border-white shadow-lg text-white"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>`,
+                            html: `<div class="p-1 rounded-full bg-blue-600 border-2 border-white shadow-lg text-white"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></div>`,
                             iconSize: [20, 20],
                             iconAnchor: [10, 10],
                         })
-                    }).addTo(map)
-                    
-                    marker.bindPopup(`
-                        <div class="p-2 space-y-1">
-                            <p class="text-xs font-black uppercase text-slate-900">${v.attributes.registration_number}</p>
-                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${v.attributes.make} ${v.attributes.model}</p>
-                        </div>
-                    `)
+                    })
+                        .bindPopup(`<div class="p-2"><p class="text-xs font-black uppercase">${v.attributes.registration_number}</p><p class="text-[9px] text-slate-500 uppercase">${v.attributes.make} ${v.attributes.model}</p></div>`)
+                        .addTo(map)
                 }
             })
+
+            observer.disconnect()
         }
 
+        const observer = new ResizeObserver(() => {
+            if (!mapRef.current) {
+                initMap()
+            } else {
+                mapRef.current.invalidateSize()
+            }
+        })
+        observer.observe(container)
+
+        initMap()
+
         return () => {
-            map.remove()
+            observer.disconnect()
+            mapRef.current?.remove()
             mapRef.current = null
         }
-    }, [geofence])
+    }, [geofence, vehicles])
 
     return (
         <div

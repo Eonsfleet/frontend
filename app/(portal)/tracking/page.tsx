@@ -120,17 +120,18 @@ export default function TrackingPage() {
         return false;
       });
     }
+    return result;
+  }, [vehicles, searchQuery, statusFilter, locations, selectedClusterIds]);
+
+  // Clear selection if the selected vehicle is not in the filtered results
+  useEffect(() => {
     if (
       selectedVehicleId &&
-      !result.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))
+      !filteredVehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))
     ) {
-      const sv = vehicles.find(
-        (v: Vehicle) => String(v.id) === String(selectedVehicleId),
-      );
-      if (sv) result = [...result, sv];
+      setSelectedVehicleId(null);
     }
-    return result;
-  }, [vehicles, searchQuery, statusFilter, locations, selectedVehicleId, selectedClusterIds]);
+  }, [filteredVehicles, selectedVehicleId]);
 
   const ongoingTripsData = useMemo(() => {
     return ongoingTrips.map((trip: Trip) => {

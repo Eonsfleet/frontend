@@ -113,7 +113,9 @@ export default function IncidentDetailPage() {
                         </div>
                         <p className="text-slate-500 mt-1 capitalize">{incident.attributes.type.replace(/_/g, ' ')}</p>
                         <div className="flex items-center gap-4 mt-3 text-sm text-slate-500">
-                            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> Reported: {format(new Date(incident.attributes.reported_at), 'PPp')}</span>
+                            <span className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4" /> Reported: {incident.attributes.reported_at ? format(new Date(incident.attributes.reported_at), 'PPp') : 'N/A'}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -145,7 +147,7 @@ export default function IncidentDetailPage() {
                                 <CardContent className="p-6">
                                     <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{incident.attributes.description}</p>
 
-                                    {incident.attributes.location && (
+                                    {incident.attributes.location && incident.attributes.location.lat && incident.attributes.location.lng && (
                                         <div className="mt-6 pt-6 border-t border-slate-100">
                                             <p className="text-sm font-semibold text-slate-900 mb-3">Reported Location</p>
                                             <div className="h-48 w-full bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 overflow-hidden relative">
@@ -240,7 +242,9 @@ export default function IncidentDetailPage() {
                                         <div key={msg.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-xs font-semibold text-slate-700">{msg.sender?.name ?? 'User'}</span>
-                                                <span className="text-xs text-slate-400">{msg.created_at ? format(new Date(msg.created_at), 'MMM d, p') : ''}</span>
+                                                <span className="text-xs text-slate-400">
+                                                    {msg.created_at ? format(new Date(msg.created_at), 'MMM d, p') : ''}
+                                                </span>
                                             </div>
                                             <p className="text-sm text-slate-800">{msg.body}</p>
                                         </div>

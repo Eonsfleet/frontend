@@ -55,8 +55,17 @@ export const calculateTripEstimate = async (data: {
 export const generateTripRoute = async (data: {
     start_location: { name: string; coords: { latitude: number; longitude: number } }
     end_location: { name: string; coords: { latitude: number; longitude: number } }
+    waypoints?: Array<{ latitude: number; longitude: number }>
 }): Promise<{ message: string; data: { waypoints: any[] } }> => {
-    const response = await apiClient.post('/trips/generate-route', data)
+    // Format payload as: origin: 'lat,lng', destination: 'lat,lng', waypoints: [] (optional)
+    const payload = {
+        origin: `${data.start_location.coords.latitude},${data.start_location.coords.longitude}`,
+        destination: `${data.end_location.coords.latitude},${data.end_location.coords.longitude}`,
+        ...(data.waypoints && data.waypoints.length > 0 && {
+            waypoints: data.waypoints.map(wp => `${wp.latitude},${wp.longitude}`)
+        })
+    }
+    const response = await apiClient.post('/trips/generate-route', payload)
     return response.data
 }
 
