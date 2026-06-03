@@ -42,7 +42,10 @@ export interface MaintenanceSchedule {
         parent_schedule_id?: number | null
         series_id?: string | null
         occurrence_number?: number
+        occurrence_count?: number | null
+        end_date?: string | null
         is_master_schedule?: boolean
+        estimated_cost?: number | null
         created_at: string
         updated_at?: string
         /** @deprecated Use relationships.vehicle instead */

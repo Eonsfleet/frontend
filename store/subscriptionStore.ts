@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 
 export type PlanTier = 'starter' | 'growth' | 'enterprise'
 export type DunningStage = null | 'grace' | 'restricted' | 'suspended'
+export type SubscriptionStatus = 'active' | 'trial' | 'grace' | 'restricted' | 'suspended' | 'expired' | null
 
 /**
  * Slugs for all gateable features (Core Modules + Advanced Capabilities)
@@ -42,11 +43,13 @@ interface SubscriptionState {
     planName: string | null
     capabilities: Capability[]
     dunningStage: DunningStage
+    subscriptionStatus: SubscriptionStatus
     setSubscription: (
-        tier: PlanTier,
-        name: string,
+        tier: PlanTier | null,
+        name: string | null,
         capabilities: Capability[],
-        dunning: DunningStage
+        dunning: DunningStage,
+        status?: SubscriptionStatus
     ) => void
     hasCapability: (slug: Capability) => boolean
 }
@@ -58,8 +61,9 @@ export const useSubscriptionStore = create<SubscriptionState>()(
             planName: null,
             capabilities: [],
             dunningStage: null,
-            setSubscription: (planTier, planName, capabilities, dunningStage) =>
-                set({ planTier, planName, capabilities, dunningStage }),
+            subscriptionStatus: null,
+            setSubscription: (planTier, planName, capabilities, dunningStage, subscriptionStatus = null) =>
+                set({ planTier, planName, capabilities, dunningStage, subscriptionStatus }),
             hasCapability: (slug) => get().capabilities.includes(slug),
         }),
         { name: 'eonsfleet-subscription' }
