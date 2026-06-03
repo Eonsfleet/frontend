@@ -23,19 +23,33 @@ export interface MaintenanceJobPerson {
     name?: string
 }
 
+export interface ScheduleChecklist {
+    id: string | number
+    attributes: {
+        name: string
+        description?: string | null
+        status: 'pending' | 'completed' | string | null
+        completed_at?: string | null
+        created_at?: string | null
+    }
+    relationships: Record<string, never>
+}
+
 export interface MaintenanceSchedule {
     id: string | number
     attributes: {
+        reference?: string | null
         schedule_type: 'time' | 'mileage' | string
         service_type: string
         interval_unit?: string
         interval_value?: number
         due_date: string
-        description: string | null
+        description?: string | null
+        notes?: string | null
         schedule_date?: string | null
         expected_odometer?: number | null
-        status: 'pending' | 'active' | 'overdue' | 'completed' | 'cancelled' | string
-        priority?: 'low' | 'medium' | 'high' | string
+        status: 'upcoming' | 'pending' | 'active' | 'overdue' | 'completed' | 'cancelled' | string
+        priority?: 'low' | 'normal' | 'medium' | 'high' | 'critical' | string
         turn_on_notification?: boolean
         last_scheduled_at?: string | null
         is_recurring?: boolean
@@ -43,21 +57,17 @@ export interface MaintenanceSchedule {
         series_id?: string | null
         occurrence_number?: number
         occurrence_count?: number | null
+        occurrences?: number | null
         end_date?: string | null
         is_master_schedule?: boolean
         estimated_cost?: number | null
+        estimated_cost_kobo?: number | null
+        service_duration?: number | null
+        next_due_date?: string | null
         created_at: string
         updated_at?: string
-        /** @deprecated Use relationships.vehicle instead */
+        /** @deprecated use relationships.vehicle */
         vehicle_id?: string | number
-        /** @deprecated Use due_date instead */
-        last_service_date?: string | null
-        last_service_odometer?: number | null
-        /** @deprecated Use due_date instead */
-        next_service_date?: string | null
-        next_service_odometer?: number | null
-        /** @deprecated Use description instead */
-        notes?: string | null
     }
     relationships?: {
         vehicle?: {
@@ -65,8 +75,23 @@ export interface MaintenanceSchedule {
             make?: string
             model?: string
             registration_number?: string
+            image?: string | null
+            current_odometer?: number | null
         }
-        vendor?: { id: number | string; name?: string }
+        vendor?: {
+            id: number | string
+            name?: string
+            email?: string | null
+            phone?: string | null
+        }
+        assigned_by?: {
+            id: number | string
+            f_name?: string
+            l_name?: string
+        } | null
+        logs?: MaintenanceLog[]
+        latest_log?: MaintenanceLog | null
+        checklists?: ScheduleChecklist[]
     }
 }
 
@@ -139,28 +164,37 @@ export interface MaintenanceAlert {
 export interface MaintenanceLog {
     id: string | number
     attributes: {
-        status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'verified'
-        progress_percent?: number
-        started_at?: string | null
-        completed_at?: string | null
+        schedule_id?: number | null
+        ticket_number?: string | null
+        status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'verified' | string
+        priority?: string | null
+        due_date?: string | null
+        perform_date?: string | null
+        completed_date?: string | null
+        cost?: number
+        actual_cost?: number | null
+        expected_odometer?: number | null
+        actual_odometer?: number | null
+        service_duration?: number | null
+        description?: string | null
         notes?: string | null
+        remark?: string | null
+        attachments?: string[] | null
+        occurrence_count?: number | null
         created_at: string
         updated_at: string
     }
     relationships: {
+        vendor?: {
+            id: number | string
+            name?: string
+            attributes?: { business_name?: string }
+        } | null
         schedule?: {
             id: number | string
             service_type?: string
-            due_date?: string
-        }
-        vehicle?: {
-            id: number | string
-            make?: string
-            model?: string
-            registration_number?: string
-        }
-        vendor?: { id: number | string; name?: string }
-        technician?: { id: number | string; f_name?: string; l_name?: string }
+            vehicle_id?: number | string
+        } | null
     }
 }
 

@@ -11,7 +11,8 @@ import {
     Bell, BellOff, Gauge, ListChecks, Car, User, Store,
     Play, ShieldCheck, X, Plus, Trash2, Paperclip,
     Settings2, BarChart2, ExternalLink, ArrowRight, Activity,
-    ClipboardList, Hash, FileText,
+    ClipboardList, Hash, FileText, Clock, DollarSign, Ticket,
+    AlertCircle, CheckSquare, Square, Info,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,41 +30,57 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import {
-    getScheduleById, getScheduleChecklists, getLogsBySchedule,
-    getLogParts, assignVendorToSchedule, assignLog, startLog,
+    getScheduleById, assignVendorToSchedule, assignLog, startLog,
     completeLog, verifyLog, cancelLog, updateLogProgress,
     addLogPart, deleteLogPart, uploadLogAttachment,
-    type ChecklistItem,
+    getLogParts,
 } from '@/lib/api/maintenance'
 import { getVendors } from '@/lib/api/vendors'
-import type { MaintenanceLog, MaintenancePart } from '@/types'
+import type { MaintenanceLog, MaintenancePart, ScheduleChecklist } from '@/types'
 
-// ─── Status / priority configs ────────────────────────────────────────────────
+// ─── Status configs ────────────────────────────────────────────────────────────
 
-const STATUS_CFG: Record<string, { label: string; pill: string; bar: string; dot: string }> = {
-    pending:     { label: 'Pending',     pill: 'bg-blue-50 text-blue-700 border-blue-100',    bar: 'bg-blue-500',    dot: 'bg-blue-500' },
-    in_progress: { label: 'In Progress', pill: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-400',   dot: 'bg-amber-500' },
-    completed:   { label: 'Completed',   pill: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', dot: 'bg-emerald-500' },
-    verified:    { label: 'Verified',    pill: 'bg-violet-50 text-violet-700 border-violet-100', bar: 'bg-violet-500', dot: 'bg-violet-500' },
-    cancelled:   { label: 'Cancelled',   pill: 'bg-slate-100 text-slate-500 border-slate-200', bar: 'bg-slate-300',   dot: 'bg-slate-400' },
-    overdue:     { label: 'Overdue',     pill: 'bg-rose-50 text-rose-700 border-rose-100',    bar: 'bg-rose-500',    dot: 'bg-rose-500' },
+const SCHEDULE_STATUS_CFG: Record<string, { label: string; pill: string; bar: string; dot: string }> = {
+    upcoming:    { label: 'Upcoming',    pill: 'bg-blue-50 text-blue-700 border-blue-100',          bar: 'bg-blue-500',    dot: 'bg-blue-400' },
+    pending:     { label: 'Pending',     pill: 'bg-blue-50 text-blue-700 border-blue-100',          bar: 'bg-blue-500',    dot: 'bg-blue-500' },
     active:      { label: 'Active',      pill: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', dot: 'bg-emerald-500' },
-    upcoming:    { label: 'Upcoming',    pill: 'bg-blue-50 text-blue-700 border-blue-100',    bar: 'bg-blue-500',    dot: 'bg-blue-400' },
+    in_progress: { label: 'In Progress', pill: 'bg-amber-50 text-amber-700 border-amber-100',       bar: 'bg-amber-400',   dot: 'bg-amber-500' },
+    completed:   { label: 'Completed',   pill: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', dot: 'bg-emerald-500' },
+    verified:    { label: 'Verified',    pill: 'bg-violet-50 text-violet-700 border-violet-100',    bar: 'bg-violet-500',  dot: 'bg-violet-500' },
+    overdue:     { label: 'Overdue',     pill: 'bg-rose-50 text-rose-700 border-rose-100',          bar: 'bg-rose-500',    dot: 'bg-rose-500' },
+    cancelled:   { label: 'Cancelled',   pill: 'bg-slate-100 text-slate-500 border-slate-200',      bar: 'bg-slate-300',   dot: 'bg-slate-400' },
+}
+
+const LOG_STATUS_CFG: Record<string, { label: string; pill: string; dot: string; bar: string }> = {
+    pending:     { label: 'Pending',     pill: 'bg-blue-50 text-blue-700 border-blue-100',          dot: 'bg-blue-400',    bar: 'bg-blue-400' },
+    in_progress: { label: 'In Progress', pill: 'bg-amber-50 text-amber-700 border-amber-100',       dot: 'bg-amber-500',   bar: 'bg-amber-400' },
+    completed:   { label: 'Completed',   pill: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-500', bar: 'bg-emerald-500' },
+    verified:    { label: 'Verified',    pill: 'bg-violet-50 text-violet-700 border-violet-100',    dot: 'bg-violet-500',  bar: 'bg-violet-500' },
+    cancelled:   { label: 'Cancelled',   pill: 'bg-slate-100 text-slate-500 border-slate-200',      dot: 'bg-slate-400',   bar: 'bg-slate-300' },
 }
 
 const PRIORITY_CFG: Record<string, { label: string; pill: string }> = {
     low:      { label: 'Low',      pill: 'bg-slate-50 text-slate-600 border-slate-200' },
+    normal:   { label: 'Normal',   pill: 'bg-sky-50 text-sky-700 border-sky-100' },
     medium:   { label: 'Medium',   pill: 'bg-amber-50 text-amber-700 border-amber-100' },
     high:     { label: 'High',     pill: 'bg-orange-50 text-orange-700 border-orange-100' },
     critical: { label: 'Critical', pill: 'bg-rose-50 text-rose-700 border-rose-100' },
 }
 
-function resolveScheduleStatus(status: string, dueDate?: string) {
-    const isOverdue = dueDate && isPast(new Date(dueDate)) && !isToday(new Date(dueDate)) && status !== 'completed'
-    return STATUS_CFG[isOverdue ? 'overdue' : status.toLowerCase()] ?? STATUS_CFG.pending
+const CHECKLIST_STATUS_CFG = {
+    completed: { label: 'Done',    pill: 'bg-emerald-50 text-emerald-700 border-emerald-100', Icon: CheckSquare, iconColor: 'text-emerald-500' },
+    pending:   { label: 'Pending', pill: 'bg-slate-50 text-slate-500 border-slate-100',       Icon: Square,      iconColor: 'text-slate-300' },
 }
 
-// ─── Tiny shared helpers ──────────────────────────────────────────────────────
+function resolveScheduleStatus(status: string, dueDate?: string) {
+    const normalized = status?.toLowerCase() ?? 'pending'
+    if (dueDate && isPast(new Date(dueDate)) && !isToday(new Date(dueDate)) && !['completed', 'verified', 'cancelled'].includes(normalized)) {
+        return SCHEDULE_STATUS_CFG.overdue
+    }
+    return SCHEDULE_STATUS_CFG[normalized] ?? SCHEDULE_STATUS_CFG.pending
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────────
 
 function KV({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
     return (
@@ -112,12 +129,15 @@ export default function MaintenanceScheduleDetailPage() {
     const [progressModal, setProgressModal] = useState<{ logId: string | number } | null>(null)
     const [addPartModal,  setAddPartModal]  = useState<{ logId: string | number } | null>(null)
 
-    // ── Queries ───────────────────────────────────────────────────────────────
+    // ── Queries ────────────────────────────────────────────────────────────────
 
-    const schedQ = useQuery({ queryKey: ['maintenance-schedule', id], queryFn: () => getScheduleById(id), enabled: !!id })
-    const checkQ = useQuery({ queryKey: ['maintenance-checklists', id], queryFn: () => getScheduleChecklists(id), enabled: !!id })
-    const logsQ  = useQuery({ queryKey: ['maintenance-logs-schedule', id], queryFn: () => getLogsBySchedule(id), enabled: !!id })
-    const vendQ  = useQuery({
+    const schedQ = useQuery({
+        queryKey: ['maintenance-schedule', id],
+        queryFn: () => getScheduleById(id),
+        enabled: !!id,
+    })
+
+    const vendQ = useQuery({
         queryKey: ['vendors-list-maint'],
         queryFn: () => getVendors(),
         enabled: assignVendorOpen || workflowModal?.action === 'assign',
@@ -133,7 +153,7 @@ export default function MaintenanceScheduleDetailPage() {
         onError: () => toast.error('Failed to assign vendor'),
     })
 
-    // ── Loading / error states ────────────────────────────────────────────────
+    // ── Loading / error ────────────────────────────────────────────────────────
 
     if (schedQ.isLoading) {
         return (
@@ -160,24 +180,28 @@ export default function MaintenanceScheduleDetailPage() {
         )
     }
 
-    // ── Derived data ──────────────────────────────────────────────────────────
+    // ── Derived data ───────────────────────────────────────────────────────────
 
-    const schedule  = schedQ.data.data.schedule
-    const attrs     = schedule.attributes
-    const vehicle   = schedule.relationships?.vehicle
-    const vendor    = schedule.relationships?.vendor
-    const assignedBy = (schedule.relationships as any)?.assigned_by
-    const checklists: ChecklistItem[] = checkQ.data?.data?.checklists ?? []
-    const logs: MaintenanceLog[]      = logsQ.data?.data?.logs ?? []
+    const schedule   = schedQ.data.data.schedule
+    const attrs      = schedule.attributes
+    const rels       = schedule.relationships ?? {}
+    const vehicle    = rels.vehicle
+    const vendor     = rels.vendor
+    const assignedBy = rels.assigned_by
+    const logs: MaintenanceLog[]        = rels.logs ?? []
+    const checklists: ScheduleChecklist[] = rels.checklists ?? []
 
-    const statusCfg  = resolveScheduleStatus(attrs.status, attrs.due_date)
-    const priorityCfg = PRIORITY_CFG[attrs.priority ?? 'low'] ?? PRIORITY_CFG.low
-    const reference  = (attrs as any).reference ?? `MS-${String(schedule.id).padStart(4, '0')}`
-    const dueDate    = attrs.due_date ? new Date(attrs.due_date) : null
-    const daysLeft   = dueDate ? differenceInDays(dueDate, new Date()) : null
+    const statusCfg   = resolveScheduleStatus(attrs.status, attrs.due_date)
+    const priorityCfg = PRIORITY_CFG[attrs.priority ?? 'normal'] ?? PRIORITY_CFG.normal
+    const reference   = attrs.reference ?? `MS-${String(schedule.id).padStart(4, '0')}`
+    const dueDate     = attrs.due_date ? new Date(attrs.due_date) : null
+    const daysLeft    = dueDate ? differenceInDays(dueDate, new Date()) : null
 
     const openLogs      = logs.filter(l => !['completed', 'verified', 'cancelled'].includes(l.attributes.status))
     const completedLogs = logs.filter(l => ['completed', 'verified'].includes(l.attributes.status))
+    const doneChecklists = checklists.filter(c => c.attributes.status === 'completed')
+
+    const totalPartsKobo = logs.reduce((sum, l) => sum + (l.attributes.cost ?? 0), 0)
 
     const intervalLabel = attrs.schedule_type === 'mileage'
         ? `Every ${(attrs.interval_value ?? 0).toLocaleString()} ${(attrs.interval_unit ?? 'km').toUpperCase()}`
@@ -193,7 +217,7 @@ export default function MaintenanceScheduleDetailPage() {
     const toggleLog  = (lid: string | number) =>
         setExpandedLogs(p => { const n = new Set(p); n.has(lid) ? n.delete(lid) : n.add(lid); return n })
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     return (
         <div className="min-h-full bg-slate-50">
@@ -234,13 +258,18 @@ export default function MaintenanceScheduleDetailPage() {
                         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                             <div className="space-y-3 flex-1 min-w-0">
                                 <div className="flex items-center gap-2.5 flex-wrap">
-                                    <h1 className="text-2xl font-bold text-slate-900">
+                                    <h1 className="text-2xl font-bold text-slate-900 capitalize">
                                         {(attrs.service_type ?? 'Maintenance').replace(/_/g, ' ')}
                                     </h1>
                                     <span className="text-slate-300">·</span>
                                     <span className="text-sm text-slate-400 capitalize font-medium">
                                         {attrs.schedule_type?.replace(/_/g, ' ')} schedule
                                     </span>
+                                    {attrs.is_recurring && (
+                                        <Badge variant="outline" className="text-[10px] px-2 py-0 bg-blue-50 text-blue-600 border-blue-100">
+                                            Recurring
+                                        </Badge>
+                                    )}
                                 </div>
 
                                 {vehicle && (
@@ -260,6 +289,13 @@ export default function MaintenanceScheduleDetailPage() {
                                     <p className="text-sm text-slate-500 leading-relaxed max-w-xl">{attrs.description}</p>
                                 )}
 
+                                {attrs.notes && (
+                                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 max-w-xl">
+                                        <Info className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-amber-700 italic">{attrs.notes}</p>
+                                    </div>
+                                )}
+
                                 <p className="text-[11px] text-slate-400 font-medium">
                                     Created {attrs.created_at ? format(new Date(attrs.created_at), 'dd MMM yyyy') : '—'}
                                 </p>
@@ -269,7 +305,8 @@ export default function MaintenanceScheduleDetailPage() {
                             <div className="shrink-0 bg-slate-50 rounded-xl border border-slate-100 px-5 py-4 text-right min-w-[160px]">
                                 <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Due Date</p>
                                 <p className={cn('text-3xl font-black tracking-tight leading-none',
-                                    dueDate && isPast(dueDate) && attrs.status !== 'completed' ? 'text-rose-600' : 'text-slate-900'
+                                    dueDate && isPast(dueDate) && !['completed', 'cancelled'].includes(attrs.status)
+                                        ? 'text-rose-600' : 'text-slate-900'
                                 )}>
                                     {dueDate ? format(dueDate, 'dd MMM') : '—'}
                                 </p>
@@ -289,11 +326,13 @@ export default function MaintenanceScheduleDetailPage() {
                 {/* ── Stats bar ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {([
-                        { label: 'Total Logs',   value: logs.length,          icon: ClipboardList, color: 'text-slate-600' },
-                        { label: 'Open',         value: openLogs.length,      icon: Activity,      color: 'text-amber-600' },
-                        { label: 'Completed',    value: completedLogs.length, icon: CheckCircle2,  color: 'text-emerald-600' },
-                        { label: 'Est. Cost',    value: attrs.estimated_cost != null ? `₦${Number(attrs.estimated_cost).toLocaleString()}` : '—', icon: Gauge, color: 'text-blue-600' },
-                        { label: daysLeft !== null && daysLeft < 0 ? 'Overdue' : 'Days to Due', value: daysLeft !== null ? `${Math.abs(daysLeft)}d` : '—', icon: Calendar, color: daysLeft !== null && daysLeft < 0 ? 'text-rose-600' : 'text-slate-600' },
+                        { label: 'Total Logs',     value: logs.length,                                                                   icon: ClipboardList, color: 'text-slate-600' },
+                        { label: 'Open',           value: openLogs.length,                                                               icon: Activity,      color: 'text-amber-600' },
+                        { label: 'Completed',      value: completedLogs.length,                                                          icon: CheckCircle2,  color: 'text-emerald-600' },
+                        { label: 'Checklist',      value: `${doneChecklists.length}/${checklists.length}`,                               icon: ListChecks,    color: 'text-blue-600' },
+                        { label: daysLeft !== null && daysLeft < 0 ? 'Overdue' : 'Days to Due',
+                          value: daysLeft !== null ? `${Math.abs(daysLeft)}d` : '—',
+                          icon: Calendar, color: daysLeft !== null && daysLeft < 0 ? 'text-rose-600' : 'text-slate-600' },
                     ] as const).map(({ label, value, icon: Icon, color }) => (
                         <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3.5 flex items-center gap-3 shadow-sm">
                             <Icon className={cn('h-5 w-5 shrink-0', color)} />
@@ -308,38 +347,39 @@ export default function MaintenanceScheduleDetailPage() {
                 {/* ── Tabs ── */}
                 <Tabs defaultValue="info">
                     <TabsList variant="line" className="border-b border-slate-200 w-full justify-start rounded-none bg-transparent h-auto pb-0 gap-0">
-                        <TabsTrigger value="info"      className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
-                            Info
-                        </TabsTrigger>
-                        <TabsTrigger value="checklist" className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
-                            Checklist
-                            {checklists.length > 0 && (
-                                <span className="ml-2 text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
-                                    {checklists.length}
-                                </span>
-                            )}
-                        </TabsTrigger>
-                        <TabsTrigger value="logs"      className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
-                            Workflow Log
-                            {logs.length > 0 && (
-                                <span className={cn(
-                                    'ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                                    openLogs.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-                                )}>
-                                    {logs.length}
-                                </span>
-                            )}
-                        </TabsTrigger>
+                        {[
+                            { value: 'info',      label: 'Info',         badge: null },
+                            { value: 'checklist', label: 'Checklist',    badge: checklists.length > 0 ? `${doneChecklists.length}/${checklists.length}` : null },
+                            { value: 'logs',      label: 'Work Logs',    badge: logs.length > 0 ? String(logs.length) : null },
+                        ].map(tab => (
+                            <TabsTrigger
+                                key={tab.value}
+                                value={tab.value}
+                                className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent"
+                            >
+                                {tab.label}
+                                {tab.badge && (
+                                    <span className={cn(
+                                        'ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                                        tab.value === 'logs' && openLogs.length > 0
+                                            ? 'bg-amber-100 text-amber-700'
+                                            : 'bg-slate-100 text-slate-500'
+                                    )}>
+                                        {tab.badge}
+                                    </span>
+                                )}
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
 
                     {/* ── Info tab ── */}
                     <TabsContent value="info" className="mt-6">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                            {/* Left (2/3) */}
+                            {/* Left 2/3 */}
                             <div className="lg:col-span-2 space-y-5">
 
-                                {/* Schedule Configuration — collapsible */}
+                                {/* Schedule Configuration */}
                                 <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
                                     <button
                                         onClick={() => setConfigOpen(p => !p)}
@@ -351,35 +391,28 @@ export default function MaintenanceScheduleDetailPage() {
                                             </div>
                                             <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Schedule Configuration</span>
                                         </div>
-                                        {configOpen
-                                            ? <ChevronUp className="h-4 w-4 text-slate-400" />
-                                            : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                                        {configOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                                     </button>
                                     {configOpen && (
                                         <CardContent className="px-6 pt-1 pb-5 border-t border-slate-100">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10">
                                                 <div>
-                                                    <KV label="Schedule Type" value={attrs.schedule_type?.toUpperCase()} />
-                                                    <KV label="Recurring" value={
+                                                    <KV label="Schedule Type"  value={attrs.schedule_type?.toUpperCase()} />
+                                                    <KV label="Recurring"      value={
                                                         <span className={attrs.is_recurring ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
                                                             {attrs.is_recurring ? 'Yes' : 'No'}
                                                         </span>
                                                     } />
-                                                    <KV label="Interval"     value={intervalLabel} />
-                                                    <KV label="End Date"     value={attrs.end_date ? format(new Date(attrs.end_date), 'dd MMM yyyy') : null} />
-                                                    <KV label="Occurrence #" value={attrs.occurrence_number ?? null} />
+                                                    <KV label="Interval"       value={intervalLabel} />
+                                                    <KV label="End Date"       value={attrs.end_date ? format(new Date(attrs.end_date), 'dd MMM yyyy') : null} />
+                                                    <KV label="Occurrence #"   value={attrs.occurrence_number != null ? `${attrs.occurrence_number} of ${attrs.occurrences ?? '∞'}` : null} />
                                                 </div>
                                                 <div>
-                                                    <KV label="Occurrence Limit" value={attrs.occurrence_count ?? null} />
-                                                    <KV label="Est. Cost"        value={attrs.estimated_cost != null ? `₦${Number(attrs.estimated_cost).toLocaleString()}` : null} />
-                                                    <KV label="Target Odometer"  value={attrs.expected_odometer != null ? `${attrs.expected_odometer.toLocaleString()} KM` : null} />
-                                                    <KV label="Last Scheduled"   value={attrs.last_scheduled_at ? format(new Date(attrs.last_scheduled_at), 'dd MMM yyyy') : null} />
-                                                    <KV label="Notifications" value={
-                                                        <span className={cn('flex items-center gap-1.5', attrs.turn_on_notification ? 'text-emerald-600' : 'text-slate-400')}>
-                                                            {attrs.turn_on_notification ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
-                                                            {attrs.turn_on_notification ? 'On' : 'Off'}
-                                                        </span>
-                                                    } />
+                                                    <KV label="Est. Cost"       value={attrs.estimated_cost != null ? `₦${Number(attrs.estimated_cost).toLocaleString()}` : null} />
+                                                    <KV label="Service Duration" value={attrs.service_duration != null ? `${attrs.service_duration} min` : null} />
+                                                    <KV label="Target Odometer" value={attrs.expected_odometer != null ? `${attrs.expected_odometer.toLocaleString()} km` : null} />
+                                                    <KV label="Next Due"        value={attrs.next_due_date ? format(new Date(attrs.next_due_date), 'dd MMM yyyy') : null} />
+                                                    <KV label="Last Scheduled"  value={attrs.last_scheduled_at ? format(new Date(attrs.last_scheduled_at), 'dd MMM yyyy') : null} />
                                                 </div>
                                             </div>
                                         </CardContent>
@@ -392,6 +425,8 @@ export default function MaintenanceScheduleDetailPage() {
                                         <SectionHeader icon={Store} color="bg-indigo-50" iconColor="text-indigo-600">
                                             Assignment &amp; Vendor
                                         </SectionHeader>
+
+                                        {/* Vendor row */}
                                         <div className="flex items-center justify-between py-2">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
@@ -402,6 +437,8 @@ export default function MaintenanceScheduleDetailPage() {
                                                     <p className="text-sm font-semibold text-slate-800">
                                                         {vendor?.name ?? <span className="text-slate-400 font-normal italic">Not assigned</span>}
                                                     </p>
+                                                    {vendor?.email && <p className="text-[11px] text-slate-400">{vendor.email}</p>}
+                                                    {vendor?.phone && <p className="text-[11px] text-slate-400">{vendor.phone}</p>}
                                                 </div>
                                             </div>
                                             {canManage && (
@@ -410,6 +447,7 @@ export default function MaintenanceScheduleDetailPage() {
                                                 </Button>
                                             )}
                                         </div>
+
                                         {assignedBy && (
                                             <>
                                                 <Separator className="my-3" />
@@ -428,51 +466,56 @@ export default function MaintenanceScheduleDetailPage() {
                                         )}
                                     </CardContent>
                                 </Card>
-                            </div>
 
-                            {/* Right (1/3) */}
-                            <div className="space-y-5">
-
-                                {/* Vehicle */}
-                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                    <CardContent className="p-5">
-                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Vehicle</p>
-                                        {vehicle ? (
+                                {/* Vehicle details */}
+                                {vehicle && (
+                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                        <CardContent className="p-6">
+                                            <SectionHeader icon={Car} color="bg-slate-100" iconColor="text-slate-600">
+                                                Vehicle
+                                            </SectionHeader>
                                             <Link
                                                 href={`/vehicles/${vehicle.id}`}
-                                                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all group"
+                                                className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all group"
                                             >
-                                                <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                                                    <Car className="h-5 w-5 text-white" />
+                                                <div className="h-12 w-12 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
+                                                    <Car className="h-6 w-6 text-white" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 truncate">{vehicle.registration_number}</p>
-                                                    <p className="text-[11px] text-slate-400 font-medium">{vehicle.make} {vehicle.model}</p>
+                                                    <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700">{vehicle.registration_number}</p>
+                                                    <p className="text-xs text-slate-500">{vehicle.make} {vehicle.model}</p>
+                                                    {vehicle.current_odometer != null && (
+                                                        <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                                            <Gauge className="h-3 w-3" />
+                                                            {vehicle.current_odometer.toLocaleString()} km current odometer
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 shrink-0" />
                                             </Link>
-                                        ) : (
-                                            <p className="text-sm text-slate-400 italic">No vehicle linked</p>
-                                        )}
-                                    </CardContent>
-                                </Card>
-
-                                {/* Series info */}
-                                {(attrs.is_recurring || attrs.series_id) && (
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-5">
-                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Recurrence Series</p>
-                                            <KV label="Occurrence" value={`${attrs.occurrence_number ?? '—'} of ${attrs.occurrence_count ?? '∞'}`} />
-                                            {attrs.series_id && <KV label="Series ID" value={attrs.series_id} mono />}
-                                            {attrs.is_master_schedule && (
-                                                <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
-                                                    <Hash className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                                    <span className="text-[11px] font-semibold text-blue-700">Master schedule</span>
-                                                </div>
-                                            )}
                                         </CardContent>
                                     </Card>
                                 )}
+                            </div>
+
+                            {/* Right 1/3 */}
+                            <div className="space-y-5">
+
+                                {/* Record info */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <CardContent className="p-5">
+                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Record Info</p>
+                                        <KV label="Reference" value={reference} mono />
+                                        <KV label="Priority"  value={
+                                            attrs.priority
+                                                ? <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', priorityCfg.pill)}>{priorityCfg.label}</Badge>
+                                                : null
+                                        } />
+                                        <KV label="Service Type" value={<span className="capitalize">{attrs.service_type?.replace(/_/g, ' ')}</span>} />
+                                        <KV label="Created"   value={attrs.created_at ? format(new Date(attrs.created_at), 'dd MMM yyyy') : null} />
+                                        <KV label="Updated"   value={attrs.updated_at ? format(new Date(attrs.updated_at), 'dd MMM yyyy') : null} />
+                                    </CardContent>
+                                </Card>
 
                                 {/* Notifications */}
                                 <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
@@ -488,26 +531,28 @@ export default function MaintenanceScheduleDetailPage() {
                                                 <p className={cn('text-sm font-semibold', attrs.turn_on_notification ? 'text-emerald-700' : 'text-slate-500')}>
                                                     {attrs.turn_on_notification ? 'Notifications on' : 'Notifications off'}
                                                 </p>
-                                                <p className="text-[11px] text-slate-400">Reminder alerts</p>
+                                                <p className="text-[11px] text-slate-400">Reminder alerts for this schedule</p>
                                             </div>
                                         </div>
                                     </CardContent>
                                 </Card>
 
-                                {/* Record info */}
-                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                    <CardContent className="p-5">
-                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Record Info</p>
-                                        <KV label="Reference" value={reference} mono />
-                                        <KV label="Priority" value={
-                                            attrs.priority
-                                                ? <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', PRIORITY_CFG[attrs.priority]?.pill ?? '')}>{priorityCfg.label}</Badge>
-                                                : null
-                                        } />
-                                        <KV label="Created" value={attrs.created_at ? format(new Date(attrs.created_at), 'dd MMM yyyy') : null} />
-                                        <KV label="Updated" value={attrs.updated_at ? format(new Date(attrs.updated_at), 'dd MMM yyyy') : null} />
-                                    </CardContent>
-                                </Card>
+                                {/* Series info */}
+                                {(attrs.is_recurring || attrs.series_id) && (
+                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                        <CardContent className="p-5">
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Recurrence Series</p>
+                                            <KV label="Occurrence" value={`${attrs.occurrence_number ?? '—'} of ${attrs.occurrences ?? '∞'}`} />
+                                            {attrs.series_id && <KV label="Series ID" value={attrs.series_id} mono />}
+                                            {attrs.is_master_schedule && (
+                                                <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                                                    <Hash className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                    <span className="text-[11px] font-semibold text-blue-700">Master schedule</span>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )}
                             </div>
                         </div>
                     </TabsContent>
@@ -524,24 +569,64 @@ export default function MaintenanceScheduleDetailPage() {
                                         <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Checklist Items</span>
                                     </div>
                                     {checklists.length > 0 && (
-                                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                                            {checklists.length} items
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {/* Progress bar */}
+                                            <div className="hidden sm:flex items-center gap-2">
+                                                <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-emerald-500 rounded-full transition-all"
+                                                        style={{ width: `${checklists.length > 0 ? (doneChecklists.length / checklists.length) * 100 : 0}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-[11px] font-bold text-slate-500">
+                                                    {doneChecklists.length}/{checklists.length}
+                                                </span>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
 
-                                {checkQ.isLoading ? (
-                                    <div className="flex justify-center py-10">
-                                        <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
-                                    </div>
-                                ) : checklists.length > 0 ? (
+                                {checklists.length > 0 ? (
                                     <ul className="space-y-2">
-                                        {checklists.map((item, i) => (
-                                            <li key={item.id ?? i} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-100">
-                                                <div className="h-4 w-4 rounded border-2 border-slate-300 bg-white shrink-0" />
-                                                <span className="text-sm font-medium text-slate-700">{item.name}</span>
-                                            </li>
-                                        ))}
+                                        {checklists.map((item, i) => {
+                                            const isDone = item.attributes.status === 'completed'
+                                            const cfg = isDone ? CHECKLIST_STATUS_CFG.completed : CHECKLIST_STATUS_CFG.pending
+                                            return (
+                                                <li
+                                                    key={item.id ?? i}
+                                                    className={cn(
+                                                        'flex items-start gap-3 px-4 py-3 rounded-xl border transition-colors',
+                                                        isDone ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'
+                                                    )}
+                                                >
+                                                    <cfg.Icon className={cn('h-4 w-4 shrink-0 mt-0.5', cfg.iconColor)} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className={cn(
+                                                                'text-sm font-medium',
+                                                                isDone ? 'text-slate-500 line-through' : 'text-slate-700'
+                                                            )}>
+                                                                {item.attributes.name}
+                                                            </span>
+                                                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold shrink-0', cfg.pill)}>
+                                                                {cfg.label}
+                                                            </Badge>
+                                                        </div>
+                                                        {item.attributes.description && (
+                                                            <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                                                                {item.attributes.description}
+                                                            </p>
+                                                        )}
+                                                        {isDone && item.attributes.completed_at && (
+                                                            <p className="text-[10px] text-emerald-500 mt-1 flex items-center gap-1">
+                                                                <Check className="h-3 w-3" />
+                                                                Completed {format(new Date(item.attributes.completed_at), 'dd MMM yyyy')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            )
+                                        })}
                                     </ul>
                                 ) : (
                                     <div className="flex flex-col items-center py-16 gap-3">
@@ -556,7 +641,7 @@ export default function MaintenanceScheduleDetailPage() {
                         </Card>
                     </TabsContent>
 
-                    {/* ── Workflow Log tab ── */}
+                    {/* ── Work Logs tab ── */}
                     <TabsContent value="logs" className="mt-6">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2.5">
@@ -565,13 +650,15 @@ export default function MaintenanceScheduleDetailPage() {
                                 </div>
                                 <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Work Logs</span>
                                 <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full ml-1">{logs.length}</span>
+                                {totalPartsKobo > 0 && (
+                                    <span className="ml-auto text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                        <DollarSign className="h-3.5 w-3.5" />
+                                        Total parts: ₦{(totalPartsKobo / 100).toLocaleString()}
+                                    </span>
+                                )}
                             </div>
 
-                            {logsQ.isLoading ? (
-                                <div className="bg-white rounded-2xl border border-slate-200 flex justify-center py-12">
-                                    <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                                </div>
-                            ) : logs.length === 0 ? (
+                            {logs.length === 0 ? (
                                 <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center">
                                     <div className="h-14 w-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
                                         <Wrench className="h-7 w-7 text-slate-200" />
@@ -604,7 +691,6 @@ export default function MaintenanceScheduleDetailPage() {
             </div>
 
             {/* ── Modals ── */}
-
             <AssignVendorModal
                 open={assignVendorOpen}
                 onClose={() => setAssignVendorOpen(false)}
@@ -623,7 +709,7 @@ export default function MaintenanceScheduleDetailPage() {
                     vendors={workflowModal.action === 'assign' ? vendorList : []}
                     onClose={() => setWorkflowModal(null)}
                     onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ['maintenance-logs-schedule', id] })
+                        queryClient.invalidateQueries({ queryKey: ['maintenance-schedule', id] })
                         setWorkflowModal(null)
                     }}
                 />
@@ -635,7 +721,7 @@ export default function MaintenanceScheduleDetailPage() {
                     logId={progressModal.logId}
                     onClose={() => setProgressModal(null)}
                     onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ['maintenance-logs-schedule', id] })
+                        queryClient.invalidateQueries({ queryKey: ['maintenance-schedule', id] })
                         setProgressModal(null)
                     }}
                 />
@@ -647,7 +733,7 @@ export default function MaintenanceScheduleDetailPage() {
                     logId={addPartModal.logId}
                     onClose={() => setAddPartModal(null)}
                     onSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ['log-parts', addPartModal.logId] })
+                        queryClient.invalidateQueries({ queryKey: ['maintenance-schedule', id] })
                         setAddPartModal(null)
                     }}
                 />
@@ -671,42 +757,41 @@ function WorkLogCard({
     onAddPart: () => void
 }) {
     const queryClient = useQueryClient()
-    const { status } = log.attributes
-    const vendor     = log.relationships.vendor
-    const tech       = log.relationships.technician
-    const techName   = tech ? `${tech.f_name ?? ''} ${tech.l_name ?? ''}`.trim() : null
-    const logRef     = (log.attributes as any).reference ?? `WL-${String(log.id).padStart(4, '0')}`
-    const statusCfg  = STATUS_CFG[status] ?? STATUS_CFG.pending
-    const progress   = log.attributes.progress_percent ?? 0
+    const { status }  = log.attributes
+    const vendor      = log.relationships.vendor
+    const vendorName  = vendor?.attributes?.business_name ?? vendor?.name ?? null
+    const logRef      = log.attributes.ticket_number ?? `WL-${String(log.id).padStart(4, '0')}`
+    const statusCfg   = LOG_STATUS_CFG[status] ?? LOG_STATUS_CFG.pending
+    const priorityCfg = log.attributes.priority ? (PRIORITY_CFG[log.attributes.priority] ?? PRIORITY_CFG.normal) : null
 
     const partsQ = useQuery({
         queryKey: ['log-parts', log.id],
-        queryFn: () => getLogParts(log.id),
-        enabled: expanded,
+        queryFn:  () => getLogParts(log.id),
+        enabled:  expanded,
     })
 
     const delPartMut = useMutation({
         mutationFn: (partId: string | number) => deleteLogPart(log.id, partId),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['log-parts', log.id] }); toast.success('Part removed') },
-        onError: () => toast.error('Failed to remove part'),
+        onError:   () => toast.error('Failed to remove part'),
     })
 
-    const parts: MaintenancePart[]  = partsQ.data?.data?.parts ?? []
+    const parts: MaintenancePart[] = partsQ.data?.data?.parts ?? []
     const totalKobo = parts.reduce((s, p) => s + p.attributes.quantity * p.attributes.unit_price_kobo, 0)
 
     const actions: { key: string; label: string; variant: 'default' | 'outline'; icon: React.ElementType; fn: () => void }[] = []
     if (canManage && status === 'pending' && !vendor)
-        actions.push({ key: 'assign', label: 'Assign', variant: 'default', icon: User, fn: () => onWorkflowAction('assign', 'Assign Log', 'Assign a vendor and/or technician to this work log.') })
+        actions.push({ key: 'assign',   label: 'Assign',    variant: 'default',  icon: User,         fn: () => onWorkflowAction('assign',   'Assign Log',       'Assign a vendor and/or technician to this work log.') })
     if (canAct && status === 'pending' && vendor)
-        actions.push({ key: 'start', label: 'Start', variant: 'default', icon: Play, fn: () => onWorkflowAction('start', 'Start Work Log', 'Mark this log as in progress?') })
+        actions.push({ key: 'start',    label: 'Start',     variant: 'default',  icon: Play,         fn: () => onWorkflowAction('start',    'Start Work Log',   'Mark this log as in progress?') })
     if (canAct && status === 'in_progress') {
-        actions.push({ key: 'complete', label: 'Complete', variant: 'default',  icon: CheckCircle2, fn: () => onWorkflowAction('complete', 'Complete Work Log', 'Mark this log as completed?') })
-        actions.push({ key: 'progress', label: 'Progress',  variant: 'outline', icon: BarChart2,    fn: onUpdateProgress })
-        actions.push({ key: 'cancel',   label: 'Cancel',    variant: 'outline', icon: X,            fn: () => onWorkflowAction('cancel', 'Cancel Work Log', 'Provide a reason for cancellation.') })
+        actions.push({ key: 'complete', label: 'Complete',  variant: 'default',  icon: CheckCircle2, fn: () => onWorkflowAction('complete', 'Complete Log',     'Mark this log as completed?') })
+        actions.push({ key: 'progress', label: 'Progress',  variant: 'outline',  icon: BarChart2,    fn: onUpdateProgress })
+        actions.push({ key: 'cancel',   label: 'Cancel',    variant: 'outline',  icon: X,            fn: () => onWorkflowAction('cancel',   'Cancel Log',       'Provide a reason for cancellation.') })
     }
     if (canManage && status === 'completed') {
-        actions.push({ key: 'verify', label: 'Verify', variant: 'default', icon: ShieldCheck, fn: () => onWorkflowAction('verify', 'Verify Work Log', 'Verify and close this work log?') })
-        actions.push({ key: 'cancel', label: 'Cancel', variant: 'outline', icon: X,           fn: () => onWorkflowAction('cancel', 'Cancel Work Log', 'Provide a reason for cancellation.') })
+        actions.push({ key: 'verify',   label: 'Verify',    variant: 'default',  icon: ShieldCheck,  fn: () => onWorkflowAction('verify',   'Verify Work Log',  'Verify and close this work log?') })
+        actions.push({ key: 'cancel',   label: 'Cancel',    variant: 'outline',  icon: X,            fn: () => onWorkflowAction('cancel',   'Cancel Log',       'Provide a reason for cancellation.') })
     }
 
     return (
@@ -714,26 +799,42 @@ function WorkLogCard({
             <div className="px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0">
-                        <div className={cn('h-2 w-2 rounded-full mt-1.5 shrink-0', statusCfg.dot)} />
+                        <div className={cn('h-2 w-2 rounded-full mt-2 shrink-0', statusCfg.dot)} />
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-[13px] font-bold text-slate-900">{logRef}</span>
+                                <span className="font-mono text-[13px] font-bold text-slate-900 flex items-center gap-1">
+                                    <Ticket className="h-3 w-3 text-slate-400" />
+                                    {logRef}
+                                </span>
                                 <Badge variant="outline" className={cn('text-[10px] font-semibold px-2 py-0', statusCfg.pill)}>
                                     {statusCfg.label}
                                 </Badge>
+                                {priorityCfg && (
+                                    <Badge variant="outline" className={cn('text-[10px] font-semibold px-2 py-0', priorityCfg.pill)}>
+                                        {priorityCfg.label}
+                                    </Badge>
+                                )}
                             </div>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                {vendor && (
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                {vendorName && (
                                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <Store className="h-3 w-3 shrink-0" />{vendor.name}
+                                        <Store className="h-3 w-3 shrink-0" />{vendorName}
                                     </span>
                                 )}
-                                {techName && (
+                                {log.attributes.due_date && (
                                     <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <User className="h-3 w-3 shrink-0" />{techName}
+                                        <Calendar className="h-3 w-3 shrink-0" />
+                                        Due {format(new Date(log.attributes.due_date), 'dd MMM yyyy')}
                                     </span>
                                 )}
-                                <span className="text-[11px] text-slate-400">
+                                {log.attributes.cost != null && log.attributes.cost > 0 && (
+                                    <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                                        <DollarSign className="h-3 w-3 shrink-0" />
+                                        ₦{(log.attributes.cost / 100).toLocaleString()}
+                                    </span>
+                                )}
+                                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
                                     {format(new Date(log.attributes.created_at), 'dd MMM yyyy')}
                                 </span>
                             </div>
@@ -756,43 +857,48 @@ function WorkLogCard({
                         </button>
                     </div>
                 </div>
-
-                {status === 'in_progress' && (
-                    <div className="mt-3 space-y-1">
-                        <div className="flex justify-between">
-                            <span className="text-[11px] text-slate-400 font-medium">Progress</span>
-                            <span className="text-[11px] font-bold text-slate-600">{progress}%</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {expanded && (
                 <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-5 space-y-6">
 
-                    {/* Progress detail */}
-                    {['in_progress', 'completed', 'verified'].includes(status) && (
-                        <div>
-                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Progress Tracker</p>
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                    <div
-                                        className={cn('h-full rounded-full transition-all',
-                                            status === 'verified' ? 'bg-violet-500' :
-                                            status === 'completed' ? 'bg-emerald-500' : 'bg-amber-400'
-                                        )}
-                                        style={{ width: `${progress}%` }}
-                                    />
-                                </div>
-                                <span className="text-sm font-black text-slate-700 shrink-0 w-10 text-right">{progress}%</span>
+                    {/* Log details grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                            { label: 'Actual Cost',     value: log.attributes.actual_cost != null ? `₦${(log.attributes.actual_cost / 100).toLocaleString()}` : null, icon: DollarSign },
+                            { label: 'Service Duration', value: log.attributes.service_duration != null ? `${log.attributes.service_duration} min` : null, icon: Clock },
+                            { label: 'Actual Odometer', value: log.attributes.actual_odometer != null ? `${log.attributes.actual_odometer.toLocaleString()} km` : null, icon: Gauge },
+                            { label: 'Completed',        value: log.attributes.completed_date ? format(new Date(log.attributes.completed_date), 'dd MMM yyyy') : null, icon: CheckCircle2 },
+                        ].filter(d => d.value != null).map(({ label, value, icon: Icon }) => (
+                            <div key={label} className="bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                                <p className="text-sm font-bold text-slate-800">{value}</p>
                             </div>
+                        ))}
+                    </div>
+
+                    {/* Description / notes / remark */}
+                    {(log.attributes.description || log.attributes.notes || log.attributes.remark) && (
+                        <div className="space-y-2">
+                            {log.attributes.description && (
+                                <div className="bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Description</p>
+                                    <p className="text-xs text-slate-600">{log.attributes.description}</p>
+                                </div>
+                            )}
                             {log.attributes.notes && (
-                                <p className="text-xs text-slate-500 mt-2 bg-white rounded-lg px-3 py-2 border border-slate-100 italic">
-                                    {log.attributes.notes}
-                                </p>
+                                <div className="bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Notes</p>
+                                    <p className="text-xs text-slate-600 italic">{log.attributes.notes}</p>
+                                </div>
+                            )}
+                            {log.attributes.remark && (
+                                <div className="bg-amber-50 rounded-xl border border-amber-100 px-3 py-2.5">
+                                    <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />Remark
+                                    </p>
+                                    <p className="text-xs text-amber-700">{log.attributes.remark}</p>
+                                </div>
                             )}
                         </div>
                     )}
@@ -824,11 +930,16 @@ function WorkLogCard({
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {parts.map(part => {
-                                            const unit    = part.attributes.unit_price_kobo / 100
+                                            const unit     = part.attributes.unit_price_kobo / 100
                                             const subtotal = part.attributes.quantity * unit
                                             return (
                                                 <tr key={part.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-3 py-2.5 font-medium text-slate-800">{part.attributes.name}</td>
+                                                    <td className="px-3 py-2.5 font-medium text-slate-800">
+                                                        {part.attributes.name}
+                                                        {part.attributes.supplier && (
+                                                            <span className="text-[10px] text-slate-400 ml-1.5">({part.attributes.supplier})</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-3 py-2.5 text-right text-slate-500">{part.attributes.quantity}</td>
                                                     <td className="px-3 py-2.5 text-right text-slate-500">₦{unit.toLocaleString()}</td>
                                                     <td className="px-3 py-2.5 text-right font-semibold text-slate-800">₦{subtotal.toLocaleString()}</td>
@@ -848,13 +959,8 @@ function WorkLogCard({
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t border-slate-200 bg-slate-50">
-                                            <td colSpan={canAct && status === 'in_progress' ? 3 : 3}
-                                                className="px-3 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Total Cost
-                                            </td>
-                                            <td className="px-3 py-2.5 text-right font-black text-slate-900">
-                                                ₦{(totalKobo / 100).toLocaleString()}
-                                            </td>
+                                            <td colSpan={3} className="px-3 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total</td>
+                                            <td className="px-3 py-2.5 text-right font-black text-slate-900">₦{(totalKobo / 100).toLocaleString()}</td>
                                             {canAct && status === 'in_progress' && <td />}
                                         </tr>
                                     </tfoot>
@@ -876,10 +982,28 @@ function WorkLogCard({
                                 <AttachmentUploadBtn logId={log.id} />
                             )}
                         </div>
-                        <div className="flex items-center gap-2 py-2 text-slate-400">
-                            <Paperclip className="h-4 w-4 shrink-0" />
-                            <span className="text-xs italic">No attachments yet</span>
-                        </div>
+                        {log.attributes.attachments && log.attributes.attachments.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                                {log.attributes.attachments.map((url, i) => (
+                                    <a
+                                        key={i}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                                    >
+                                        <Paperclip className="h-3 w-3 shrink-0" />
+                                        Attachment {i + 1}
+                                        <ExternalLink className="h-3 w-3 shrink-0" />
+                                    </a>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 py-2 text-slate-400">
+                                <Paperclip className="h-4 w-4 shrink-0" />
+                                <span className="text-xs italic">No attachments yet</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -887,14 +1011,14 @@ function WorkLogCard({
     )
 }
 
-// ─── Attachment upload button ─────────────────────────────────────────────────
+// ─── Attachment upload button ──────────────────────────────────────────────────
 
 function AttachmentUploadBtn({ logId }: { logId: string | number }) {
     const ref = React.useRef<HTMLInputElement>(null)
     const { mutate, isPending } = useMutation({
         mutationFn: (file: File) => { const fd = new FormData(); fd.append('file', file); return uploadLogAttachment(logId, fd) },
         onSuccess: () => toast.success('Attachment uploaded'),
-        onError: () => toast.error('Upload failed'),
+        onError:   () => toast.error('Upload failed'),
     })
     return (
         <>
@@ -902,7 +1026,10 @@ function AttachmentUploadBtn({ logId }: { logId: string | number }) {
                 {isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Paperclip className="mr-1 h-3 w-3" />}
                 Attach
             </Button>
-            <input ref={ref} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) mutate(f); e.target.value = '' }} />
+            <input
+                ref={ref} type="file" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) mutate(f); e.target.value = '' }}
+            />
         </>
     )
 }
@@ -916,9 +1043,9 @@ function WorkflowActionModal({
     action: string; logId: string | number; vendors: any[]
     onClose: () => void; onSuccess: () => void
 }) {
-    const [note,        setNote]        = useState('')
-    const [vendorId,    setVendorId]    = useState('')
-    const [techId,      setTechId]      = useState('')
+    const [note,     setNote]     = useState('')
+    const [vendorId, setVendorId] = useState('')
+    const [techId,   setTechId]   = useState('')
 
     const { mutate, isPending } = useMutation({
         mutationFn: async () => {
@@ -1040,7 +1167,7 @@ function UpdateProgressModal({ open, logId, onClose, onSuccess }: {
     const { mutate, isPending } = useMutation({
         mutationFn: () => updateLogProgress(logId, { progress: pct, note: note || undefined }),
         onSuccess: () => { toast.success('Progress updated'); onSuccess() },
-        onError: () => toast.error('Failed to update progress'),
+        onError:   () => toast.error('Failed to update progress'),
     })
 
     return (
