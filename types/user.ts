@@ -69,7 +69,7 @@ export interface DriverPayload {
     l_name: string
     email: string
     phone_number?: string | null
-    date_of_birth?: string | null
+    dob?: string | null
     employee_id?: string | null
     avatar?: string | null
     role?: RoleSlug
