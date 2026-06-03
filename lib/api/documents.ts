@@ -93,6 +93,28 @@ export const getVehicleDocuments = async (vehicleId: string | number): Promise<D
     return response.data
 }
 
+export const getDriverDocuments = async (driverId: string | number): Promise<DocumentListResponse> => {
+    const response = await apiClient.get<DocumentListResponse>(`/documents/driver/${driverId}`)
+    return response.data
+}
+
+export interface GetAllDocumentsParams {
+    page?: number
+    search?: string
+    type?: 'vehicle' | 'driver'
+    category?: string
+    status?: string
+}
+
+export const getAllDocuments = async (params?: GetAllDocumentsParams): Promise<DocumentListResponse> => {
+    const response = await apiClient.get<DocumentListResponse>('/documents', { params })
+    return response.data
+}
+
+export const deleteDocument = async (documentId: string | number): Promise<void> => {
+    await apiClient.delete(`/documents/${documentId}`)
+}
+
 export const downloadDocument = async (documentId: string | number, filename?: string) => {
     const response = await apiClient.get(`/documents/${documentId}/download`, { responseType: 'blob' })
     const url = URL.createObjectURL(response.data)

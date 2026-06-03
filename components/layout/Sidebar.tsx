@@ -20,6 +20,7 @@ import {
   Menu,
   LogOut,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -138,6 +139,19 @@ const NAV_SECTIONS = [
         icon: BarChart3,
         permission: null,
         module: "analytics",
+        trialAllowed: false,
+      },
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      {
+        href: "/documents",
+        label: "Documents",
+        icon: FileText,
+        permission: null,
+        module: "documents",
         trialAllowed: false,
       },
     ],
