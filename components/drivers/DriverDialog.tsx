@@ -38,13 +38,13 @@ export function DriverDialog({
     email: "",
     phone_number: "",
     employee_id: "",
-    date_of_birth: "",
+    dob: "",
   });
 
   useEffect(() => {
     if (open) {
       if (mode === "edit" && initialData) {
-        // Normalize date_of_birth to YYYY-MM-DD for <input type="date">
+        // Normalize dob to YYYY-MM-DD for <input type="date">
         // API may return "1986/10/02" (slashes) or "1986-10-02T00:00:00Z" (ISO)
         const rawDob = initialData.attributes.date_of_birth || "";
         const dob = rawDob
@@ -57,7 +57,7 @@ export function DriverDialog({
           email: initialData.attributes.email || "",
           phone_number: initialData.attributes.phone_number || "",
           employee_id: initialData.attributes.employee_id || "",
-          date_of_birth: dob,
+          dob: dob,
         });
       } else if (mode === "add") {
         setFormData({
@@ -66,7 +66,7 @@ export function DriverDialog({
           email: "",
           phone_number: "",
           employee_id: "",
-          date_of_birth: "",
+          dob: "",
         });
       }
     }
@@ -163,12 +163,12 @@ export function DriverDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date_of_birth">Date of Birth</Label>
+                <Label htmlFor="dob">Date of Birth</Label>
                 <Input
-                  id="date_of_birth"
-                  name="date_of_birth"
+                  id="dob"
+                  name="dob"
                   type="date"
-                  value={formData.date_of_birth}
+                  value={formData.dob}
                   onChange={handleChange}
                 />
               </div>
