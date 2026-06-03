@@ -118,16 +118,21 @@ export function TripTable({
         },
         {
             header: 'Vehicle / Driver',
-            cell: ({ row }) => (
-                <div className="flex flex-col">
-                    <span className="text-sm font-medium text-slate-900 capitalize">
-                        {row.original.attributes.vehicle_id ? `Vehicle: ${row.original.attributes.vehicle_id}` : 'No Vehicle'}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                        {row.original.attributes.driver_id ? `Driver: ${row.original.attributes.driver_id}` : 'No Driver'}
-                    </span>
-                </div>
-            ),
+            cell: ({ row }) => {
+                const vehicle = row.original.relationships?.vehicle
+                const driver = row.original.relationships?.driver
+                
+                return (
+                    <div className="flex flex-col">
+                        <span className="text-sm font-medium text-slate-900">
+                            {vehicle?.attributes?.registration_number || 'No Vehicle'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                            {driver?.attributes?.full_name || 'No Driver'}
+                        </span>
+                    </div>
+                )
+            },
         },
         {
             accessorKey: 'attributes.status',

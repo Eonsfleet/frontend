@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { getTripById, getTripCheckpoints } from '@/lib/api/trips'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -13,10 +13,15 @@ import { TripChatPanel } from '@/components/trips/TripChatPanel'
 import { CargoPhotoReports } from '@/components/trips/CargoPhotoReports'
 import { TripDriverInfo } from '@/components/trips/TripDriverInfo'
 import { TripVehicleInfo } from '@/components/trips/TripVehicleInfo'
-import { Loader2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Loader2, ArrowLeft, MapPin, Calendar, Clock, Truck, User } from 'lucide-react'
+import { format } from 'date-fns'
+import Link from 'next/link'
 
 export default function TripDetailPage() {
     const params = useParams()
+    const router = useRouter()
     const id = params.id as string
 
     const { data: response, isLoading } = useQuery({
@@ -47,6 +52,24 @@ export default function TripDetailPage() {
     }
 
     const trip = response.data
+
+    // Status badge config
+    const getStatusConfig = (status: string) => {
+        switch (status) {
+            case 'pending':
+                return { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+            case 'ongoing':
+                return { label: 'Ongoing', className: 'bg-blue-50 text-blue-700 border-blue-200' }
+            case 'completed':
+                return { label: 'Completed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+            case 'cancelled':
+                return { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' }
+            default:
+                return { label: status, className: 'bg-slate-50 text-slate-700 border-slate-200' }
+        }
+    }
+
+    const statusConfig = getStatusConfig(trip.attributes.status)
 
     // Parse locations
     const startLocation = typeof trip.attributes.start_location === 'object' && trip.attributes.start_location?.coords
@@ -128,6 +151,119 @@ export default function TripDetailPage() {
 
     return (
         <div className="p-6 lg:p-8 space-y-6 bg-slate-50 min-h-full">
+            {/* Back Button */}
+            <Link
+                href="/trips"
+                className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors"
+            >
+                <ArrowLeft className="mr-1 h-4 w-4" /> Back to Trips
+            </Link>
+
+            {/* Trip Details Header */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <div className="flex items-center gap-3 mb-2">
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                                Trip #{trip.id}
+                            </h1>
+                            <Badge className={`${statusConfig.className} border px-3 py-1`}>
+                                {statusConfig.label}
+                            </Badge>
+                        </div>
+                        <p className="text-slate-500">
+                            {typeof trip.attributes.start_location === 'string' 
+                                ? trip.attributes.start_location 
+                                : trip.attributes.start_location?.name || 'Start'} 
+                            {' → '}
+                            {typeof trip.attributes.end_location === 'string'
+                                ? trip.attributes.end_location
+                                : trip.attributes.end_location?.name || 'Destination'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm">
+                            Export Report
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Trip Info Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Vehicle */}
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <Truck className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vehicle</p>
+                            <p className="text-sm font-bold text-slate-900 truncate mt-1">
+                                {trip.relationships?.vehicle?.attributes?.registration_number || 'N/A'}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                                {trip.relationships?.vehicle?.attributes?.make} {trip.relationships?.vehicle?.attributes?.model}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Driver */}
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                            <User className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Driver</p>
+                            <p className="text-sm font-bold text-slate-900 truncate mt-1">
+                                {trip.relationships?.driver?.attributes?.full_name || 'N/A'}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                                {trip.relationships?.driver?.attributes?.phone_number || 'No phone'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Start Time */}
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                            <Calendar className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Start Time</p>
+                            <p className="text-sm font-bold text-slate-900 truncate mt-1">
+                                {trip.attributes.planned_start_time 
+                                    ? format(new Date(trip.attributes.planned_start_time), 'MMM dd, yyyy')
+                                    : 'Not set'}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                                {trip.attributes.planned_start_time 
+                                    ? format(new Date(trip.attributes.planned_start_time), 'h:mm a')
+                                    : ''}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* ETA */}
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                            <Clock className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ETA</p>
+                            <p className="text-sm font-bold text-slate-900 truncate mt-1">
+                                {trip.attributes.planned_end_time 
+                                    ? format(new Date(trip.attributes.planned_end_time), 'MMM dd, yyyy')
+                                    : 'N/A'}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                                {trip.attributes.planned_end_time 
+                                    ? format(new Date(trip.attributes.planned_end_time), 'h:mm a')
+                                    : ''}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column - 2/3 width */}
                 <div className="lg:col-span-2 space-y-6">
@@ -145,9 +281,9 @@ export default function TripDetailPage() {
                     {/* Tabs */}
                     <Tabs defaultValue="driver" className="w-full">
                         <TabsList className="bg-white border border-slate-200 p-1 w-full justify-start">
+                            <TabsTrigger value="vehicle">Vehicle</TabsTrigger>
                             <TabsTrigger value="driver">Driver Info</TabsTrigger>
                             <TabsTrigger value="tracking">Tracking details</TabsTrigger>
-                            <TabsTrigger value="vehicle">Vehicle</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="driver" className="mt-6">
@@ -161,9 +297,9 @@ export default function TripDetailPage() {
                             {/* Stats Cards */}
                             <TripStatsCards
                                 currentLocation={timelineCheckpoints.find(c => c.completed)?.name || 'Unknown'}
-                                avgSpeed={trip.attributes.avg_speed || 58}
-                                distanceCovered={trip.attributes.distance_covered_km || 370}
-                                distanceRemaining={trip.attributes.distance_remaining_km || 370}
+                                avgSpeed={trip.attributes?.avg_speed || 58}
+                                distanceCovered={trip.attributes?.distance_covered_km || 370}
+                                distanceRemaining={trip.attributes?.distance_remaining_km || 370}
                             />
 
                             {/* Cargo Photo Reports */}

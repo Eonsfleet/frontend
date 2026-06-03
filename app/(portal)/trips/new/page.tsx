@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -62,7 +63,10 @@ export default function NewTripPage() {
         planned_start_time: '',
         planned_end_time: '',
         recurring_type: 'one_time',
-        status: 'pending',
+        status: 'scheduled',
+        note: '',
+        distance_km: null as number | null,
+        recurring_end_date: null as string | null,
     })
 
     const [waypoints, setWaypoints] = useState<Waypoint[]>([])
@@ -82,26 +86,71 @@ export default function NewTripPage() {
 
     const { mutate: handleDispatch, isPending: isDispatching } = useMutation({
         mutationFn: (data: any) => {
-            // Format routes for API
-            const formattedRoutes = waypoints.map((wp, index) => ({
-                route_order: index + 1,
-                location_name: wp.location_name,
-                coordinates: {
-                    latitude: wp.latitude,
-                    longitude: wp.longitude
-                },
-                expected_arrival_time: wp.expected_arrival_time,
-                is_checkpoint: wp.is_checkpoint,
-                is_stop_point: wp.is_stop_point
-            }))
+            // Format routes for API - filter out waypoints without location names
+            const formattedRoutes = waypoints
+                .filter(wp => wp.location_name && wp.location_name.trim() !== '')
+                .map((wp, index) => ({
+                    route_order: index + 1,
+                    location_name: wp.location_name,
+                    coordinates: {
+                        latitude: wp.latitude,
+                        longitude: wp.longitude
+                    },
+                    expected_arrival_time: wp.expected_arrival_time,
+                    is_checkpoint: wp.is_checkpoint,
+                    is_stop_point: wp.is_stop_point
+                }))
 
-            const payload = {
-                ...data,
+            // Build payload matching API requirements exactly
+            const payload: any = {
                 vehicle_id: Number(data.vehicle_id),
                 driver_id: Number(data.driver_id),
-                eta: "Calculated Automatically", // Mocking ETA description
-                routes: formattedRoutes
+                status: data.status || 'scheduled',
+                recurring_type: data.recurring_type || 'one_time',
+                eta: etaMinutes ? `${Math.floor(etaMinutes / 60)} hours ${etaMinutes % 60} minutes` : "To be calculated",
+                planned_start_time: data.planned_start_time,
+                planned_end_time: data.planned_end_time,
+                start_location: {
+                    name: data.start_location.name,
+                    coords: {
+                        latitude: data.start_location.coords.latitude,
+                        longitude: data.start_location.coords.longitude
+                    }
+                },
+                end_location: {
+                    name: data.end_location.name,
+                    coords: {
+                        latitude: data.end_location.coords.latitude,
+                        longitude: data.end_location.coords.longitude
+                    }
+                }
             }
+
+            // Only add routes if there are valid waypoints
+            if (formattedRoutes.length > 0) {
+                payload.routes = formattedRoutes
+            }
+
+            // Add optional fields if present
+            if (data.recurring_end_date) {
+                payload.recurring_end_date = data.recurring_end_date
+            }
+            
+            if (data.note) {
+                payload.note = data.note
+            }
+
+            if (data.distance_km) {
+                payload.distance_km = data.distance_km.toString()
+            }
+
+            // Add metadata if needed
+            payload.metadata = {}
+
+            console.log('📦 Trip Payload with Routes:', JSON.stringify(payload, null, 2))
+            console.log('🛣️ Total waypoints in state:', waypoints.length)
+            console.log('✅ Valid routes being sent:', formattedRoutes.length)
+
             return createTrip(payload)
         },
         onSuccess: (response) => {
@@ -138,7 +187,7 @@ export default function NewTripPage() {
         }
         setFormData(newFormData)
 
-        // If both are selected, calculate ETA
+        // If both are selected, try to calculate ETA (optional feature)
         if (newFormData.start_location.coords.latitude !== 0 && newFormData.end_location.coords.latitude !== 0) {
             setIsCalculatingEta(true)
             try {
@@ -147,25 +196,39 @@ export default function NewTripPage() {
                     end_location: newFormData.end_location
                 })
 
-                const minutes = Math.ceil(response.data.distance_km * 2) // Mock logic: 2 mins per km if API doesn't return mins
-                // Actually the API structure I added returns eta as string "2 hours 30 minutes"
-                // Let's assume the API returns numeric minutes for easier calculation or parse it
-                const parsedMinutes = 120 // Fallback/Mock for now
+                // Parse ETA - assume API returns distance and we estimate time
+                const estimatedMinutes = response.data.distance_km ? Math.ceil(response.data.distance_km * 2) : 120
 
-                setEtaMinutes(parsedMinutes)
+                setEtaMinutes(estimatedMinutes)
 
                 if (newFormData.planned_start_time) {
                     const startTime = new Date(newFormData.planned_start_time)
-                    const endTime = addMinutes(startTime, parsedMinutes)
+                    const endTime = addMinutes(startTime, estimatedMinutes)
                     setFormData(prev => ({
                         ...prev,
                         [type === 'start' ? 'start_location' : 'end_location']: location,
                         planned_end_time: format(endTime, "yyyy-MM-dd'T'HH:mm")
                     }))
                 }
-                toast.success(`Estimated arrival: ${response.data.eta}`)
-            } catch (error) {
-                console.error('Failed to calculate ETA', error)
+                
+                if (response.data.eta) {
+                    toast.success(`Estimated time: ${response.data.eta}`)
+                }
+            } catch (error: any) {
+                // ETA calculation is optional - don't block the user
+                console.warn('Could not calculate ETA automatically:', error)
+                // Set a default ETA of 2 hours
+                const defaultMinutes = 120
+                setEtaMinutes(defaultMinutes)
+                
+                if (newFormData.planned_start_time) {
+                    const startTime = new Date(newFormData.planned_start_time)
+                    const endTime = addMinutes(startTime, defaultMinutes)
+                    setFormData(prev => ({
+                        ...prev,
+                        planned_end_time: format(endTime, "yyyy-MM-dd'T'HH:mm")
+                    }))
+                }
             } finally {
                 setIsCalculatingEta(false)
             }
@@ -493,15 +556,27 @@ export default function NewTripPage() {
                                                                 />
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center justify-end gap-3 pt-6">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" htmlFor={`check-${wp.id}`}>
-                                                                Make Checkpoint
-                                                            </label>
-                                                            <Switch
-                                                                id={`check-${wp.id}`}
-                                                                checked={wp.is_checkpoint}
-                                                                onCheckedChange={(val) => updateWaypoint(wp.id, 'is_checkpoint', val)}
-                                                            />
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" htmlFor={`check-${wp.id}`}>
+                                                                    Checkpoint
+                                                                </label>
+                                                                <Switch
+                                                                    id={`check-${wp.id}`}
+                                                                    checked={wp.is_checkpoint}
+                                                                    onCheckedChange={(val) => updateWaypoint(wp.id, 'is_checkpoint', val)}
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" htmlFor={`stop-${wp.id}`}>
+                                                                    Stop Point
+                                                                </label>
+                                                                <Switch
+                                                                    id={`stop-${wp.id}`}
+                                                                    checked={wp.is_stop_point}
+                                                                    onCheckedChange={(val) => updateWaypoint(wp.id, 'is_stop_point', val)}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -598,6 +673,17 @@ export default function NewTripPage() {
                                                 MISSION DATA IS SYNCHRONIZED. ON DISPATCH, THE ONBOARD TERMINAL WILL DOWNLOAD THESE PARAMETERS.
                                             </p>
                                         </div>
+                                    </div>
+
+                                    {/* Additional Notes */}
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Additional Notes (Optional)</Label>
+                                        <Textarea
+                                            className="rounded-xl border-slate-200 bg-slate-50 min-h-[80px] font-medium text-sm focus:ring-slate-900"
+                                            placeholder="e.g., Handle with care — fragile goods"
+                                            value={formData.note}
+                                            onChange={(e) => updateField('note', e.target.value)}
+                                        />
                                     </div>
                                 </div>
                             )}
