@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, differenceInDays, isPast, isToday } from 'date-fns'
 import {
     ChevronLeft, ChevronDown, ChevronUp, RefreshCw, Copy, Check,
-    Loader2, AlertTriangle, CheckCircle2, Clock, Calendar, Wrench,
+    Loader2, AlertTriangle, CheckCircle2, Calendar, Wrench,
     Bell, BellOff, Gauge, ListChecks, Car, User, Store,
     Play, ShieldCheck, X, Plus, Trash2, Paperclip,
     Settings2, BarChart2, ExternalLink, ArrowRight, Activity,
@@ -24,9 +24,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/store/authStore'
 import { usePermission } from '@/hooks/usePermission'
 import {
     getScheduleById, getScheduleChecklists, getLogsBySchedule,
@@ -305,105 +305,215 @@ export default function MaintenanceScheduleDetailPage() {
                     ))}
                 </div>
 
-                {/* ── Two-column main grid ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                    {/* ── Left (2/3) ── */}
-                    <div className="lg:col-span-2 space-y-5">
-
-                        {/* Schedule Configuration — collapsible */}
-                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                            <button
-                                onClick={() => setConfigOpen(p => !p)}
-                                className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
-                            >
-                                <div className="flex items-center gap-2.5">
-                                    <div className="h-7 w-7 bg-blue-50 rounded-lg flex items-center justify-center">
-                                        <Settings2 className="h-3.5 w-3.5 text-blue-600" />
-                                    </div>
-                                    <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Schedule Configuration</span>
-                                </div>
-                                {configOpen
-                                    ? <ChevronUp className="h-4 w-4 text-slate-400" />
-                                    : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                            </button>
-                            {configOpen && (
-                                <CardContent className="px-6 pt-1 pb-5 border-t border-slate-100">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10">
-                                        <div>
-                                            <KV label="Schedule Type"  value={attrs.schedule_type?.toUpperCase()} />
-                                            <KV label="Recurring"      value={
-                                                <span className={attrs.is_recurring ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
-                                                    {attrs.is_recurring ? 'Yes' : 'No'}
-                                                </span>
-                                            } />
-                                            <KV label="Interval"       value={intervalLabel} />
-                                            <KV label="End Date"       value={attrs.end_date ? format(new Date(attrs.end_date), 'dd MMM yyyy') : null} />
-                                            <KV label="Occurrence #"   value={attrs.occurrence_number ?? null} />
-                                        </div>
-                                        <div>
-                                            <KV label="Occurrence Limit"  value={attrs.occurrence_count ?? null} />
-                                            <KV label="Est. Cost"         value={attrs.estimated_cost != null ? `₦${Number(attrs.estimated_cost).toLocaleString()}` : null} />
-                                            <KV label="Target Odometer"   value={attrs.expected_odometer != null ? `${attrs.expected_odometer.toLocaleString()} KM` : null} />
-                                            <KV label="Last Scheduled"    value={attrs.last_scheduled_at ? format(new Date(attrs.last_scheduled_at), 'dd MMM yyyy') : null} />
-                                            <KV label="Notifications" value={
-                                                <span className={cn('flex items-center gap-1.5', attrs.turn_on_notification ? 'text-emerald-600' : 'text-slate-400')}>
-                                                    {attrs.turn_on_notification ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
-                                                    {attrs.turn_on_notification ? 'On' : 'Off'}
-                                                </span>
-                                            } />
-                                        </div>
-                                    </div>
-                                </CardContent>
+                {/* ── Tabs ── */}
+                <Tabs defaultValue="info">
+                    <TabsList variant="line" className="border-b border-slate-200 w-full justify-start rounded-none bg-transparent h-auto pb-0 gap-0">
+                        <TabsTrigger value="info"      className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
+                            Info
+                        </TabsTrigger>
+                        <TabsTrigger value="checklist" className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
+                            Checklist
+                            {checklists.length > 0 && (
+                                <span className="ml-2 text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                                    {checklists.length}
+                                </span>
                             )}
-                        </Card>
+                        </TabsTrigger>
+                        <TabsTrigger value="logs"      className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent">
+                            Workflow Log
+                            {logs.length > 0 && (
+                                <span className={cn(
+                                    'ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                                    openLogs.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                                )}>
+                                    {logs.length}
+                                </span>
+                            )}
+                        </TabsTrigger>
+                    </TabsList>
 
-                        {/* Assignment & Vendor */}
-                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                            <CardContent className="p-6">
-                                <SectionHeader icon={Store} color="bg-indigo-50" iconColor="text-indigo-600">
-                                    Assignment &amp; Vendor
-                                </SectionHeader>
+                    {/* ── Info tab ── */}
+                    <TabsContent value="info" className="mt-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                                <div className="flex items-center justify-between py-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                                            <Store className="h-5 w-5 text-slate-400" />
+                            {/* Left (2/3) */}
+                            <div className="lg:col-span-2 space-y-5">
+
+                                {/* Schedule Configuration — collapsible */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <button
+                                        onClick={() => setConfigOpen(p => !p)}
+                                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="h-7 w-7 bg-blue-50 rounded-lg flex items-center justify-center">
+                                                <Settings2 className="h-3.5 w-3.5 text-blue-600" />
+                                            </div>
+                                            <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Schedule Configuration</span>
                                         </div>
-                                        <div>
-                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Vendor</p>
-                                            <p className="text-sm font-semibold text-slate-800">
-                                                {vendor?.name ?? <span className="text-slate-400 font-normal italic">Not assigned</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {canManage && (
-                                        <Button size="sm" variant={vendor ? 'ghost' : 'outline'} onClick={() => setAssignVendorOpen(true)} className="text-xs">
-                                            {vendor ? 'Reassign' : <><Plus className="mr-1 h-3.5 w-3.5" />Assign Vendor</>}
-                                        </Button>
+                                        {configOpen
+                                            ? <ChevronUp className="h-4 w-4 text-slate-400" />
+                                            : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                                    </button>
+                                    {configOpen && (
+                                        <CardContent className="px-6 pt-1 pb-5 border-t border-slate-100">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+                                                <div>
+                                                    <KV label="Schedule Type" value={attrs.schedule_type?.toUpperCase()} />
+                                                    <KV label="Recurring" value={
+                                                        <span className={attrs.is_recurring ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
+                                                            {attrs.is_recurring ? 'Yes' : 'No'}
+                                                        </span>
+                                                    } />
+                                                    <KV label="Interval"     value={intervalLabel} />
+                                                    <KV label="End Date"     value={attrs.end_date ? format(new Date(attrs.end_date), 'dd MMM yyyy') : null} />
+                                                    <KV label="Occurrence #" value={attrs.occurrence_number ?? null} />
+                                                </div>
+                                                <div>
+                                                    <KV label="Occurrence Limit" value={attrs.occurrence_count ?? null} />
+                                                    <KV label="Est. Cost"        value={attrs.estimated_cost != null ? `₦${Number(attrs.estimated_cost).toLocaleString()}` : null} />
+                                                    <KV label="Target Odometer"  value={attrs.expected_odometer != null ? `${attrs.expected_odometer.toLocaleString()} KM` : null} />
+                                                    <KV label="Last Scheduled"   value={attrs.last_scheduled_at ? format(new Date(attrs.last_scheduled_at), 'dd MMM yyyy') : null} />
+                                                    <KV label="Notifications" value={
+                                                        <span className={cn('flex items-center gap-1.5', attrs.turn_on_notification ? 'text-emerald-600' : 'text-slate-400')}>
+                                                            {attrs.turn_on_notification ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+                                                            {attrs.turn_on_notification ? 'On' : 'Off'}
+                                                        </span>
+                                                    } />
+                                                </div>
+                                            </div>
+                                        </CardContent>
                                     )}
-                                </div>
+                                </Card>
 
-                                {assignedBy && (
-                                    <>
-                                        <Separator className="my-3" />
-                                        <div className="flex items-center gap-3 py-1">
-                                            <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                                                <User className="h-5 w-5 text-slate-400" />
+                                {/* Assignment & Vendor */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <CardContent className="p-6">
+                                        <SectionHeader icon={Store} color="bg-indigo-50" iconColor="text-indigo-600">
+                                            Assignment &amp; Vendor
+                                        </SectionHeader>
+                                        <div className="flex items-center justify-between py-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                                                    <Store className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Vendor</p>
+                                                    <p className="text-sm font-semibold text-slate-800">
+                                                        {vendor?.name ?? <span className="text-slate-400 font-normal italic">Not assigned</span>}
+                                                    </p>
+                                                </div>
                                             </div>
+                                            {canManage && (
+                                                <Button size="sm" variant={vendor ? 'ghost' : 'outline'} onClick={() => setAssignVendorOpen(true)} className="text-xs">
+                                                    {vendor ? 'Reassign' : <><Plus className="mr-1 h-3.5 w-3.5" />Assign Vendor</>}
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {assignedBy && (
+                                            <>
+                                                <Separator className="my-3" />
+                                                <div className="flex items-center gap-3 py-1">
+                                                    <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                                                        <User className="h-5 w-5 text-slate-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Assigned By</p>
+                                                        <p className="text-sm font-semibold text-slate-800">
+                                                            {`${assignedBy.f_name ?? ''} ${assignedBy.l_name ?? ''}`.trim() || '—'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Right (1/3) */}
+                            <div className="space-y-5">
+
+                                {/* Vehicle */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <CardContent className="p-5">
+                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Vehicle</p>
+                                        {vehicle ? (
+                                            <Link
+                                                href={`/vehicles/${vehicle.id}`}
+                                                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all group"
+                                            >
+                                                <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
+                                                    <Car className="h-5 w-5 text-white" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 truncate">{vehicle.registration_number}</p>
+                                                    <p className="text-[11px] text-slate-400 font-medium">{vehicle.make} {vehicle.model}</p>
+                                                </div>
+                                                <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 shrink-0" />
+                                            </Link>
+                                        ) : (
+                                            <p className="text-sm text-slate-400 italic">No vehicle linked</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Series info */}
+                                {(attrs.is_recurring || attrs.series_id) && (
+                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                        <CardContent className="p-5">
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Recurrence Series</p>
+                                            <KV label="Occurrence" value={`${attrs.occurrence_number ?? '—'} of ${attrs.occurrence_count ?? '∞'}`} />
+                                            {attrs.series_id && <KV label="Series ID" value={attrs.series_id} mono />}
+                                            {attrs.is_master_schedule && (
+                                                <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                                                    <Hash className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                    <span className="text-[11px] font-semibold text-blue-700">Master schedule</span>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                {/* Notifications */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <CardContent className="p-5">
+                                        <div className={cn(
+                                            'flex items-center gap-3 p-3.5 rounded-xl border',
+                                            attrs.turn_on_notification ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'
+                                        )}>
+                                            {attrs.turn_on_notification
+                                                ? <Bell className="h-4 w-4 text-emerald-600 shrink-0" />
+                                                : <BellOff className="h-4 w-4 text-slate-400 shrink-0" />}
                                             <div>
-                                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Assigned By</p>
-                                                <p className="text-sm font-semibold text-slate-800">
-                                                    {`${assignedBy.f_name ?? ''} ${assignedBy.l_name ?? ''}`.trim() || '—'}
+                                                <p className={cn('text-sm font-semibold', attrs.turn_on_notification ? 'text-emerald-700' : 'text-slate-500')}>
+                                                    {attrs.turn_on_notification ? 'Notifications on' : 'Notifications off'}
                                                 </p>
+                                                <p className="text-[11px] text-slate-400">Reminder alerts</p>
                                             </div>
                                         </div>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
+                                    </CardContent>
+                                </Card>
 
-                        {/* Checklists */}
+                                {/* Record info */}
+                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                    <CardContent className="p-5">
+                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Record Info</p>
+                                        <KV label="Reference" value={reference} mono />
+                                        <KV label="Priority" value={
+                                            attrs.priority
+                                                ? <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', PRIORITY_CFG[attrs.priority]?.pill ?? '')}>{priorityCfg.label}</Badge>
+                                                : null
+                                        } />
+                                        <KV label="Created" value={attrs.created_at ? format(new Date(attrs.created_at), 'dd MMM yyyy') : null} />
+                                        <KV label="Updated" value={attrs.updated_at ? format(new Date(attrs.updated_at), 'dd MMM yyyy') : null} />
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    {/* ── Checklist tab ── */}
+                    <TabsContent value="checklist" className="mt-6">
                         <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between mb-5">
@@ -411,7 +521,7 @@ export default function MaintenanceScheduleDetailPage() {
                                         <div className="h-7 w-7 bg-amber-50 rounded-lg flex items-center justify-center">
                                             <ListChecks className="h-3.5 w-3.5 text-amber-600" />
                                         </div>
-                                        <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Checklist</span>
+                                        <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Checklist Items</span>
                                     </div>
                                     {checklists.length > 0 && (
                                         <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
@@ -421,37 +531,40 @@ export default function MaintenanceScheduleDetailPage() {
                                 </div>
 
                                 {checkQ.isLoading ? (
-                                    <div className="flex justify-center py-6">
+                                    <div className="flex justify-center py-10">
                                         <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
                                     </div>
                                 ) : checklists.length > 0 ? (
                                     <ul className="space-y-2">
                                         {checklists.map((item, i) => (
-                                            <li key={item.id ?? i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                            <li key={item.id ?? i} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-100">
                                                 <div className="h-4 w-4 rounded border-2 border-slate-300 bg-white shrink-0" />
                                                 <span className="text-sm font-medium text-slate-700">{item.name}</span>
                                             </li>
                                         ))}
                                     </ul>
                                 ) : (
-                                    <div className="flex flex-col items-center py-8 gap-2">
-                                        <ListChecks className="h-8 w-8 text-slate-200" />
-                                        <p className="text-sm text-slate-400">No checklist items attached</p>
+                                    <div className="flex flex-col items-center py-16 gap-3">
+                                        <div className="h-14 w-14 bg-slate-50 rounded-full flex items-center justify-center">
+                                            <ListChecks className="h-7 w-7 text-slate-200" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-500">No checklist items attached</p>
+                                        <p className="text-xs text-slate-400">Checklist items are configured when the schedule is created.</p>
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
+                    </TabsContent>
 
-                        {/* Work Logs Timeline */}
+                    {/* ── Workflow Log tab ── */}
+                    <TabsContent value="logs" className="mt-6">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2.5">
                                 <div className="h-7 w-7 bg-slate-900 rounded-lg flex items-center justify-center">
                                     <Activity className="h-3.5 w-3.5 text-white" />
                                 </div>
                                 <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Work Logs</span>
-                                <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full ml-1">
-                                    {logs.length}
-                                </span>
+                                <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full ml-1">{logs.length}</span>
                             </div>
 
                             {logsQ.isLoading ? (
@@ -459,7 +572,7 @@ export default function MaintenanceScheduleDetailPage() {
                                     <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
                                 </div>
                             ) : logs.length === 0 ? (
-                                <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                                <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center">
                                     <div className="h-14 w-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
                                         <Wrench className="h-7 w-7 text-slate-200" />
                                     </div>
@@ -486,91 +599,8 @@ export default function MaintenanceScheduleDetailPage() {
                                 ))
                             )}
                         </div>
-                    </div>
-
-                    {/* ── Right (1/3) ── */}
-                    <div className="space-y-5">
-
-                        {/* Vehicle */}
-                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                            <CardContent className="p-5">
-                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Vehicle</p>
-                                {vehicle ? (
-                                    <Link
-                                        href={`/vehicles/${vehicle.id}`}
-                                        className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all group"
-                                    >
-                                        <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                                            <Car className="h-5 w-5 text-white" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 truncate">{vehicle.registration_number}</p>
-                                            <p className="text-[11px] text-slate-400 font-medium">{vehicle.make} {vehicle.model}</p>
-                                        </div>
-                                        <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 shrink-0" />
-                                    </Link>
-                                ) : (
-                                    <p className="text-sm text-slate-400 italic">No vehicle linked</p>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* Series info */}
-                        {(attrs.is_recurring || attrs.series_id) && (
-                            <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                <CardContent className="p-5">
-                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Recurrence Series</p>
-                                    <KV label="Occurrence" value={`${attrs.occurrence_number ?? '—'} of ${attrs.occurrence_count ?? '∞'}`} />
-                                    {attrs.series_id && <KV label="Series ID" value={attrs.series_id} mono />}
-                                    {attrs.is_master_schedule && (
-                                        <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
-                                            <Hash className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                            <span className="text-[11px] font-semibold text-blue-700">Master schedule</span>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Notifications */}
-                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                            <CardContent className="p-5">
-                                <div className={cn(
-                                    'flex items-center gap-3 p-3.5 rounded-xl border',
-                                    attrs.turn_on_notification
-                                        ? 'bg-emerald-50 border-emerald-100'
-                                        : 'bg-slate-50 border-slate-100'
-                                )}>
-                                    {attrs.turn_on_notification
-                                        ? <Bell className="h-4 w-4 text-emerald-600 shrink-0" />
-                                        : <BellOff className="h-4 w-4 text-slate-400 shrink-0" />
-                                    }
-                                    <div>
-                                        <p className={cn('text-sm font-semibold', attrs.turn_on_notification ? 'text-emerald-700' : 'text-slate-500')}>
-                                            {attrs.turn_on_notification ? 'Notifications on' : 'Notifications off'}
-                                        </p>
-                                        <p className="text-[11px] text-slate-400">Reminder alerts</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Record info */}
-                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                            <CardContent className="p-5">
-                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Record Info</p>
-                                <KV label="Reference" value={reference} mono />
-                                <KV label="Priority" value={
-                                    attrs.priority
-                                        ? <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', PRIORITY_CFG[attrs.priority]?.pill ?? '')}>{priorityCfg.label}</Badge>
-                                        : null
-                                } />
-                                <KV label="Created"  value={attrs.created_at ? format(new Date(attrs.created_at), 'dd MMM yyyy') : null} />
-                                <KV label="Updated"  value={attrs.updated_at ? format(new Date(attrs.updated_at), 'dd MMM yyyy') : null} />
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
+                    </TabsContent>
+                </Tabs>
             </div>
 
             {/* ── Modals ── */}
