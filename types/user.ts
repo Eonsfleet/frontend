@@ -73,4 +73,5 @@ export interface DriverPayload {
     employee_id?: string | null
     avatar?: string | null
     role?: RoleSlug
+    status?: string | null
 }
