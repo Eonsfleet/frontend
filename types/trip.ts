@@ -18,6 +18,14 @@ export interface TripAttributes {
     is_master_trip: boolean
     is_locked: boolean
     is_editable: boolean
+    started_at?: string | null
+    completed_at?: string | null
+    avg_speed?: number | null
+    distance_covered_km?: number | null
+    distance_remaining_km?: number | null
+    current_load?: number | null
+    max_load?: number | null
+    load_category?: string | null
     vehicle_id?: string
     driver_id?: string
     /** @deprecated Use relationships.vehicle.id instead */
@@ -43,7 +51,19 @@ export interface Trip {
     relationships: {
         /** API returns vehicle fields directly (not JSON:API data-wrapped) */
         vehicle?: { id: string; type?: string; registration_number?: string }
-        driver?: { data: { id: string; type: 'users' } }
+        driver?: {
+            id?: string | number
+            name?: string
+            full_name?: string
+            email?: string
+            phone?: string
+            phone_number?: string
+            avatar?: string
+            location?: string
+            created_at?: string
+            assigned_at?: string
+            end_date?: string
+        }
     }
 }
 
