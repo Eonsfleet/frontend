@@ -9,8 +9,8 @@ import {
     ChevronLeft, RefreshCw, Copy, Check, Loader2, AlertTriangle,
     Car, Wrench, ShieldAlert, Fuel, UserX, MapPin,
     MessageSquare, Activity, ArrowRight, Lock, Info,
-    Send, Image as ImageIcon, Play, User,
-    CheckCircle2, Clock, Eye, ExternalLink,
+    Send, Image as ImageIcon, User,
+    CheckCircle2, Clock, Eye,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -100,8 +100,8 @@ const MACHINE: Partial<Record<IncidentStatus, ActionDef[]>> = {
         { key: 'pending_resolution', label: 'Mark Pending Resolution', variant: 'default', needsNote: true, noteLabel: 'Resolution notes', execute: (id, { note }) => submitForResolution(id, note) },
     ],
     pending_resolution: [
-        { key: 'resolve',         label: 'Resolve Incident',     variant: 'default', needsNote: true, noteLabel: 'Resolution notes', noteRequired: true, execute: (id, { note }) => resolveIncident(id, note) },
-        { key: 'more_action',     label: 'More Action Required', variant: 'outline', execute: (id) => requireAction(id) },
+        { key: 'resolve',     label: 'Resolve Incident',     variant: 'default', needsNote: true, noteLabel: 'Resolution notes', noteRequired: true, execute: (id, { note }) => resolveIncident(id, note) },
+        { key: 'more_action', label: 'More Action Required', variant: 'outline', execute: (id) => requireAction(id) },
     ],
     resolved: [
         { key: 'close', label: 'Close Record', variant: 'secondary', needsNote: true, noteLabel: 'Closing notes (optional)', execute: (id, { note }) => closeIncident(id, note || undefined) },
@@ -146,12 +146,12 @@ export default function IncidentDetailPage() {
 
     const canAct = ['administrator', 'fleet_manager', 'owner', 'dispatcher', 'compliance'].includes(userRole ?? '')
 
-    const [copiedRef,    setCopiedRef]    = useState(false)
-    const [activeAction, setActiveAction] = useState<ActionDef | null>(null)
-    const [noteInput,    setNoteInput]    = useState('')
-    const [assigneeInput,setAssigneeInput]= useState('')
-    const [severityInput,setSeverityInput]= useState('high')
-    const [lightboxSrc,  setLightboxSrc] = useState<string | null>(null)
+    const [copiedRef,     setCopiedRef]     = useState(false)
+    const [activeAction,  setActiveAction]  = useState<ActionDef | null>(null)
+    const [noteInput,     setNoteInput]     = useState('')
+    const [assigneeInput, setAssigneeInput] = useState('')
+    const [severityInput, setSeverityInput] = useState('high')
+    const [lightboxSrc,   setLightboxSrc]  = useState<string | null>(null)
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -196,14 +196,14 @@ export default function IncidentDetailPage() {
 
     // ── Derived data ──────────────────────────────────────────────────────────
 
-    const incident   = incidentQ.data.data
-    const attrs      = incident.attributes
-    const rels       = incident.relationships
-    const status     = attrs.status
-    const statusCfg  = STATUS_CFG[status] ?? STATUS_CFG.reported
+    const incident    = incidentQ.data.data
+    const attrs       = incident.attributes
+    const rels        = incident.relationships
+    const status      = attrs.status
+    const statusCfg   = STATUS_CFG[status] ?? STATUS_CFG.reported
     const priorityCfg = PRIORITY_CFG[attrs.priority] ?? PRIORITY_CFG.low
-    const TypeIcon   = TYPE_ICON[attrs.type] ?? AlertTriangle
-    const reference  = attrs.reference_number ?? `INC-${incident.id}`
+    const TypeIcon    = TYPE_ICON[attrs.type] ?? AlertTriangle
+    const reference   = attrs.reference_number ?? `INC-${incident.id}`
 
     const vehicle    = flatVehicle(rels?.vehicle)
     const driver     = flatPerson(rels?.driver)
@@ -214,9 +214,9 @@ export default function IncidentDetailPage() {
     const isTerminal  = ['closed', 'cancelled', 'dismissed'].includes(status)
     const isEscalated = status === 'escalated'
 
-    const history:  WorkflowHistoryEntry[]  = historyQ.data?.data?.history ?? []
-    const messages: ConversationMessage[]   = convQ.data?.data?.conversation?.messages ?? []
-    const actions:  ActionDef[]             = MACHINE[status] ?? []
+    const history:  WorkflowHistoryEntry[] = historyQ.data?.data?.history ?? []
+    const messages: ConversationMessage[]  = convQ.data?.data?.conversation?.messages ?? []
+    const actions:  ActionDef[]            = MACHINE[status] ?? []
 
     const copyRef = () => {
         navigator.clipboard.writeText(reference)
@@ -288,390 +288,375 @@ export default function IncidentDetailPage() {
                 </Button>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+            <div className="max-w-7xl mx-auto px-6 py-6">
 
-                {/* ── Hero card ── */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className={cn('h-1 w-full', statusCfg.bar)} />
-                    <div className="p-6 lg:p-8">
-                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-                            <div className="flex items-start gap-4 flex-1 min-w-0">
-                                <div className={cn('h-12 w-12 rounded-2xl flex items-center justify-center shrink-0', isEscalated ? 'bg-rose-100' : isTerminal ? 'bg-slate-100' : 'bg-red-50')}>
-                                    <TypeIcon className={cn('h-6 w-6', isEscalated ? 'text-rose-600' : isTerminal ? 'text-slate-400' : 'text-red-600')} />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2.5 flex-wrap">
-                                        <h1 className="text-2xl font-bold text-slate-900 capitalize">
-                                            {attrs.type.replace(/_/g, ' ')}
-                                        </h1>
-                                        {vehicle && (
-                                            <Link
-                                                href={`/vehicles/${vehicle.id}`}
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all group text-xs font-semibold text-slate-600 group-hover:text-blue-700"
-                                            >
-                                                <Car className="h-3 w-3 group-hover:text-blue-500" />
-                                                {vehicle.registration_number ?? `Vehicle #${vehicle.id}`}
-                                                <ExternalLink className="h-2.5 w-2.5 text-slate-300 group-hover:text-blue-400" />
-                                            </Link>
-                                        )}
-                                    </div>
-                                    <p className="text-sm text-slate-500 mt-1 line-clamp-2 max-w-2xl">{attrs.description}</p>
-                                    {(address?.city || address?.state) && (
-                                        <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400 font-medium">
-                                            <MapPin className="h-3.5 w-3.5" />
-                                            {[address.street, address.city, address.state].filter(Boolean).join(', ')}
-                                        </div>
-                                    )}
-                                </div>
+                {/* ── Page header row ── */}
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4 mb-6">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className={cn(
+                            'h-11 w-11 rounded-2xl flex items-center justify-center shrink-0',
+                            isEscalated ? 'bg-rose-100' : isTerminal ? 'bg-slate-100' : 'bg-red-50',
+                        )}>
+                            <TypeIcon className={cn('h-5 w-5', isEscalated ? 'text-rose-600' : isTerminal ? 'text-slate-400' : 'text-red-600')} />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-xl font-bold text-slate-900 capitalize leading-tight">
+                                    {attrs.type.replace(/_/g, ' ')}
+                                </h1>
+                                {vehicle && (
+                                    <Link
+                                        href={`/vehicles/${vehicle.id}`}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-xs font-semibold text-slate-600 hover:text-blue-700"
+                                    >
+                                        <Car className="h-3 w-3" />
+                                        {vehicle.registration_number ?? `Vehicle #${vehicle.id}`}
+                                    </Link>
+                                )}
                             </div>
+                            <p className="text-sm text-slate-500 mt-1 line-clamp-2">{attrs.description}</p>
+                            {(address?.city || address?.state) && (
+                                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {[address.street, address.city, address.state].filter(Boolean).join(', ')}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    {attrs.occured_date && (
+                        <div className="shrink-0 text-right">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Occurred</p>
+                            <p className="text-base font-bold text-slate-800 leading-tight mt-0.5">
+                                {format(new Date(attrs.occured_date), 'dd MMM yyyy')}
+                            </p>
+                            {attrs.occured_time && (
+                                <p className="text-xs text-slate-400">{attrs.occured_time}</p>
+                            )}
+                            <p className="text-[11px] text-slate-400 mt-1">
+                                Reported {attrs.reported_at ? formatDistanceToNow(new Date(attrs.reported_at), { addSuffix: true }) : '—'}
+                            </p>
+                        </div>
+                    )}
+                </div>
 
-                            {/* Date block */}
-                            <div className="shrink-0 bg-slate-50 rounded-xl border border-slate-100 px-5 py-4 text-right">
-                                {attrs.occured_date && (
+                {/* ── Two-column Jira layout ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+                    {/* Left — main content (2/3) */}
+                    <div className="lg:col-span-2 space-y-5">
+
+                        {/* Description + location + victim + witnesses */}
+                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                            <div className={cn('h-0.5 w-full', statusCfg.bar)} />
+                            <CardContent className="p-6 space-y-5">
+                                <div>
+                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Description</p>
+                                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{attrs.description}</p>
+                                </div>
+
+                                {attrs.location?.lat && attrs.location?.lng && (
                                     <>
-                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Occurred</p>
-                                        <p className="text-lg font-black text-slate-900 leading-tight">
-                                            {format(new Date(attrs.occured_date), 'dd MMM yyyy')}
-                                        </p>
-                                        {attrs.occured_time && (
-                                            <p className="text-xs text-slate-400 mt-0.5">{attrs.occured_time}</p>
-                                        )}
+                                        <Separator />
+                                        <div>
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                                <MapPin className="h-3.5 w-3.5" />Location
+                                            </p>
+                                            <div className="h-44 w-full bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
+                                                <div className="absolute inset-0 bg-slate-200 opacity-50 mix-blend-multiply pointer-events-none" />
+                                                <div className="absolute h-5 w-5 bg-rose-600 rounded-full border-2 border-white shadow-lg animate-pulse z-10" />
+                                                <p className="absolute bottom-2 left-2 bg-white/90 backdrop-blur text-xs px-2.5 py-1.5 rounded-lg shadow-sm text-slate-700 font-mono z-10">
+                                                    {attrs.location.lat.toFixed(5)}, {attrs.location.lng.toFixed(5)}
+                                                </p>
+                                            </div>
+                                            {attrs.location.address && (
+                                                <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+                                                    <MapPin className="h-3 w-3" />{attrs.location.address}
+                                                </p>
+                                            )}
+                                        </div>
                                     </>
                                 )}
-                                <p className="text-[11px] text-slate-400 mt-2">
-                                    Reported {attrs.reported_at ? formatDistanceToNow(new Date(attrs.reported_at), { addSuffix: true }) : '—'}
-                                </p>
-                            </div>
+
+                                {(attrs.victim_name || (attrs.witness && attrs.witness.length > 0)) && (
+                                    <>
+                                        <Separator />
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {attrs.victim_name && (
+                                                <div>
+                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Victim</p>
+                                                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-rose-50 border border-rose-100">
+                                                        <User className="h-4 w-4 text-rose-400 shrink-0" />
+                                                        <span className="text-sm font-semibold text-slate-800">{attrs.victim_name}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {attrs.witness && attrs.witness.length > 0 && (
+                                                <div>
+                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                                                        Witnesses ({attrs.witness.length})
+                                                    </p>
+                                                    <ul className="space-y-1.5">
+                                                        {attrs.witness.map((w, i) => (
+                                                            <li key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+                                                                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                                <span className="text-sm font-medium text-slate-700">{w.name}</span>
+                                                                {w.phone && <span className="text-[11px] text-slate-400 ml-auto">{w.phone}</span>}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Media gallery */}
+                        {attrs.media && attrs.media.length > 0 && (
+                            <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                <CardContent className="p-6">
+                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                        <ImageIcon className="h-3.5 w-3.5" />Media ({attrs.media.length})
+                                    </p>
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                        {attrs.media.map((url, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => setLightboxSrc(url)}
+                                                className="aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-100 hover:opacity-90 transition-opacity relative group"
+                                            >
+                                                <img src={url} alt={`Media ${i + 1}`} className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                    <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Action taken / resolved notes */}
+                        {(attrs.action_taken || attrs.resolved_notes) && (
+                            <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                <CardContent className="p-6 space-y-4">
+                                    {attrs.action_taken && (
+                                        <div>
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Action Taken</p>
+                                            <p className="text-sm text-slate-700 bg-teal-50 border border-teal-100 rounded-xl px-4 py-3 leading-relaxed">{attrs.action_taken}</p>
+                                        </div>
+                                    )}
+                                    {attrs.resolved_notes && (
+                                        <div>
+                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Resolution Notes</p>
+                                            <p className="text-sm text-slate-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 leading-relaxed">{attrs.resolved_notes}</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+
+                    {/* Right — Jira-style sticky sidebar (1/3) */}
+                    <div className="space-y-4 lg:sticky lg:top-[72px] lg:self-start">
+
+                        {/* Workflow actions */}
+                        {!isTerminal && actions.length > 0 && canAct ? (
+                            <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                                <CardContent className="p-4">
+                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Actions</p>
+                                    <div className="flex items-center gap-2 mb-3 px-2.5 py-2 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="text-[11px] text-slate-500 font-medium">Current</span>
+                                        <Badge variant="outline" className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-full', statusCfg.pill)}>
+                                            <span className={cn('mr-1.5 h-1.5 w-1.5 rounded-full inline-block', statusCfg.dot)} />
+                                            {statusCfg.label}
+                                        </Badge>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        {actions.map(action => (
+                                            <Button
+                                                key={action.key}
+                                                variant={action.variant}
+                                                size="sm"
+                                                onClick={() => openModal(action)}
+                                                className="w-full text-xs justify-start"
+                                            >
+                                                {action.label}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : isTerminal ? (
+                            <Card className="border-slate-100 bg-slate-50 shadow-sm rounded-2xl overflow-hidden">
+                                <CardContent className="p-4 flex items-center gap-3">
+                                    <CheckCircle2 className="h-5 w-5 text-slate-400 shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-600">Workflow Complete</p>
+                                        <p className="text-xs text-slate-400">No further actions available.</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : null}
+
+                        {/* Details */}
+                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                            <CardContent className="p-4">
+                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Details</p>
+                                <div className="space-y-0">
+                                    {([
+                                        {
+                                            label: 'Status',
+                                            value: (
+                                                <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', statusCfg.pill)}>
+                                                    <span className={cn('mr-1 h-1.5 w-1.5 rounded-full inline-block', statusCfg.dot)} />
+                                                    {statusCfg.label}
+                                                </Badge>
+                                            ),
+                                        },
+                                        {
+                                            label: 'Priority',
+                                            value: (
+                                                <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', priorityCfg.pill)}>
+                                                    {priorityCfg.label}
+                                                </Badge>
+                                            ),
+                                        },
+                                        { label: 'Type',      value: attrs.type.replace(/_/g, ' ') },
+                                        { label: 'Reference', value: reference, mono: true },
+                                        { label: 'Occurred',  value: attrs.occured_date ? format(new Date(attrs.occured_date), 'dd MMM yyyy') : null },
+                                        { label: 'Reported',  value: attrs.reported_at  ? format(new Date(attrs.reported_at),  'dd MMM yyyy') : null },
+                                        { label: 'Resolved',  value: attrs.resolved_at  ? format(new Date(attrs.resolved_at),  'dd MMM yyyy') : null },
+                                    ] as { label: string; value: React.ReactNode; mono?: boolean }[]).map(({ label, value, mono }) => value != null && (
+                                        <div key={label} className="flex items-center justify-between gap-4 py-2.5 border-b border-slate-50 last:border-0">
+                                            <span className="text-xs text-slate-400 font-medium shrink-0">{label}</span>
+                                            <span className={cn('text-xs font-semibold text-slate-800 text-right', mono && 'font-mono text-[11px]')}>{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* People */}
+                        <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                            <CardContent className="p-4">
+                                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">People</p>
+                                <div className="space-y-3">
+                                    {assignee && (
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-medium mb-1.5">Investigator</p>
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="h-7 w-7 shrink-0">
+                                                    <AvatarImage src={assignee.avatar ?? undefined} />
+                                                    <AvatarFallback className="text-[10px] bg-blue-100 text-blue-700">{initials(personName(assignee))}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs font-semibold text-slate-800">{personName(assignee)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {driver && (
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-medium mb-1.5">Driver</p>
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="h-7 w-7 shrink-0">
+                                                    <AvatarImage src={driver.avatar ?? undefined} />
+                                                    <AvatarFallback className="text-[10px] bg-violet-100 text-violet-700">{initials(personName(driver))}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs font-semibold text-slate-800">{personName(driver)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {reportedBy && (
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-medium mb-1.5">Reported By</p>
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="h-7 w-7 shrink-0">
+                                                    <AvatarImage src={reportedBy.avatar ?? undefined} />
+                                                    <AvatarFallback className="text-[10px] bg-rose-100 text-rose-700">{initials(personName(reportedBy))}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs font-semibold text-slate-800">{personName(reportedBy)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {vehicle && (
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-medium mb-1.5">Vehicle</p>
+                                            <Link href={`/vehicles/${vehicle.id}`} className="flex items-center gap-2 group">
+                                                <div className="h-7 w-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                                                    <Car className="h-3.5 w-3.5 text-white" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-slate-800 group-hover:text-blue-600 transition-colors">
+                                                        {vehicle.registration_number ?? `#${vehicle.id}`}
+                                                    </p>
+                                                    {(vehicle.make || vehicle.model) && (
+                                                        <p className="text-[10px] text-slate-400">{vehicle.make} {vehicle.model}</p>
+                                                    )}
+                                                </div>
+                                            </Link>
+                                        </div>
+                                    )}
+                                    {!assignee && !driver && !reportedBy && !vehicle && (
+                                        <p className="text-xs text-slate-400 italic">No parties linked</p>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { label: 'Time Since',   value: attrs.reported_at ? formatDistanceToNow(new Date(attrs.reported_at)) : '—', icon: Clock,         color: 'text-slate-500' },
+                                { label: 'Status',       value: statusCfg.label,                                                              icon: Activity,      color: 'text-slate-500' },
+                                { label: 'Messages',     value: String(messages.length),                                                      icon: MessageSquare, color: 'text-blue-500' },
+                                { label: 'Transitions',  value: String(history.length),                                                       icon: ArrowRight,    color: 'text-violet-500' },
+                            ].map(({ label, value, icon: Icon, color }) => (
+                                <div key={label} className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 flex items-center gap-2 shadow-sm">
+                                    <Icon className={cn('h-4 w-4 shrink-0', color)} />
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-900 leading-none truncate">{value}</p>
+                                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">{label}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                {/* ── Stats bar ── */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {([
-                        { label: 'Time Since Reported', value: attrs.reported_at ? formatDistanceToNow(new Date(attrs.reported_at)) : '—', icon: Clock, color: 'text-slate-600' },
-                        { label: 'Current Status', value: statusCfg.label, icon: Activity, color: statusCfg.dot.replace('bg-', 'text-') },
-                        { label: 'Messages', value: messages.length, icon: MessageSquare, color: 'text-blue-600' },
-                        { label: 'Transitions', value: history.length, icon: ArrowRight, color: 'text-violet-600' },
-                    ] as const).map(({ label, value, icon: Icon, color }) => (
-                        <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3.5 flex items-center gap-3 shadow-sm">
-                            <Icon className={cn('h-5 w-5 shrink-0', color)} />
-                            <div>
-                                <p className="text-sm font-black text-slate-900 leading-none truncate">{value}</p>
-                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">{label}</p>
-                            </div>
-                        </div>
-                    ))}
+                {/* ── Full-width: Conversation + History ── */}
+                <div className="mt-8">
+                    <Tabs defaultValue="conversation">
+                        <TabsList className="border-b border-slate-200 w-full justify-start rounded-none bg-transparent h-auto pb-0 gap-0">
+                            {([
+                                { value: 'conversation', label: 'Conversation', count: messages.length },
+                                { value: 'history',      label: 'History',      count: history.length },
+                            ] as { value: string; label: string; count: number }[]).map(({ value, label, count }) => (
+                                <TabsTrigger
+                                    key={value}
+                                    value={value}
+                                    className="data-[state=active]:border-b-2 data-[state=active]:border-rose-600 data-[state=active]:text-rose-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent"
+                                >
+                                    {label}
+                                    {count > 0 && (
+                                        <span className="ml-2 text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{count}</span>
+                                    )}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                        <TabsContent value="conversation" className="mt-6">
+                            <ConversationPanel
+                                incidentId={id}
+                                messages={messages}
+                                isLoading={convQ.isLoading}
+                                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['incident-conversation', id] })}
+                            />
+                        </TabsContent>
+                        <TabsContent value="history" className="mt-6">
+                            <HistoryTimeline history={history} isLoading={historyQ.isLoading} />
+                        </TabsContent>
+                    </Tabs>
                 </div>
-
-                {/* ── Tabs ── */}
-                <Tabs defaultValue="overview">
-                    <TabsList className="border-b border-slate-200 w-full justify-start rounded-none bg-transparent h-auto pb-0 gap-0">
-                        {([
-                            { value: 'overview',     label: 'Overview',     count: null },
-                            { value: 'conversation', label: 'Conversation', count: messages.length },
-                            { value: 'history',      label: 'History',      count: history.length },
-                        ] as { value: string; label: string; count: number | null }[]).map(({ value, label, count }) => (
-                            <TabsTrigger
-                                key={value}
-                                value={value}
-                                className="data-[state=active]:border-b-2 data-[state=active]:border-rose-600 data-[state=active]:text-rose-600 rounded-none px-5 pb-3 pt-1 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors border-b-2 border-transparent"
-                            >
-                                {label}
-                                {count !== null && count > 0 && (
-                                    <span className="ml-2 text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{count}</span>
-                                )}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-
-                    {/* ── Overview tab ── */}
-                    <TabsContent value="overview" className="mt-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                            {/* Left (2/3) */}
-                            <div className="lg:col-span-2 space-y-5">
-
-                                {/* Description + location + victim + witnesses */}
-                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                    <CardContent className="p-6 space-y-5">
-                                        <div>
-                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Incident Description</p>
-                                            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{attrs.description}</p>
-                                        </div>
-
-                                        {/* Location map */}
-                                        {attrs.location?.lat && attrs.location?.lng && (
-                                            <>
-                                                <Separator />
-                                                <div>
-                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                                        <MapPin className="h-3.5 w-3.5" />Location
-                                                    </p>
-                                                    <div className="h-44 w-full bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
-                                                        <div className="absolute inset-0 bg-[url('https://maps.wikimedia.org/osm-intl/12/697/1594.png')] opacity-50 mix-blend-multiply bg-center bg-cover pointer-events-none" />
-                                                        <div className="absolute h-5 w-5 bg-rose-600 rounded-full border-3 border-white shadow-lg animate-pulse z-10" />
-                                                        <p className="absolute bottom-2 left-2 bg-white/90 backdrop-blur text-xs px-2.5 py-1.5 rounded-lg shadow-sm text-slate-700 font-mono z-10">
-                                                            {attrs.location.lat.toFixed(5)}, {attrs.location.lng.toFixed(5)}
-                                                        </p>
-                                                    </div>
-                                                    {attrs.location.address && (
-                                                        <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
-                                                            <MapPin className="h-3 w-3" />{attrs.location.address}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </>
-                                        )}
-
-                                        {/* Victim + witnesses */}
-                                        {(attrs.victim_name || (attrs.witness && attrs.witness.length > 0)) && (
-                                            <>
-                                                <Separator />
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {attrs.victim_name && (
-                                                        <div>
-                                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Victim</p>
-                                                            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-rose-50 border border-rose-100">
-                                                                <User className="h-4 w-4 text-rose-400 shrink-0" />
-                                                                <span className="text-sm font-semibold text-slate-800">{attrs.victim_name}</span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {attrs.witness && attrs.witness.length > 0 && (
-                                                        <div>
-                                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                                                                Witnesses ({attrs.witness.length})
-                                                            </p>
-                                                            <ul className="space-y-1.5">
-                                                                {attrs.witness.map((w, i) => (
-                                                                    <li key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
-                                                                        <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                                                        <span className="text-sm font-medium text-slate-700">{w.name}</span>
-                                                                        {w.phone && <span className="text-[11px] text-slate-400 ml-auto">{w.phone}</span>}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </>
-                                        )}
-
-                                        {/* Media gallery */}
-                                        {attrs.media && attrs.media.length > 0 && (
-                                            <>
-                                                <Separator />
-                                                <div>
-                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                                        <ImageIcon className="h-3.5 w-3.5" />Media ({attrs.media.length})
-                                                    </p>
-                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                                        {attrs.media.map((url, i) => (
-                                                            <button
-                                                                key={i}
-                                                                onClick={() => setLightboxSrc(url)}
-                                                                className="aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-100 hover:opacity-90 transition-opacity relative group"
-                                                            >
-                                                                <img src={url} alt={`Media ${i + 1}`} className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                                                    <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                    </CardContent>
-                                </Card>
-
-                                {/* Involved parties */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    {/* Vehicle */}
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-4">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Vehicle</p>
-                                            {vehicle ? (
-                                                <Link href={`/vehicles/${vehicle.id}`} className="flex items-start gap-2.5 group">
-                                                    <div className="h-9 w-9 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                                                        <Car className="h-4 w-4 text-white" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{vehicle.registration_number ?? `#${vehicle.id}`}</p>
-                                                        {(vehicle.make || vehicle.model) && (
-                                                            <p className="text-[11px] text-slate-400">{vehicle.make} {vehicle.model}</p>
-                                                        )}
-                                                    </div>
-                                                </Link>
-                                            ) : <p className="text-xs text-slate-400 italic">Not linked</p>}
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* Driver */}
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-4">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Driver</p>
-                                            {driver ? (
-                                                <div className="flex items-start gap-2.5">
-                                                    <Avatar className="h-9 w-9 shrink-0">
-                                                        <AvatarImage src={driver.avatar ?? undefined} />
-                                                        <AvatarFallback className="text-xs bg-blue-100 text-blue-700">{initials(personName(driver))}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-900">{personName(driver)}</p>
-                                                        <p className="text-[11px] text-slate-400">Driver</p>
-                                                    </div>
-                                                </div>
-                                            ) : <p className="text-xs text-slate-400 italic">Not linked</p>}
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* Reported by */}
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-4">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Reported By</p>
-                                            {reportedBy ? (
-                                                <div className="flex items-start gap-2.5">
-                                                    <Avatar className="h-9 w-9 shrink-0">
-                                                        <AvatarImage src={reportedBy.avatar ?? undefined} />
-                                                        <AvatarFallback className="text-xs bg-rose-100 text-rose-700">{initials(personName(reportedBy))}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-900">{personName(reportedBy)}</p>
-                                                        <p className="text-[11px] text-slate-400">Reporter</p>
-                                                    </div>
-                                                </div>
-                                            ) : <p className="text-xs text-slate-400 italic">Unknown</p>}
-                                        </CardContent>
-                                    </Card>
-                                </div>
-
-                                {/* Workflow actions */}
-                                {!isTerminal && actions.length > 0 && canAct && (
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-6">
-                                            <div className="flex items-center gap-2.5 mb-5">
-                                                <div className="h-7 w-7 bg-slate-900 rounded-lg flex items-center justify-center">
-                                                    <Play className="h-3.5 w-3.5 text-white" />
-                                                </div>
-                                                <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wider">Workflow Actions</span>
-                                            </div>
-                                            <div className="flex items-center gap-3 mb-5 px-3 py-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                <span className="text-xs font-semibold text-slate-500">Current status</span>
-                                                <ArrowRight className="h-3.5 w-3.5 text-slate-300" />
-                                                <Badge variant="outline" className={cn('text-[11px] font-semibold px-2 py-0.5', statusCfg.pill)}>
-                                                    <span className={cn('mr-1.5 h-1.5 w-1.5 rounded-full inline-block', statusCfg.dot)} />
-                                                    {statusCfg.label}
-                                                </Badge>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {actions.map(action => (
-                                                    <Button key={action.key} variant={action.variant} size="sm" onClick={() => openModal(action)} className="text-xs">
-                                                        {action.label}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Action taken / resolved notes */}
-                                {(attrs.action_taken || attrs.resolved_notes) && (
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-6 space-y-4">
-                                            {attrs.action_taken && (
-                                                <div>
-                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Action Taken</p>
-                                                    <p className="text-sm text-slate-700 bg-teal-50 border border-teal-100 rounded-xl px-4 py-3 leading-relaxed">{attrs.action_taken}</p>
-                                                </div>
-                                            )}
-                                            {attrs.resolved_notes && (
-                                                <div>
-                                                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Resolution Notes</p>
-                                                    <p className="text-sm text-slate-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 leading-relaxed">{attrs.resolved_notes}</p>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </div>
-
-                            {/* Right (1/3) */}
-                            <div className="space-y-5">
-
-                                {/* Quick info */}
-                                <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                    <CardContent className="p-5">
-                                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Incident Info</p>
-                                        <div className="space-y-0">
-                                            {[
-                                                { label: 'Reference',  value: reference, mono: true },
-                                                { label: 'Type',       value: attrs.type.replace(/_/g, ' ') },
-                                                { label: 'Priority',   value: <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 font-semibold', priorityCfg.pill)}>{priorityCfg.label}</Badge> },
-                                                { label: 'Occurred',   value: attrs.occured_date ? format(new Date(attrs.occured_date), 'dd MMM yyyy') : null },
-                                                { label: 'Reported',   value: attrs.reported_at ? format(new Date(attrs.reported_at), 'dd MMM yyyy, HH:mm') : null },
-                                                { label: 'Resolved',   value: attrs.resolved_at ? format(new Date(attrs.resolved_at), 'dd MMM yyyy') : null },
-                                            ].map(({ label, value, mono }) => value != null && (
-                                                <div key={label} className="flex items-start justify-between gap-4 py-2.5 border-b border-slate-50 last:border-0">
-                                                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">{label}</span>
-                                                    <span className={cn('text-[13px] font-semibold text-slate-800 text-right', mono && 'font-mono text-xs')}>{value}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Assignee */}
-                                {assignee && (
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                                        <CardContent className="p-5">
-                                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Assigned Investigator</p>
-                                            <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
-                                                <Avatar className="h-9 w-9 shrink-0">
-                                                    <AvatarImage src={assignee.avatar ?? undefined} />
-                                                    <AvatarFallback className="text-xs bg-blue-200 text-blue-800">{initials(personName(assignee))}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-900">{personName(assignee)}</p>
-                                                    <p className="text-[11px] text-blue-500 font-medium">Investigator</p>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Terminal state notice */}
-                                {isTerminal && (
-                                    <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden opacity-80">
-                                        <CardContent className="p-5 flex items-center gap-3">
-                                            <CheckCircle2 className="h-5 w-5 text-slate-400 shrink-0" />
-                                            <div>
-                                                <p className="text-sm font-semibold text-slate-600">Workflow Complete</p>
-                                                <p className="text-xs text-slate-400">No further actions available.</p>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </div>
-                        </div>
-                    </TabsContent>
-
-                    {/* ── Conversation tab ── */}
-                    <TabsContent value="conversation" className="mt-6">
-                        <ConversationPanel
-                            incidentId={id}
-                            messages={messages}
-                            isLoading={convQ.isLoading}
-                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['incident-conversation', id] })}
-                        />
-                    </TabsContent>
-
-                    {/* ── History tab ── */}
-                    <TabsContent value="history" className="mt-6">
-                        <HistoryTimeline history={history} isLoading={historyQ.isLoading} />
-                    </TabsContent>
-                </Tabs>
             </div>
 
             {/* ── Workflow action modal ── */}
@@ -769,7 +754,7 @@ function ConversationPanel({
     }, [messages.length])
 
     return (
-        <div className="max-w-3xl space-y-4">
+        <div className="space-y-4">
             <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
                     <div className="flex items-center gap-2.5">
@@ -878,7 +863,7 @@ function HistoryTimeline({ history, isLoading }: { history: WorkflowHistoryEntry
     const sorted = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     return (
-        <div className="max-w-2xl">
+        <div>
             <Card className="border-slate-200 shadow-sm rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-100">
                     <div className="h-7 w-7 bg-violet-50 rounded-lg flex items-center justify-center">
@@ -898,16 +883,14 @@ function HistoryTimeline({ history, isLoading }: { history: WorkflowHistoryEntry
                     ) : (
                         <ol className="relative space-y-0">
                             {sorted.map((entry, i) => {
-                                const toCfg = STATUS_CFG[entry.to_status] ?? STATUS_CFG.reported
+                                const toCfg   = STATUS_CFG[entry.to_status]   ?? STATUS_CFG.reported
                                 const fromCfg = STATUS_CFG[entry.from_status] ?? STATUS_CFG.reported
-                                const isLast = i === sorted.length - 1
+                                const isLast  = i === sorted.length - 1
                                 return (
                                     <li key={entry.id} className="relative pl-8">
-                                        {/* Vertical line */}
                                         {!isLast && (
                                             <div className="absolute left-[11px] top-5 bottom-0 w-px bg-slate-100" />
                                         )}
-                                        {/* Dot */}
                                         <div className={cn('absolute left-0 top-1 h-5 w-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center', toCfg.dot)}>
                                             <div className="h-1.5 w-1.5 rounded-full bg-white" />
                                         </div>
