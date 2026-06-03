@@ -97,7 +97,7 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
         } else if (layer instanceof L.Polygon) {
             const geojson = layer.toGeoJSON()
             // API expects a flat array of { lat, lng } objects, not a GeoJSON geometry
-            const ring: number[][] = geojson.geometry.coordinates[0]
+            const ring = geojson.geometry.coordinates[0] as number[][]
             const vertices = ring.map((p: number[]) => ({ lat: p[1], lng: p[0] }))
             onChange({
                 type: 'polygon',
