@@ -10,6 +10,7 @@ export type RoleSlug =
     | 'finance'
     | 'compliance'
     | 'vendor'
+    | 'owner'
 
 export interface UserProfile {
     id: string

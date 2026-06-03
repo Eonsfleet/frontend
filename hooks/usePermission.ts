@@ -6,6 +6,9 @@ export const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     // Fleet manager has full admin access; denied permissions are listed in ROLE_DENIED_PERMISSIONS
     fleet_manager: ['*'],
 
+    // Owner has full operational access; corporate-only settings are blocked at the route level
+    owner: ['*'],
+
     dispatcher: [
         'vehicles:read', 'tracking:read',
         'trips:read', 'trips:write',

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAccessControl } from "@/hooks/useAccessControl";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiStore";
 import {
@@ -55,6 +56,7 @@ const NAV_SECTIONS = [
         icon: LayoutDashboard,
         permission: null,
         module: null,
+        trialAllowed: true,
       },
       {
         href: "/vehicles",
@@ -62,6 +64,7 @@ const NAV_SECTIONS = [
         icon: Car,
         permission: "vehicles:read",
         module: "vehicles",
+        trialAllowed: true,
       },
       {
         href: "/drivers",
@@ -69,6 +72,7 @@ const NAV_SECTIONS = [
         icon: Users,
         permission: "drivers:read",
         module: "drivers",
+        trialAllowed: true,
       },
       {
         href: "/trips",
@@ -76,6 +80,7 @@ const NAV_SECTIONS = [
         icon: Route,
         permission: "trips:read",
         module: "trips",
+        trialAllowed: false,
       },
       {
         href: "/tracking",
@@ -83,6 +88,7 @@ const NAV_SECTIONS = [
         icon: MapPin,
         permission: "tracking:read",
         module: "geofence",
+        trialAllowed: false,
       },
     ],
   },
@@ -95,6 +101,7 @@ const NAV_SECTIONS = [
         icon: Wrench,
         permission: "maintenance:read",
         module: "maintenance",
+        trialAllowed: false,
       },
       {
         href: "/geofences",
@@ -102,6 +109,7 @@ const NAV_SECTIONS = [
         icon: MapPin,
         permission: null,
         module: "geofence",
+        trialAllowed: false,
       },
       {
         href: "/incidents",
@@ -109,6 +117,7 @@ const NAV_SECTIONS = [
         icon: AlertTriangle,
         permission: null,
         module: "incidents",
+        trialAllowed: false,
       },
       {
         href: "/fuel",
@@ -116,6 +125,7 @@ const NAV_SECTIONS = [
         icon: Fuel,
         permission: null,
         module: "fuel",
+        trialAllowed: false,
       },
     ],
   },
@@ -128,6 +138,7 @@ const NAV_SECTIONS = [
         icon: BarChart3,
         permission: null,
         module: "analytics",
+        trialAllowed: false,
       },
     ],
   },
@@ -140,6 +151,7 @@ const NAV_SECTIONS = [
         icon: CreditCard,
         permission: "billing:read",
         module: null,
+        trialAllowed: true,
       },
       {
         href: "/notifications",
@@ -147,6 +159,7 @@ const NAV_SECTIONS = [
         icon: Bell,
         permission: "notifications:read",
         module: "notifications",
+        trialAllowed: false,
       },
       {
         href: "/vendors",
@@ -154,6 +167,7 @@ const NAV_SECTIONS = [
         icon: Store,
         permission: "vendors:read",
         module: "vendors",
+        trialAllowed: false,
       },
       {
         href: "/settings",
@@ -161,6 +175,7 @@ const NAV_SECTIONS = [
         icon: Settings,
         permission: null,
         module: null,
+        trialAllowed: true,
       },
     ],
   },
@@ -171,6 +186,7 @@ export default function Sidebar() {
   const router = useRouter();
   const { can } = usePermission();
   const { hasCapability } = useSubscription();
+  const { isExpiredTrial } = useAccessControl();
   const { isSidebarCollapsed, toggleSidebar } = useUIStore();
   const queryClient = useQueryClient();
   const { user, token, clearAuth } = useAuthStore();
@@ -265,7 +281,11 @@ export default function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 scrollbar-none">
           {NAV_SECTIONS.map((section) => {
             const visibleItems = section.items.filter(
-              ({ permission }) => !permission || can(permission),
+              ({ permission, trialAllowed }) => {
+                if (permission && !can(permission)) return false;
+                if (isExpiredTrial && !trialAllowed) return false;
+                return true;
+              },
             );
             if (visibleItems.length === 0) return null;
             return (
