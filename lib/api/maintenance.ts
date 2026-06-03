@@ -166,8 +166,13 @@ export const createSchedule = async (data: {
 }
 
 export const getScheduleById = async (id: string | number): Promise<MaintenanceScheduleDetailResponse> => {
-    const response = await apiClient.get<MaintenanceScheduleDetailResponse>(`/maintenances/schedule/${id}`)
-    return response.data
+    const response = await apiClient.get<any>(`/maintenances/schedule/${id}`)
+    const raw = response.data
+    // API returns { data: { id, attributes, relationships } } — normalize to { data: { schedule } }
+    return {
+        message: raw.message,
+        data: { schedule: raw.data?.schedule ?? raw.data },
+    }
 }
 
 export const updateSchedule = async (

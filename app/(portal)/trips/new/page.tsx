@@ -175,9 +175,15 @@ export default function NewTripPage() {
     const handleGenerateRoute = async () => {
         setIsGeneratingRoute(true)
         try {
+            // Prepare waypoints if any exist (convert to lat,lng format)
+            const existingWaypoints = waypoints.length > 0 
+                ? waypoints.map(wp => ({ latitude: wp.latitude, longitude: wp.longitude }))
+                : undefined
+
             const response = await generateTripRoute({
                 start_location: formData.start_location,
-                end_location: formData.end_location
+                end_location: formData.end_location,
+                waypoints: existingWaypoints
             })
 
             if (response.data.waypoints) {

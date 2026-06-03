@@ -317,7 +317,7 @@ export default function DashboardPage() {
                         <MaintenanceHeatmap data={normalizedForecast} />
                         <VehicleStatusChart data={dynamicStatusData} />
                     </div>
-                    <ActivityFeed activities={normalizedActivities} />  
+                    {/* <ActivityFeed activities={normalizedActivities} />   */}
                 </div>
                 {/* Right: live feed — alerts + activity, both scrollable */}
                 <div className="space-y-6">
