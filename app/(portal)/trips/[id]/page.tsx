@@ -98,9 +98,9 @@ export default function TripDetailPage() {
             completed: !!trip.attributes.started_at,
         },
         ...(checkpointsData?.data || []).map((cp: any) => ({
-            name: cp.name || cp.location || 'Checkpoint',
-            timestamp: cp.reached_at || cp.timestamp,
-            completed: !!cp.reached_at || cp.status === 'completed',
+            name: cp.attributes?.location_name || cp.name || cp.location || 'Checkpoint',
+            timestamp: cp.attributes?.checkpoint_passed_at || cp.reached_at || cp.timestamp,
+            completed: !!(cp.attributes?.checkpoint_passed_at || cp.reached_at) || cp.checkpoint_status === 'completed',
         })),
         {
             name: typeof trip.attributes.end_location === 'string'
@@ -110,6 +110,13 @@ export default function TripDetailPage() {
             completed: !!trip.attributes.completed_at,
         },
     ]
+
+    // Extract waypoints from checkpoints for map
+    const waypoints = (checkpointsData?.data || []).map((cp: any) => ({
+        latitude: cp.attributes?.coordinates?.latitude || 0,
+        longitude: cp.attributes?.coordinates?.longitude || 0,
+        name: cp.attributes?.location_name || 'Checkpoint',
+    })).filter((wp: any) => wp.latitude !== 0 && wp.longitude !== 0)
 
     // Mock data for demonstration (replace with real data from API)
     const mockMessages = [
@@ -181,11 +188,6 @@ export default function TripDetailPage() {
                                 : trip.attributes.end_location?.name || 'Destination'}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                            Export Report
-                        </Button>
-                    </div>
                 </div>
 
                 {/* Trip Info Grid */}
@@ -198,10 +200,10 @@ export default function TripDetailPage() {
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vehicle</p>
                             <p className="text-sm font-bold text-slate-900 truncate mt-1">
-                                {trip.relationships?.vehicle?.attributes?.registration_number || 'N/A'}
+                                {trip.relationships?.vehicle?.registration_number || trip.relationships?.vehicle?.attributes?.registration_number || 'N/A'}
                             </p>
                             <p className="text-xs text-slate-500 truncate">
-                                {trip.relationships?.vehicle?.attributes?.make} {trip.relationships?.vehicle?.attributes?.model}
+                                {trip.relationships?.vehicle?.make || trip.relationships?.vehicle?.attributes?.make} {trip.relationships?.vehicle?.model || trip.relationships?.vehicle?.attributes?.model}
                             </p>
                         </div>
                     </div>
@@ -214,7 +216,7 @@ export default function TripDetailPage() {
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Driver</p>
                             <p className="text-sm font-bold text-slate-900 truncate mt-1">
-                                {trip.relationships?.driver?.attributes?.full_name || 'N/A'}
+                                {trip.relationships?.driver?.name || trip.relationships?.driver?.attributes?.full_name || 'N/A'}
                             </p>
                             <p className="text-xs text-slate-500 truncate">
                                 {trip.relationships?.driver?.attributes?.phone_number || 'No phone'}
@@ -274,6 +276,7 @@ export default function TripDetailPage() {
                             <TripMapOverview
                                 startLocation={startLocation}
                                 endLocation={endLocation}
+                                waypoints={waypoints}
                             />
                         </div>
                     </div>

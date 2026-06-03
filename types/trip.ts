@@ -83,6 +83,11 @@ export interface Trip {
         /** API returns vehicle fields directly (not JSON:API data-wrapped) */
         vehicle?: { 
             id?: string | number
+            // Flat properties (used in trip list)
+            registration_number?: string
+            make?: string
+            model?: string
+            // Nested properties (used in trip details)
             attributes?: {
                 make?: string
                 model?: string
@@ -123,6 +128,11 @@ export interface Trip {
         driver?: { 
             id?: string | number
             organization_id?: number
+            // Flat properties (used in trip list)
+            name?: string
+            f_name?: string
+            l_name?: string
+            // Nested properties (used in trip details)
             attributes?: {
                 first_name?: string
                 last_name?: string

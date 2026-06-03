@@ -125,10 +125,10 @@ export function TripTable({
                 return (
                     <div className="flex flex-col">
                         <span className="text-sm font-medium text-slate-900">
-                            {vehicle?.attributes?.registration_number || 'No Vehicle'}
+                            {vehicle?.registration_number || vehicle?.attributes?.registration_number || 'No Vehicle'}
                         </span>
                         <span className="text-xs text-slate-500">
-                            {driver?.attributes?.full_name || 'No Driver'}
+                            {driver?.name || driver?.attributes?.full_name || 'No Driver'}
                         </span>
                     </div>
                 )

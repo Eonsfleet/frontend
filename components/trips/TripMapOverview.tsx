@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css'
 interface TripMapOverviewProps {
     startLocation?: { latitude: number; longitude: number; name?: string }
     endLocation?: { latitude: number; longitude: number; name?: string }
-    waypoints?: Array<{ latitude: number; longitude: number }>
+    waypoints?: Array<{ latitude: number; longitude: number; name?: string }>
 }
 
 export function TripMapOverview({ startLocation, endLocation, waypoints = [] }: TripMapOverviewProps) {
@@ -79,8 +79,30 @@ export function TripMapOverview({ startLocation, endLocation, waypoints = [] }: 
             iconAnchor: [9, 9],
         })
 
+        const waypointIcon = L.divIcon({
+            html: '<div style="background: #f59e0b; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+            className: '',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+        })
+
         const startMarker = L.marker([startLocation.latitude, startLocation.longitude], { icon: startIcon }).addTo(map)
+        if (startLocation.name) {
+            startMarker.bindPopup(startLocation.name)
+        }
+
         const endMarker = L.marker([endLocation.latitude, endLocation.longitude], { icon: endIcon }).addTo(map)
+        if (endLocation.name) {
+            endMarker.bindPopup(endLocation.name)
+        }
+
+        // Add waypoint markers
+        waypoints.forEach((wp) => {
+            const marker = L.marker([wp.latitude, wp.longitude], { icon: waypointIcon }).addTo(map)
+            if (wp.name) {
+                marker.bindPopup(wp.name)
+            }
+        })
 
         // Draw route line
         const routePoints: L.LatLngExpression[] = [
@@ -95,11 +117,13 @@ export function TripMapOverview({ startLocation, endLocation, waypoints = [] }: 
             opacity: 0.7,
         }).addTo(map)
 
-        // Fit bounds
-        const bounds = L.latLngBounds([
+        // Fit bounds including waypoints
+        const allPoints: L.LatLngExpression[] = [
             [startLocation.latitude, startLocation.longitude],
+            ...waypoints.map(wp => [wp.latitude, wp.longitude] as L.LatLngExpression),
             [endLocation.latitude, endLocation.longitude],
-        ])
+        ]
+        const bounds = L.latLngBounds(allPoints)
         map.fitBounds(bounds, { padding: [50, 50] })
     }, [startLocation, endLocation, waypoints])
 

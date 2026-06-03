@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,6 +74,11 @@ export default function NewTripPage() {
     const [isGeneratingRoute, setIsGeneratingRoute] = useState(false)
     const [etaMinutes, setEtaMinutes] = useState<number | null>(null)
 
+    // Debug waypoints state changes
+    useEffect(() => {
+        console.log('📍 Waypoints state updated:', waypoints)
+    }, [waypoints])
+
     const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles-list-simple'],
         queryFn: () => getVehicles({ per_page: 100, status: 'active' }),
@@ -85,10 +90,17 @@ export default function NewTripPage() {
     })
 
     const { mutate: handleDispatch, isPending: isDispatching } = useMutation({
-        mutationFn: (data: any) => {
+        mutationFn: ({ data, waypoints: currentWaypoints }: { data: any, waypoints: Waypoint[] }) => {
+            console.log('🔍 DEBUG - Received waypoints:', currentWaypoints)
+            console.log('🔍 DEBUG - Waypoints length:', currentWaypoints.length)
+            
             // Format routes for API - filter out waypoints without location names
-            const formattedRoutes = waypoints
-                .filter(wp => wp.location_name && wp.location_name.trim() !== '')
+            const formattedRoutes = currentWaypoints
+                .filter(wp => {
+                    const hasName = wp.location_name && wp.location_name.trim() !== ''
+                    console.log(`🔍 Waypoint "${wp.location_name}" hasName: ${hasName}`)
+                    return hasName
+                })
                 .map((wp, index) => ({
                     route_order: index + 1,
                     location_name: wp.location_name,
@@ -100,6 +112,8 @@ export default function NewTripPage() {
                     is_checkpoint: wp.is_checkpoint,
                     is_stop_point: wp.is_stop_point
                 }))
+
+            console.log('🔍 DEBUG - Formatted routes:', formattedRoutes)
 
             // Build payload matching API requirements exactly
             const payload: any = {
@@ -127,8 +141,12 @@ export default function NewTripPage() {
             }
 
             // Only add routes if there are valid waypoints
+            console.log('🔍 DEBUG - Checking formattedRoutes.length:', formattedRoutes.length)
             if (formattedRoutes.length > 0) {
+                console.log('✅ Adding routes to payload!')
                 payload.routes = formattedRoutes
+            } else {
+                console.log('⚠️ No routes to add (formattedRoutes is empty)')
             }
 
             // Add optional fields if present
@@ -148,7 +166,7 @@ export default function NewTripPage() {
             payload.metadata = {}
 
             console.log('📦 Trip Payload with Routes:', JSON.stringify(payload, null, 2))
-            console.log('🛣️ Total waypoints in state:', waypoints.length)
+            console.log('🛣️ Total waypoints in state:', currentWaypoints.length)
             console.log('✅ Valid routes being sent:', formattedRoutes.length)
 
             return createTrip(payload)
@@ -287,7 +305,8 @@ export default function NewTripPage() {
     }
 
     const updateWaypoint = (id: string, field: keyof Waypoint, value: any) => {
-        setWaypoints(waypoints.map(w => w.id === id ? { ...w, [field]: value } : w))
+        console.log(`🔧 updateWaypoint called: id=${id}, field=${field}, value=`, value)
+        setWaypoints(prevWaypoints => prevWaypoints.map(w => w.id === id ? { ...w, [field]: value } : w))
     }
 
     const isStep1Valid = formData.vehicle_id && formData.driver_id
@@ -709,7 +728,7 @@ export default function NewTripPage() {
                                     </Button>
                                 ) : (
                                     <Button
-                                        onClick={() => handleDispatch(formData)}
+                                        onClick={() => handleDispatch({ data: formData, waypoints })}
                                         disabled={isDispatching}
                                         className="bg-blue-600 hover:bg-blue-700 px-10 rounded-xl h-12 text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-100 animate-pulse-slow"
                                     >
