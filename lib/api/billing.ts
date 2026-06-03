@@ -146,8 +146,32 @@ export const getInvoices = async (params?: { page?: number }): Promise<{ data: {
     return response.data
 }
 
+export interface InvoiceDetail extends Invoice {
+    line_items?: Array<{
+        description: string
+        quantity: number
+        unit_price: number
+        total: number
+    }>
+    subtotal?: number
+    tax?: number
+    discount?: number
+}
+
+export const getInvoiceDetails = async (invoiceId: string | number): Promise<{ data: InvoiceDetail }> => {
+    const response = await apiClient.get<{ data: InvoiceDetail }>(`/subscriptions/invoices/${invoiceId}`)
+    return response.data
+}
+
 export const getInvoicePdfUrl = (id: number): string => {
     return `${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/subscriptions/invoices/${id}/pdf`
+}
+
+export const downloadInvoicePdf = async (invoiceId: string | number): Promise<Blob> => {
+    const response = await apiClient.get(`/subscriptions/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+    })
+    return response.data
 }
 
 export interface ChangePlanPayload {
