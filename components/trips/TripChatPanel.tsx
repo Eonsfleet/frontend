@@ -42,9 +42,9 @@ export function TripChatPanel({
     }
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col max-h-[600px]">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                         <AvatarImage src={driverAvatar} />
@@ -67,7 +67,7 @@ export function TripChatPanel({
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[500px]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px]">
                 {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-slate-400 text-sm">
                         No messages yet
@@ -110,7 +110,7 @@ export function TripChatPanel({
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-slate-200">
+            <div className="p-4 border-t border-slate-200 flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <Input
                         placeholder="Hello"

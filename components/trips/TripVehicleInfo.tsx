@@ -2,33 +2,53 @@
 
 import React from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Truck } from 'lucide-react'
+import { Truck, Gauge, Droplet, Calendar, Hash, Palette, Wrench } from 'lucide-react'
+import { format } from 'date-fns'
 
 interface TripVehicleInfoProps {
     vehicle?: {
         id?: string | number
-        name?: string
-        registration_number?: string
-        device_id?: string
-        chassis_number?: string
-        vin?: string
-        mileage?: number
-        odometer?: number
-        color?: string
-        make?: string
-        manufacturer?: string
-        region?: string
-        year?: number
-        display_number?: string
-        model?: string
-        fuel_type?: string
-        avatar?: string
-        image?: string
-    }
+        attributes?: {
+            make?: string
+            model?: string
+            image?: string
+            year?: string | number
+            registration_number?: string
+            display_number?: string
+            chasis_number?: string
+            body_type?: string
+            type?: string
+            color?: string
+            device_id?: string
+            status?: string | null
+            device_status?: string | null
+            is_online?: boolean
+            device_connected?: boolean
+            is_allocated?: boolean
+            last_packet_received_at?: string | null
+            fuel_type?: string
+            fuel_capacity?: number
+            fuel_capacity_unit?: string
+            fuel_sensor_conversion_factor?: number | null
+            odometer_when_join?: number
+            current_odometer?: number
+            total_odometer?: number
+            total_mileage?: number | null
+            last_odometer_value?: number | null
+            tire_psi?: number | null
+            gvm?: number | null
+            created_at?: string
+            updated_at?: string
+        }
+        relationships?: {
+            device?: any
+            current_driver?: any[]
+        }
+    } | null | undefined
 }
 
 export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
-    if (!vehicle) {
+    if (!vehicle || !vehicle.attributes) {
         return (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
                 <p className="text-slate-500">No vehicle assigned to this trip</p>
@@ -36,93 +56,153 @@ export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
         )
     }
 
-    const vehicleName = vehicle.name || `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Unknown Vehicle'
+    const vehicleName = `${vehicle.attributes.make || ''} ${vehicle.attributes.model || ''}`.trim() || 'Unknown Vehicle'
+    
+    const formatDate = (date?: string | null) => {
+        if (!date) return 'N/A'
+        try {
+            return format(new Date(date), 'MMM dd, yyyy')
+        } catch {
+            return 'N/A'
+        }
+    }
+
+    const getStatusColor = (isOnline?: boolean) => {
+        return isOnline 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-slate-50 text-slate-700 border-slate-200'
+    }
     
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
             {/* Vehicle Header */}
             <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16 rounded-lg">
-                    <AvatarImage src={vehicle.avatar || vehicle.image} />
+                <Avatar className="h-20 w-20 rounded-lg ring-4 ring-slate-100">
+                    <AvatarImage src={vehicle.attributes.image} className="object-cover" />
                     <AvatarFallback className="bg-slate-100 text-slate-600 rounded-lg">
-                        <Truck className="h-8 w-8" />
+                        <Truck className="h-10 w-10" />
                     </AvatarFallback>
                 </Avatar>
-                <div>
-                    <p className="text-sm text-slate-500 mb-1">Vehicle Name</p>
-                    <p className="text-lg font-semibold text-slate-900">{vehicleName}</p>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xl font-bold text-slate-900">{vehicleName}</p>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${getStatusColor(vehicle.attributes.is_online)}`}>
+                            {vehicle.attributes.is_online ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    <p className="text-sm text-slate-600 font-medium">{vehicle.attributes.registration_number}</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mt-0.5">
+                        {vehicle.attributes.type} • {vehicle.attributes.body_type}
+                    </p>
                 </div>
             </div>
 
             {/* Vehicle Details Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {/* Device ID */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Device ID</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.device_id || 'N/A'}</p>
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Hash className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Device ID</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium font-mono">
+                        {vehicle.attributes.device_id || 'N/A'}
+                    </p>
                 </div>
 
-                {/* Chasis Number */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Chasis Number</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.chassis_number || vehicle.vin || 'N/A'}</p>
+                {/* Chassis Number */}
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Wrench className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Chassis Number</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium font-mono">
+                        {vehicle.attributes.chasis_number || 'N/A'}
+                    </p>
                 </div>
 
-                {/* Mileage */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Mileage</p>
-                    <p className="text-slate-900 font-semibold">
-                        {vehicle.mileage || vehicle.odometer ? `${(vehicle.mileage || vehicle.odometer)?.toLocaleString()} KM` : 'N/A'}
+                {/* Current Odometer */}
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Gauge className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Odometer</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium">
+                        {vehicle.attributes.current_odometer 
+                            ? `${vehicle.attributes.current_odometer.toLocaleString()} KM` 
+                            : 'N/A'}
                     </p>
                 </div>
 
                 {/* Color */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Color</p>
-                    <p className="text-slate-900 font-semibold capitalize">{vehicle.color || 'N/A'}</p>
-                </div>
-
-                {/* Registration Number */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Registration Number</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.registration_number || 'N/A'}</p>
-                </div>
-
-                {/* Vehicle Make */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Vehicle Make</p>
-                    <p className="text-slate-900 font-semibold capitalize">{vehicle.make || vehicle.manufacturer || 'N/A'}</p>
-                </div>
-
-                {/* Region */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Region</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.region || 'N/A'}</p>
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Palette className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Color</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium capitalize">
+                        {vehicle.attributes.color || 'N/A'}
+                    </p>
                 </div>
 
                 {/* Year */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Year</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.year || 'N/A'}</p>
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Calendar className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Year</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium">
+                        {vehicle.attributes.year || 'N/A'}
+                    </p>
                 </div>
 
                 {/* Display Number */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Display Number</p>
-                    <p className="text-slate-900 font-semibold">{vehicle.display_number || 'N/A'}</p>
-                </div>
-
-                {/* Model */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Model</p>
-                    <p className="text-slate-900 font-semibold capitalize">{vehicle.model || 'N/A'}</p>
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Hash className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Display Number</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium font-mono">
+                        {vehicle.attributes.display_number || 'N/A'}
+                    </p>
                 </div>
 
                 {/* Fuel Type */}
-                <div className="space-y-1">
-                    <p className="text-sm text-slate-500">Fuel Type</p>
-                    <p className="text-slate-900 font-semibold capitalize">{vehicle.fuel_type || 'N/A'}</p>
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Droplet className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Fuel Type</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium capitalize">
+                        {vehicle.attributes.fuel_type || 'N/A'}
+                    </p>
                 </div>
+
+                {/* Fuel Capacity */}
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500">
+                        <Droplet className="h-4 w-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Fuel Capacity</span>
+                    </div>
+                    <p className="text-sm text-slate-900 font-medium">
+                        {vehicle.attributes.fuel_capacity 
+                            ? `${vehicle.attributes.fuel_capacity} ${vehicle.attributes.fuel_capacity_unit || 'L'}` 
+                            : 'N/A'}
+                    </p>
+                </div>
+
+                {/* Total Odometer */}
+                {vehicle.attributes.total_odometer !== undefined && vehicle.attributes.total_odometer > 0 && (
+                    <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                        <div className="flex items-center gap-2 text-slate-500">
+                            <Gauge className="h-4 w-4" />
+                            <span className="text-xs font-semibold uppercase tracking-wider">Total Mileage</span>
+                        </div>
+                        <p className="text-sm text-slate-900 font-medium">
+                            {vehicle.attributes.total_odometer.toLocaleString()} KM
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     )
