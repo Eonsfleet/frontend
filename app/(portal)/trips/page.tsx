@@ -3,7 +3,7 @@
 import React from 'react'
 import { TripTable } from '@/components/trips/TripTable'
 import { Button } from '@/components/ui/button'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useQuery } from '@tanstack/react-query'
 import { getTrips } from '@/lib/api/trips'
@@ -13,20 +13,27 @@ import { TripStatusModal } from '@/components/trips/TripStatusModal'
 import { EditTripModal } from '@/components/trips/EditTripModal'
 import { QueryError } from '@/components/shared/QueryError'
 import { Trip } from '@/types'
+import { TripFilters } from '@/components/trips/TripFilters'
 
 export default function TripsPage() {
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
     const [statusTrip, setStatusTrip] = React.useState<Trip | null>(null)
     const [editingTrip, setEditingTrip] = React.useState<Trip | null>(null)
+    const [filter, setFilter] = React.useState<{ status?: string }>({})
 
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['trips', search, page],
-        queryFn: () => getTrips({ q: search, page }),
+        queryKey: ['trips', search, page, filter],
+        queryFn: () => getTrips({ q: search, page, status: filter.status }),
     })
 
     const handleSearch = (val: string) => {
         setSearch(val)
+        setPage(1)
+    }
+
+    const handleFiltersChange = (newFilter: { status?: string }) => {
+        setFilter(newFilter)
         setPage(1)
     }
 
@@ -54,9 +61,7 @@ export default function TripsPage() {
                         onChange={(e) => handleSearch(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" className="w-full sm:w-auto text-slate-600 border-slate-200 h-10">
-                    <Filter className="mr-2 h-4 w-4" /> All Statuses
-                </Button>
+                <TripFilters filters={filter} onFiltersChange={handleFiltersChange} />
             </div>
 
             {isError && <QueryError message="Failed to load trips." onRetry={refetch} />}

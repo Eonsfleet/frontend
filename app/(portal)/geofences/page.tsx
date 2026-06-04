@@ -6,12 +6,13 @@ import { useQuery } from '@tanstack/react-query'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { GeofenceList } from '@/components/geofencing/GeofenceList'
 import { GeofenceBuilder } from '../../../components/geofencing/GeofenceBuilder'
-import { Plus, List, Map as MapIcon, Filter, Loader2 } from 'lucide-react'
+import { Plus, List, Map as MapIcon, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getGeofences } from '@/lib/api/geofencing'
 import { getVehicles } from '@/lib/api/vehicles'
 import { QueryError } from '@/components/shared/QueryError'
 import { PAGE_SIZE_DROPDOWN } from '@/lib/config'
+import { GeofenceFilters, GeofenceFilterState } from '@/components/geofencing/GeofenceFilters'
 
 const GeofenceOverviewMap = dynamic(
     () => import('@/components/geofencing/GeofenceOverviewMap'),
@@ -29,6 +30,7 @@ export default function GeofencesPage() {
     const [view, setView] = useState<'list' | 'map'>('list')
     const [isBuilderOpen, setIsBuilderOpen] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
+    const [geofenceFilters, setGeofenceFilters] = useState<GeofenceFilterState>({})
 
     // Fetch all geofences for map view (no pagination needed — map shows all)
     const { data: allGeofencesData, isLoading: isLoadingMapData, isError: isMapError, refetch: refetchMap } = useQuery({
@@ -96,11 +98,11 @@ export default function GeofencesPage() {
                 {/* Filters Row — only shown in list view */}
                 {view === 'list' && (
                     <div className="flex items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
-                            <Filter className="h-3 w-3 text-slate-400" />
-                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Filter: All</span>
-                        </div>
-                        <div className="h-4 w-[1px] bg-slate-200 mx-2" />
+                        <GeofenceFilters
+                            filters={geofenceFilters}
+                            onFiltersChange={setGeofenceFilters}
+                        />
+                        <div className="h-4 w-[1px] bg-slate-200" />
                         <input
                             type="text"
                             placeholder="SEARCH GEOFENCES..."
@@ -112,7 +114,7 @@ export default function GeofencesPage() {
                 )}
 
                 {view === 'list' ? (
-                    <GeofenceList searchTerm={searchTerm} />
+                    <GeofenceList searchTerm={searchTerm} statusFilter={geofenceFilters.status} />
                 ) : (
                     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden h-[600px] shadow-sm relative">
                         {isLoadingMapData ? (

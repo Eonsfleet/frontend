@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Car,
@@ -18,9 +18,13 @@ import {
   Settings,
   Lock,
   Menu,
+  LogOut,
+  Loader2,
+  FileText,
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAccessControl } from "@/hooks/useAccessControl";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiStore";
 import {
@@ -30,12 +34,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import * as notificationApi from "@/lib/api/notifications";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { getEcho } from "@/lib/echo";
 import { useAuthStore } from "@/store/authStore";
+import { logoutUser } from "@/lib/api/auth";
+import { toast } from "sonner";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
@@ -51,6 +57,7 @@ const NAV_SECTIONS = [
         icon: LayoutDashboard,
         permission: null,
         module: null,
+        trialAllowed: true,
       },
       {
         href: "/vehicles",
@@ -58,6 +65,7 @@ const NAV_SECTIONS = [
         icon: Car,
         permission: "vehicles:read",
         module: "vehicles",
+        trialAllowed: true,
       },
       {
         href: "/drivers",
@@ -65,6 +73,7 @@ const NAV_SECTIONS = [
         icon: Users,
         permission: "drivers:read",
         module: "drivers",
+        trialAllowed: true,
       },
       {
         href: "/trips",
@@ -72,6 +81,7 @@ const NAV_SECTIONS = [
         icon: Route,
         permission: "trips:read",
         module: "trips",
+        trialAllowed: false,
       },
       {
         href: "/tracking",
@@ -79,6 +89,7 @@ const NAV_SECTIONS = [
         icon: MapPin,
         permission: "tracking:read",
         module: "geofence",
+        trialAllowed: false,
       },
     ],
   },
@@ -91,6 +102,7 @@ const NAV_SECTIONS = [
         icon: Wrench,
         permission: "maintenance:read",
         module: "maintenance",
+        trialAllowed: false,
       },
       {
         href: "/geofences",
@@ -98,6 +110,7 @@ const NAV_SECTIONS = [
         icon: MapPin,
         permission: null,
         module: "geofence",
+        trialAllowed: false,
       },
       {
         href: "/incidents",
@@ -105,6 +118,7 @@ const NAV_SECTIONS = [
         icon: AlertTriangle,
         permission: null,
         module: "incidents",
+        trialAllowed: false,
       },
       {
         href: "/fuel",
@@ -112,6 +126,7 @@ const NAV_SECTIONS = [
         icon: Fuel,
         permission: null,
         module: "fuel",
+        trialAllowed: false,
       },
     ],
   },
@@ -124,6 +139,20 @@ const NAV_SECTIONS = [
         icon: BarChart3,
         permission: null,
         module: "analytics",
+        trialAllowed: false,
+      },
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      {
+        href: "/documents",
+        label: "Documents",
+        icon: FileText,
+        permission: null,
+        module: "documents",
+        trialAllowed: false,
       },
     ],
   },
@@ -136,6 +165,7 @@ const NAV_SECTIONS = [
         icon: CreditCard,
         permission: "billing:read",
         module: null,
+        trialAllowed: true,
       },
       {
         href: "/notifications",
@@ -143,6 +173,7 @@ const NAV_SECTIONS = [
         icon: Bell,
         permission: "notifications:read",
         module: "notifications",
+        trialAllowed: false,
       },
       {
         href: "/vendors",
@@ -150,6 +181,7 @@ const NAV_SECTIONS = [
         icon: Store,
         permission: "vendors:read",
         module: "vendors",
+        trialAllowed: false,
       },
       {
         href: "/settings",
@@ -157,6 +189,7 @@ const NAV_SECTIONS = [
         icon: Settings,
         permission: null,
         module: null,
+        trialAllowed: true,
       },
     ],
   },
@@ -164,11 +197,35 @@ const NAV_SECTIONS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { can } = usePermission();
   const { hasCapability } = useSubscription();
+  const { isExpiredTrial } = useAccessControl();
   const { isSidebarCollapsed, toggleSidebar } = useUIStore();
   const queryClient = useQueryClient();
-  const { user, token } = useAuthStore();
+  const { user, token, clearAuth } = useAuthStore();
+
+  const { mutate: logout, isPending: isLoggingOut } = useMutation({
+    mutationFn: logoutUser,
+    onMutate: () => {
+      toast.loading('Signing out...', { id: 'logout' });
+    },
+    onSuccess: () => {
+      toast.success('Signed out successfully', { id: 'logout' });
+      clearAuth();
+      queryClient.clear();
+      localStorage.removeItem('eonsfleet-session');
+      router.push('/login');
+    },
+    onError: () => {
+      // Even if the API call fails, clear local session and redirect
+      toast.success('Signed out successfully', { id: 'logout' });
+      clearAuth();
+      queryClient.clear();
+      localStorage.removeItem('eonsfleet-session');
+      router.push('/login');
+    },
+  });
 
   // Fetch notifications for the badge
   const { data: inboxData } = useQuery({
@@ -238,7 +295,11 @@ export default function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 scrollbar-none">
           {NAV_SECTIONS.map((section) => {
             const visibleItems = section.items.filter(
-              ({ permission }) => !permission || can(permission),
+              ({ permission, trialAllowed }) => {
+                if (permission && !can(permission)) return false;
+                if (isExpiredTrial && !trialAllowed) return false;
+                return true;
+              },
             );
             if (visibleItems.length === 0) return null;
             return (
@@ -353,21 +414,69 @@ export default function Sidebar() {
               </div>
             );
           })}
+
+          {/* Logout — last item in nav */}
+          <div>
+            {!isSidebarCollapsed ? (
+              <p className="mb-3 px-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 animate-in fade-in">
+                Session
+              </p>
+            ) : (
+              <div className="h-px bg-slate-100 mb-6 mx-2" />
+            )}
+            <div className="space-y-1">
+              {isSidebarCollapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => logout()}
+                      disabled={isLoggingOut}
+                      className="h-12 w-12 mx-auto flex items-center justify-center rounded-xl text-rose-400 hover:bg-rose-50 transition-all group disabled:opacity-50"
+                    >
+                      {isLoggingOut
+                        ? <Loader2 className="h-5 w-5 animate-spin" />
+                        : <LogOut className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                      }
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    sideOffset={15}
+                    className="bg-slate-900 border-none text-white px-3 py-1.5 font-bold text-xs ring-4 ring-slate-900/10"
+                  >
+                    Logout
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <button
+                  onClick={() => logout()}
+                  disabled={isLoggingOut}
+                  className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 transition-all duration-200 group disabled:opacity-50"
+                >
+                  {isLoggingOut
+                    ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                    : <LogOut className="h-5 w-5 shrink-0 group-hover:scale-110 transition-transform" />
+                  }
+                  <span className="font-bold text-[13px] tracking-tight">
+                    {isLoggingOut ? "Signing out..." : "Logout"}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-slate-50">
-          <div
-            className={cn(
-              "flex items-center gap-3 p-2 rounded-xl border border-transparent transition-all",
-              !isSidebarCollapsed && "hover:bg-slate-50",
-            )}
+          <Link
+            href="/profile"
+            className="flex items-center gap-3 p-2 rounded-xl border border-transparent transition-all hover:bg-slate-50"
           >
             <div className="h-9 w-9 rounded-full bg-slate-100 shrink-0 overflow-hidden border-2 border-white shadow-sm">
               <img
-                className=" h-full w-ful"
+                className="h-full w-full object-cover"
                 src={
                   user?.attributes?.avatar ??
-                  "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original"
+                  "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
                 }
                 alt="User-avatar"
               />
@@ -382,7 +491,7 @@ export default function Sidebar() {
                 </p>
               </div>
             )}
-          </div>
+          </Link>
         </div>
       </aside>
     </TooltipProvider>

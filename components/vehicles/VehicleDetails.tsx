@@ -48,6 +48,7 @@ import { getVehicleDocuments, downloadDocument } from "@/lib/api/documents";
 import { getVehicleCurrentFuel, getVehicleFuelHistory } from "@/lib/api/fuel";
 import { getDriverTrips } from "@/lib/api/drivers";
 import { UploadDocumentDialog } from "@/components/vehicles/UploadDocumentDialog";
+import { CreateMaintenanceScheduleModal } from "@/components/maintenance/CreateScheduleModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -92,6 +93,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const [isAssignClusterOpen, setIsAssignClusterOpen] = React.useState(false);
   const [isAssignTrackerOpen, setIsAssignTrackerOpen] = React.useState(false);
   const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false);
+  const [isAddScheduleOpen, setIsAddScheduleOpen] = React.useState(false);
 
   // Location is read from the vehicle relationship.
   // Detail endpoint may still return the old {attributes: {...}} envelope;
@@ -1093,7 +1095,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                   Preventive maintenance plans and their execution logs.
                 </CardDescription>
               </div>
-              <Button size="sm">
+              <Button size="sm" onClick={() => setIsAddScheduleOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" /> Add Schedule
               </Button>
             </CardHeader>
@@ -1638,6 +1640,13 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
           vehicleId={vehicle.id}
           isOpen={isUploadDocOpen}
           onClose={() => setIsUploadDocOpen(false)}
+        />
+
+        <CreateMaintenanceScheduleModal
+          open={isAddScheduleOpen}
+          onOpenChange={setIsAddScheduleOpen}
+          preselectedVehicleId={vehicle.id.toString()}
+          preselectedVehicleReg={vehicle.attributes.registration_number}
         />
       </Tabs>
     </div>

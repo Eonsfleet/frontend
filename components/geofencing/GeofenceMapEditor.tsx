@@ -20,6 +20,7 @@ interface GeofenceMapEditorProps {
     vehicles?: (import('@/types').Vehicle | any)[]
     onChange: (data: { type: 'polygon' | 'circle', coordinates: any, radius?: number }) => void
     height?: string
+    center?: { lat: number; lng: number }
 }
 
 const DefaultPosition: [number, number] = [6.5244, 3.3792] // Lagos, Nigeria
@@ -32,19 +33,37 @@ const MapCenterer = ({ initialGeofence }: { initialGeofence?: Geofence }) => {
         const { type, coordinates, radius } = initialGeofence.attributes
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const c = coordinates as any
-        if (type === 'circle' && (c?.latitude ?? c?.lat) && (c?.longitude ?? c?.lng)) {
-            map.setView([c.latitude ?? c.lat, c.longitude ?? c.lng], 15)
-        } else if (type === 'polygon' && c?.type === 'Polygon') {
-            const bounds = L.geoJSON(c).getBounds()
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50] })
+
+        if (type === 'circle') {
+            const lat = c?.lat ?? c?.latitude
+            const lng = c?.lng ?? c?.longitude
+            if (lat && lng) map.setView([lat, lng], 15)
+        } else if (type === 'polygon') {
+            // Flat array of { lat, lng } — the format the API returns
+            if (Array.isArray(c) && c.length > 0 && c[0].lat != null) {
+                const bounds = L.latLngBounds(c.map((p: any) => [p.lat, p.lng] as [number, number]))
+                if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] })
+            // GeoJSON geometry fallback
+            } else if (c?.type === 'Polygon') {
+                const bounds = L.geoJSON(c).getBounds()
+                if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] })
             }
         }
     }, [initialGeofence, map])
     return null
 }
 
-export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange, height = '400px' }: GeofenceMapEditorProps) {
+const MapPanner = ({ center }: { center?: { lat: number; lng: number } }) => {
+    const map = useMap()
+    useEffect(() => {
+        if (center) {
+            map.flyTo([center.lat, center.lng], 15, { duration: 1.2 })
+        }
+    }, [center, map])
+    return null
+}
+
+export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange, height = '400px', center }: GeofenceMapEditorProps) {
     const [mapReady, setMapReady] = useState(false)
 
     useEffect(() => {
@@ -71,14 +90,18 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
             const radius = layer.getRadius()
             onChange({
                 type: 'circle',
-                coordinates: { latitude: center.lat, longitude: center.lng },
+                // API expects { lat, lng } for circle center
+                coordinates: { lat: center.lat, lng: center.lng },
                 radius: radius
             })
         } else if (layer instanceof L.Polygon) {
             const geojson = layer.toGeoJSON()
+            // API expects a flat array of { lat, lng } objects, not a GeoJSON geometry
+            const ring = geojson.geometry.coordinates[0] as number[][]
+            const vertices = ring.map((p: number[]) => ({ lat: p[1], lng: p[0] }))
             onChange({
                 type: 'polygon',
-                coordinates: geojson.geometry
+                coordinates: vertices,
             })
         }
     }
@@ -90,13 +113,28 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
         const { type, coordinates, radius } = initialGeofence.attributes
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const c = coordinates as any
-        if (type === 'circle' && (c?.latitude ?? c?.lat) && (c?.longitude ?? c?.lng)) {
-            return <Circle center={[c.latitude ?? c.lat, c.longitude ?? c.lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke={true} fill={true} />
+
+        if (type === 'circle') {
+            const lat = c?.lat ?? c?.latitude
+            const lng = c?.lng ?? c?.longitude
+            if (lat != null && lng != null) {
+                return <Circle center={[lat, lng]} radius={radius || 0} color="#2563eb" fillOpacity={0.2} stroke fill />
+            }
         }
-        if (type === 'polygon' && c?.type === 'Polygon') {
-            const latlngs = (c.coordinates[0] as any[]).map((p: any) => [p[1], p[0]] as [number, number])
-            return <Polygon positions={latlngs} color="#2563eb" fillOpacity={0.2} />
+
+        if (type === 'polygon') {
+            // Flat array of { lat, lng } — the format the API returns
+            if (Array.isArray(c) && c.length > 0 && c[0].lat != null) {
+                const positions = c.map((p: any) => [p.lat, p.lng] as [number, number])
+                return <Polygon positions={positions} color="#2563eb" fillOpacity={0.2} />
+            }
+            // GeoJSON geometry fallback
+            if (c?.type === 'Polygon') {
+                const latlngs = (c.coordinates[0] as any[]).map((p: any) => [p[1], p[0]] as [number, number])
+                return <Polygon positions={latlngs} color="#2563eb" fillOpacity={0.2} />
+            }
         }
+
         return null
     }
 
@@ -108,6 +146,7 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
                 style={{ height: '100%', width: '100%' }}
             >
                 <MapCenterer initialGeofence={initialGeofence} />
+                <MapPanner center={center} />
                 <TileLayer
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                     attribution='&copy; <a href="https://carto.com/">Carto</a>'

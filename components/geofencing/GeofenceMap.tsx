@@ -12,6 +12,7 @@ interface Props {
     onChange: (data: { type: 'polygon' | 'circle', coordinates: any, radius?: number }) => void
     initialGeofence?: Geofence
     vehicles?: (import('@/types').Vehicle | any)[]
+    center?: { lat: number; lng: number }
 }
 
 export function GeofenceMap(props: Props) {

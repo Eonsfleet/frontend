@@ -66,10 +66,11 @@ const BRAND_BLUE_BG = "bg-[#0055FF]"
 const BRAND_ACCENT = "bg-[#0055FF]/10 text-[#0055FF]"
 
 const COLUMNS = [
-    { id: 'submitted', title: 'Requests', icon: ListFilter, color: 'text-slate-400', bg: 'bg-slate-50' },
-    { id: 'pending_inspection', title: 'Inspection', icon: Search, color: 'text-amber-500', bg: 'bg-amber-50' },
-    { id: 'approved', title: 'Approved', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { id: 'in_progress', title: 'Active Repair', icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { id: 'submitted', title: 'Requests', icon: ListFilter, color: 'text-slate-400', bg: 'bg-slate-50', toStatus: 'needs_inspection' },
+    { id: 'pending_inspection', title: 'Inspection', icon: Search, color: 'text-amber-500', bg: 'bg-amber-50', toStatus: 'pending_approval' },
+    { id: 'approved', title: 'Approved', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50', toStatus: 'assigned' },
+    { id: 'in_progress', title: 'Active Repair', icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-50', toStatus: 'pending_verification' },
+    { id: 'closed', title: 'Closed', icon: CheckCircle2, color: 'text-slate-400', bg: 'bg-slate-50', toStatus: null },
 ]
 
 export default function MaintenanceJobBoardPage() {
@@ -104,19 +105,22 @@ export default function MaintenanceJobBoardPage() {
             submitted: [],
             pending_inspection: [],
             approved: [],
-            in_progress: []
+            in_progress: [],
+            closed: [],
         }
         jobs.forEach(job => {
             const status = job.attributes.status?.toLowerCase() || 'submitted'
-            
-            if (status === 'submitted') {
+
+            if (['draft', 'submitted'].includes(status)) {
                 acc.submitted.push(job)
-            } else if (status === 'pending_inspection') {
+            } else if (['needs_inspection', 'pending_inspection', 'pending_approval', 'pending_finance_approval'].includes(status)) {
                 acc.pending_inspection.push(job)
-            } else if (['pending_approval', 'pending_finance_approval', 'approved', 'assigned'].includes(status)) {
+            } else if (['approved', 'assigned'].includes(status)) {
                 acc.approved.push(job)
             } else if (['in_progress', 'pending_verification', 'reopened'].includes(status)) {
                 acc.in_progress.push(job)
+            } else if (['closed', 'completed', 'cancelled', 'rejected'].includes(status)) {
+                acc.closed.push(job)
             }
         })
         return acc
@@ -125,11 +129,16 @@ export default function MaintenanceJobBoardPage() {
     const { mutate: transitionMutation } = useMutation({
         mutationFn: ({ id, status }: { id: string; status: string }) => 
             transitionMaintenanceJob(id, { to_status: status }),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
-            toast.success('Job status updated.')
+        onMutate: () => {
+            toast.loading('Updating job status...', { id: 'transition' })
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to update job status.'),
+        onSuccess: () => {
+            toast.success('Job status updated.', { id: 'transition' })
+            queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
+        },
+        onError: (err: any) => {
+            toast.error(err?.response?.data?.message || 'Failed to update job status.', { id: 'transition' })
+        },
     })
 
     const [deleteTarget, setDeleteTarget] = useState<any>(null)
@@ -147,11 +156,11 @@ export default function MaintenanceJobBoardPage() {
         e.preventDefault()
     }
 
-    const handleDrop = (e: React.DragEvent, status: string) => {
+    const handleDrop = (e: React.DragEvent, col: typeof COLUMNS[number]) => {
         e.preventDefault()
         const id = e.dataTransfer.getData('jobId')
-        if (id) {
-            transitionMutation({ id, status })
+        if (id && col.toStatus) {
+            transitionMutation({ id, status: col.toStatus })
         }
     }
 
@@ -212,7 +221,7 @@ export default function MaintenanceJobBoardPage() {
                         key={col.id} 
                         className="space-y-6"
                         onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, col.id)}
+                        onDrop={(e) => handleDrop(e, col)}
                     >
                         <div className="flex items-center justify-between px-2">
                             <div className="flex items-center gap-3">
@@ -228,9 +237,9 @@ export default function MaintenanceJobBoardPage() {
                                     </p>
                                 </div>
                             </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900 rounded-xl">
+                            {/* <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-slate-900 rounded-xl">
                                 <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            </Button> */}
                         </div>
 
                         <div className="space-y-5 min-h-[600px] p-2 rounded-[32px] bg-slate-100/30 border border-slate-100/50">
@@ -482,6 +491,24 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
     )
 }
 
+const STATUS_STYLES: Record<string, string> = {
+    draft:                'bg-slate-100 text-slate-500',
+    submitted:            'bg-blue-50 text-blue-600',
+    needs_inspection:     'bg-amber-50 text-amber-600',
+    pending_inspection:   'bg-amber-50 text-amber-600',
+    pending_approval:     'bg-orange-50 text-orange-600',
+    pending_finance_approval: 'bg-orange-50 text-orange-600',
+    approved:             'bg-emerald-50 text-emerald-600',
+    assigned:             'bg-teal-50 text-teal-600',
+    in_progress:          'bg-blue-50 text-blue-700',
+    pending_verification: 'bg-purple-50 text-purple-600',
+    reopened:             'bg-rose-50 text-rose-600',
+    closed:               'bg-slate-100 text-slate-500',
+    completed:            'bg-green-50 text-green-600',
+    cancelled:            'bg-red-50 text-red-500',
+    rejected:             'bg-red-50 text-red-500',
+}
+
 function JobCard({ job, onDelete }: { job: any; onDelete: () => void }) {
     const attrs = job.attributes
     const vehicle = job.relationships?.vehicle
@@ -528,18 +555,17 @@ function JobCard({ job, onDelete }: { job: any; onDelete: () => void }) {
                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-[0.2em] border-slate-100 text-slate-400 rounded-full px-3 py-1 bg-slate-50/50">
                             #{job.id.toString().padStart(4, '0')}
                         </Badge>
-                        <div className="flex -space-x-1.5">
-                            {(technician || [1]).map((_: any, i: number) => (
-                                <div key={i} className="h-7 w-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm">
-                                    <User className="h-3.5 w-3.5 text-slate-400" />
-                                </div>
-                            ))}
-                        </div>
+                        <span className={cn(
+                            'text-[8px] font-black uppercase tracking-[0.15em] px-2.5 py-1 rounded-full',
+                            STATUS_STYLES[attrs.status?.toLowerCase()] ?? 'bg-slate-100 text-slate-500'
+                        )}>
+                            {attrs.status?.replace(/_/g, ' ') ?? '—'}
+                        </span>
                     </div>
 
                     <div className="space-y-1.5">
                         <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-[#0055FF] transition-colors line-clamp-2">
-                            {attrs.service_type?.replace(/_/g, ' ') || 'General Maintenance'}
+                            {attrs.title || attrs.service_type?.replace(/_/g, ' ') || 'General Maintenance'}
                         </h4>
                         <div className="flex items-center gap-2">
                             <div className="h-1.5 w-1.5 rounded-full bg-[#0055FF]" />
@@ -553,7 +579,11 @@ function JobCard({ job, onDelete }: { job: any; onDelete: () => void }) {
                         <div className="flex items-center gap-2 text-slate-400">
                             <Clock className="h-3 w-3" />
                             <span className="text-[8px] font-black uppercase tracking-[0.2em]">
-                                {attrs.scheduled_at ? new Date(attrs.scheduled_at).toLocaleDateString() : 'Pending'}
+                                {attrs.created_at
+                                    ? new Date(attrs.created_at).toLocaleDateString()
+                                    : attrs.scheduled_at
+                                        ? new Date(attrs.scheduled_at).toLocaleDateString()
+                                        : 'Pending'}
                             </span>
                         </div>
                         <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-[#0055FF] group-hover:text-white transition-all text-slate-200">

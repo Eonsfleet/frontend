@@ -81,9 +81,9 @@ export function AlertsPanel({ alerts = [] }: { alerts?: AlertItem[] }) {
                                                     Acknowledge
                                                 </Button>
                                             )}
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400">
+                                        {/* <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400">
                                             <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
+                                        </Button> */}
                                     </div>
                                 </div>
                             </div>
@@ -104,9 +104,9 @@ export function AlertsPanel({ alerts = [] }: { alerts?: AlertItem[] }) {
                     </CardTitle>
                     <CardDescription className="text-[10px]">Real-time operations monitor</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" className="h-8 text-xs font-bold text-slate-400 hover:text-slate-600">
+                {/* <Button variant="ghost" size="sm" className="h-8 text-xs font-bold text-slate-400 hover:text-slate-600">
                     CLEAR ALL
-                </Button>
+                </Button> */}
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-6 scrollbar-hide bg-slate-50/30">
                 <div className="space-y-8">

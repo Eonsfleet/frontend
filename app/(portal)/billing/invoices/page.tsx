@@ -3,23 +3,63 @@
 import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, FileText, CheckCircle2, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Download, FileText, CheckCircle2, Loader2, AlertCircle, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import * as api from '@/lib/api/billing'
 import { format } from 'date-fns'
+import { toast } from 'sonner'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 
 export default function InvoiceHistoryPage() {
     const [page, setPage] = useState(1)
+    const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null)
 
     const { data: invoicesData, isLoading, isError } = useQuery({
         queryKey: ['invoices', page],
         queryFn: () => api.getInvoices({ page })
     })
 
+    const { data: invoiceDetailData, isLoading: isLoadingDetail } = useQuery({
+        queryKey: ['invoice-detail', selectedInvoiceId],
+        queryFn: () => api.getInvoiceDetails(selectedInvoiceId!),
+        enabled: !!selectedInvoiceId
+    })
+
+    const { mutate: downloadPdf, isPending: isDownloading } = useMutation({
+        mutationFn: async (invoiceId: number) => {
+            const blob = await api.downloadInvoicePdf(invoiceId)
+            
+            // Create a download link
+            const url = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `invoice-${invoiceId}.pdf`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(url)
+        },
+        onSuccess: () => {
+            toast.success('Invoice PDF downloaded successfully')
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || 'Failed to download PDF')
+        }
+    })
+
     const handleDownload = (id: number) => {
-        const url = api.getInvoicePdfUrl(id)
-        window.open(url, '_blank')
+        downloadPdf(id)
+    }
+
+    const handleViewDetails = (id: number) => {
+        setSelectedInvoiceId(id)
     }
 
     if (isLoading) {
@@ -42,6 +82,7 @@ export default function InvoiceHistoryPage() {
 
     const invoices = invoicesData.data.data
     const meta = invoicesData.data.meta
+    const invoiceDetail = invoiceDetailData?.data
 
     return (
         <div className="space-y-6 max-w-5xl">
@@ -88,15 +129,30 @@ export default function InvoiceHistoryPage() {
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-8 shadow-sm"
-                                                disabled={!invoice.pdf_available}
-                                                onClick={() => handleDownload(invoice.id)}
-                                            >
-                                                <Download className="w-4 h-4 mr-2" /> PDF
-                                            </Button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 shadow-sm"
+                                                    onClick={() => handleViewDetails(invoice.id)}
+                                                >
+                                                    <Eye className="w-4 h-4 mr-2" /> View
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 shadow-sm"
+                                                    disabled={!invoice.pdf_available || isDownloading}
+                                                    onClick={() => handleDownload(invoice.id)}
+                                                >
+                                                    {isDownloading ? (
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    ) : (
+                                                        <Download className="w-4 h-4 mr-2" />
+                                                    )}
+                                                    PDF
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -135,6 +191,140 @@ export default function InvoiceHistoryPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Invoice Details Modal */}
+            <Dialog open={!!selectedInvoiceId} onOpenChange={(open) => !open && setSelectedInvoiceId(null)}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Invoice Details</DialogTitle>
+                        <DialogDescription>
+                            {invoiceDetail && `Invoice ${invoiceDetail.invoice_number}`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {isLoadingDetail ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                        </div>
+                    ) : invoiceDetail ? (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Invoice Number</p>
+                                    <p className="text-sm font-medium text-slate-900 mt-1">{invoiceDetail.invoice_number}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Issue Date</p>
+                                    <p className="text-sm font-medium text-slate-900 mt-1">
+                                        {format(new Date(invoiceDetail.issued_at), 'MMM dd, yyyy')}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</p>
+                                    <Badge className={`mt-1 border-none px-2 py-0.5 ${invoiceDetail.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                        {invoiceDetail.status === 'paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                                        <span className="capitalize">{invoiceDetail.status}</span>
+                                    </Badge>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
+                                    <p className="text-sm font-bold text-slate-900 mt-1">
+                                        {invoiceDetail.currency} {invoiceDetail.total.toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {invoiceDetail.line_items && invoiceDetail.line_items.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Line Items</p>
+                                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-slate-50 border-b border-slate-200">
+                                                <tr>
+                                                    <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Description</th>
+                                                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Qty</th>
+                                                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Unit Price</th>
+                                                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {invoiceDetail.line_items.map((item, idx) => (
+                                                    <tr key={idx}>
+                                                        <td className="px-4 py-2 text-slate-700">{item.description}</td>
+                                                        <td className="px-4 py-2 text-right text-slate-700">{item.quantity}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-slate-700">
+                                                            {invoiceDetail.currency} {item.unit_price.toLocaleString()}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-medium text-slate-900">
+                                                            {invoiceDetail.currency} {item.total.toLocaleString()}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="border-t border-slate-200 pt-4 space-y-2">
+                                {invoiceDetail.subtotal !== undefined && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-600">Subtotal</span>
+                                        <span className="font-mono text-slate-900">
+                                            {invoiceDetail.currency} {invoiceDetail.subtotal.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
+                                {invoiceDetail.tax !== undefined && invoiceDetail.tax > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-600">Tax</span>
+                                        <span className="font-mono text-slate-900">
+                                            {invoiceDetail.currency} {invoiceDetail.tax.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
+                                {invoiceDetail.discount !== undefined && invoiceDetail.discount > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-600">Discount</span>
+                                        <span className="font-mono text-emerald-600">
+                                            -{invoiceDetail.currency} {invoiceDetail.discount.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between text-base font-bold pt-2 border-t border-slate-200">
+                                    <span className="text-slate-900">Total</span>
+                                    <span className="font-mono text-slate-900">
+                                        {invoiceDetail.currency} {invoiceDetail.total.toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setSelectedInvoiceId(null)}
+                                >
+                                    Close
+                                </Button>
+                                <Button
+                                    onClick={() => handleDownload(invoiceDetail.id)}
+                                    disabled={!invoiceDetail.pdf_available || isDownloading}
+                                >
+                                    {isDownloading ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4 mr-2" />
+                                    )}
+                                    Download PDF
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-slate-500">
+                            Failed to load invoice details
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

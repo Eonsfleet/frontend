@@ -125,11 +125,11 @@ export default function BillingOverviewPage() {
                             </div>
                         </div>
                     </CardContent>
-                    <div className="p-4 border-t border-slate-800 relative z-10">
+                    {/* <div className="p-4 border-t border-slate-800 relative z-10">
                         <Button variant="ghost" className="w-full text-indigo-300 hover:text-indigo-200 hover:bg-slate-800 justify-between">
                             Manage Payment Method <ArrowRight className="h-4 w-4" />
                         </Button>
-                    </div>
+                    </div> */}
                 </Card>
             </div>
 

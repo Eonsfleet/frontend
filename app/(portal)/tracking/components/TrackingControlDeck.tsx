@@ -203,10 +203,16 @@ export function TrackingControlDeck({
         </div>
 
         <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-1 overflow-hidden items-center">
-          <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors border-b border-slate-50">
+          <button
+            onClick={() => (window as any).leafletMap?.zoomIn()}
+            className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors border-b border-slate-50"
+          >
             +
           </button>
-          <button className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors">
+          <button
+            onClick={() => (window as any).leafletMap?.zoomOut()}
+            className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-900 font-black hover:bg-slate-50 transition-colors"
+          >
             -
           </button>
         </div>

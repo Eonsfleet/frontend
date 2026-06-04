@@ -10,6 +10,7 @@ export type RoleSlug =
     | 'finance'
     | 'compliance'
     | 'vendor'
+    | 'owner'
 
 export interface UserProfile {
     id: string
@@ -31,6 +32,8 @@ export interface UserProfile {
     relationships: {
         address: Address | null
         organization: Organization | null
+        current_vehicle?: { id: string; attributes: Record<string, unknown> } | null
+        cluster?: { id: number; name: string } | null
     }
 }
 
@@ -66,8 +69,9 @@ export interface DriverPayload {
     l_name: string
     email: string
     phone_number?: string | null
-    date_of_birth?: string | null
+    dob?: string | null
     employee_id?: string | null
     avatar?: string | null
     role?: RoleSlug
+    status?: string | null
 }

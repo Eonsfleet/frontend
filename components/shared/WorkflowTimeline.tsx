@@ -6,7 +6,7 @@ import { CheckCircle2, Circle } from 'lucide-react'
 export interface WorkflowEvent {
     status: string
     actor: string
-    timestamp: string
+    timestamp: string | null
     reason: string | null
 }
 
@@ -54,7 +54,13 @@ export function WorkflowTimeline({ history }: WorkflowTimelineProps) {
                                         )}
                                     </div>
                                     <div className="text-xs font-medium text-slate-500 shrink-0">
-                                        {format(new Date(event.timestamp), 'MMM dd, yyyy HH:mm')}
+                                        {event.timestamp
+                                            ? (() => {
+                                                const d = new Date(event.timestamp)
+                                                return isNaN(d.getTime()) ? event.timestamp : format(d, 'MMM dd, yyyy HH:mm')
+                                              })()
+                                            : '—'
+                                        }
                                     </div>
                                 </CardContent>
                             </Card>

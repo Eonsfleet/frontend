@@ -61,7 +61,7 @@ export default function ProfilePage() {
             const uploadResponse = await uploadFileMutation.mutateAsync({ file, folder: 'avatar' })
             
             // Step 2: Get the uploaded file URL from response
-            const uploadedFileUrl = uploadResponse.data.file[0]
+            const uploadedFileUrl = uploadResponse.data.file.url
             
             // Update toast to show we're saving
             toast.loading('Saving avatar...', { id: uploadToast })

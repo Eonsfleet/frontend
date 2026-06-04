@@ -197,14 +197,20 @@ export default function TrackingMap({
             const { type, coordinates, radius, name } = g.attributes;
 
             if (type === "circle") {
-              // Assuming coordinates is [lat, lng] or {lat, lng}
-              const center = Array.isArray(coordinates)
-                ? [coordinates[0], coordinates[1]]
-                : [coordinates.lat, coordinates.lng];
+              // coordinates can be {lat, lng} or {latitude, longitude}
+              const lat = coordinates.lat ?? coordinates.latitude;
+              const lng = coordinates.lng ?? coordinates.longitude;
+              
+              // Skip if coordinates are invalid
+              if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+                console.warn(`Geofence ${g.id} has invalid circle coordinates:`, coordinates);
+                return null;
+              }
+
               return (
                 <Circle
                   key={g.id}
-                  center={center as [number, number]}
+                  center={[lat, lng]}
                   radius={radius || 500}
                   pathOptions={{
                     color: "#10b981",
@@ -223,14 +229,21 @@ export default function TrackingMap({
             }
 
             if (type === "polygon") {
-              // Normalize GeoJSON [lng, lat] to Leaflet [lat, lng]
+              // coordinates is an array of {lat, lng} objects or [lng, lat] arrays
+              if (!Array.isArray(coordinates) || coordinates.length === 0) {
+                console.warn(`Geofence ${g.id} has invalid polygon coordinates:`, coordinates);
+                return null;
+              }
+
               const positions = coordinates.map((coord: any) => {
                 if (Array.isArray(coord)) {
                   // GeoJSON standard is [lng, lat]
                   return [coord[1], coord[0]];
                 }
+                // Flat {lat, lng} object
                 return [coord.lat, coord.lng];
               });
+
               return (
                 <Polygon
                   key={g.id}
