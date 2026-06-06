@@ -21,7 +21,7 @@ import { Button } from '../ui/button'
 
 interface GeofenceListProps {
     searchTerm?: string
-    statusFilter?: 'active' | 'inactive'
+    statusFilter?: true | false
 }
 
 export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProps) {
@@ -38,7 +38,7 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
             page,
             per_page: 9,
             q: searchTerm || undefined,
-            status: statusFilter ?? undefined,
+            status: statusFilter !== undefined ? (statusFilter ? 'active' : 'inactive') : undefined,
         }),
     })
 

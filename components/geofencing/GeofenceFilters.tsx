@@ -5,7 +5,7 @@ import { Filter, RotateCcw, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface GeofenceFilterState {
-  status?: "active" | "inactive";
+  status?: true | false;
 }
 
 interface GeofenceFiltersProps {
@@ -14,8 +14,8 @@ interface GeofenceFiltersProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: "active" as const, label: "Active" },
-  { value: "inactive" as const, label: "Inactive" },
+  { value: true as const, label: "Active" },
+  { value: false as const, label: "Inactive" },
 ];
 
 export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersProps) {
@@ -33,7 +33,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleSelect = (value: "active" | "inactive") => {
+  const handleSelect = (value: true | false) => {
     onFiltersChange({ status: filters.status === value ? undefined : value });
     setIsOpen(false);
   };
@@ -90,7 +90,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
             </button>
             {STATUS_OPTIONS.map((opt) => (
               <button
-                key={opt.value}
+                key={String(opt.value)}
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
                   "w-full text-left px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors",

@@ -221,7 +221,7 @@ export default function MaintenanceDashboardPage() {
                                     Critical Alerts
                                 </CardTitle>
                                 <Link href="/maintenance/alerts" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">
-                                    Inbox
+                                    View More
                                 </Link>
                             </div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight px-4 ml-0.5">Immediate intervention required</p>
