@@ -4,14 +4,16 @@ import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, AlertTriangle, Eye, Edit2 } from 'lucide-react'
+import { Plus, Loader2, AlertTriangle, Eye } from 'lucide-react'
 import { getIncidents } from '@/lib/api/incidents'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
+import { IncidentDrawer } from './IncidentDrawer'
 
 export function IncidentList() {
     const [page, setPage] = React.useState(1)
+    const [drawerIncidentId, setDrawerIncidentId] = React.useState<string | null>(null)
 
     const { data, isLoading } = useQuery({
         queryKey: ['incidents', { page }],
@@ -44,6 +46,7 @@ export function IncidentList() {
     }
 
     return (
+        <>
         <Card className="shadow-sm border-slate-200">
             <CardHeader className="flex flex-row items-center justify-between bg-white border-b border-slate-100">
                 <div>
@@ -91,11 +94,15 @@ export function IncidentList() {
                                     </tr>
                                 ) : (
                                     data?.data?.incidents?.map((item) => (
-                                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                        <tr
+                                            key={item.id}
+                                            className="hover:bg-slate-50 transition-colors cursor-pointer"
+                                            onClick={() => setDrawerIncidentId(item.id)}
+                                        >
                                             <td className="px-6 py-4">
-                                                <Link href={`/incidents/${item.id}`} className="font-medium text-blue-600 hover:underline">
+                                                <span className="font-medium text-blue-600">
                                                     {item.attributes.reference_number}
-                                                </Link>
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4 capitalize font-medium text-slate-700">
                                                 {item.attributes.type.replace(/_/g, ' ')}
@@ -147,13 +154,14 @@ export function IncidentList() {
                                                 })()}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="icon" title="View details" asChild>
-                                                        <Link href={`/incidents/${item.id}`}>
-                                                            <Eye className="h-4 w-4 text-slate-500 hover:text-blue-600" />
-                                                        </Link>
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    title="View details"
+                                                    onClick={(e) => { e.stopPropagation(); setDrawerIncidentId(item.id) }}
+                                                >
+                                                    <Eye className="h-4 w-4 text-slate-500 hover:text-blue-600" />
+                                                </Button>
                                             </td>
                                         </tr>
                                     ))
@@ -163,6 +171,39 @@ export function IncidentList() {
                     </div>
                 )}
             </CardContent>
+
+            {/* Pagination */}
+            {(data?.data?.pagination?.last_page ?? 1) > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="text-[10px] font-black uppercase tracking-widest"
+                    >
+                        Prev
+                    </Button>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Page {page} of {data?.data?.pagination?.last_page}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === (data?.data?.pagination?.last_page ?? 1)}
+                        onClick={() => setPage((p) => p + 1)}
+                        className="text-[10px] font-black uppercase tracking-widest"
+                    >
+                        Next
+                    </Button>
+                </div>
+            )}
         </Card>
+
+        <IncidentDrawer
+            incidentId={drawerIncidentId}
+            onClose={() => setDrawerIncidentId(null)}
+        />
+        </>
     )
 }

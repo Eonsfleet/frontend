@@ -35,7 +35,8 @@ import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteSchedule } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { MaintenanceScheduleDrawer } from './MaintenanceScheduleDrawer'
 
 interface MaintenanceScheduleTableProps {
     data: MaintenanceSchedule[]
@@ -107,7 +108,7 @@ export function MaintenanceScheduleTable({
     onPageChange
 }: MaintenanceScheduleTableProps) {
     const queryClient = useQueryClient()
-    const router = useRouter()
+    const [scheduleDrawerId, setScheduleDrawerId] = useState<string | null>(null)
 
     const { mutate: cancelSchedule, variables: cancellingId } = useMutation({
         mutationFn: (id: string) => deleteSchedule(id),
@@ -130,6 +131,7 @@ export function MaintenanceScheduleTable({
     }
 
     return (
+        <>
         <div className="space-y-4">
             <div className="overflow-x-auto">
                 <Table>
@@ -225,7 +227,7 @@ export function MaintenanceScheduleTable({
                                                     </DropdownMenuItem> */}
                                                     <DropdownMenuItem
                                                         className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
-                                                        onClick={() => router.push(`/maintenance/schedules/${row.id}`)}
+                                                        onClick={() => setScheduleDrawerId(String(row.id))}
                                                     >
                                                         <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
@@ -327,5 +329,11 @@ export function MaintenanceScheduleTable({
                 </div>
             )}
         </div>
+
+        <MaintenanceScheduleDrawer
+            scheduleId={scheduleDrawerId}
+            onClose={() => setScheduleDrawerId(null)}
+        />
+        </>
     )
 }

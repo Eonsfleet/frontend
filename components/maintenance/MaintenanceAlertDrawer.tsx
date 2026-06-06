@@ -28,33 +28,51 @@ import { CreateWorkOrderDialog } from './CreateWorkOrderDialog'
 import { WorkflowTimeline } from '@/components/shared/WorkflowTimeline'
 import {
     AlertTriangle, BellRing, Eye, Clock, Wrench, CheckCircle2,
-    Loader2, Car, Calendar, Activity, ChevronRight, Send, MessageSquare,
+    Loader2, Car, Calendar, Send, MessageSquare, ChevronRight,
+    Zap, Activity,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import type { MaintenanceAlert } from '@/types'
 
-const ALERT_STATUS_STYLES = {
-    triggered:          { badge: 'bg-amber-50 text-amber-600',     accent: 'border-l-amber-400',   label: 'Triggered'       },
-    overdue:            { badge: 'bg-rose-50 text-rose-600',       accent: 'border-l-rose-500',    label: 'Overdue'         },
-    acknowledged:       { badge: 'bg-blue-50 text-blue-600',       accent: 'border-l-blue-400',    label: 'Acknowledged'    },
-    snoozed:            { badge: 'bg-slate-100 text-slate-500',    accent: 'border-l-slate-300',   label: 'Snoozed'         },
-    work_order_created: { badge: 'bg-indigo-50 text-indigo-600',   accent: 'border-l-indigo-400',  label: 'Work Order Open' },
-    closed:             { badge: 'bg-emerald-50 text-emerald-600', accent: 'border-l-emerald-400', label: 'Closed'          },
-} as const
+// ── Status config ─────────────────────────────────────────────────────────────
 
-function StatusIcon({ status, className }: { status: string; className?: string }) {
-    const cls = cn('h-4 w-4', className)
-    switch (status) {
-        case 'overdue':            return <AlertTriangle className={cls} />
-        case 'triggered':          return <BellRing className={cls} />
-        case 'acknowledged':       return <Eye className={cls} />
-        case 'snoozed':            return <Clock className={cls} />
-        case 'work_order_created': return <Wrench className={cls} />
-        case 'closed':             return <CheckCircle2 className={cls} />
-        default:                   return <BellRing className={cls} />
-    }
+const STATUS_CONFIG: Record<string, { label: string; color: string; border: string; Icon: React.ComponentType<{ className?: string }> }> = {
+    triggered:          { label: 'Triggered',       color: 'text-amber-600 bg-amber-50',    border: 'border-l-amber-400',   Icon: BellRing      },
+    overdue:            { label: 'Overdue',          color: 'text-rose-600 bg-rose-50',      border: 'border-l-rose-500',    Icon: AlertTriangle  },
+    acknowledged:       { label: 'Acknowledged',     color: 'text-blue-600 bg-blue-50',      border: 'border-l-blue-400',    Icon: Eye            },
+    snoozed:            { label: 'Snoozed',          color: 'text-slate-500 bg-slate-100',   border: 'border-l-slate-300',   Icon: Clock          },
+    work_order_created: { label: 'Work Order Open',  color: 'text-indigo-600 bg-indigo-50',  border: 'border-l-indigo-400',  Icon: Wrench         },
+    closed:             { label: 'Closed',           color: 'text-emerald-600 bg-emerald-50',border: 'border-l-emerald-400', Icon: CheckCircle2   },
 }
+
+function StatusBadge({ status }: { status: string }) {
+    const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.triggered
+    return (
+        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', cfg.color)}>
+            <cfg.Icon className="h-3 w-3" />
+            {cfg.label}
+        </span>
+    )
+}
+
+// ── Label / value helpers ─────────────────────────────────────────────────────
+
+function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+        <div className="flex flex-col gap-0.5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+            <div className="text-xs font-bold text-slate-900">{value}</div>
+        </div>
+    )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+    return <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">{children}</p>
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
     alertId: string | null
@@ -67,6 +85,7 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
     const [workOrderOpen, setWorkOrderOpen] = useState(false)
     const [messageText, setMessageText] = useState('')
 
+    // ── Queries ──────────────────────────────────────────────────────────────
     const { data: detailData, isLoading, isError } = useQuery({
         queryKey: ['maintenance-alert-detail', alertId],
         queryFn: () => getMaintenanceAlertById(alertId!),
@@ -85,23 +104,21 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
         enabled: !!alertId,
     })
 
+    // ── Mutations ────────────────────────────────────────────────────────────
+    const invalidate = () => {
+        queryClient.invalidateQueries({ queryKey: ['maintenance-alerts-full'] })
+        queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
+    }
+
     const { mutate: handleAcknowledge, isPending: isAcknowledging } = useMutation({
         mutationFn: () => acknowledgeMaintenanceAlert(alertId!),
-        onSuccess: () => {
-            toast.success('Alert acknowledged')
-            queryClient.invalidateQueries({ queryKey: ['maintenance-alerts-full'] })
-            queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
-        },
+        onSuccess: () => { toast.success('Alert acknowledged'); invalidate() },
         onError: () => toast.error('Failed to acknowledge'),
     })
 
     const { mutate: handleClose, isPending: isClosing } = useMutation({
         mutationFn: () => closeMaintenanceAlert(alertId!),
-        onSuccess: () => {
-            toast.success('Alert closed')
-            queryClient.invalidateQueries({ queryKey: ['maintenance-alerts-full'] })
-            queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
-        },
+        onSuccess: () => { toast.success('Alert closed'); invalidate() },
         onError: () => toast.error('Failed to close alert'),
     })
 
@@ -115,10 +132,12 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
         onError: () => toast.error('Failed to send message'),
     })
 
+    // ── Derived data ─────────────────────────────────────────────────────────
     const rawAlertData = detailData?.data as any
-    const alert = rawAlertData?.attributes ? (rawAlertData as import('@/types').MaintenanceAlert) : null
+    const alert: MaintenanceAlert | null = rawAlertData?.attributes ? rawAlertData : null
+
     const status = alert?.attributes?.status ?? ''
-    const styles = ALERT_STATUS_STYLES[status as keyof typeof ALERT_STATUS_STYLES] ?? ALERT_STATUS_STYLES.triggered
+    const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.triggered
     const isClosed = status === 'closed'
     const isOverdue = status === 'overdue'
 
@@ -130,358 +149,351 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
         ?? 'Maintenance'
     const triggeredAt = alert?.attributes?.triggered_at ?? alert?.attributes?.created_at
     const jobId = (alert?.relationships?.maintenance_job as any)?.id ?? null
+    const schedDueDate = alert?.relationships?.schedule?.due_date
     const history = historyData?.data?.history ?? []
     const messages = conversationData?.data?.conversation?.messages ?? []
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <>
             <Sheet open={!!alertId} onOpenChange={(open) => { if (!open) onClose() }}>
                 <SheetContent
                     side="right"
-                    className="w-full sm:max-w-[560px] p-0 flex flex-col gap-0"
+                    className="w-full sm:max-w-[700px] p-0 flex flex-col gap-0 overflow-hidden"
                 >
-                    {/* Header */}
-                    <SheetHeader className="px-6 py-5 border-b border-slate-100 shrink-0">
-                        {/* SheetTitle must always be rendered for Radix a11y */}
+                    {/* ── Sticky header ─────────────────────────────────── */}
+                    <SheetHeader className={cn(
+                        'px-6 py-4 border-b border-slate-100 shrink-0 border-l-4',
+                        cfg.border
+                    )}>
                         <SheetTitle className={cn(
                             'text-base font-black uppercase tracking-tight leading-tight',
                             isLoading ? 'sr-only' : isError ? 'text-rose-600 text-sm' : 'text-slate-900'
                         )}>
                             {isLoading ? 'Maintenance Alert' : isError ? 'Failed to load alert' : serviceType}
                         </SheetTitle>
+
                         {isLoading ? (
-                            <div className="space-y-2">
-                                <Skeleton className="h-4 w-40" />
-                                <Skeleton className="h-6 w-64" />
+                            <div className="space-y-2 pt-1">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-6 w-56" />
+                                <Skeleton className="h-3 w-40" />
                             </div>
                         ) : alert ? (
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge className={cn('font-black uppercase text-[8px] h-4 tracking-tighter border-0 shadow-none', styles.badge)}>
-                                        <StatusIcon status={status} className="mr-1 h-3 w-3" />
-                                        {styles.label}
-                                    </Badge>
-                                    <Badge className={cn(
-                                        'font-black uppercase text-[8px] h-4 tracking-tighter border-0 shadow-none',
-                                        alert.attributes.alert_type === 'due'
-                                            ? 'bg-rose-50 text-rose-600'
-                                            : 'bg-amber-50 text-amber-600'
-                                    )}>
-                                        {alert.attributes.alert_type}
-                                    </Badge>
-                                    {isOverdue && (
-                                        <span className="flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-rose-400 opacity-75" />
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
-                                        </span>
-                                    )}
+                            <div className="flex items-start justify-between gap-3 pt-0.5">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {vehicleMake} {vehicleModel} · {vehicleReg}
+                                    </p>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <StatusBadge status={status} />
+                                        <Badge className={cn(
+                                            'text-[8px] font-black uppercase tracking-tighter h-4 border-0 shadow-none',
+                                            alert.attributes.alert_type === 'due'
+                                                ? 'bg-rose-50 text-rose-600'
+                                                : 'bg-amber-50 text-amber-600'
+                                        )}>
+                                            {alert.attributes.alert_type}
+                                        </Badge>
+                                        {isOverdue && (
+                                            <span className="flex h-2 w-2 shrink-0">
+                                                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-rose-400 opacity-75" />
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                    {vehicleMake} {vehicleModel} · {vehicleReg}
-                                </p>
                             </div>
                         ) : null}
                     </SheetHeader>
 
-                    {/* Action buttons */}
-                    {!isLoading && !isError && alert && (
-                        <div className={cn(
-                            'px-6 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap shrink-0',
-                            `border-l-4 ${styles.accent}`
-                        )}>
-                            {(status === 'triggered' || status === 'overdue') && (
-                                <Button
-                                    size="sm"
-                                    className="h-7 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-900 text-white px-3 hover:bg-slate-700"
-                                    onClick={() => handleAcknowledge()}
-                                    disabled={isAcknowledging}
-                                >
-                                    {isAcknowledging ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Acknowledge'}
-                                </Button>
-                            )}
-                            {status === 'acknowledged' && (
-                                <>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 rounded-lg text-[9px] font-black uppercase tracking-widest border-slate-200 px-3"
-                                        onClick={() => setSnoozeOpen(true)}
-                                    >
-                                        Snooze
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        className="h-7 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-900 text-white px-3 hover:bg-slate-700"
-                                        onClick={() => setWorkOrderOpen(true)}
-                                    >
-                                        Create Work Order
-                                    </Button>
-                                </>
-                            )}
-                            {status === 'snoozed' && alert.attributes.snooze_expires_at && (
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                    Re-triggers {formatDistanceToNow(new Date(alert.attributes.snooze_expires_at), { addSuffix: true })}
-                                </span>
-                            )}
-                            {status === 'work_order_created' && (
-                                <>
-                                    {jobId && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 rounded-lg text-[9px] font-black uppercase tracking-widest border-indigo-200 text-indigo-600 px-3"
-                                            asChild
-                                        >
-                                            <Link href={`/maintenance/jobs/${jobId}`}>
-                                                View Job <ChevronRight className="ml-1 h-3 w-3" />
-                                            </Link>
-                                        </Button>
-                                    )}
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 rounded-lg text-[9px] font-black uppercase tracking-widest border-slate-200 px-3"
-                                        onClick={() => handleClose()}
-                                        disabled={isClosing}
-                                    >
-                                        {isClosing ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Close Alert'}
-                                    </Button>
-                                </>
-                            )}
-                            {isClosed && (
-                                <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                                    <CheckCircle2 className="h-3.5 w-3.5" /> Resolved
-                                </span>
-                            )}
-                        </div>
-                    )}
+                    {/* ── Scrollable body ───────────────────────────────── */}
+                    <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
 
-                    {/* Tabs */}
-                    <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
-                        <TabsList className="shrink-0 w-full justify-start rounded-none border-b border-slate-100 bg-white px-6 h-10 gap-0">
-                            <TabsTrigger
-                                value="overview"
-                                className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
-                            >
-                                Overview
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="history"
-                                className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
-                            >
-                                History
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="conversation"
-                                className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
-                            >
-                                Conversation
-                            </TabsTrigger>
-                        </TabsList>
+                        {isLoading ? (
+                            <div className="p-6 space-y-4">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-14 rounded-xl" />
+                                ))}
+                            </div>
+                        ) : isError ? (
+                            <div className="p-6 text-center text-sm text-rose-500">
+                                Could not load alert details.
+                            </div>
+                        ) : alert ? (
+                            <>
+                                {/* ── Two-pane content ─────────────────── */}
+                                <div className="flex flex-col sm:flex-row flex-1">
 
-                        {/* Overview */}
-                        <TabsContent value="overview" className="flex-1 overflow-y-auto m-0">
-                            {isLoading ? (
-                                <div className="p-6 space-y-4">
-                                    {Array.from({ length: 4 }).map((_, i) => (
-                                        <Skeleton key={i} className="h-14 rounded-xl" />
-                                    ))}
-                                </div>
-                            ) : isError ? (
-                                <div className="p-6 text-center text-sm text-rose-500">
-                                    Could not load alert details.
-                                </div>
-                            ) : alert ? (
-                                <div className="p-6 space-y-4">
-                                    {/* Vehicle */}
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-3">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                            <Car className="h-3 w-3" /> Vehicle
-                                        </p>
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center">
-                                                <Car className="h-5 w-5 text-white" />
+                                    {/* LEFT — main content */}
+                                    <div className="flex-1 min-w-0 px-6 py-5 space-y-6">
+
+                                        {/* Action buttons */}
+                                        {!isClosed && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {(status === 'triggered' || status === 'overdue') && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-700"
+                                                        onClick={() => handleAcknowledge()}
+                                                        disabled={isAcknowledging}
+                                                    >
+                                                        {isAcknowledging ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Acknowledge'}
+                                                    </Button>
+                                                )}
+                                                {status === 'acknowledged' && (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 rounded-lg text-[9px] font-black uppercase tracking-widest border-slate-200"
+                                                            onClick={() => setSnoozeOpen(true)}
+                                                        >
+                                                            Snooze
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-8 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-700"
+                                                            onClick={() => setWorkOrderOpen(true)}
+                                                        >
+                                                            Create Work Order
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {status === 'work_order_created' && (
+                                                    <>
+                                                        {jobId && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-8 rounded-lg text-[9px] font-black uppercase tracking-widest border-indigo-200 text-indigo-600"
+                                                                asChild
+                                                            >
+                                                                <Link href={`/maintenance/jobs/${jobId}`}>
+                                                                    View Job <ChevronRight className="ml-1 h-3 w-3" />
+                                                                </Link>
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 rounded-lg text-[9px] font-black uppercase tracking-widest border-slate-200"
+                                                            onClick={() => handleClose()}
+                                                            disabled={isClosing}
+                                                        >
+                                                            {isClosing ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Close Alert'}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {status === 'snoozed' && alert.attributes.snooze_expires_at && (
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest self-center">
+                                                        Re-triggers {formatDistanceToNow(new Date(alert.attributes.snooze_expires_at), { addSuffix: true })}
+                                                    </p>
+                                                )}
                                             </div>
-                                            <div>
-                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                                                    {vehicleMake} {vehicleModel}
+                                        )}
+
+                                        {isClosed && (
+                                            <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                                                <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
+                                                    This alert has been resolved and closed.
                                                 </p>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                    {vehicleReg}
-                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Alert overview grid */}
+                                        <div>
+                                            <SectionLabel>Alert Details</SectionLabel>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <MetaRow label="Alert Type" value={<span className="uppercase">{alert.attributes.alert_type}</span>} />
+                                                <MetaRow label="Threshold" value={<span className="uppercase">{alert.attributes.threshold_type}</span>} />
+                                                <MetaRow
+                                                    label="Triggered"
+                                                    value={triggeredAt
+                                                        ? formatDistanceToNow(new Date(triggeredAt), { addSuffix: true })
+                                                        : 'Unknown'}
+                                                />
+                                                {alert.attributes.snooze_count ? (
+                                                    <MetaRow
+                                                        label="Snoozed"
+                                                        value={`${alert.attributes.snooze_count}× total`}
+                                                    />
+                                                ) : null}
+                                                {alert.attributes.snooze_expires_at && (
+                                                    <MetaRow
+                                                        label="Snooze Expires"
+                                                        value={format(new Date(alert.attributes.snooze_expires_at), 'dd MMM yyyy')}
+                                                    />
+                                                )}
+                                                {schedDueDate && (
+                                                    <MetaRow
+                                                        label="Target Due"
+                                                        value={format(new Date(schedDueDate), 'dd MMM yyyy')}
+                                                    />
+                                                )}
                                             </div>
                                         </div>
+
+                                        {/* Schedule link */}
+                                        {alert.relationships?.schedule?.id && (
+                                            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Activity className="h-4 w-4 text-slate-400 shrink-0" />
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Linked Schedule</p>
+                                                        <p className="text-xs font-bold text-slate-900">{serviceType}</p>
+                                                    </div>
+                                                </div>
+                                                <Button size="sm" variant="ghost" asChild className="h-7 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 px-2">
+                                                    <Link href={`/maintenance/schedules/${alert.relationships.schedule.id}`}>
+                                                        View <ChevronRight className="ml-0.5 h-3 w-3" />
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* Alert details */}
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-3">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                            <Activity className="h-3 w-3" /> Alert Details
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-0.5">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Service Type
-                                                </p>
-                                                <p className="text-xs font-black text-slate-900 uppercase">
-                                                    {serviceType}
-                                                </p>
-                                            </div>
-                                            <div className="space-y-0.5">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Alert Type
-                                                </p>
-                                                <p className="text-xs font-black text-slate-900 uppercase">
-                                                    {alert.attributes.alert_type}
-                                                </p>
-                                            </div>
-                                            <div className="space-y-0.5">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Triggered
-                                                </p>
-                                                <p className="text-xs font-bold text-slate-700">
-                                                    {triggeredAt
-                                                        ? format(new Date(triggeredAt), 'dd MMM yyyy, HH:mm')
-                                                        : 'Unknown'}
-                                                </p>
-                                            </div>
-                                            {alert.attributes.snooze_count ? (
-                                                <div className="space-y-0.5">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                        Snoozed
-                                                    </p>
-                                                    <p className="text-xs font-bold text-slate-700">
-                                                        {alert.attributes.snooze_count}× total
-                                                    </p>
+                                    {/* RIGHT — metadata sidebar */}
+                                    <div className="sm:w-52 border-t sm:border-t-0 sm:border-l border-slate-100 bg-slate-50/40 px-5 py-5 space-y-5 shrink-0">
+
+                                        {/* Status */}
+                                        <div className="space-y-1">
+                                            <SectionLabel>Status</SectionLabel>
+                                            <StatusBadge status={status} />
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Vehicle */}
+                                        <div className="space-y-2">
+                                            <SectionLabel>Vehicle</SectionLabel>
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center shrink-0">
+                                                    <Car className="h-4 w-4 text-white" />
                                                 </div>
-                                            ) : null}
-                                            {alert.attributes.snooze_expires_at && (
-                                                <div className="space-y-0.5 col-span-2">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                        Snooze Expires
-                                                    </p>
-                                                    <p className="text-xs font-bold text-slate-700">
-                                                        {format(new Date(alert.attributes.snooze_expires_at), 'dd MMM yyyy')}
-                                                        {' '}
-                                                        <span className="text-slate-400">
-                                                            ({formatDistanceToNow(new Date(alert.attributes.snooze_expires_at), { addSuffix: true })})
-                                                        </span>
-                                                    </p>
+                                                <div>
+                                                    <p className="text-xs font-black text-slate-900 uppercase">{vehicleMake} {vehicleModel}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{vehicleReg}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Timeline */}
+                                        <div className="space-y-2">
+                                            <SectionLabel>Timeline</SectionLabel>
+                                            {triggeredAt && (
+                                                <div className="flex items-center gap-2">
+                                                    <Zap className="h-3 w-3 text-slate-300 shrink-0" />
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Triggered</p>
+                                                        <p className="text-[10px] font-bold text-slate-700">
+                                                            {format(new Date(triggeredAt), 'dd MMM yyyy, HH:mm')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {schedDueDate && (
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="h-3 w-3 text-slate-300 shrink-0" />
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due Date</p>
+                                                        <p className="text-[10px] font-bold text-slate-700">
+                                                            {format(new Date(schedDueDate), 'dd MMM yyyy')}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* Threshold */}
-                                    {alert.relationships?.schedule?.due_date && (
-                                        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-3">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                <Calendar className="h-3 w-3" /> Maintenance Target
-                                            </p>
-                                            <div className="space-y-0.5">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due Date</p>
-                                                <p className="text-xs font-black text-slate-900">
-                                                    {format(new Date(alert.relationships.schedule.due_date), 'dd MMM yyyy')}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
-                            ) : null}
-                        </TabsContent>
 
-                        {/* History */}
-                        <TabsContent value="history" className="flex-1 overflow-y-auto m-0">
-                            {isHistoryLoading ? (
-                                <div className="p-6 space-y-3">
-                                    {Array.from({ length: 3 }).map((_, i) => (
-                                        <Skeleton key={i} className="h-12 rounded-xl" />
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="p-6">
-                                    {history.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                No history yet
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <WorkflowTimeline history={history.map((e) => ({
-                                            status: e.to_status,
-                                            actor: e.actor_name ?? e.actor_role ?? 'System',
-                                            timestamp: e.created_at,
-                                            reason: e.reason,
-                                        }))} />
-                                    )}
-                                </div>
-                            )}
-                        </TabsContent>
+                                {/* ── Activity tabs — full width ────────── */}
+                                <div className="border-t border-slate-100 flex flex-col">
+                                    <Tabs defaultValue="history" className="flex flex-col">
+                                        <TabsList className="w-full justify-start rounded-none bg-white border-b border-slate-100 h-10 px-6 gap-0 shrink-0">
+                                            {(['history', 'conversation'] as const).map((tab) => (
+                                                <TabsTrigger
+                                                    key={tab}
+                                                    value={tab}
+                                                    className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-4"
+                                                >
+                                                    {tab === 'history' ? 'History' : 'Conversation'}
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
 
-                        {/* Conversation */}
-                        <TabsContent value="conversation" className="flex-1 flex flex-col m-0 min-h-0">
-                            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-                                {isConvLoading ? (
-                                    Array.from({ length: 3 }).map((_, i) => (
-                                        <Skeleton key={i} className="h-16 rounded-xl" />
-                                    ))
-                                ) : messages.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <MessageSquare className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            No messages yet
-                                        </p>
-                                    </div>
-                                ) : (
-                                    messages.map((msg, i) => (
-                                        <div key={msg.id ?? i} className="flex flex-col gap-0.5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                    {(msg as any).author ?? 'System'}
-                                                </span>
-                                                {(msg as any).created_at && (
-                                                    <span className="text-[9px] text-slate-300">
-                                                        {formatDistanceToNow(new Date((msg as any).created_at), { addSuffix: true })}
-                                                    </span>
+                                        <TabsContent value="history" className="m-0 px-6 py-5">
+                                            {isHistoryLoading ? (
+                                                <div className="space-y-3">
+                                                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
+                                                </div>
+                                            ) : history.length === 0 ? (
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center py-8">No history yet</p>
+                                            ) : (
+                                                <WorkflowTimeline history={history.map((e: any) => ({
+                                                    status: e.to_status ?? e.status ?? '',
+                                                    actor: e.actor_name ?? e.actor_role ?? 'System',
+                                                    timestamp: e.created_at ?? null,
+                                                    reason: e.reason ?? null,
+                                                }))} />
+                                            )}
+                                        </TabsContent>
+
+                                        <TabsContent value="conversation" className="m-0 flex flex-col">
+                                            <div className="px-6 py-4 space-y-3 min-h-[120px]">
+                                                {isConvLoading ? (
+                                                    Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)
+                                                ) : messages.length === 0 ? (
+                                                    <div className="text-center py-8">
+                                                        <MessageSquare className="h-6 w-6 text-slate-200 mx-auto mb-2" />
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No messages yet</p>
+                                                    </div>
+                                                ) : (
+                                                    messages.map((msg: any, i: number) => (
+                                                        <div key={msg.id ?? i} className="space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{msg.author ?? 'System'}</span>
+                                                                {msg.created_at && (
+                                                                    <span className="text-[9px] text-slate-300">
+                                                                        {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="rounded-xl bg-white border border-slate-100 px-3 py-2">
+                                                                <p className="text-xs font-medium text-slate-700 leading-relaxed">{msg.body}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))
                                                 )}
                                             </div>
-                                            <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
-                                                <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                                                    {msg.body}
-                                                </p>
+                                            <div className="border-t border-slate-100 px-6 py-4 flex gap-2">
+                                                <Textarea
+                                                    placeholder="Write a note..."
+                                                    value={messageText}
+                                                    onChange={(e) => setMessageText(e.target.value)}
+                                                    className="resize-none h-16 flex-1 text-sm"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && messageText.trim()) sendMessage()
+                                                    }}
+                                                />
+                                                <Button
+                                                    size="sm"
+                                                    className="self-end h-9 w-9 p-0 bg-slate-900 hover:bg-slate-700 rounded-xl shrink-0"
+                                                    disabled={!messageText.trim() || isSending}
+                                                    onClick={() => sendMessage()}
+                                                >
+                                                    {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                                </Button>
                                             </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-
-                            <Separator />
-                            <div className="p-4 flex gap-2 shrink-0">
-                                <Textarea
-                                    placeholder="Write a note or update..."
-                                    value={messageText}
-                                    onChange={(e) => setMessageText(e.target.value)}
-                                    className="resize-none text-sm h-16 flex-1"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && messageText.trim()) {
-                                            sendMessage()
-                                        }
-                                    }}
-                                />
-                                <Button
-                                    size="sm"
-                                    className="self-end h-9 w-9 p-0 bg-slate-900 hover:bg-slate-700 rounded-xl"
-                                    disabled={!messageText.trim() || isSending}
-                                    onClick={() => sendMessage()}
-                                >
-                                    {isSending
-                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        : <Send className="h-3.5 w-3.5" />
-                                    }
-                                </Button>
-                            </div>
-                        </TabsContent>
-                    </Tabs>
+                                        </TabsContent>
+                                    </Tabs>
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
                 </SheetContent>
             </Sheet>
 
@@ -492,9 +504,7 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
                         open={snoozeOpen}
                         onOpenChange={(open) => {
                             setSnoozeOpen(open)
-                            if (!open) {
-                                queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
-                            }
+                            if (!open) queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
                         }}
                     />
                     <CreateWorkOrderDialog
@@ -502,9 +512,7 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
                         open={workOrderOpen}
                         onOpenChange={(open) => {
                             setWorkOrderOpen(open)
-                            if (!open) {
-                                queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
-                            }
+                            if (!open) queryClient.invalidateQueries({ queryKey: ['maintenance-alert-detail', alertId] })
                         }}
                     />
                 </>
