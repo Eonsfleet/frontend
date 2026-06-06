@@ -162,11 +162,11 @@ export interface OrgPolicies {
 }
 
 export const getPolicies = async (): Promise<{ data: OrgPolicies }> => {
-    const response = await apiClient.get<{ data: OrgPolicies }>('/policies')
+    const response = await apiClient.get<{ data: OrgPolicies }>('/organization/policies')
     return response.data
 }
 
 export const updatePolicies = async (data: Partial<OrgPolicies>): Promise<{ data: OrgPolicies }> => {
-    const response = await apiClient.put<{ data: OrgPolicies }>('/policies', data)
+    const response = await apiClient.put<{ data: OrgPolicies }>('/organization/policies', data)
     return response.data
 }
