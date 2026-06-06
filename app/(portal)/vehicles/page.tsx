@@ -137,7 +137,7 @@ export default function VehiclesPage() {
             <PolicySettingsSheet
                 open={isPolicyOpen}
                 onOpenChange={setIsPolicyOpen}
-                defaultTab="fleet-rules"
+                mode="fleet-rules"
             />
         </div>
     )

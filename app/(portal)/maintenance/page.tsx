@@ -249,7 +249,7 @@ export default function MaintenanceDashboardPage() {
             <PolicySettingsSheet
                 open={isPolicyOpen}
                 onOpenChange={setIsPolicyOpen}
-                defaultTab="maintenance"
+                mode="maintenance"
             />
         </div>
     )
