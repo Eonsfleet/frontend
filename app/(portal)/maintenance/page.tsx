@@ -6,8 +6,9 @@ import { MaintenanceAlertList } from '@/components/maintenance/MaintenanceAlertL
 import { useQuery } from '@tanstack/react-query'
 import { getMaintenances, getMaintenanceAlerts, getMaintenanceStats, getUpcomingMaintenance } from '@/lib/api/maintenance'
 import { Button } from '@/components/ui/button'
-import { Plus, BellRing, Wrench, Clock, CheckCircle2 } from 'lucide-react'
+import { Plus, BellRing, Wrench, Clock, CheckCircle2, Settings } from 'lucide-react'
 import Link from 'next/link'
+import { PolicySettingsSheet } from '@/components/shared/PolicySettingsSheet'
 import { useSubscription } from '@/hooks/useSubscription'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,6 +26,7 @@ export default function MaintenanceDashboardPage() {
     const [schedulePage, setSchedulePage] = React.useState(1)
     const [statusFilter, setStatusFilter] = React.useState<string | undefined>(undefined)
     const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
+    const [isPolicyOpen, setIsPolicyOpen] = React.useState(false)
 
     const { data: scheduleData, isLoading: isLoadingSchedules, isError: isScheduleError, refetch: refetchSchedules } = useQuery({
         queryKey: ['maintenance-schedules', schedulePage, statusFilter],
@@ -105,6 +107,9 @@ export default function MaintenanceDashboardPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button variant="outline" size="icon" className="border-slate-200 bg-white shadow-sm hover:bg-slate-50 h-11 w-11 rounded-xl" onClick={() => setIsPolicyOpen(true)} title="Maintenance policy settings">
+                        <Settings className="h-4 w-4 text-slate-500" />
+                    </Button>
                     {canUseWorkflows && (
                         <Button variant="outline" className="border-slate-200 bg-white shadow-sm hover:bg-slate-50 font-black text-[10px] uppercase tracking-[0.2em] px-6 h-11 rounded-xl" asChild>
                             <Link href="/maintenance/jobs">
@@ -239,6 +244,12 @@ export default function MaintenanceDashboardPage() {
             <CreateMaintenanceScheduleModal
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
+            />
+
+            <PolicySettingsSheet
+                open={isPolicyOpen}
+                onOpenChange={setIsPolicyOpen}
+                mode="maintenance"
             />
         </div>
     )

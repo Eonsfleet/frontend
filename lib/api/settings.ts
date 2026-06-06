@@ -148,3 +148,25 @@ export const getWebhookDeliveries = async (id: string): Promise<{ data: { delive
     const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[] } }>(`/webhooks/${id}/deliveries`)
     return response.data
 }
+
+// Organization Policies
+export interface OrgPolicies {
+    speed_limit_kmh: number
+    idle_threshold_minutes: number
+    after_hours_enabled: boolean
+    after_hours_start: string
+    after_hours_end: string
+    maintenance_approaching_km: number
+    maintenance_approaching_days: number
+    maintenance_escalation_hours: number
+}
+
+export const getPolicies = async (): Promise<{ data: OrgPolicies }> => {
+    const response = await apiClient.get<{ data: OrgPolicies }>('/organization/policies')
+    return response.data
+}
+
+export const updatePolicies = async (data: Partial<OrgPolicies>): Promise<{ data: OrgPolicies }> => {
+    const response = await apiClient.put<{ data: OrgPolicies }>('/organization/policies', data)
+    return response.data
+}
