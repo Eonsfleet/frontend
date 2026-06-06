@@ -46,8 +46,8 @@ function StatusBadge({ status }: { status: string }) {
 
 interface TablePaginationProps {
     pagination?: {
-        current_page: number
-        last_page: number
+        current: number
+        lastPage: number
         total: number
     }
     onPageChange: (page: number) => void
@@ -55,26 +55,26 @@ interface TablePaginationProps {
 }
 
 function TablePagination({ pagination, onPageChange, variant = 'default' }: TablePaginationProps) {
-    if (!pagination || pagination.last_page <= 1) return null
+    if (!pagination || pagination.lastPage <= 1) return null
 
     if (variant === 'simple') {
         return (
             <div className="flex items-center justify-between pt-4">
-                <p className="text-xs text-slate-500 font-medium">Page {pagination.current_page} of {pagination.last_page}</p>
+                <p className="text-xs text-slate-500 font-medium">Page {pagination.current} of {pagination.lastPage}</p>
                 <div className="flex gap-2">
                     <Button
                         size="sm" variant="outline"
                         className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page <= 1}
-                        onClick={() => onPageChange(pagination.current_page - 1)}
+                        disabled={pagination.current <= 1}
+                        onClick={() => onPageChange(pagination.current - 1)}
                     >
                         Previous
                     </Button>
                     <Button
                         size="sm" variant="outline"
                         className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page >= pagination.last_page}
-                        onClick={() => onPageChange(pagination.current_page + 1)}
+                        disabled={pagination.current >= pagination.lastPage}
+                        onClick={() => onPageChange(pagination.current + 1)}
                     >
                         Next
                     </Button>
@@ -86,22 +86,22 @@ function TablePagination({ pagination, onPageChange, variant = 'default' }: Tabl
     return (
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
             <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
-                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
+                Page {pagination.current} of {pagination.lastPage} &nbsp;·&nbsp; {pagination.total} records
             </p>
             <div className="flex gap-2">
                 <Button
                     size="sm" variant="outline"
                     className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page <= 1}
-                    onClick={() => onPageChange(pagination.current_page - 1)}
+                    disabled={pagination.current <= 1}
+                    onClick={() => onPageChange(pagination.current - 1)}
                 >
                     Previous
                 </Button>
                 <Button
                     size="sm" variant="outline"
                     className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page >= pagination.last_page}
-                    onClick={() => onPageChange(pagination.current_page + 1)}
+                    disabled={pagination.current >= pagination.lastPage}
+                    onClick={() => onPageChange(pagination.current + 1)}
                 >
                     Next
                 </Button>
@@ -328,7 +328,14 @@ export default function FuelExpensesPage() {
 
     const m = metricsData?.data
     const expenses: FuelExpense[] = data?.data?.fuel_expenses ?? []
-    const pagination = data?.data?.pagination
+    const paginationData = data?.data?.pagination as any
+    
+    // Map API pagination to component expectations (API uses camelCase, type uses snake_case)
+    const pagination = paginationData ? {
+        current: paginationData.current ?? paginationData.current_page ?? 1,
+        lastPage: paginationData.lastPage ?? paginationData.last_page ?? 1,
+        total: paginationData.total ?? 0
+    } : undefined
 
     return (
         <div className="space-y-6">
@@ -443,6 +450,7 @@ export default function FuelExpensesPage() {
                         <table className="w-full text-sm text-left">
                             <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
                                 <tr>
+                                    <th className="px-6 py-4">Reference No</th>
                                     <th className="px-6 py-4">Vehicle</th>
                                     <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4 whitespace-nowrap">Vol (L)</th>
@@ -453,9 +461,21 @@ export default function FuelExpensesPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {isLoading ? (
-                                    [1, 2, 3, 4, 5].map(i => (
+                                    Array.from({ length: 5 }).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={6} className="px-6 py-4 h-16 bg-slate-50/30" />
+                                            <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+                                            <td className="px-6 py-4">
+                                                <div className="h-4 w-32 bg-slate-200 rounded mb-1" />
+                                                <div className="h-3 w-24 bg-slate-100 rounded" />
+                                            </td>
+                                            <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+                                            <td className="px-6 py-4"><div className="h-4 w-16 bg-slate-200 rounded" /></td>
+                                            <td className="px-6 py-4">
+                                                <div className="h-5 w-24 bg-slate-200 rounded mb-1" />
+                                                <div className="h-3 w-16 bg-slate-100 rounded" />
+                                            </td>
+                                            <td className="px-6 py-4"><div className="h-5 w-20 bg-slate-200 rounded-full" /></td>
+                                            <td className="px-6 py-4 text-right"><div className="h-8 w-20 bg-slate-200 rounded ml-auto" /></td>
                                         </tr>
                                     ))
                                 ) : isError ? (
@@ -474,6 +494,9 @@ export default function FuelExpensesPage() {
                                     expenses.map(exp => (
                                         <tr key={exp.id} className="hover:bg-slate-50 transition-colors group">
                                             <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-900">{exp?.attributes?.reference_number ?? '-'}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900">{exp.relationships.vehicle?.registration_number ?? 'Unknown'}</div>
                                                 <div className="text-[11px] text-slate-400 font-medium">by {exp.relationships.driver?.name ?? 'Unknown'}</div>
                                             </td>
@@ -485,7 +508,12 @@ export default function FuelExpensesPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-mono font-bold text-slate-900 text-base">₦{(exp.attributes.amount ?? 0).toLocaleString()}</div>
-                                                <div className="text-[10px] text-slate-400 font-bold">₦{(exp.attributes.cost_per_volume ?? 0).toFixed(2)}/L</div>
+                                                <div className="text-[10px] text-slate-400 font-bold">
+                                                    {exp.attributes.amount && exp.attributes.volume 
+                                                        ? `₦${(exp.attributes.amount / exp.attributes.volume).toFixed(2)}/L`
+                                                        : '-'
+                                                    }
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <StatusBadge status={exp.attributes.status} />

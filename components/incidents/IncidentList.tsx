@@ -94,7 +94,7 @@ export function IncidentList() {
                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <Link href={`/incidents/${item.id}`} className="font-medium text-blue-600 hover:underline">
-                                                    {item.attributes.reference_number}
+                                                    {item.attributes.reference}
                                                 </Link>
                                             </td>
                                             <td className="px-6 py-4 capitalize font-medium text-slate-700">

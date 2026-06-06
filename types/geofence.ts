@@ -32,6 +32,7 @@ export interface Geofence {
         radius?: number // Required if type is circle
         speed: number   // Speed limit threshold (km/h); 0 means no limit
         is_active: boolean
+        status:boolean
         schedule: GeofenceSchedule | null
     }
     relationships: {

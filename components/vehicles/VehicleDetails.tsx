@@ -238,7 +238,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 <DetailItem
                   label="Cluster"
                   value={
-                    vehicle.relationships?.cluster?.data?.name || "Unassigned"
+                    vehicle.relationships?.cluster?.name || "Unassigned"
                   }
                   action={
                     <PermissionGate permission="vehicles:assign">
@@ -247,7 +247,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                         className="h-auto p-0 text-xs text-blue-600 font-semibold"
                         onClick={() => setIsAssignClusterOpen(true)}
                       >
-                        {vehicle.relationships?.cluster?.data
+                        {vehicle.relationships?.cluster
                           ? "Change"
                           : "Assign"}
                       </Button>

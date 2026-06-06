@@ -63,7 +63,7 @@ export function BulkAssignmentModal({
 
     const filteredVehicles = vehicles.filter(v =>
         v.attributes.registration_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.relationships?.cluster?.data?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        v.relationships?.cluster?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
@@ -128,7 +128,7 @@ export function BulkAssignmentModal({
                                         {vehicle.attributes.registration_number}
                                     </h4>
                                     <p className={cn("text-[9px] font-bold uppercase tracking-widest", selectedIds.includes(vehicle.id) ? "text-blue-100" : "text-slate-400")}>
-                                        {vehicle.relationships?.cluster?.data?.name || 'GENERIC FLEET'}
+                                        {vehicle.relationships?.cluster?.name || 'GENERIC FLEET'}
                                     </p>
                                 </div>
                             </div>
