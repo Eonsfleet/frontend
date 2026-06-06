@@ -34,8 +34,8 @@ export default function MaintenanceDashboardPage() {
     })
 
     const { data: alertData, isLoading: isLoadingAlerts, isError: isAlertError, refetch: refetchAlerts } = useQuery({
-        queryKey: ['maintenance-alerts'],
-        queryFn: () => getMaintenanceAlerts(),
+        queryKey: ['maintenance-alerts-full', '', 1],
+        queryFn: () => getMaintenanceAlerts({ per_page: 5 }),
     })
 
     const { data: statsData, isLoading: isLoadingStats, isError: isStatsError, refetch: refetchStats } = useQuery({
@@ -225,8 +225,10 @@ export default function MaintenanceDashboardPage() {
                                     <div className="h-6 w-1.5 bg-amber-500 rounded-full" />
                                     Critical Alerts
                                 </CardTitle>
-                                <Link href="/maintenance/alerts" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">
-                                    view more
+                                <Link href="/maintenance/alerts" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                                    {alertData?.data?.pagination?.total
+                                        ? `${alertData.data.pagination.total} total`
+                                        : 'View all'}
                                 </Link>
                             </div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight px-4 ml-0.5">Immediate intervention required</p>
