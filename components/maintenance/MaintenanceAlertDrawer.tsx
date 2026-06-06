@@ -115,7 +115,8 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
         onError: () => toast.error('Failed to send message'),
     })
 
-    const alert = detailData?.data
+    const rawAlertData = detailData?.data as any
+    const alert = rawAlertData?.attributes ? (rawAlertData as import('@/types').MaintenanceAlert) : null
     const status = alert?.attributes?.status ?? ''
     const styles = ALERT_STATUS_STYLES[status as keyof typeof ALERT_STATUS_STYLES] ?? ALERT_STATUS_STYLES.triggered
     const isClosed = status === 'closed'
