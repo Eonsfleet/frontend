@@ -4,7 +4,7 @@ import React, { useEffect } from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Building2, Users, Shield, Key, Network, UserCircle, Activity, Bell, ArrowLeft } from 'lucide-react'
+import { Building2, Users, Shield, Key, Network, UserCircle, Activity, Bell, ArrowLeft, Gauge, Wrench } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAccessControl, TRIAL_EXPIRED_ALLOWED_PATHS } from '@/hooks/useAccessControl'
@@ -54,6 +54,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'Developer API Keys', href: '/settings/api-keys', icon: Key, show: isAdmin, ownerAllowed: false },
         { name: 'Notification Settings', href: '/settings/notifications', icon: Bell, show: isAdmin, ownerAllowed: false },
         { name: 'Webhooks', href: '/settings/webhooks', icon: Activity, show: true, ownerAllowed: false },
+        { name: 'Fleet Rules', href: '/settings/fleet-rules', icon: Gauge, show: true, ownerAllowed: false },
+        { name: 'Maintenance', href: '/settings/maintenance', icon: Wrench, show: true, ownerAllowed: false },
     ].filter(item => {
         if (!item.show) return false
         if (isOwner && !item.ownerAllowed) return false
