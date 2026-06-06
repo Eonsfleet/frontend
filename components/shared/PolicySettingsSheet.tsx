@@ -291,7 +291,7 @@ type WorkflowValues = z.infer<typeof workflowSchema>
 function WorkflowSettingsForm({ onClose }: { onClose: () => void }) {
     const queryClient = useQueryClient()
 
-    const { data, isLoading, isError } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['workflow-settings', 'maintenance'],
         queryFn: () => getWorkflowSettings('maintenance'),
     })
@@ -337,11 +337,14 @@ function WorkflowSettingsForm({ onClose }: { onClose: () => void }) {
         )
     }
 
-    if (isError || !settings) {
+    if (isError) {
         return (
-            <div className="flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
                 <p className="text-sm font-semibold text-slate-700">Failed to load workflow settings</p>
                 <p className="text-xs text-slate-400">Check your connection and try again.</p>
+                <Button size="sm" variant="outline" onClick={() => refetch()} className="mt-1 text-xs font-bold">
+                    Retry
+                </Button>
             </div>
         )
     }
@@ -395,8 +398,8 @@ function WorkflowSettingsForm({ onClose }: { onClose: () => void }) {
                     hint="Current approval configuration for this org."
                 >
                     <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">{settings.minimum_approvals}×</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{settings.required_role}</p>
+                        <p className="text-sm font-black text-slate-900">{settings?.minimum_approvals ?? 1}×</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{settings?.required_role ?? '—'}</p>
                     </div>
                 </SectionRow>
 
