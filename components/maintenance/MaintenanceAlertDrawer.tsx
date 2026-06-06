@@ -142,17 +142,20 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
                 >
                     {/* Header */}
                     <SheetHeader className="px-6 py-5 border-b border-slate-100 shrink-0">
+                        {/* SheetTitle must always be rendered for Radix a11y */}
+                        <SheetTitle className={cn(
+                            'text-base font-black uppercase tracking-tight leading-tight',
+                            isLoading ? 'sr-only' : isError ? 'text-rose-600 text-sm' : 'text-slate-900'
+                        )}>
+                            {isLoading ? 'Maintenance Alert' : isError ? 'Failed to load alert' : serviceType}
+                        </SheetTitle>
                         {isLoading ? (
                             <div className="space-y-2">
                                 <Skeleton className="h-4 w-40" />
                                 <Skeleton className="h-6 w-64" />
                             </div>
-                        ) : isError ? (
-                            <SheetTitle className="text-sm font-black uppercase tracking-widest text-rose-600">
-                                Failed to load alert
-                            </SheetTitle>
                         ) : alert ? (
-                            <div className="space-y-2">
+                            <div className="space-y-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={cn('font-black uppercase text-[8px] h-4 tracking-tighter border-0 shadow-none', styles.badge)}>
                                         <StatusIcon status={status} className="mr-1 h-3 w-3" />
@@ -173,9 +176,6 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
                                         </span>
                                     )}
                                 </div>
-                                <SheetTitle className="text-base font-black uppercase tracking-tight text-slate-900 leading-tight">
-                                    {serviceType}
-                                </SheetTitle>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                     {vehicleMake} {vehicleModel} · {vehicleReg}
                                 </p>
