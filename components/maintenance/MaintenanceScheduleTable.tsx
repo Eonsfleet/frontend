@@ -1,6 +1,5 @@
 'use client'
 
-import React from 'react'
 import {
     Table,
     TableBody,
@@ -20,7 +19,7 @@ import {
 import { MaintenanceSchedule } from '@/types'
 import { format, differenceInDays, isPast, isToday } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
-import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Wrench, Eye } from 'lucide-react'
+import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Eye, RefreshCw, Plus } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -36,6 +35,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteSchedule } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { MaintenanceScheduleDrawer } from './MaintenanceScheduleDrawer'
 
 interface MaintenanceScheduleTableProps {
@@ -108,6 +108,7 @@ export function MaintenanceScheduleTable({
     onPageChange
 }: MaintenanceScheduleTableProps) {
     const queryClient = useQueryClient()
+    const router = useRouter()
     const [scheduleDrawerId, setScheduleDrawerId] = useState<string | null>(null)
 
     const { mutate: cancelSchedule, variables: cancellingId } = useMutation({
@@ -153,7 +154,11 @@ export function MaintenanceScheduleTable({
                                 const vehicle = row.relationships?.vehicle
 
                                 return (
-                                    <TableRow key={row.id} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50">
+                                    <TableRow
+                                        key={row.id}
+                                        className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50 cursor-pointer"
+                                        onClick={() => setScheduleDrawerId(String(row.id))}
+                                    >
                                         <TableCell className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform">
@@ -161,7 +166,7 @@ export function MaintenanceScheduleTable({
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                                                        {vehicle?.registration_number ?? attrs.vehicle_id ?? 'N/A'}
+                                                        {vehicle?.registration_number ?? 'N/A'}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]">
                                                         {vehicle?.make} {vehicle?.model}
@@ -212,7 +217,10 @@ export function MaintenanceScheduleTable({
                                                 {getDueDateDisplay(attrs.due_date)}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="px-6 py-4 text-right">
+                                        <TableCell
+                                            className="px-6 py-4 text-right"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg">
@@ -222,17 +230,23 @@ export function MaintenanceScheduleTable({
                                                 <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl shadow-2xl border-slate-100">
                                                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 py-2">Schedule Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
-                                                    {/* <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
-                                                        <Wrench className="h-3.5 w-3.5" /> Create Work Order
-                                                    </DropdownMenuItem> */}
                                                     <DropdownMenuItem
                                                         className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
                                                         onClick={() => setScheduleDrawerId(String(row.id))}
                                                     >
                                                         <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
-                                                        <Clock className="h-3.5 w-3.5" /> Reschedule
+                                                    <DropdownMenuItem
+                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
+                                                        onClick={() => router.push(`/maintenance/schedules/${row.id}`)}
+                                                    >
+                                                        <RefreshCw className="h-3.5 w-3.5" /> Reschedule
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
+                                                        onClick={() => router.push(vehicle?.id ? `/maintenance/jobs?vehicle_id=${vehicle.id}` : '/maintenance/jobs')}
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5" /> Create Work Order
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem

@@ -13,7 +13,6 @@ import {
   Fuel,
   BarChart3,
   CreditCard,
-  Bell,
   Store,
   Settings,
   Lock,
@@ -24,6 +23,7 @@ import {
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
+import type { Capability } from "@/store/subscriptionStore";
 import { useAccessControl } from "@/hooks/useAccessControl";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiStore";
@@ -34,18 +34,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import * as notificationApi from "@/lib/api/notifications";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
-import { getEcho } from "@/lib/echo";
 import { useAuthStore } from "@/store/authStore";
 import { logoutUser } from "@/lib/api/auth";
 import { toast } from "sonner";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 const NAV_SECTIONS = [
   {
@@ -168,14 +164,6 @@ const NAV_SECTIONS = [
         trialAllowed: true,
       },
       {
-        href: "/notifications",
-        label: "Notifications",
-        icon: Bell,
-        permission: "notifications:read",
-        module: "notifications",
-        trialAllowed: false,
-      },
-      {
         href: "/vendors",
         label: "Vendors",
         icon: Store,
@@ -203,7 +191,7 @@ export default function Sidebar() {
   const { isExpiredTrial } = useAccessControl();
   const { isSidebarCollapsed, toggleSidebar } = useUIStore();
   const queryClient = useQueryClient();
-  const { user, token, clearAuth } = useAuthStore();
+  const { user, clearAuth } = useAuthStore();
 
   const { mutate: logout, isPending: isLoggingOut } = useMutation({
     mutationFn: logoutUser,
@@ -226,33 +214,6 @@ export default function Sidebar() {
       router.push('/login');
     },
   });
-
-  // Fetch notifications for the badge
-  const { data: inboxData } = useQuery({
-    queryKey: ["notifications", "inbox"],
-    queryFn: () => notificationApi.getInbox({ unread_only: true }),
-    refetchInterval: 30000,
-    enabled: !!token,
-  });
-
-  // Real-time notification push via WebSocket
-  useEffect(() => {
-    if (!token || !user?.id) return;
-    const echo = getEcho();
-    if (!echo) return;
-    const channel = echo.private(`notification.${user.id}`);
-    channel.listen(".notification.created", () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications", "inbox"] });
-    });
-
-    return () => {
-      echo.leave(`notification.${user.id}`);
-    };
-  }, [token, user?.id, queryClient]);
-
-  const unreadCount =
-    inboxData?.data?.notifications?.filter((n) => !n.attributes.read_at)
-      .length || 0;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -313,12 +274,10 @@ export default function Sidebar() {
                 )}
                 <div className="space-y-1">
                   {visibleItems.map(({ href, label, icon: Icon, module }) => {
-                    const isLocked = module && !hasCapability(module as any);
+                    const isLocked = module && !hasCapability(module as Capability);
                     const isActive =
                       !isLocked &&
                       (pathname === href || pathname.startsWith(href + "/"));
-                    const isNotifications = label === "Notifications";
-
                     const itemContent = (
                       <Link
                         href={isLocked ? "/billing" : href}
@@ -356,20 +315,6 @@ export default function Sidebar() {
 
                         {/* Badge Integration */}
                         <div className="flex items-center gap-2">
-                          {isNotifications && unreadCount > 0 && !isLocked && (
-                            <div
-                              className={cn(
-                                "flex h-5 items-center justify-center rounded-full text-[10px] font-black px-1.5",
-                                isActive
-                                  ? "bg-white text-blue-600"
-                                  : "bg-rose-500 text-white shadow-sm shadow-rose-200",
-                                isSidebarCollapsed &&
-                                  "absolute top-1 right-1 h-2 w-2 p-0 border border-white",
-                              )}
-                            >
-                              {!isSidebarCollapsed && unreadCount}
-                            </div>
-                          )}
                           {isLocked && (
                             <div
                               className={cn(

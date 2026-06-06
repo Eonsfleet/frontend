@@ -4,14 +4,23 @@ import React, { useEffect } from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Building2, Users, Shield, Key, Network, UserCircle, Activity, Bell, ArrowLeft } from 'lucide-react'
+import { Building2, Users, Shield, Key, Network, UserCircle, Activity, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAccessControl, TRIAL_EXPIRED_ALLOWED_PATHS } from '@/hooks/useAccessControl'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import type { Capability } from '@/store/subscriptionStore'
 
+type SettingsNavItem = {
+    name: string
+    href: string
+    icon: React.ComponentType<{ className?: string }>
+    show: boolean
+    ownerAllowed: boolean
+    capability?: Capability
+}
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
@@ -45,14 +54,13 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         }
     }, [pathname, isOwnerRestricted])
 
-    const navItems = [
+    const navItems: SettingsNavItem[] = [
         { name: 'My Profile', href: '/profile', icon: UserCircle, show: true, ownerAllowed: true },
         { name: 'Organization', href: '/settings', icon: Building2, show: true, ownerAllowed: false },
         { name: 'User Management', href: '/settings/users', icon: Users, show: true, ownerAllowed: false },
         { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true, ownerAllowed: true },
-        { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles', ownerAllowed: false },
+        { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' as Capability, ownerAllowed: false },
         { name: 'Developer API Keys', href: '/settings/api-keys', icon: Key, show: isAdmin, ownerAllowed: false },
-        { name: 'Notification Settings', href: '/settings/notifications', icon: Bell, show: isAdmin, ownerAllowed: false },
         { name: 'Webhooks', href: '/settings/webhooks', icon: Activity, show: true, ownerAllowed: false },
     ].filter(item => {
         if (!item.show) return false
@@ -84,7 +92,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
                         <nav className="space-y-1.5 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
                             {navItems.map((item) => {
-                                const isLocked = (item as any).capability && !hasCapability((item as any).capability)
+                                const isLocked = item.capability ? !hasCapability(item.capability) : false
                                 const isActive = !isLocked && pathname === item.href
 
                                 return (

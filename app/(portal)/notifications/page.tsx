@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -7,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/notifications'
 import { toast } from 'sonner'
-import { Bell, CheckCheck, Loader2, Mail, Smartphone, AppWindow, Settings2, BellRing, Info, AlertTriangle, Route, ShieldAlert, Wrench, Users as UsersIcon, CalendarClock, Target, Plus, ShieldCheck } from 'lucide-react'
+import { Bell, CheckCheck, Loader2, Mail, Smartphone, AppWindow, BellRing, Info, Route, ShieldAlert, Wrench, Target, Plus, Trash2, ExternalLink, SlidersHorizontal, Users, CalendarClock } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { Switch } from '@/components/ui/switch'
 import { useSubscription } from '@/hooks/useSubscription'
@@ -19,13 +21,35 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { invalidateNotificationInbox } from '@/hooks/useRealtimeNotifications'
+
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+const getUserName = (user: any) => user?.attributes?.full_name || user?.name || [user?.f_name, user?.l_name].filter(Boolean).join(' ') || 'User'
+const getGroupMembers = (group: any) => group?.members || group?.relationships?.users?.data || []
+const getRuleCode = (rule: any) => rule?.notification_type?.code || rule?.notificationType?.code || rule?.event_type || `Type #${rule?.notification_type_id}`
+const getRuleChannels = (rule: any) => rule?.enabled_channels || rule?.channel_types || []
+const isRuleEnabled = (rule: any) => rule?.is_enabled ?? rule?.is_active ?? false
+const getDelegationTarget = (delegation: any) => delegation?.delegate_user || delegation?.relationships?.delegated_to?.data
+const getDelegationTypes = (delegation: any) => delegation?.notification_type_ids?.map((id: number) => `#${id}`) || delegation?.event_types || ['All types']
+const getNotificationTitle = (notification: api.Notification) => {
+    const data = notification.attributes.data
+    return notification.attributes.subject || (typeof data.message === 'string' ? data.message : null) || notification.attributes.type.replace(/[_-]/g, ' ')
+}
+const getNotificationBody = (notification: api.Notification) => {
+    const data = notification.attributes.data
+    return notification.attributes.body || (typeof data.description === 'string' ? data.description : null) || 'A new fleet event was recorded.'
+}
+const getActionUrl = (notification: api.Notification) => {
+    const value = notification.attributes.data.action_url || notification.attributes.data.url
+    return typeof value === 'string' ? value : null
+}
 
 export default function NotificationsPage() {
     const queryClient = useQueryClient()
     const { hasCapability } = useSubscription()
     const { can } = usePermission()
     const [activeTab, setActiveTab] = useState('inbox')
-    const [managementTab, setManagementTab] = useState('rules')
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [formData, setFormData] = useState<any>({
         notification_type_id: '',
@@ -34,13 +58,14 @@ export default function NotificationsPage() {
         recipient_groups: [],
         recipient_roles: [],
         recipient_users: [],
+        notification_type_ids: [],
         name: '',
         description: '',
         user_ids: [],
         initial_user_id: '',
-        delegated_to_id: '',
-        event_types: [],
-        expires_at: '',
+        delegate_user_id: '',
+        start_date: todayIso(),
+        end_date: '',
         reason: ''
     })
 
@@ -58,7 +83,7 @@ export default function NotificationsPage() {
         fetchNextPage,
     } = useInfiniteQuery({
         queryKey: ['notifications-inbox'],
-        queryFn: ({ pageParam = 1 }) => api.getInbox({ page: pageParam }),
+        queryFn: ({ pageParam = 1 }) => api.getInbox({ page: pageParam, per_page: 20 }),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
             const { current_page, last_page } = lastPage.data.pagination
@@ -90,58 +115,67 @@ export default function NotificationsPage() {
     const { data: rulesData, isLoading: isLoadingRules } = useQuery({
         queryKey: ['notification-rules'],
         queryFn: api.getRules,
-        enabled: activeTab === 'management' && managementTab === 'rules'
+        enabled: activeTab === 'rules'
     })
 
     const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
         queryKey: ['notification-groups'],
         queryFn: api.getGroups,
-        enabled: activeTab === 'management' && managementTab === 'groups'
+        enabled: activeTab === 'rules' || activeTab === 'groups'
     })
 
     const { data: delegationsData, isLoading: isLoadingDelegations } = useQuery({
         queryKey: ['notification-delegations'],
         queryFn: api.getDelegations,
-        enabled: activeTab === 'management' && managementTab === 'delegations'
+        enabled: activeTab === 'delegations'
     })
 
     const { data: userData } = useQuery({
         queryKey: ['users-list-simple'],
         queryFn: () => import('@/lib/api/settings').then(api => api.getUsers({ per_page: 100 })),
-        enabled: activeTab === 'management'
+        enabled: isAdvancedUser && ['rules', 'groups', 'delegations'].includes(activeTab)
     })
 
     const { data: channelData } = useQuery({
         queryKey: ['channel-availability'],
         queryFn: api.getChannelAvailability,
-        enabled: activeTab === 'management' || activeTab === 'preferences'
+        enabled: activeTab === 'preferences' || activeTab === 'rules'
     })
 
     const { data: notificationTypes } = useQuery({
         queryKey: ['notification-types'],
         queryFn: () => api.getNotificationTypes({ configurable: true }),
-        enabled: activeTab === 'management' && managementTab === 'rules'
+        enabled: activeTab === 'rules' || activeTab === 'delegations'
     })
 
     const { data: rolesData } = useQuery({
         queryKey: ['settings-roles-simple'],
         queryFn: () => import('@/lib/api/settings').then(api => api.getRoles()),
-        enabled: activeTab === 'management' && managementTab === 'rules'
+        enabled: activeTab === 'rules'
     })
 
     const markReadMutation = useMutation({
         mutationFn: api.markAsRead,
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications-inbox'] })
+            invalidateNotificationInbox(queryClient)
         }
     })
 
     const markAllReadMutation = useMutation({
         mutationFn: api.markAllAsRead,
         onSuccess: () => {
-            queryClient.resetQueries({ queryKey: ['notifications-inbox'] })
+            invalidateNotificationInbox(queryClient)
             toast.success('All messages marked as read')
         }
+    })
+
+    const deleteMutation = useMutation({
+        mutationFn: api.deleteNotification,
+        onSuccess: () => {
+            invalidateNotificationInbox(queryClient)
+            toast.success('Notification removed')
+        },
+        onError: () => toast.error('Failed to remove notification')
     })
 
     const prefMutation = useMutation({
@@ -183,6 +217,15 @@ export default function NotificationsPage() {
         onError: () => toast.error('Failed to assign delegation')
     })
 
+    const endDelegationMutation = useMutation({
+        mutationFn: api.endDelegation,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notification-delegations'] })
+            toast.success('Delegation ended')
+        },
+        onError: () => toast.error('Failed to end delegation')
+    })
+
     const handleClose = () => {
         setIsCreateOpen(false)
         setFormData({
@@ -192,29 +235,30 @@ export default function NotificationsPage() {
             recipient_groups: [],
             recipient_roles: [],
             recipient_users: [],
+            notification_type_ids: [],
             name: '',
             description: '',
             user_ids: [],
             initial_user_id: '',
-            delegated_to_id: '',
-            event_types: [],
-            expires_at: '',
+            delegate_user_id: '',
+            start_date: todayIso(),
+            end_date: '',
             reason: ''
         })
     }
 
     const handleSave = () => {
-        if (managementTab === 'rules') {
+        if (activeTab === 'rules') {
             if (!formData.notification_type_id) return toast.error('Please select a notification type')
             createRuleMutation.mutate({
                 notification_type_id: parseInt(formData.notification_type_id),
                 is_enabled: formData.is_enabled,
-                channel_types: formData.channel_types,
-                recipient_groups: formData.recipient_groups,
+                enabled_channels: formData.channel_types,
+                recipient_group_ids: formData.recipient_groups,
                 recipient_roles: formData.recipient_roles,
-                recipient_users: formData.recipient_users
+                recipient_user_ids: formData.recipient_users
             })
-        } else if (managementTab === 'groups') {
+        } else if (activeTab === 'groups') {
             if (!formData.name) return toast.error('Group name is required')
             createGroupMutation.mutate({
                 name: formData.name,
@@ -222,12 +266,13 @@ export default function NotificationsPage() {
                 user_ids: formData.user_ids
             })
         } else {
-            if (!formData.delegated_to_id || !formData.expires_at) return toast.error('Recipient and expiry are required')
+            if (!formData.initial_user_id || !formData.delegate_user_id || !formData.start_date) return toast.error('Source, recipient, and start date are required')
             createDelegationMutation.mutate({
                 initial_user_id: formData.initial_user_id,
-                delegated_to_id: formData.delegated_to_id,
-                event_types: formData.event_types,
-                expires_at: formData.expires_at,
+                delegate_user_id: formData.delegate_user_id,
+                start_date: formData.start_date,
+                end_date: formData.end_date || undefined,
+                notification_type_ids: formData.notification_type_ids,
                 reason: formData.reason
             })
         }
@@ -249,37 +294,59 @@ export default function NotificationsPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-20">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 pb-20 lg:px-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Notifications Center</h1>
-                    <p className="text-slate-500 mt-1">Unified view for alerts, personal preferences, and operational routing.</p>
+                    <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-indigo-600">
+                        <BellRing className="h-3.5 w-3.5" />
+                        Signal hub
+                    </div>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-950">Notifications Center</h1>
+                    <p className="text-slate-500 mt-1">A clean stream for alerts, preferences, and routing.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-right sm:min-w-56">
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Unread</p>
+                        <p className="text-2xl font-black text-slate-900">{notifications.filter((item) => !item.attributes.is_read).length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-emerald-50 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Loaded</p>
+                        <p className="text-2xl font-black text-emerald-700">{notifications.length}</p>
+                    </div>
                 </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="bg-slate-100/50 p-1 border border-slate-200">
-                    <TabsTrigger value="inbox" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <TabsList className="h-auto flex-wrap justify-start gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                    <TabsTrigger value="inbox" className="h-9 gap-2 rounded-xl px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                         <Bell className="w-4 h-4" /> Inbox
                     </TabsTrigger>
-                    <TabsTrigger value="preferences" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                        <Settings2 className="w-4 h-4" /> Preferences
+                    <TabsTrigger value="preferences" className="h-9 gap-2 rounded-xl px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                        <SlidersHorizontal className="w-4 h-4" /> Channels
                     </TabsTrigger>
                     {isAdvancedUser && (
-                        <TabsTrigger value="management" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <ShieldCheck className="w-4 h-4 text-indigo-600" /> Management
-                        </TabsTrigger>
+                        <>
+                            <TabsTrigger value="rules" className="h-9 gap-2 rounded-xl px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                                <Target className="w-4 h-4" /> Rules
+                            </TabsTrigger>
+                            <TabsTrigger value="groups" className="h-9 gap-2 rounded-xl px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                                <Users className="w-4 h-4" /> Groups
+                            </TabsTrigger>
+                            <TabsTrigger value="delegations" className="h-9 gap-2 rounded-xl px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                                <CalendarClock className="w-4 h-4" /> Delegations
+                            </TabsTrigger>
+                        </>
                     )}
                 </TabsList>
 
                 <TabsContent value="inbox" className="mt-6">
-                    <Card className="shadow-sm border-slate-200">
-                        <CardHeader className="bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between py-4">
-                            <CardTitle className="text-base font-semibold text-slate-900">Recent Activity</CardTitle>
+                    <Card className="overflow-hidden rounded-3xl border-slate-200 shadow-sm">
+                        <CardHeader className="bg-white border-b border-slate-100 flex flex-row items-center justify-between py-4">
+                            <CardTitle className="text-base font-black text-slate-900">Recent Activity</CardTitle>
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs bg-white"
+                                className="h-9 rounded-xl bg-white text-xs font-black"
                                 onClick={() => markAllReadMutation.mutate()}
                                 disabled={markAllReadMutation.isPending || !notifications.length}
                             >
@@ -294,37 +361,51 @@ export default function NotificationsPage() {
                                 <div className="py-24 text-center text-slate-500">
                                     <BellRing className="w-12 h-12 text-slate-200 mx-auto mb-4" />
                                     <p className="font-medium text-slate-400">Everything clear!</p>
-                                    <p className="text-xs text-slate-300">You don't have any unread notifications.</p>
+                                    <p className="text-xs text-slate-300">You don&apos;t have any unread notifications.</p>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-slate-100">
+                                <div className="space-y-2 bg-slate-50/60 p-3">
                                     {notifications.map((notification) => (
                                         <div
                                             key={notification.id}
-                                            className={`p-4 flex gap-4 transition-colors cursor-pointer ${!notification.attributes.is_read ? 'bg-indigo-50/20' : 'bg-white hover:bg-slate-50'}`}
-                                            onClick={() => !notification.attributes.is_read && markReadMutation.mutate(notification.id)}
+                                            className={`group flex gap-4 rounded-2xl border p-4 transition-colors ${!notification.attributes.is_read ? 'border-indigo-100 bg-white shadow-sm shadow-indigo-100/40' : 'border-slate-100 bg-white/80 hover:bg-white'}`}
+                                            onClick={() => {
+                                                if (!notification.attributes.is_read) markReadMutation.mutate(notification.id)
+                                            }}
                                         >
                                             <div className="shrink-0 mt-1">
                                                 {getIcon(notification.attributes.type)}
                                             </div>
                                             <div className="flex-1 min-w-0 text-left">
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <p className={`text-sm ${!notification.attributes.is_read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
-                                                        {notification.attributes.data.message || notification.attributes.subject || notification.attributes.type.replace('_', ' ')}
+                                                    <p className={`text-sm capitalize ${!notification.attributes.is_read ? 'font-black text-slate-900' : 'font-semibold text-slate-700'}`}>
+                                                        {getNotificationTitle(notification)}
                                                     </p>
                                                     <span className="text-[11px] text-slate-400 whitespace-nowrap">
                                                         {formatDistanceToNow(new Date(notification.attributes.created_at), { addSuffix: true })}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                                                    {notification.attributes.body || notification.attributes.data.description || 'System generated event.'}
+                                                    {getNotificationBody(notification)}
                                                 </p>
                                             </div>
-                                            {!notification.attributes.is_read && (
-                                                <div className="shrink-0 flex items-center">
-                                                    <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-                                                </div>
-                                            )}
+                                            <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                                                {getActionUrl(notification) && (
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-slate-400 hover:text-indigo-600" onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        window.location.href = getActionUrl(notification) as string
+                                                    }}>
+                                                        <ExternalLink className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={(event) => {
+                                                    event.stopPropagation()
+                                                    deleteMutation.mutate(notification.id)
+                                                }}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                                {!notification.attributes.is_read && <div className="ml-1 h-2 w-2 rounded-full bg-indigo-600" />}
+                                            </div>
                                         </div>
                                     ))}
                                     {/* Infinite scroll sentinel */}
@@ -381,23 +462,19 @@ export default function NotificationsPage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="management" className="mt-6">
-                    <div className="space-y-6">
-                        <Tabs value={managementTab} onValueChange={setManagementTab} className="w-full">
-                            <div className="flex items-center justify-between gap-4 mb-4">
-                                <TabsList className="bg-slate-50 p-1 border border-slate-200 h-9">
-                                    <TabsTrigger value="rules" className="h-7 text-xs px-4">Routing Rules</TabsTrigger>
-                                    <TabsTrigger value="groups" className="h-7 text-xs px-4">Groups</TabsTrigger>
-                                    <TabsTrigger value="delegations" className="h-7 text-xs px-4">Delegations</TabsTrigger>
-                                </TabsList>
-
-                                <Button size="sm" variant="outline" className="h-8 text-[11px] font-bold border-indigo-100 text-indigo-600 hover:bg-indigo-50" onClick={() => setIsCreateOpen(true)}>
-                                    <Plus className="w-3 h-3 mr-1.5" />
-                                    {managementTab === 'rules' ? 'New Rule' : managementTab === 'groups' ? 'New Group' : 'New Delegation'}
+                {isAdvancedUser && (
+                    <TabsContent value="rules" className="mt-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <h2 className="text-sm font-black text-slate-900">Routing Rules</h2>
+                                    <p className="text-xs text-slate-500">Route notification types to roles, users, groups, and channels.</p>
+                                </div>
+                                <Button size="sm" variant="outline" className="h-9 rounded-xl text-xs font-black border-indigo-100 text-indigo-600 hover:bg-indigo-50" onClick={() => setIsCreateOpen(true)}>
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                    New Rule
                                 </Button>
                             </div>
-
-                            <TabsContent value="rules" className="mt-4">
                                 <UpgradeGate
                                     module="notification_routing"
                                     featureName="Operational Routing"
@@ -419,22 +496,23 @@ export default function NotificationsPage() {
                                                     {isLoadingRules ? <TableRow><TableCell colSpan={4} className="h-32 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-300" /></TableCell></TableRow> : (
                                                         rulesData?.data?.rules?.map(rule => (
                                                             <TableRow key={rule.id} className="text-sm">
-                                                                <TableCell className="font-mono text-[11px] font-semibold text-slate-700">{rule.event_type}</TableCell>
+                                                                <TableCell className="font-mono text-[11px] font-semibold text-slate-700">{getRuleCode(rule)}</TableCell>
                                                                 <TableCell>
                                                                     <div className="flex flex-wrap gap-1">
-                                                                        {rule.relationships?.recipient_groups?.data?.map(g => (
-                                                                            <Badge key={g.id} variant="secondary" className="bg-slate-100 text-slate-600 border-none font-normal text-[10px]">{g.name}</Badge>
+                                                                        {(rule.recipient_group_ids || rule.relationships?.recipient_groups?.data?.map(g => g.id) || []).map(groupId => (
+                                                                            <Badge key={groupId} variant="secondary" className="bg-slate-100 text-slate-600 border-none font-normal text-[10px]">Group {groupId}</Badge>
                                                                         ))}
+                                                                        {(!rule.recipient_group_ids?.length && !rule.relationships?.recipient_groups?.data?.length) && <span className="text-xs text-slate-400">Roles/users</span>}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <div className="flex gap-1">
-                                                                        {rule.channel_types.map(c => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-bold uppercase">{c}</span>)}
+                                                                        {getRuleChannels(rule).map((c: string) => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-bold uppercase">{c}</span>)}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
-                                                                    <Badge className={rule.is_active ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-50 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}>
-                                                                        {rule.is_active ? 'Active' : 'Muted'}
+                                                                    <Badge className={isRuleEnabled(rule) ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-50 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}>
+                                                                        {isRuleEnabled(rule) ? 'Active' : 'Muted'}
                                                                     </Badge>
                                                                 </TableCell>
                                                             </TableRow>
@@ -446,9 +524,23 @@ export default function NotificationsPage() {
                                         </CardContent>
                                     </Card>
                                 </UpgradeGate>
-                            </TabsContent>
+                        </div>
+                    </TabsContent>
+                )}
 
-                            <TabsContent value="groups" className="mt-4">
+                {isAdvancedUser && (
+                    <TabsContent value="groups" className="mt-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <h2 className="text-sm font-black text-slate-900">Notification Groups</h2>
+                                    <p className="text-xs text-slate-500">Create reusable recipient groups for operational alerts.</p>
+                                </div>
+                                <Button size="sm" variant="outline" className="h-9 rounded-xl text-xs font-black border-indigo-100 text-indigo-600 hover:bg-indigo-50" onClick={() => setIsCreateOpen(true)}>
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                    New Group
+                                </Button>
+                            </div>
                                 <UpgradeGate
                                     module="notification_groups"
                                     featureName="Notification Groups"
@@ -474,14 +566,14 @@ export default function NotificationsPage() {
                                                                 <TableCell className="text-slate-500 line-clamp-1 max-w-[200px]">{group.description || '-'}</TableCell>
                                                                 <TableCell>
                                                                     <div className="flex -space-x-2">
-                                                                        {group.relationships?.users?.data?.slice(0, 4).map(u => (
-                                                                            <div key={u.id} className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold" title={u.name}>
-                                                                                {u.name?.charAt(0)}
+                                                                        {getGroupMembers(group).slice(0, 4).map((u: any) => (
+                                                                            <div key={u.id} className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold" title={getUserName(u)}>
+                                                                                {getUserName(u).charAt(0)}
                                                                             </div>
                                                                         ))}
-                                                                        {(group.relationships?.users?.data?.length || 0) > 4 && (
+                                                                        {getGroupMembers(group).length > 4 && (
                                                                             <div className="w-6 h-6 rounded-full bg-indigo-50 border-2 border-white flex items-center justify-center text-[9px] font-bold text-indigo-600">
-                                                                                +{(group.relationships?.users?.data?.length || 0) - 4}
+                                                                                +{getGroupMembers(group).length - 4}
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -498,9 +590,23 @@ export default function NotificationsPage() {
                                         </CardContent>
                                     </Card>
                                 </UpgradeGate>
-                            </TabsContent>
+                        </div>
+                    </TabsContent>
+                )}
 
-                            <TabsContent value="delegations" className="mt-4">
+                {isAdvancedUser && (
+                    <TabsContent value="delegations" className="mt-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <h2 className="text-sm font-black text-slate-900">Delegations</h2>
+                                    <p className="text-xs text-slate-500">Temporarily hand notification responsibility to another user.</p>
+                                </div>
+                                <Button size="sm" variant="outline" className="h-9 rounded-xl text-xs font-black border-indigo-100 text-indigo-600 hover:bg-indigo-50" onClick={() => setIsCreateOpen(true)}>
+                                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                    New Delegation
+                                </Button>
+                            </div>
                                 <UpgradeGate
                                     module="notification_delegation"
                                     featureName="Temporary Handover"
@@ -520,29 +626,39 @@ export default function NotificationsPage() {
                                                 </TableHeader>
                                                 <TableBody>
                                                     {isLoadingDelegations ? <TableRow><TableCell colSpan={4} className="h-32 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-300" /></TableCell></TableRow> : (
-                                                        delegationsData?.data?.delegations?.map(del => (
+                                                        delegationsData?.data?.delegations?.map(del => {
+                                                            const target = getDelegationTarget(del)
+                                                            return (
                                                             <TableRow key={del.id} className="text-sm">
                                                                 <TableCell>
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 uppercase">
-                                                                            {del.relationships?.delegated_to.data.name?.charAt(0)}
+                                                                            {getUserName(target).charAt(0)}
                                                                         </div>
-                                                                        <span className="font-medium text-slate-800">{del.relationships?.delegated_to.data.name}</span>
+                                                                        <span className="font-medium text-slate-800">{getUserName(target)}</span>
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <div className="flex flex-wrap gap-1">
-                                                                        {del.event_types.map(e => <Badge key={e} variant="outline" className="text-[9px] font-mono h-4 px-1">{e}</Badge>)}
+                                                                        {getDelegationTypes(del).map((e: string) => <Badge key={e} variant="outline" className="text-[9px] font-mono h-4 px-1">{e}</Badge>)}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="text-[11px] text-slate-600 font-medium">
-                                                                    {format(new Date(del.expires_at), 'MMM d, yyyy')}
+                                                                    {del.end_date ? format(new Date(del.end_date), 'MMM d, yyyy') : 'Open-ended'}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
-                                                                    <Button variant="ghost" size="sm" className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold">Revoke</Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold"
+                                                                        disabled={endDelegationMutation.isPending}
+                                                                        onClick={() => endDelegationMutation.mutate(del.id)}
+                                                                    >
+                                                                        Revoke
+                                                                    </Button>
                                                                 </TableCell>
                                                             </TableRow>
-                                                        ))
+                                                        )})
                                                     )}
                                                     {delegationsData?.data?.delegations?.length === 0 && <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-400 text-sm italic">No active delegations.</TableCell></TableRow>}
                                                 </TableBody>
@@ -550,31 +666,24 @@ export default function NotificationsPage() {
                                         </CardContent>
                                     </Card>
                                 </UpgradeGate>
-                            </TabsContent>
-                        </Tabs>
-
-                        <div className="flex justify-end pt-2">
-                            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold h-9 rounded-lg shadow-sm" onClick={() => window.location.href = '/settings/notifications'}>
-                                <Settings2 className="w-3.5 h-3.5 mr-2" /> Full Management Suite
-                            </Button>
                         </div>
-                    </div>
-                </TabsContent>
+                    </TabsContent>
+                )}
             </Tabs>
 
             <Dialog open={isCreateOpen} onOpenChange={(v) => !v && handleClose()}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
-                            {managementTab === 'rules' ? 'Create Routing Rule' : managementTab === 'groups' ? 'Create Notification Group' : 'New Temporary Delegation'}
+                            {activeTab === 'rules' ? 'Create Routing Rule' : activeTab === 'groups' ? 'Create Notification Group' : 'New Temporary Delegation'}
                         </DialogTitle>
                         <DialogDescription>
-                            {managementTab === 'rules' ? 'Define automated routing conditions for operational events.' : managementTab === 'groups' ? 'Group users together to receive batch alerts.' : 'Temporarily hand over alerts to another teammate.'}
+                            {activeTab === 'rules' ? 'Define automated routing conditions for operational events.' : activeTab === 'groups' ? 'Group users together to receive batch alerts.' : 'Temporarily hand over alerts to another teammate.'}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto px-1">
-                        {managementTab === 'rules' && (
+                        {activeTab === 'rules' && (
                             <>
                                 <div className="space-y-2">
                                     <Label>Trigger Notification Type</Label>
@@ -689,7 +798,7 @@ export default function NotificationsPage() {
                             </>
                         )}
 
-                        {managementTab === 'groups' && (
+                        {activeTab === 'groups' && (
                             <>
                                 <div className="space-y-2">
                                     <Label>Group Name</Label>
@@ -727,7 +836,7 @@ export default function NotificationsPage() {
                             </>
                         )}
 
-                        {managementTab === 'delegations' && (
+                        {activeTab === 'delegations' && (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
@@ -743,42 +852,38 @@ export default function NotificationsPage() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Delegate To</Label>
-                                        <Select value={formData.delegated_to_id} onValueChange={(v) => setFormData({ ...formData, delegated_to_id: v })}>
+                                        <Select value={formData.delegate_user_id} onValueChange={(v) => setFormData({ ...formData, delegate_user_id: v })}>
                                             <SelectTrigger><SelectValue placeholder="Select delegate" /></SelectTrigger>
                                             <SelectContent>
                                                 {userData?.data?.users?.map(u => (
-                                                    <SelectItem key={u.id} value={u.id.toString()}>{u.attributes.full_name}</SelectItem>
+                                                    u.id.toString() !== formData.initial_user_id && <SelectItem key={u.id} value={u.id.toString()}>{u.attributes.full_name}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Events to Delegate</Label>
+                                    <Label>Notification Types</Label>
                                     <div className="grid grid-cols-2 gap-2 border rounded-lg p-4 bg-slate-50 max-h-40 overflow-y-auto">
-                                        {[
-                                            'trip.started', 'trip.completed', 'trip.assigned',
-                                            'incidents.created', 'incidents.resolved', 'incidents.closed',
-                                            'maintenance.assigned', 'maintenance.completed',
-                                            'geofence.alert', 'device.status_changed'
-                                        ].map(s => (
-                                            <div key={s} className="flex items-center space-x-2">
+                                        {notificationTypes?.data?.map(type => (
+                                            <div key={type.id} className="flex items-center space-x-2">
                                                 <input
                                                     type="checkbox"
-                                                    id={`del-ev-${s}`}
-                                                    checked={formData.event_types.includes(s)}
+                                                    id={`del-type-${type.id}`}
+                                                    checked={formData.notification_type_ids.includes(type.id)}
                                                     className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                                     onChange={(e) => {
                                                         const checked = e.target.checked
-                                                        const evs = checked
-                                                            ? [...formData.event_types, s]
-                                                            : formData.event_types.filter((id: string) => id !== s)
-                                                        setFormData({ ...formData, event_types: evs })
+                                                        const notificationTypeIds = checked
+                                                            ? [...formData.notification_type_ids, type.id]
+                                                            : formData.notification_type_ids.filter((id: number) => id !== type.id)
+                                                        setFormData({ ...formData, notification_type_ids: notificationTypeIds })
                                                     }}
                                                 />
-                                                <label htmlFor={`del-ev-${s}`} className="text-[10px] font-mono leading-none">{s}</label>
+                                                <label htmlFor={`del-type-${type.id}`} className="text-[10px] font-mono leading-none">{type.code}</label>
                                             </div>
                                         ))}
+                                        {notificationTypes?.data?.length === 0 && <p className="col-span-2 text-xs text-slate-400">Leave empty to delegate all notification types.</p>}
                                     </div>
                                 </div>
                                 <div className="space-y-2">
@@ -786,8 +891,12 @@ export default function NotificationsPage() {
                                     <Input placeholder="e.g. Annual Leave, Shift Change" value={formData.reason} onChange={(e) => setFormData({ ...formData, reason: e.target.value })} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Expiry Date</Label>
-                                    <Input type="date" value={formData.expires_at} onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })} />
+                                    <Label>Start Date</Label>
+                                    <Input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>End Date (Optional)</Label>
+                                    <Input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
                                 </div>
                             </div>
                         )}
@@ -801,7 +910,7 @@ export default function NotificationsPage() {
                             disabled={createRuleMutation.isPending || createGroupMutation.isPending || createDelegationMutation.isPending}
                         >
                             {(createRuleMutation.isPending || createGroupMutation.isPending || createDelegationMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            {managementTab === 'rules' ? 'Create Rule' : managementTab === 'groups' ? 'Create Group' : 'Assign Delegation'}
+                            {activeTab === 'rules' ? 'Create Rule' : activeTab === 'groups' ? 'Create Group' : 'Assign Delegation'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
