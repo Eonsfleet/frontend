@@ -428,7 +428,7 @@ export const getMaintenanceAlertById = async (
   id: string | number,
 ): Promise<MaintenanceAlertDetailResponse> => {
   const response = await apiClient.get<MaintenanceAlertDetailResponse>(
-    `/maintenance/alerts/${id}`,
+    `/maintenances/alerts/${id}`,
   );
   return response.data;
 };

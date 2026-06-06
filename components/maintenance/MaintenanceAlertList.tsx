@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { SnoozeAlertDialog } from './SnoozeAlertDialog'
 import { CreateWorkOrderDialog } from './CreateWorkOrderDialog'
+import { MaintenanceAlertDrawer } from './MaintenanceAlertDrawer'
 
 const ALERT_STATUS_STYLES = {
     triggered:          { badge: 'bg-amber-50 text-amber-600',     accent: 'border-l-amber-400',   label: 'Triggered'       },
@@ -47,6 +48,7 @@ export function MaintenanceAlertList({ alerts, isLoading }: MaintenanceAlertList
     const queryClient = useQueryClient()
     const [snoozeAlert, setSnoozeAlert] = useState<MaintenanceAlert | null>(null)
     const [workOrderAlert, setWorkOrderAlert] = useState<MaintenanceAlert | null>(null)
+    const [detailAlertId, setDetailAlertId] = useState<string | null>(null)
 
     const { mutate: handleAcknowledge, isPending: isAcknowledging, variables: acknowledgingId } = useMutation({
         mutationFn: (id: string) => acknowledgeMaintenanceAlert(id),
@@ -226,11 +228,9 @@ export function MaintenanceAlertList({ alerts, isLoading }: MaintenanceAlertList
                                     size="sm"
                                     variant="ghost"
                                     className="ml-auto h-7 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 px-2"
-                                    asChild
+                                    onClick={() => setDetailAlertId(alert.id)}
                                 >
-                                    <Link href={`/maintenance/alerts/${alert.id}`}>
-                                        {isClosed ? 'View Details' : 'Details'} <ChevronRight className="ml-0.5 h-3 w-3" />
-                                    </Link>
+                                    {isClosed ? 'View Details' : 'Details'} <ChevronRight className="ml-0.5 h-3 w-3" />
                                 </Button>
                             </div>
                         </div>
@@ -247,6 +247,10 @@ export function MaintenanceAlertList({ alerts, isLoading }: MaintenanceAlertList
                 alert={workOrderAlert}
                 open={!!workOrderAlert}
                 onOpenChange={(open) => { if (!open) setWorkOrderAlert(null) }}
+            />
+            <MaintenanceAlertDrawer
+                alertId={detailAlertId}
+                onClose={() => setDetailAlertId(null)}
             />
         </>
     )
