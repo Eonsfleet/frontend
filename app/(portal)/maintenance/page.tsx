@@ -238,6 +238,14 @@ export default function MaintenanceDashboardPage() {
                                 alerts={alertData?.data?.alerts || []}
                                 isLoading={isLoadingAlerts}
                             />
+                            {(alertData?.data?.pagination?.total ?? 0) > 5 && (
+                                <Link
+                                    href="/maintenance/alerts"
+                                    className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-blue-300 hover:text-blue-600 transition-colors"
+                                >
+                                    +{(alertData?.data?.pagination?.total ?? 0) - 5} more alerts in inbox
+                                </Link>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
