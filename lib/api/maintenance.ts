@@ -172,7 +172,7 @@ export const createSchedule = async (data: {
   note?: string;
 }): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.post<MaintenanceScheduleDetailResponse>(
-    "/maintenances/schedules",
+    "/maintenances/schedule",
     data,
   );
   return response.data;
@@ -181,7 +181,7 @@ export const createSchedule = async (data: {
 export const getScheduleById = async (
   id: string | number,
 ): Promise<MaintenanceScheduleDetailResponse> => {
-  const response = await apiClient.get<any>(`/maintenances/schedules/${id}`);
+  const response = await apiClient.get<any>(`/maintenances/schedule/${id}`);
   const raw = response.data;
   // API returns { data: { id, attributes, relationships } } — normalize to { data: { schedule } }
   return {
@@ -195,14 +195,14 @@ export const updateSchedule = async (
   data: Record<string, unknown>,
 ): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.put<MaintenanceScheduleDetailResponse>(
-    `/maintenances/schedules/${id}`,
+    `/maintenances/schedule/${id}`,
     data,
   );
   return response.data;
 };
 
 export const deleteSchedule = async (id: string | number): Promise<void> => {
-  await apiClient.delete(`/maintenances/schedules/${id}`);
+  await apiClient.delete(`/maintenances/schedule/${id}`);
 };
 
 export const assignVendorToSchedule = async (
@@ -210,7 +210,7 @@ export const assignVendorToSchedule = async (
   data: { vendor_id: number | string; priority?: string },
 ): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.put<MaintenanceScheduleDetailResponse>(
-    `/maintenances/schedules/${id}/assign-vendor`,
+    `/maintenances/schedule/${id}/assign-vendor`,
     data,
   );
   return response.data;
