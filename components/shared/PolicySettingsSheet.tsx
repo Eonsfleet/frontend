@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,10 +12,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPolicies, updatePolicies, type OrgPolicies } from '@/lib/api/settings'
+import { getWorkflowSettings, updateWorkflowSettings, type WorkflowSettings } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
 import {
     Loader2, Gauge, Timer, Moon, Wrench,
-    CalendarClock, AlarmClock, SlidersHorizontal,
+    CalendarClock, AlarmClock, SlidersHorizontal, DollarSign, Users, ShieldCheck,
 } from 'lucide-react'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -277,6 +279,157 @@ function MaintenanceForm({ policies, onClose }: { policies: OrgPolicies; onClose
     )
 }
 
+// ── Workflow Settings Form ────────────────────────────────────────────────────
+
+const workflowSchema = z.object({
+    finance_threshold_enabled: z.boolean(),
+    cost_threshold: z.number().min(0, 'Must be ≥ 0'),
+})
+
+type WorkflowValues = z.infer<typeof workflowSchema>
+
+function WorkflowSettingsForm({ onClose }: { onClose: () => void }) {
+    const queryClient = useQueryClient()
+
+    const { data, isLoading, isError, refetch } = useQuery({
+        queryKey: ['workflow-settings', 'maintenance'],
+        queryFn: () => getWorkflowSettings('maintenance'),
+    })
+
+    const settings = data?.data?.settings
+
+    const { register, handleSubmit, reset, watch, control, formState: { errors, isDirty } } =
+        useForm<WorkflowValues>({
+            resolver: zodResolver(workflowSchema),
+            defaultValues: {
+                finance_threshold_enabled: true,
+                cost_threshold: 100000,
+            },
+        })
+
+    useEffect(() => {
+        if (settings) {
+            reset({
+                finance_threshold_enabled: settings.finance_threshold_enabled,
+                cost_threshold: settings.cost_threshold,
+            })
+        }
+    }, [settings, reset])
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: (v: WorkflowValues) => updateWorkflowSettings('maintenance', v),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-settings', 'maintenance'] })
+            toast.success('Workflow settings saved')
+            onClose()
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save'),
+    })
+
+    const financeOn = watch('finance_threshold_enabled')
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <p className="text-xs">Loading workflow settings…</p>
+            </div>
+        )
+    }
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
+                <p className="text-sm font-semibold text-slate-700">Failed to load workflow settings</p>
+                <p className="text-xs text-slate-400">Check your connection and try again.</p>
+                <Button size="sm" variant="outline" onClick={() => refetch()} className="mt-1 text-xs font-bold">
+                    Retry
+                </Button>
+            </div>
+        )
+    }
+
+    return (
+        <form onSubmit={handleSubmit((v) => mutate(v))} className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto px-6">
+                <div className="py-5 border-b border-slate-100">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <DollarSign className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                                <span className="text-sm font-semibold text-slate-800">Finance Routing</span>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                                Automatically route high-cost repairs to financial controllers.
+                            </p>
+                        </div>
+                        <Controller name="finance_threshold_enabled" control={control}
+                            render={({ field }) => (
+                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            )} />
+                    </div>
+
+                    <div className={`mt-4 transition-all duration-200 ${financeOn ? 'opacity-100' : 'opacity-35 pointer-events-none'}`}>
+                        <div className="space-y-1.5">
+                            <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                                Cost Threshold (₦)
+                            </Label>
+                            <div className="flex rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                                <span className="flex items-center px-3 bg-slate-50 border-r border-slate-200 text-sm font-bold text-slate-400">₦</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    className="w-full px-3 py-2 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                                    placeholder="100,000"
+                                    {...register('cost_threshold', { valueAsNumber: true })}
+                                />
+                            </div>
+                            {errors.cost_threshold && (
+                                <p className="text-xs text-red-500">{errors.cost_threshold.message}</p>
+                            )}
+                            <p className="text-[10px] italic text-slate-400">Jobs above this amount require Finance approval.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <SectionRow
+                    icon={Users} iconClass="text-slate-400"
+                    label="Approval Requirements"
+                    hint="Current approval configuration for this org."
+                >
+                    <div className="text-right">
+                        <p className="text-sm font-black text-slate-900">{settings?.minimum_approvals ?? 1}×</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{settings?.required_role ?? '—'}</p>
+                    </div>
+                </SectionRow>
+
+                <SectionRow
+                    icon={ShieldCheck} iconClass="text-emerald-500"
+                    label="Workflow Guard"
+                    hint="Automated compliance gatekeeping is active for this organisation."
+                >
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-full">
+                        Active
+                    </span>
+                </SectionRow>
+            </div>
+
+            <div className="shrink-0 px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-400">Changes apply org-wide immediately.</p>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" type="button" onClick={() => reset()} disabled={!isDirty || isPending}>
+                        Reset
+                    </Button>
+                    <Button size="sm" type="submit" disabled={!isDirty || isPending}>
+                        {isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
+                        Save Settings
+                    </Button>
+                </div>
+            </div>
+        </form>
+    )
+}
+
 // ── Config per mode ───────────────────────────────────────────────────────────
 
 const MODE_CONFIG = {
@@ -332,20 +485,57 @@ export function PolicySettingsSheet({ open, onOpenChange, mode }: PolicySettings
 
                 {/* Body */}
                 <div className="flex-1 overflow-hidden flex flex-col">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                            <p className="text-xs">Loading settings…</p>
-                        </div>
-                    ) : isError || !data?.data ? (
-                        <div className="flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
-                            <p className="text-sm font-semibold text-slate-700">Failed to load settings</p>
-                            <p className="text-xs text-slate-400">Check your connection and try again.</p>
-                        </div>
-                    ) : mode === 'fleet-rules' ? (
-                        <FleetRulesForm policies={data.data} onClose={() => onOpenChange(false)} />
+                    {mode === 'fleet-rules' ? (
+                        isLoading ? (
+                            <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                                <p className="text-xs">Loading settings…</p>
+                            </div>
+                        ) : isError || !data?.data ? (
+                            <div className="flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
+                                <p className="text-sm font-semibold text-slate-700">Failed to load settings</p>
+                                <p className="text-xs text-slate-400">Check your connection and try again.</p>
+                            </div>
+                        ) : (
+                            <FleetRulesForm policies={data.data} onClose={() => onOpenChange(false)} />
+                        )
                     ) : (
-                        <MaintenanceForm policies={data.data} onClose={() => onOpenChange(false)} />
+                        <Tabs defaultValue="thresholds" className="flex flex-col flex-1 overflow-hidden">
+                            <TabsList className="mx-6 mt-3 mb-1 bg-slate-50 border border-slate-100 rounded-xl p-1 h-auto shrink-0 grid grid-cols-2">
+                                <TabsTrigger
+                                    value="thresholds"
+                                    className="rounded-lg text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow py-2"
+                                >
+                                    Alert Thresholds
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="workflow"
+                                    className="rounded-lg text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow py-2"
+                                >
+                                    Workflow
+                                </TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="thresholds" className="flex-1 overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden">
+                                {isLoading ? (
+                                    <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+                                        <Loader2 className="h-6 w-6 animate-spin" />
+                                        <p className="text-xs">Loading settings…</p>
+                                    </div>
+                                ) : isError || !data?.data ? (
+                                    <div className="flex flex-col items-center justify-center gap-2 py-16 px-6 text-center">
+                                        <p className="text-sm font-semibold text-slate-700">Failed to load settings</p>
+                                        <p className="text-xs text-slate-400">Check your connection and try again.</p>
+                                    </div>
+                                ) : (
+                                    <MaintenanceForm policies={data.data} onClose={() => onOpenChange(false)} />
+                                )}
+                            </TabsContent>
+
+                            <TabsContent value="workflow" className="flex-1 overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden">
+                                <WorkflowSettingsForm onClose={() => onOpenChange(false)} />
+                            </TabsContent>
+                        </Tabs>
                     )}
                 </div>
             </SheetContent>

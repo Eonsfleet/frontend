@@ -472,6 +472,13 @@ export const createWorkOrderFromAlert = async (
   return response.data;
 };
 
+export const closeMaintenanceAlert = async (
+  id: string | number,
+): Promise<any> => {
+  const response = await apiClient.patch(`/maintenance/alerts/${id}/close`);
+  return response.data;
+};
+
 export const getAlertHistory = async (
   id: string | number,
 ): Promise<HistoryResponse> => {

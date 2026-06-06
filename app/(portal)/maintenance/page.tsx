@@ -6,7 +6,7 @@ import { MaintenanceAlertList } from '@/components/maintenance/MaintenanceAlertL
 import { useQuery } from '@tanstack/react-query'
 import { getMaintenances, getMaintenanceAlerts, getMaintenanceStats, getUpcomingMaintenance } from '@/lib/api/maintenance'
 import { Button } from '@/components/ui/button'
-import { Plus, BellRing, Wrench, Clock, CheckCircle2, Settings } from 'lucide-react'
+import { Plus, BellRing, Wrench, Clock, CheckCircle2, Settings, ChevronDown, AlertTriangle, Eye, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 import { PolicySettingsSheet } from '@/components/shared/PolicySettingsSheet'
 import { useSubscription } from '@/hooks/useSubscription'
@@ -34,8 +34,8 @@ export default function MaintenanceDashboardPage() {
     })
 
     const { data: alertData, isLoading: isLoadingAlerts, isError: isAlertError, refetch: refetchAlerts } = useQuery({
-        queryKey: ['maintenance-alerts'],
-        queryFn: () => getMaintenanceAlerts(),
+        queryKey: ['maintenance-alerts-full', '', 1],
+        queryFn: () => getMaintenanceAlerts({ per_page: 5 }),
     })
 
     const { data: statsData, isLoading: isLoadingStats, isError: isStatsError, refetch: refetchStats } = useQuery({
@@ -225,8 +225,10 @@ export default function MaintenanceDashboardPage() {
                                     <div className="h-6 w-1.5 bg-amber-500 rounded-full" />
                                     Critical Alerts
                                 </CardTitle>
-                                <Link href="/maintenance/alerts" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">
-                                    View More
+                                <Link href="/maintenance/alerts" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                                    {alertData?.data?.pagination?.total
+                                        ? `${alertData.data.pagination.total} total`
+                                        : 'View all'}
                                 </Link>
                             </div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight px-4 ml-0.5">Immediate intervention required</p>
@@ -236,10 +238,20 @@ export default function MaintenanceDashboardPage() {
                                 alerts={alertData?.data?.alerts || []}
                                 isLoading={isLoadingAlerts}
                             />
+                            {(alertData?.data?.pagination?.total ?? 0) > 5 && (
+                                <Link
+                                    href="/maintenance/alerts"
+                                    className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-blue-300 hover:text-blue-600 transition-colors"
+                                >
+                                    +{(alertData?.data?.pagination?.total ?? 0) - 5} more alerts in inbox
+                                </Link>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
             </div>
+
+            <StatusGuide />
 
             <CreateMaintenanceScheduleModal
                 open={isCreateModalOpen}
@@ -251,6 +263,172 @@ export default function MaintenanceDashboardPage() {
                 onOpenChange={setIsPolicyOpen}
                 mode="maintenance"
             />
+        </div>
+    )
+}
+
+// ── Status Guide ──────────────────────────────────────────────────────────────
+
+const ALERT_FLOW = [
+    {
+        status: 'triggered',
+        label: 'Triggered',
+        badge: 'bg-amber-50 text-amber-600 border-amber-200',
+        dot: 'bg-amber-500',
+        desc: 'System detects a threshold breach and auto-creates the alert.',
+        icon: BellRing,
+    },
+    {
+        status: 'overdue',
+        label: 'Overdue',
+        badge: 'bg-rose-50 text-rose-600 border-rose-200',
+        dot: 'bg-rose-500',
+        desc: 'Alert unacknowledged for 48 h — escalated automatically.',
+        icon: AlertTriangle,
+    },
+    {
+        status: 'acknowledged',
+        label: 'Acknowledged',
+        badge: 'bg-blue-50 text-blue-600 border-blue-200',
+        dot: 'bg-blue-500',
+        desc: 'Fleet manager confirms awareness. Next: snooze or create a work order.',
+        icon: Eye,
+    },
+    {
+        status: 'snoozed',
+        label: 'Snoozed',
+        badge: 'bg-slate-100 text-slate-500 border-slate-200',
+        dot: 'bg-slate-400',
+        desc: 'Deferred with a reason and expiry date. Auto-re-triggers on expiry.',
+        icon: Clock,
+    },
+    {
+        status: 'work_order_created',
+        label: 'Work Order',
+        badge: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+        dot: 'bg-indigo-500',
+        desc: 'A maintenance job has been raised and linked to this alert.',
+        icon: Wrench,
+    },
+    {
+        status: 'closed',
+        label: 'Closed',
+        badge: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+        dot: 'bg-emerald-500',
+        desc: 'Alert fully resolved. No further action required.',
+        icon: CheckCircle2,
+    },
+] as const
+
+const SCHEDULE_FLOW = [
+    {
+        label: 'Upcoming',
+        badge: 'bg-blue-50 text-blue-600 border-blue-200',
+        desc: 'Service due within the warning window.',
+    },
+    {
+        label: 'Active',
+        badge: 'bg-amber-50 text-amber-600 border-amber-200',
+        desc: 'Service window is now open.',
+    },
+    {
+        label: 'Overdue',
+        badge: 'bg-rose-50 text-rose-600 border-rose-200',
+        desc: 'Due date passed with no service recorded.',
+    },
+    {
+        label: 'Completed',
+        badge: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+        desc: 'Service confirmed and logged.',
+    },
+    {
+        label: 'Cancelled',
+        badge: 'bg-slate-100 text-slate-500 border-slate-200',
+        desc: 'Removed from the schedule.',
+    },
+] as const
+
+function StatusGuide() {
+    const [open, setOpen] = React.useState(false)
+
+    return (
+        <div className="rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+            <button
+                onClick={() => setOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50/60 transition-colors"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="h-7 w-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                        <BookOpen className="h-3.5 w-3.5 text-slate-500" />
+                    </div>
+                    <div className="text-left">
+                        <p className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Status Guide</p>
+                        <p className="text-[10px] font-medium text-slate-400 mt-0.5">
+                            Quick reference for alert and schedule statuses
+                        </p>
+                    </div>
+                </div>
+                <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0", open && "rotate-180")} />
+            </button>
+
+            {open && (
+                <div className="border-t border-slate-100 px-6 py-6 space-y-8">
+                    {/* Alert lifecycle */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <BellRing className="h-3.5 w-3.5 text-amber-500" />
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Alert Lifecycle</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {ALERT_FLOW.map((s, i) => (
+                                <div key={s.status} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
+                                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                                        <span className="text-[10px] font-black text-slate-300">{i + 1}</span>
+                                        <span className={cn("h-2 w-2 rounded-full shrink-0", s.dot)} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className={cn("inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border mb-1", s.badge)}>
+                                            <s.icon className="h-2.5 w-2.5" />
+                                            {s.label}
+                                        </span>
+                                        <p className="text-[10px] text-slate-500 leading-relaxed">{s.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 italic pl-1">
+                            Snoozed alerts auto-return to <span className="font-black text-amber-600">Triggered</span> when the snooze expires.
+                            Creating a work order requires <span className="font-black text-blue-600">Acknowledged</span> first.
+                        </p>
+                    </div>
+
+                    {/* Schedule statuses */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Clock className="h-3.5 w-3.5 text-blue-500" />
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Schedule Status</p>
+                        </div>
+
+                        <div className="flex flex-wrap items-start gap-x-1 gap-y-4">
+                            {SCHEDULE_FLOW.map((s, i) => (
+                                <React.Fragment key={s.label}>
+                                    <div className="flex flex-col items-center gap-1 text-center w-[90px]">
+                                        <span className={cn("inline-flex text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border whitespace-nowrap", s.badge)}>
+                                            {s.label}
+                                        </span>
+                                        <p className="text-[9px] text-slate-400 leading-snug">{s.desc}</p>
+                                    </div>
+                                    {i < SCHEDULE_FLOW.length - 1 && (
+                                        <span className="text-slate-200 font-black text-base self-start mt-1.5">→</span>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

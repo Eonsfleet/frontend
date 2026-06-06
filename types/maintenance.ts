@@ -135,7 +135,7 @@ export interface MaintenanceJob {
 export interface MaintenanceAlert {
     id: string
     attributes: {
-        alert_type: 'approaching' | 'overdue'
+        alert_type: 'approaching' | 'due'
         threshold_type: 'time' | 'mileage'
         status: 'triggered' | 'acknowledged' | 'snoozed' | 'overdue' | 'work_order_created' | 'closed'
         snooze_count?: number
