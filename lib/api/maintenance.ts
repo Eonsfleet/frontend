@@ -8,6 +8,7 @@ import {
   MaintenanceCostSummary,
   ConversationMessage,
   WorkflowHistoryEntry,
+  ScheduleChecklist,
 } from "@/types";
 
 // ── Pagination shape (matches actual backend) ─────────────────────────────────
@@ -90,13 +91,9 @@ export interface HistoryResponse {
   data: { history: WorkflowHistoryEntry[] };
 }
 
-export interface ChecklistItem {
-  id: number | string;
-  name: string;
-}
-
 export interface ChecklistResponse {
-  data: { checklists: ChecklistItem[] };
+  message?: string;
+  data: { checklists: ScheduleChecklist[] };
 }
 
 export interface WorkflowSettings {
@@ -144,6 +141,7 @@ export const getMaintenances = async (params?: {
   q?: string;
   orderBy?: "asc" | "desc";
   sortBy?: string;
+  series_id?: string;
 }): Promise<MaintenanceListResponse> => {
   const response = await apiClient.get<MaintenanceListResponse>(
     "/maintenances",
@@ -229,7 +227,19 @@ export const getScheduleChecklists = async (
   scheduleId: string | number,
 ): Promise<ChecklistResponse> => {
   const response = await apiClient.get<ChecklistResponse>(
-    `/maintenances/schedules/${scheduleId}/checklists`,
+    `/maintenances/schedule/${scheduleId}/checklists`,
+  );
+  return response.data;
+};
+
+export const toggleChecklistItem = async (
+  scheduleId: string | number,
+  pivotId: string | number,
+  completed: boolean,
+): Promise<{ message: string; data: { pivot_id: number; status: string; completed_at: string | null } }> => {
+  const response = await apiClient.patch(
+    `/maintenances/schedule/${scheduleId}/checklists/${pivotId}`,
+    { completed },
   );
   return response.data;
 };
@@ -257,6 +267,26 @@ export const createChecklistItem = async (data: {
 }): Promise<any> => {
   const response = await apiClient.post("/maintenances/checklists", data);
   return response.data;
+};
+
+export const addChecklistItemToSchedule = async (
+  scheduleId: string | number,
+  data: { name: string; description?: string },
+): Promise<any> => {
+  const response = await apiClient.post(
+    `/maintenances/schedule/${scheduleId}/checklists`,
+    data,
+  );
+  return response.data;
+};
+
+export const removeChecklistItemFromSchedule = async (
+  scheduleId: string | number,
+  pivotId: string | number,
+): Promise<void> => {
+  await apiClient.delete(
+    `/maintenances/schedule/${scheduleId}/checklists/${pivotId}`,
+  );
 };
 
 export const getUpcomingMaintenance = async (): Promise<any> => {
@@ -416,6 +446,7 @@ export const getMaintenanceAlerts = async (params?: {
   page?: number;
   per_page?: number;
   status?: string;
+  vehicle_id?: string | number;
 }): Promise<MaintenanceAlertListResponse> => {
   const response = await apiClient.get<MaintenanceAlertListResponse>(
     "/maintenance/alerts",

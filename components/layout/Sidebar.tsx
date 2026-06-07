@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
 import { logoutUser } from "@/lib/api/auth";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 import Image from "next/image";
 import logoE from "@/public/images/logoE.svg";
 import logo from "@/public/images/logo.png";
@@ -411,7 +412,11 @@ export default function Sidebar() {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-slate-50">
+        <div className="border-t border-slate-50 p-4 space-y-3">
+          <div className={cn(isSidebarCollapsed ? "flex justify-center" : "w-full")}>
+            <NotificationBell showLabel={!isSidebarCollapsed} />
+          </div>
+
           <Link
             href="/profile"
             className="flex items-center gap-3 p-2 rounded-xl border border-transparent transition-all hover:bg-slate-50"

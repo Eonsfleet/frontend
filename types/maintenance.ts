@@ -90,7 +90,6 @@ export interface MaintenanceSchedule {
             l_name?: string
         } | null
         logs?: MaintenanceLog[]
-        latest_log?: MaintenanceLog | null
         checklists?: ScheduleChecklist[]
     }
 }

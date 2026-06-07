@@ -46,8 +46,8 @@ export function MaintenanceScheduleDrawer({ scheduleId, onClose }: Props) {
             <SheetContent
                 side="right"
                 className={cn(
-                    'p-0 flex flex-col gap-0 overflow-y-auto transition-[max-width] duration-300 ease-in-out',
-                    isFullWidth ? 'w-screen !max-w-full' : 'w-full sm:max-w-[700px]'
+                    'p-0 flex flex-col gap-0 overflow-hidden transition-[max-width] duration-300 ease-in-out',
+                    isFullWidth ? 'w-screen !max-w-full' : 'w-full sm:max-w-[960px]'
                 )}
             >
                 {/* Always rendered — Radix a11y requirement */}

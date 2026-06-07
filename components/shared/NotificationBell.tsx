@@ -35,7 +35,11 @@ function getActionUrl(notification: api.Notification) {
     return typeof value === 'string' ? value : null
 }
 
-export function NotificationBell() {
+type NotificationBellProps = {
+    showLabel?: boolean
+}
+
+export function NotificationBell({ showLabel = false }: NotificationBellProps = {}) {
     const queryClient = useQueryClient()
     const [isOpen, setIsOpen] = useState(false)
 
@@ -63,8 +67,13 @@ export function NotificationBell() {
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus:ring-0">
-                    <Bell className="w-5 h-5" />
+                <Button
+                    variant="ghost"
+                    size={showLabel ? 'default' : 'icon'}
+                    className={`relative rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus:ring-0 ${showLabel ? 'h-11 w-full justify-start gap-3 px-3' : 'h-10 w-10'}`}
+                >
+                    <Bell className="w-5 h-5 shrink-0" />
+                    {showLabel && <span className="text-sm font-black tracking-tight">Notifications</span>}
                     {unreadCount > 0 && (
                         <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white ring-2 ring-white">
                             {unreadCount > 9 ? '9+' : unreadCount}
@@ -72,7 +81,12 @@ export function NotificationBell() {
                     )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="mr-4 mt-2 w-[22rem] overflow-hidden rounded-2xl border-slate-200 p-0 shadow-xl shadow-slate-200/70" align="end">
+            <PopoverContent
+                className="w-[22rem] overflow-hidden rounded-2xl border-slate-200 p-0 shadow-xl shadow-slate-200/70"
+                side={showLabel ? 'right' : 'bottom'}
+                align={showLabel ? 'end' : 'end'}
+                sideOffset={12}
+            >
                 <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
                     <div>
                         <span className="text-sm font-black text-slate-900">Inbox</span>
