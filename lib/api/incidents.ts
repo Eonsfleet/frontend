@@ -19,7 +19,16 @@ export interface IncidentConversationResponse {
     data: {
         conversation: {
             id: number | string
-            messages: ConversationMessage[]
+            attributes?: {
+                title?: string
+                status?: string
+                participants?: unknown[]
+                last_activity_at?: string
+                created_at?: string
+            }
+            relationships?: {
+                messages?: ConversationMessage[]
+            }
         }
     }
 }

@@ -90,7 +90,10 @@ type IncidentConversationCache = {
     data?: {
         conversation?: {
             id: number | string
-            messages?: ConversationMessage[]
+            attributes?: Record<string, unknown>
+            relationships?: {
+                messages?: ConversationMessage[]
+            }
         }
     }
 }
@@ -488,25 +491,29 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
             await queryClient.cancelQueries({ queryKey: ['incident-conversation', incidentId] })
             const previous = queryClient.getQueryData(['incident-conversation', incidentId])
             queryClient.setQueryData(['incident-conversation', incidentId], (current: IncidentConversationCache | undefined) => {
-                const conversation = current?.data?.conversation ?? { id: `incident-${incidentId}`, messages: [] }
+                const conversation: any = current?.data?.conversation ?? { id: `incident-${incidentId}`, relationships: { messages: [] } }
+                const existingMessages: ConversationMessage[] = conversation.relationships?.messages ?? []
                 return {
                     ...current,
                     data: {
                         ...current?.data,
                         conversation: {
                             ...conversation,
-                            messages: [
-                                ...(conversation.messages ?? []),
-                                {
-                                    id: `optimistic-${Date.now()}`,
-                                    attributes: {
-                                        body: optimisticBody,
-                                        is_internal: optimisticInternal,
-                                        sender_role: 'You',
-                                        created_at: new Date().toISOString(),
+                            relationships: {
+                                ...conversation.relationships,
+                                messages: [
+                                    ...existingMessages,
+                                    {
+                                        id: `optimistic-${Date.now()}`,
+                                        attributes: {
+                                            body: optimisticBody,
+                                            is_internal: optimisticInternal,
+                                            sender_role: 'You',
+                                            created_at: new Date().toISOString(),
+                                        },
                                     },
-                                },
-                            ],
+                                ],
+                            },
                         },
                     },
                 }
@@ -575,9 +582,10 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
         historyRaw?.data?.entries ??
         (Array.isArray(historyRaw?.data) ? historyRaw.data : [])
 
-    // Messages — try multiple shapes: { data: { conversation: { messages: [] } } } or { data: { messages: [] } }
+    // Messages live at data.conversation.relationships.messages (actual API shape)
     const convRaw: any = conversationData
     const messages: ConversationMessage[] =
+        convRaw?.data?.conversation?.relationships?.messages ??
         convRaw?.data?.conversation?.messages ??
         convRaw?.data?.messages ??
         (Array.isArray(convRaw?.data) ? convRaw.data : [])
