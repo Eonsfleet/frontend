@@ -124,7 +124,7 @@ function normalizeMessage(msg: ConversationMessage) {
         body: attrs?.body ?? msg.body ?? '',
         senderId: attrs?.sender_id ?? msg.sender_id,
         senderRole: attrs?.sender_role ?? msg.sender_role,
-        senderName: msg.sender_name ?? attrs?.sender_role,
+        senderName: msg.sender_name ?? attrs?.sender_name ?? attrs?.sender_role ?? msg.sender_role ?? 'Unknown',
         isInternal: Boolean(attrs?.is_internal ?? msg.is_internal),
         messageType: attrs?.message_type,
         createdAt: attrs?.created_at ?? msg.created_at,
@@ -135,11 +135,11 @@ function normalizeHistory(entry: WorkflowHistoryEntry) {
     const attrs = entry.attributes
     return {
         id: entry.id,
-        fromStatus: attrs?.from_status ?? entry.from_status,
-        toStatus: attrs?.to_status ?? entry.to_status,
-        actor: entry.actor_name ?? attrs?.triggered_by_role ?? entry.actor_role ?? 'System',
-        reason: attrs?.reason ?? attrs?.notes ?? entry.reason ?? null,
-        createdAt: attrs?.created_at ?? entry.created_at,
+        fromStatus: attrs?.from_status ?? entry.from_status ?? '',
+        toStatus: attrs?.to_status ?? entry.to_status ?? '',
+        actor: entry.actor_name ?? attrs?.actor_name ?? attrs?.triggered_by_role ?? entry.actor_role ?? 'System',
+        reason: attrs?.reason ?? attrs?.notes ?? entry.reason ?? (entry as any).notes ?? null,
+        createdAt: attrs?.created_at ?? entry.created_at ?? null,
     }
 }
 
@@ -463,16 +463,18 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
         enabled: !!incidentId,
     })
 
-    const { data: historyData, isLoading: isHistoryLoading } = useQuery({
+    const { data: historyData, isLoading: isHistoryLoading, isError: isHistoryError } = useQuery({
         queryKey: ['incident-history', incidentId],
         queryFn: () => getIncidentHistory(incidentId!),
         enabled: !!incidentId,
+        retry: 1,
     })
 
-    const { data: conversationData, isLoading: isConvLoading } = useQuery({
+    const { data: conversationData, isLoading: isConvLoading, isError: isConvError } = useQuery({
         queryKey: ['incident-conversation', incidentId],
         queryFn: () => getIncidentConversation(incidentId!),
         enabled: !!incidentId,
+        retry: 1,
     })
 
     // ── Send message mutation ────────────────────────────────────────────────
@@ -565,9 +567,20 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
     const locationName = getLocationName(attrs, rels)
     const directionsUrl = coords ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}` : null
 
-    // History + messages
-    const history = historyData?.data?.history ?? []
-    const messages = conversationData?.data?.conversation?.messages ?? []
+    // History — try multiple shapes: { data: { history: [] } } or { data: { workflows: [] } } or { data: [] }
+    const historyRaw: any = historyData
+    const history: WorkflowHistoryEntry[] =
+        historyRaw?.data?.history ??
+        historyRaw?.data?.workflows ??
+        historyRaw?.data?.entries ??
+        (Array.isArray(historyRaw?.data) ? historyRaw.data : [])
+
+    // Messages — try multiple shapes: { data: { conversation: { messages: [] } } } or { data: { messages: [] } }
+    const convRaw: any = conversationData
+    const messages: ConversationMessage[] =
+        convRaw?.data?.conversation?.messages ??
+        convRaw?.data?.messages ??
+        (Array.isArray(convRaw?.data) ? convRaw.data : [])
 
     // ── Render ───────────────────────────────────────────────────────────────
     return (
@@ -668,6 +681,13 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                                         <Skeleton key={i} className="h-10 rounded-xl" />
                                                     ))}
                                                 </div>
+                                            ) : isHistoryError ? (
+                                                <div className="py-14 text-center">
+                                                    <AlertTriangle className="h-6 w-6 text-rose-300 mx-auto mb-2" />
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                        Could not load history
+                                                    </p>
+                                                </div>
                                             ) : history.length === 0 ? (
                                                 <div className="py-14 text-center">
                                                     <Clock className="h-6 w-6 text-slate-200 mx-auto mb-2" />
@@ -678,12 +698,15 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                             ) : (
                                                 <div className="p-5">
                                                     <WorkflowTimeline
-                                                        history={history.map((e) => ({
-                                                            status: normalizeHistory(e).toStatus,
-                                                            actor: normalizeHistory(e).actor,
-                                                            timestamp: normalizeHistory(e).createdAt,
-                                                            reason: normalizeHistory(e).reason,
-                                                        }))}
+                                                        history={history.map((e) => {
+                                                            const n = normalizeHistory(e)
+                                                            return {
+                                                                status: n.toStatus,
+                                                                actor: n.actor,
+                                                                timestamp: n.createdAt,
+                                                                reason: n.reason,
+                                                            }
+                                                        })}
                                                     />
                                                 </div>
                                             )}
@@ -697,6 +720,13 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                                     Array.from({ length: 4 }).map((_, i) => (
                                                         <Skeleton key={i} className="h-14 rounded-xl" />
                                                     ))
+                                                ) : isConvError ? (
+                                                    <div className="py-12 text-center">
+                                                        <AlertTriangle className="h-6 w-6 text-rose-300 mx-auto mb-2" />
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                            Could not load conversation
+                                                        </p>
+                                                    </div>
                                                 ) : messages.length === 0 ? (
                                                     <div className="py-12 text-center">
                                                         <MessageSquare className="h-6 w-6 text-slate-200 mx-auto mb-2" />

@@ -10,6 +10,7 @@ export interface ConversationMessage {
         message_type?: string
         sender_type?: string
         sender_id?: number | string
+        sender_name?: string
         sender_role?: string
         body?: string
         is_internal?: boolean
@@ -33,6 +34,7 @@ export interface WorkflowHistoryEntry {
         workflow_type?: string
         from_status?: string
         to_status?: string
+        actor_name?: string
         triggered_by_type?: string
         triggered_by_id?: number | string
         triggered_by_role?: string
