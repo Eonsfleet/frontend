@@ -57,7 +57,7 @@ export interface MaintenanceAlertListResponse {
 
 export interface MaintenanceAlertDetailResponse {
   message: string;
-  data: MaintenanceAlert;
+  data: MaintenanceAlert | { alert: MaintenanceAlert }
 }
 
 export interface MaintenanceLogListResponse {
@@ -447,6 +447,7 @@ export const getMaintenanceAlerts = async (params?: {
   per_page?: number;
   status?: string;
   vehicle_id?: string | number;
+  schedule_id?: string | number;
 }): Promise<MaintenanceAlertListResponse> => {
   const response = await apiClient.get<MaintenanceAlertListResponse>(
     "/maintenance/alerts",

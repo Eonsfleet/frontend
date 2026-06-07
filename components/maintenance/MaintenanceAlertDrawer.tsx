@@ -133,7 +133,9 @@ export function MaintenanceAlertDrawer({ alertId, onClose }: Props) {
     })
 
     // ── Derived data ─────────────────────────────────────────────────────────
-    const rawAlertData = detailData?.data as any
+    // API may return data: MaintenanceAlert directly OR data: { alert: MaintenanceAlert }
+    const rawData = detailData?.data as any
+    const rawAlertData = rawData?.attributes ? rawData : (rawData?.alert ?? rawData)
     const alert: MaintenanceAlert | null = rawAlertData?.attributes ? rawAlertData : null
 
     const status = alert?.attributes?.status ?? ''
