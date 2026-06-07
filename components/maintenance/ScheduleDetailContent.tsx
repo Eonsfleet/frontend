@@ -1187,13 +1187,6 @@ export function ScheduleDetailContent({
                                 )}
                             </div>
 
-                            {/* ── Activity tabs (logs + alerts) ── */}
-                            <ActivityTabs
-                                scheduleId={scheduleId!}
-                                logs={logs}
-                                vehicleId={vehicle?.id ? String(vehicle.id) : null}
-                                queryClient={queryClient}
-                            />
                         </div>
 
                         {/* ════════════ RIGHT — metadata sidebar ═══════ */}

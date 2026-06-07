@@ -62,12 +62,19 @@ const MACHINE_STATES: Partial<Record<IncidentStatus, ActionConfig[]>> = {
             noteLabel: 'Reason for dismissal (required)',
             execute: (id, { note }) => dismissIncident(id, note),
         },
+        {
+            label: 'Cancel Report',
+            variant: 'outline',
+            noteLabel: 'Reason for cancellation (required)',
+            execute: (id, { note }) => cancelIncident(id, note),
+        },
     ],
     under_investigation: [
         {
             label: 'Action Required',
             variant: 'secondary',
-            execute: (id) => requireAction(id),
+            noteLabel: 'Describe the action plan (required)',
+            execute: (id, { note }) => requireAction(id, note),
         },
         {
             label: 'Escalate to Management',
@@ -91,16 +98,15 @@ const MACHINE_STATES: Partial<Record<IncidentStatus, ActionConfig[]>> = {
             execute: (id, { note }) => logActionTaken(id, note),
         },
         {
-            label: 'Escalate',
-            variant: 'destructive',
-            needsSeverity: true,
-            noteLabel: 'Escalation reason (required)',
-            execute: (id, { note, severity }) => escalateIncident(id, note, severity || 'high'),
+            label: 'Cancel Report',
+            variant: 'outline',
+            noteLabel: 'Reason for cancellation (required)',
+            execute: (id, { note }) => cancelIncident(id, note),
         },
     ],
     action_taken: [
         {
-            label: 'Mark Pending Resolution',
+            label: 'Submit for Resolution',
             variant: 'default',
             noteLabel: 'Resolution notes',
             execute: (id, { note }) => submitForResolution(id, note),
@@ -112,11 +118,6 @@ const MACHINE_STATES: Partial<Record<IncidentStatus, ActionConfig[]>> = {
             variant: 'default',
             noteLabel: 'Resolution notes (required)',
             execute: (id, { note }) => resolveIncident(id, note),
-        },
-        {
-            label: 'More Action Required',
-            variant: 'outline',
-            execute: (id) => requireAction(id),
         },
     ],
     resolved: [
@@ -133,12 +134,6 @@ const MACHINE_STATES: Partial<Record<IncidentStatus, ActionConfig[]>> = {
             variant: 'default',
             needsAssignee: true,
             execute: (id, { assignedTo }) => startInvestigation(id, assignedTo || id),
-        },
-        {
-            label: 'Close as Unresolved',
-            variant: 'destructive',
-            noteLabel: 'Closing notes (optional)',
-            execute: (id, { note }) => closeIncident(id, note || undefined),
         },
     ],
     closed: [],
@@ -171,6 +166,8 @@ export function IncidentWorkflowActions({ id, currentStatus }: { id: string; cur
             setAssignedTo('')
             setActiveAction(null)
             queryClient.invalidateQueries({ queryKey: ['incident', id] })
+            queryClient.invalidateQueries({ queryKey: ['incident-detail', id] })
+            queryClient.invalidateQueries({ queryKey: ['incidents'] })
         },
         onError: (err: ApiError) => {
             toast.error(err.response?.data?.message || 'Failed to update incident state')

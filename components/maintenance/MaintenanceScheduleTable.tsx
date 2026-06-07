@@ -19,7 +19,7 @@ import {
 import { MaintenanceSchedule } from '@/types'
 import { format, differenceInDays, isPast, isToday } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
-import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Eye, RefreshCw, Plus, ChevronDown, ChevronRight, Repeat2 } from 'lucide-react'
+import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Eye, RefreshCw, ChevronDown, ChevronRight, Repeat2 } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -32,11 +32,20 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { deleteSchedule } from '@/lib/api/maintenance'
+import { deleteSchedule, updateSchedule } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { MaintenanceScheduleDrawer } from './MaintenanceScheduleDrawer'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface MaintenanceScheduleTableProps {
     data: MaintenanceSchedule[]
@@ -109,8 +118,16 @@ export function MaintenanceScheduleTable({
 }: MaintenanceScheduleTableProps) {
     const queryClient = useQueryClient()
     const router = useRouter()
-    const [scheduleDrawerId, setScheduleDrawerId] = useState<string | null>(null)
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const scheduleDrawerId = searchParams.get('id')
+
+    const openDrawer = (id: string) => router.replace(`${pathname}?id=${id}`, { scroll: false })
+    const closeDrawer = () => router.replace(pathname, { scroll: false })
+
     const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set())
+    const [rescheduleTarget, setRescheduleTarget] = useState<{ id: string; currentDate: string } | null>(null)
+    const [rescheduleDate, setRescheduleDate] = useState('')
 
     // Group recurring schedules by series_id
     const { masterRows, seriesMap } = useMemo(() => {
@@ -167,6 +184,19 @@ export function MaintenanceScheduleTable({
         onError: () => toast.error('Failed to cancel schedule.'),
     })
 
+    const { mutate: doReschedule, isPending: isRescheduling } = useMutation({
+        mutationFn: ({ id, date }: { id: string; date: string }) =>
+            updateSchedule(id, { schedule_date: date }),
+        onSuccess: () => {
+            toast.success('Schedule date updated.')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules'] })
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules-full'] })
+            setRescheduleTarget(null)
+            setRescheduleDate('')
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to reschedule.'),
+    })
+
     if (isLoading) {
         return (
             <div className="space-y-3 p-6">
@@ -208,7 +238,7 @@ export function MaintenanceScheduleTable({
                                     <TableRow
                                         key={row.id}
                                         className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50 cursor-pointer"
-                                        onClick={() => setScheduleDrawerId(String(row.id))}
+                                        onClick={() => openDrawer(String(row.id))}
                                     >
                                         <TableCell className="px-6 py-4">
                                             <div className="flex items-center gap-3">
@@ -299,16 +329,15 @@ export function MaintenanceScheduleTable({
                                                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 py-2">Schedule Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
-                                                        onClick={() => setScheduleDrawerId(String(row.id))}>
+                                                        onClick={() => openDrawer(String(row.id))}>
                                                         <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
-                                                        onClick={() => router.push(`/maintenance/schedules/${row.id}`)}>
+                                                        onClick={() => {
+                                                            setRescheduleTarget({ id: String(row.id), currentDate: attrs.schedule_date ?? attrs.due_date ?? '' })
+                                                            setRescheduleDate(attrs.schedule_date ?? attrs.due_date ?? '')
+                                                        }}>
                                                         <RefreshCw className="h-3.5 w-3.5" /> Reschedule
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
-                                                        onClick={() => router.push(vehicle?.id ? `/maintenance/jobs?vehicle_id=${vehicle.id}` : '/maintenance/jobs')}>
-                                                        <Plus className="h-3.5 w-3.5" /> Create Work Order
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer"
@@ -332,7 +361,7 @@ export function MaintenanceScheduleTable({
                                             <TableRow
                                                 key={`child-${child.id}`}
                                                 className="bg-slate-50/60 hover:bg-slate-100/60 cursor-pointer border-b border-slate-50"
-                                                onClick={() => setScheduleDrawerId(String(child.id))}
+                                                onClick={() => openDrawer(String(child.id))}
                                             >
                                                 <TableCell className="px-6 py-3 pl-16">
                                                     <div className="flex items-center gap-2">
@@ -366,7 +395,7 @@ export function MaintenanceScheduleTable({
                                                 </TableCell>
                                                 <TableCell className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
                                                     <Button variant="ghost" size="sm"
-                                                        onClick={() => setScheduleDrawerId(String(child.id))}
+                                                        onClick={() => openDrawer(String(child.id))}
                                                         className="h-7 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 px-2">
                                                         <Eye className="h-3 w-3" />
                                                     </Button>
@@ -461,8 +490,49 @@ export function MaintenanceScheduleTable({
 
         <MaintenanceScheduleDrawer
             scheduleId={scheduleDrawerId}
-            onClose={() => setScheduleDrawerId(null)}
+            onClose={() => closeDrawer()}
         />
+
+        {/* Reschedule modal */}
+        <Dialog open={!!rescheduleTarget} onOpenChange={(open) => { if (!open) { setRescheduleTarget(null); setRescheduleDate('') } }}>
+            <DialogContent className="sm:max-w-sm rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle className="text-sm font-black uppercase tracking-widest">Reschedule</DialogTitle>
+                </DialogHeader>
+                <div className="py-2 space-y-4">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                        Set a new schedule date. Pending service logs will be updated automatically.
+                    </p>
+                    <div className="space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Schedule Date</Label>
+                        <Input
+                            type="date"
+                            value={rescheduleDate}
+                            onChange={(e) => setRescheduleDate(e.target.value)}
+                            className="text-xs font-bold"
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs font-black uppercase tracking-widest"
+                        onClick={() => { setRescheduleTarget(null); setRescheduleDate('') }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        size="sm"
+                        disabled={!rescheduleDate || isRescheduling}
+                        className="text-xs font-black uppercase tracking-widest"
+                        onClick={() => rescheduleTarget && doReschedule({ id: rescheduleTarget.id, date: rescheduleDate })}
+                    >
+                        {isRescheduling ? 'Saving…' : 'Confirm'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </>
     )
 }

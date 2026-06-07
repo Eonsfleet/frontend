@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Loader2, AlertTriangle, Eye } from 'lucide-react'
@@ -12,8 +13,15 @@ import { format } from 'date-fns'
 import { IncidentDrawer } from './IncidentDrawer'
 
 export function IncidentList() {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const drawerIncidentId = searchParams.get('id')
+
+    const openDrawer = (id: string) => router.replace(`${pathname}?id=${id}`, { scroll: false })
+    const closeDrawer = () => router.replace(pathname, { scroll: false })
+
     const [page, setPage] = React.useState(1)
-    const [drawerIncidentId, setDrawerIncidentId] = React.useState<string | null>(null)
 
     const { data, isLoading } = useQuery({
         queryKey: ['incidents', { page }],
@@ -97,7 +105,7 @@ export function IncidentList() {
                                         <tr
                                             key={item.id}
                                             className="hover:bg-slate-50 transition-colors cursor-pointer"
-                                            onClick={() => setDrawerIncidentId(item.id)}
+                                            onClick={() => openDrawer(String(item.id))}
                                         >
                                             <td className="px-6 py-4">
                                                 <span className="font-medium text-blue-600">
@@ -158,7 +166,7 @@ export function IncidentList() {
                                                     variant="ghost"
                                                     size="icon"
                                                     title="View details"
-                                                    onClick={(e) => { e.stopPropagation(); setDrawerIncidentId(item.id) }}
+                                                    onClick={(e) => { e.stopPropagation(); openDrawer(String(item.id)) }}
                                                 >
                                                     <Eye className="h-4 w-4 text-slate-500 hover:text-blue-600" />
                                                 </Button>
@@ -202,7 +210,7 @@ export function IncidentList() {
 
         <IncidentDrawer
             incidentId={drawerIncidentId}
-            onClose={() => setDrawerIncidentId(null)}
+            onClose={() => closeDrawer()}
         />
         </>
     )

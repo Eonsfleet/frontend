@@ -28,6 +28,7 @@ import {
     getIncidentHistory,
     getIncidentConversation,
     postIncidentMessage,
+    updateIncident,
     startInvestigation,
     requireAction,
     logActionTaken,
@@ -38,6 +39,7 @@ import {
     dismissIncident,
     escalateIncident,
 } from '@/lib/api/incidents'
+import { Input } from '@/components/ui/input'
 import { WorkflowTimeline } from '@/components/shared/WorkflowTimeline'
 import type { ConversationMessage, IncidentStatus, IncidentPerson, IncidentVehicle, UserProfile, WorkflowHistoryEntry } from '@/types'
 import { getUsers } from '@/lib/api/settings'
@@ -152,9 +154,9 @@ function safeDate(d: string | null | undefined, fmt = 'dd MMM yyyy, HH:mm'): str
     return isNaN(parsed.getTime()) ? d : format(parsed, fmt)
 }
 
-function MetaLabel({ children }: { children: React.ReactNode }) {
+function MetaLabel({ children, className }: { children: React.ReactNode; className?: string }) {
     return (
-        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">
+        <p className={cn('text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5', className)}>
             {children}
         </p>
     )
@@ -212,13 +214,21 @@ const WORKFLOW_ACTIONS: Partial<Record<IncidentStatus, ActionDef[]>> = {
             noteLabel: 'Reason for dismissal (required)',
             execute: (id, { note }) => dismissIncident(id, note),
         },
+        {
+            key: 'cancel',
+            label: 'Cancel',
+            variant: 'outline',
+            noteLabel: 'Reason for cancellation (required)',
+            execute: (id, { note }) => cancelIncident(id, note),
+        },
     ],
     under_investigation: [
         {
             key: 'action-required',
             label: 'Action Required',
             variant: 'secondary',
-            execute: (id) => requireAction(id),
+            noteLabel: 'Describe the action plan (required)',
+            execute: (id, { note }) => requireAction(id, note),
         },
         {
             key: 'escalate',
@@ -244,6 +254,13 @@ const WORKFLOW_ACTIONS: Partial<Record<IncidentStatus, ActionDef[]>> = {
             noteLabel: 'Describe the action taken (required)',
             execute: (id, { note }) => logActionTaken(id, note),
         },
+        {
+            key: 'cancel',
+            label: 'Cancel',
+            variant: 'outline',
+            noteLabel: 'Reason for cancellation (required)',
+            execute: (id, { note }) => cancelIncident(id, note),
+        },
     ],
     action_taken: [
         {
@@ -262,14 +279,6 @@ const WORKFLOW_ACTIONS: Partial<Record<IncidentStatus, ActionDef[]>> = {
             noteLabel: 'Resolution notes (required)',
             execute: (id, { note }) => resolveIncident(id, note),
         },
-        {
-            key: 'escalate-pending',
-            label: 'Escalate',
-            variant: 'destructive',
-            needsSeverity: true,
-            noteLabel: 'Escalation reason (required)',
-            execute: (id, { note, severity }) => escalateIncident(id, note, severity || 'high'),
-        },
     ],
     resolved: [
         {
@@ -279,10 +288,18 @@ const WORKFLOW_ACTIONS: Partial<Record<IncidentStatus, ActionDef[]>> = {
             execute: (id) => closeIncident(id),
         },
     ],
-    escalated:  [],
-    closed:     [],
-    cancelled:  [],
-    dismissed:  [],
+    escalated: [
+        {
+            key: 'investigate',
+            label: 'Resume Investigation',
+            variant: 'default',
+            needsAssignee: true,
+            execute: (id, { assignedTo }) => startInvestigation(id, assignedTo || id),
+        },
+    ],
+    closed:    [],
+    cancelled: [],
+    dismissed: [],
 }
 
 // ── WorkflowActions inline sub-component ─────────────────────────────────────
@@ -300,7 +317,6 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
     })
 
     const isTerminal = ['closed', 'cancelled', 'dismissed'].includes(status)
-    const isEscalated = status === 'escalated'
     const availableActions = WORKFLOW_ACTIONS[status] ?? []
 
     const { mutate: executeAction, isPending } = useMutation({
@@ -325,17 +341,6 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
                 <CheckCircle2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Terminal state — no further actions
-                </p>
-            </div>
-        )
-    }
-
-    if (isEscalated) {
-        return (
-            <div className="flex items-center gap-2 py-2 px-3 bg-rose-50 rounded-lg border border-rose-100">
-                <ArrowUpRight className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">
-                    Escalated — awaiting management decision
                 </p>
             </div>
         )
@@ -454,6 +459,24 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
     const queryClient = useQueryClient()
     const [messageText, setMessageText] = useState('')
     const [isInternal, setIsInternal] = useState(false)
+    const [editingField, setEditingField] = useState<'description' | 'priority' | 'victim_name' | null>(null)
+    const [editValue, setEditValue] = useState('')
+
+    const startEdit = (field: 'description' | 'priority' | 'victim_name', current: string) => {
+        setEditingField(field)
+        setEditValue(current)
+    }
+    const cancelEdit = () => { setEditingField(null); setEditValue('') }
+
+    const { mutate: saveField, isPending: isSavingField } = useMutation({
+        mutationFn: (data: Parameters<typeof updateIncident>[1]) => updateIncident(incidentId!, data),
+        onSuccess: () => {
+            toast.success('Incident updated')
+            queryClient.invalidateQueries({ queryKey: ['incident-detail', incidentId] })
+            cancelEdit()
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save changes'),
+    })
 
     // ── Queries ──────────────────────────────────────────────────────────────
     const {
@@ -481,13 +504,13 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
     })
 
     // ── Send message mutation ────────────────────────────────────────────────
-    const { mutate: sendMessage, isPending: isSending } = useMutation({
-        mutationFn: () =>
-            postIncidentMessage(incidentId!, { body: messageText, is_internal: isInternal }),
-        onMutate: async () => {
+    // messageText is passed as the variable so it's captured at call time,
+    // not from the closure that may be stale after setMessageText('') runs.
+    const { mutate: sendMessage, isPending: isSending } = useMutation<unknown, Error, { body: string; internal: boolean }>({
+        mutationFn: ({ body, internal }) =>
+            postIncidentMessage(incidentId!, { body, is_internal: internal }),
+        onMutate: async ({ body, internal }) => {
             if (!incidentId) return { previous: undefined }
-            const optimisticBody = messageText
-            const optimisticInternal = isInternal
             await queryClient.cancelQueries({ queryKey: ['incident-conversation', incidentId] })
             const previous = queryClient.getQueryData(['incident-conversation', incidentId])
             queryClient.setQueryData(['incident-conversation', incidentId], (current: IncidentConversationCache | undefined) => {
@@ -506,8 +529,8 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                     {
                                         id: `optimistic-${Date.now()}`,
                                         attributes: {
-                                            body: optimisticBody,
-                                            is_internal: optimisticInternal,
+                                            body,
+                                            is_internal: internal,
                                             sender_role: 'You',
                                             created_at: new Date().toISOString(),
                                         },
@@ -519,10 +542,10 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                 }
             })
             setMessageText('')
+            setIsInternal(false)
             return { previous }
         },
         onSuccess: () => {
-            toast.success('Message sent')
             queryClient.invalidateQueries({ queryKey: ['incident-conversation', incidentId] })
         },
         onError: (_err: unknown, _vars: unknown, context?: { previous: unknown }) => {
@@ -530,6 +553,12 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
             toast.error('Failed to send message')
         },
     })
+
+    const handleSend = () => {
+        const body = messageText.trim()
+        if (!body) return
+        sendMessage({ body, internal: isInternal })
+    }
 
     // ── Derived state ────────────────────────────────────────────────────────
     const rawIncident = detailData?.data
@@ -722,109 +751,158 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                     </TabsContent>
 
                                     <TabsContent value="conversation" className="flex-1 flex flex-col m-0 min-h-0">
+                                        {/* Messages list */}
                                         <ScrollArea className="flex-1 min-h-0">
-                                            <div className="p-5 space-y-3">
+                                            <div className="px-4 py-5 space-y-4">
                                                 {isConvLoading ? (
-                                                    Array.from({ length: 4 }).map((_, i) => (
-                                                        <Skeleton key={i} className="h-14 rounded-xl" />
+                                                    Array.from({ length: 3 }).map((_, i) => (
+                                                        <div key={i} className="flex gap-2.5">
+                                                            <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                                                            <div className="space-y-1.5 flex-1">
+                                                                <Skeleton className="h-3 w-24" />
+                                                                <Skeleton className="h-14 rounded-2xl rounded-tl-sm" />
+                                                            </div>
+                                                        </div>
                                                     ))
                                                 ) : isConvError ? (
-                                                    <div className="py-12 text-center">
-                                                        <AlertTriangle className="h-6 w-6 text-rose-300 mx-auto mb-2" />
+                                                    <div className="py-12 flex flex-col items-center gap-2">
+                                                        <AlertTriangle className="h-6 w-6 text-rose-300" />
                                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                             Could not load conversation
                                                         </p>
                                                     </div>
                                                 ) : messages.length === 0 ? (
-                                                    <div className="py-12 text-center">
-                                                        <MessageSquare className="h-6 w-6 text-slate-200 mx-auto mb-2" />
+                                                    <div className="py-14 flex flex-col items-center gap-2">
+                                                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                            <MessageSquare className="h-5 w-5 text-slate-300" />
+                                                        </div>
                                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                             No messages yet
+                                                        </p>
+                                                        <p className="text-[9px] text-slate-300 font-medium">
+                                                            Start the conversation below
                                                         </p>
                                                     </div>
                                                 ) : (
                                                     messages.map((msg, i) => {
                                                         const normalized = normalizeMessage(msg)
+                                                        const isOptimistic = String(normalized.id ?? '').startsWith('optimistic-')
+                                                        const senderLabel = normalized.senderName ?? normalized.senderRole ?? 'System'
+                                                        const initials = senderLabel.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+                                                        const isInternal = normalized.isInternal
+
                                                         return (
-                                                        <div key={normalized.id ?? i} className="flex flex-col gap-0.5">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                                    {normalized.senderName ?? normalized.senderRole ?? 'System'}
-                                                                </span>
-                                                                {normalized.isInternal && (
-                                                                    <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-1 py-0.5 rounded uppercase tracking-widest">
-                                                                        Internal
-                                                                    </span>
-                                                                )}
-                                                                {normalized.createdAt && (
-                                                                    <span className="text-[9px] text-slate-300">
-                                                                        {formatDistanceToNow(new Date(normalized.createdAt), { addSuffix: true })}
-                                                                    </span>
-                                                                )}
+                                                            <div key={normalized.id ?? i} className="flex gap-2.5 group">
+                                                                {/* Avatar */}
+                                                                <div className={cn(
+                                                                    'h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-[9px] font-black mt-5',
+                                                                    isInternal
+                                                                        ? 'bg-amber-100 text-amber-700'
+                                                                        : 'bg-slate-100 text-slate-600',
+                                                                )}>
+                                                                    {initials || <User className="h-3.5 w-3.5" />}
+                                                                </div>
+
+                                                                <div className="flex-1 min-w-0">
+                                                                    {/* Meta row */}
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest truncate">
+                                                                            {senderLabel}
+                                                                        </span>
+                                                                        {isInternal && (
+                                                                            <span className="inline-flex items-center gap-0.5 text-[8px] font-black bg-amber-50 border border-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full uppercase tracking-widest shrink-0">
+                                                                                <Eye className="h-2 w-2" /> Internal
+                                                                            </span>
+                                                                        )}
+                                                                        {normalized.createdAt && (
+                                                                            <span className="text-[9px] text-slate-300 font-medium ml-auto shrink-0">
+                                                                                {formatDistanceToNow(new Date(normalized.createdAt), { addSuffix: true })}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Bubble */}
+                                                                    <div className={cn(
+                                                                        'rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm leading-relaxed font-medium transition-opacity',
+                                                                        isInternal
+                                                                            ? 'bg-amber-50 border border-amber-100 text-amber-900'
+                                                                            : 'bg-slate-50 border border-slate-100 text-slate-700',
+                                                                        isOptimistic && 'opacity-60',
+                                                                    )}>
+                                                                        {normalized.body}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <div
-                                                                className={cn(
-                                                                    'rounded-xl border px-3 py-2 shadow-sm shadow-slate-200/20',
-                                                                    normalized.isInternal
-                                                                        ? 'bg-amber-50/70 border-amber-100'
-                                                                        : 'bg-white border-slate-100',
-                                                                )}
-                                                            >
-                                                                <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                                                                    {normalized.body}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    )})
+                                                        )
+                                                    })
                                                 )}
                                             </div>
                                         </ScrollArea>
 
-                                        <Separator />
-                                        <div className="p-4 flex flex-col gap-2 shrink-0 bg-white">
-                                            <div className="flex gap-2">
+                                        {/* Compose area */}
+                                        <div className={cn(
+                                            'shrink-0 border-t transition-colors',
+                                            isInternal ? 'border-amber-100 bg-amber-50/30' : 'border-slate-100 bg-white',
+                                        )}>
+                                            {/* Internal toggle bar */}
+                                            <div className={cn(
+                                                'flex items-center gap-2 px-4 pt-3 pb-1',
+                                            )}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsInternal((v) => !v)}
+                                                    className={cn(
+                                                        'relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200',
+                                                        isInternal
+                                                            ? 'bg-amber-400 border-amber-400'
+                                                            : 'bg-slate-200 border-slate-200',
+                                                    )}
+                                                    aria-pressed={isInternal}
+                                                >
+                                                    <span className={cn(
+                                                        'pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform duration-200',
+                                                        isInternal ? 'translate-x-3' : 'translate-x-0',
+                                                    )} />
+                                                </button>
+                                                <span className={cn(
+                                                    'text-[9px] font-black uppercase tracking-widest transition-colors',
+                                                    isInternal ? 'text-amber-600' : 'text-slate-400',
+                                                )}>
+                                                    {isInternal ? 'Internal note — only visible to team' : 'Team note'}
+                                                </span>
+                                            </div>
+
+                                            {/* Input + send */}
+                                            <div className="flex items-end gap-2 px-4 pb-4 pt-2">
                                                 <Textarea
-                                                    placeholder="Write a note or update... (Ctrl+Enter to send)"
+                                                    placeholder={isInternal ? 'Write an internal note…' : 'Write a message… (Ctrl+Enter to send)'}
                                                     value={messageText}
                                                     onChange={(e) => setMessageText(e.target.value)}
-                                                    className="resize-none text-sm h-16 flex-1 bg-slate-50/70 border-slate-100 focus-visible:ring-slate-300"
                                                     onKeyDown={(e) => {
-                                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && messageText.trim()) {
-                                                            sendMessage(undefined)
-                                                        }
+                                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
                                                     }}
+                                                    className={cn(
+                                                        'resize-none text-sm flex-1 min-h-[72px] max-h-36 rounded-xl transition-colors',
+                                                        isInternal
+                                                            ? 'bg-amber-50 border-amber-200 focus-visible:ring-amber-300'
+                                                            : 'bg-slate-50 border-slate-200 focus-visible:ring-slate-300',
+                                                    )}
                                                 />
                                                 <Button
                                                     size="sm"
-                                                    className="self-end h-10 w-10 p-0 bg-slate-900 hover:bg-slate-700 rounded-xl shrink-0"
                                                     disabled={!messageText.trim() || isSending}
-                                                    onClick={() => sendMessage(undefined)}
+                                                    onClick={handleSend}
+                                                    className={cn(
+                                                        'h-10 w-10 p-0 rounded-xl shrink-0 transition-colors',
+                                                        isInternal
+                                                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                                                            : 'bg-slate-900 hover:bg-slate-700 text-white',
+                                                    )}
                                                 >
                                                     {isSending
                                                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                         : <Send className="h-3.5 w-3.5" />}
                                                 </Button>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsInternal((v) => !v)}
-                                                    className={cn(
-                                                        'h-4 w-4 rounded border flex items-center justify-center transition-colors',
-                                                        isInternal
-                                                            ? 'bg-amber-500 border-amber-500 text-white'
-                                                            : 'bg-white border-slate-200',
-                                                    )}
-                                                    aria-pressed={isInternal}
-                                                    aria-label="Mark as internal note"
-                                                >
-                                                    {isInternal && (
-                                                        <Eye className="h-2.5 w-2.5" />
-                                                    )}
-                                                </button>
-                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Internal note
-                                                </span>
                                             </div>
                                         </div>
                                     </TabsContent>
@@ -842,21 +920,82 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                             <p className="text-lg font-black uppercase tracking-tight text-slate-900 leading-tight capitalize">
                                                 {attrs!.type.replace(/_/g, ' ')}
                                             </p>
-                                            {attrs?.victim_name && (
-                                                <p className="text-xs font-bold text-slate-500 mt-0.5">
-                                                    Victim: {attrs.victim_name}
-                                                </p>
-                                            )}
+
+                                            {/* Victim name — inline editable */}
+                                            <div className="group mt-1.5">
+                                                {editingField === 'victim_name' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            autoFocus
+                                                            value={editValue}
+                                                            onChange={e => setEditValue(e.target.value)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') saveField({ victim_name: editValue })
+                                                                if (e.key === 'Escape') cancelEdit()
+                                                            }}
+                                                            placeholder="Victim name"
+                                                            className="h-7 text-xs font-bold border-slate-200 focus-visible:ring-blue-400"
+                                                        />
+                                                        <Button size="sm" disabled={isSavingField} onClick={() => saveField({ victim_name: editValue })}
+                                                            className="h-7 text-[9px] font-black uppercase tracking-widest px-2.5 shrink-0">
+                                                            {isSavingField ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={cancelEdit}
+                                                            className="h-7 text-[9px] font-black uppercase tracking-widest px-2.5 shrink-0">✕</Button>
+                                                    </div>
+                                                ) : attrs?.victim_name ? (
+                                                    <p className="text-xs font-bold text-slate-500 cursor-text hover:text-slate-700 transition-colors"
+                                                        onClick={() => startEdit('victim_name', attrs.victim_name ?? '')}>
+                                                        Victim: {attrs.victim_name}
+                                                        <span className="ml-1.5 opacity-0 group-hover:opacity-100 text-[8px] font-black text-blue-400 uppercase tracking-widest transition-opacity">Edit</span>
+                                                    </p>
+                                                ) : (
+                                                    <button onClick={() => startEdit('victim_name', '')}
+                                                        className="text-[9px] font-bold text-slate-300 hover:text-slate-500 uppercase tracking-widest transition-colors">
+                                                        + Add victim name
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <Separator className="border-slate-100" />
 
-                                        {/* Description */}
-                                        <div>
-                                            <MetaLabel>Description</MetaLabel>
-                                            <p className="text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
-                                                {attrs!.description}
-                                            </p>
+                                        {/* Description — inline editable */}
+                                        <div className="group">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <MetaLabel className="mb-0">Description</MetaLabel>
+                                                {editingField !== 'description' && (
+                                                    <button onClick={() => startEdit('description', attrs!.description ?? '')}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-blue-500 uppercase tracking-widest hover:underline">
+                                                        Edit
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {editingField === 'description' ? (
+                                                <div className="space-y-2">
+                                                    <Textarea
+                                                        autoFocus
+                                                        value={editValue}
+                                                        onChange={e => setEditValue(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Escape') cancelEdit() }}
+                                                        className="resize-none text-sm min-h-[100px] border-slate-200 focus-visible:ring-blue-400"
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" disabled={isSavingField}
+                                                            onClick={() => saveField({ description: editValue })}
+                                                            className="h-7 text-[9px] font-black uppercase tracking-widest px-3">
+                                                            {isSavingField ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={cancelEdit}
+                                                            className="h-7 text-[9px] font-black uppercase tracking-widest px-3">Cancel</Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-wrap cursor-text"
+                                                    onClick={() => startEdit('description', attrs!.description ?? '')}>
+                                                    {attrs!.description}
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Location */}
@@ -979,17 +1118,52 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                             </span>
                                         </div>
 
-                                        {/* Priority */}
-                                        <div>
-                                            <MetaLabel>Priority</MetaLabel>
-                                            <span
-                                                className={cn(
-                                                    'inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest mt-0.5',
-                                                    priorityStyle.badge,
+                                        {/* Priority — inline editable */}
+                                        <div className="group">
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <MetaLabel className="mb-0">Priority</MetaLabel>
+                                                {editingField !== 'priority' && (
+                                                    <button onClick={() => startEdit('priority', attrs?.priority ?? 'low')}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-[8px] font-black text-blue-500 uppercase tracking-widest hover:underline">
+                                                        Edit
+                                                    </button>
                                                 )}
-                                            >
-                                                {priorityStyle.label}
-                                            </span>
+                                            </div>
+                                            {editingField === 'priority' ? (
+                                                <div className="space-y-1.5 mt-1">
+                                                    <Select value={editValue} onValueChange={setEditValue}>
+                                                        <SelectTrigger className="h-7 text-[10px] font-black uppercase tracking-widest border-slate-200">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {['low', 'medium', 'high', 'critical'].map(p => (
+                                                                <SelectItem key={p} value={p} className="text-[10px] font-black uppercase tracking-widest">
+                                                                    {p}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <div className="flex gap-1.5">
+                                                        <Button size="sm" disabled={isSavingField}
+                                                            onClick={() => saveField({ priority: editValue })}
+                                                            className="h-6 text-[8px] font-black uppercase tracking-widest px-2.5 flex-1">
+                                                            {isSavingField ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={cancelEdit}
+                                                            className="h-6 text-[8px] font-black uppercase tracking-widest px-2">✕</Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest mt-0.5 cursor-pointer hover:opacity-80 transition-opacity',
+                                                        priorityStyle.badge,
+                                                    )}
+                                                    onClick={() => startEdit('priority', attrs?.priority ?? 'low')}
+                                                >
+                                                    {priorityStyle.label}
+                                                </span>
+                                            )}
                                         </div>
 
                                         <Separator className="border-slate-100" />
