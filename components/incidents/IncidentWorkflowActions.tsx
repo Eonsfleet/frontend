@@ -4,12 +4,12 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react'
 import { IncidentStatus } from '@/types'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
     startInvestigation,
     requireAction,
@@ -21,6 +21,7 @@ import {
     dismissIncident,
     escalateIncident,
 } from '@/lib/api/incidents'
+import { getUsers } from '@/lib/api/settings'
 
 interface ActionConfig {
     label: string
@@ -30,7 +31,15 @@ interface ActionConfig {
     needsSeverity?: boolean
     /** Human-readable label for the note textarea when shown */
     noteLabel?: string
-    execute: (id: string, inputs: ActionInputs) => Promise<any>
+    execute: (id: string, inputs: ActionInputs) => Promise<unknown>
+}
+
+type ApiError = {
+    response?: {
+        data?: {
+            message?: string
+        }
+    }
 }
 
 interface ActionInputs {
@@ -143,6 +152,11 @@ export function IncidentWorkflowActions({ id, currentStatus }: { id: string; cur
     const [assignedTo, setAssignedTo] = useState('')
     const [severity, setSeverity] = useState('high')
     const [activeAction, setActiveAction] = useState<ActionConfig | null>(null)
+    const { data: usersData, isLoading: isLoadingUsers } = useQuery({
+        queryKey: ['users-list-simple'],
+        queryFn: () => getUsers({ per_page: 100 }),
+        enabled: !!activeAction?.needsAssignee,
+    })
 
     const availableActions = MACHINE_STATES[currentStatus] ?? []
     const isTerminal = ['closed', 'cancelled', 'dismissed'].includes(currentStatus)
@@ -158,7 +172,7 @@ export function IncidentWorkflowActions({ id, currentStatus }: { id: string; cur
             setActiveAction(null)
             queryClient.invalidateQueries({ queryKey: ['incident', id] })
         },
-        onError: (err: any) => {
+        onError: (err: ApiError) => {
             toast.error(err.response?.data?.message || 'Failed to update incident state')
         },
     })
@@ -202,12 +216,18 @@ export function IncidentWorkflowActions({ id, currentStatus }: { id: string; cur
                 {activeAction?.needsAssignee && (
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium text-slate-700">Assign Investigator</label>
-                        <Input
-                            placeholder="Enter user ID or name..."
-                            value={assignedTo}
-                            onChange={(e) => setAssignedTo(e.target.value)}
-                            className="bg-white"
-                        />
+                        <Select value={assignedTo} onValueChange={setAssignedTo}>
+                            <SelectTrigger className="bg-white">
+                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : 'Select investigator'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {usersData?.data?.users?.map((user) => (
+                                    <SelectItem key={user.id} value={String(user.id)}>
+                                        {user.attributes.full_name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 )}
 

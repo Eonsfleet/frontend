@@ -12,7 +12,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -40,7 +39,8 @@ import {
     escalateIncident,
 } from '@/lib/api/incidents'
 import { WorkflowTimeline } from '@/components/shared/WorkflowTimeline'
-import type { IncidentStatus, IncidentPerson, IncidentVehicle } from '@/types'
+import type { ConversationMessage, IncidentStatus, IncidentPerson, IncidentVehicle, UserProfile, WorkflowHistoryEntry } from '@/types'
+import { getUsers } from '@/lib/api/settings'
 
 // ── Colour maps ───────────────────────────────────────────────────────────────
 
@@ -71,6 +71,78 @@ function personName(p: IncidentPerson | undefined | null): string {
     return p.name ?? ([p.f_name, p.l_name].filter(Boolean).join(' ') || 'Unknown')
 }
 
+type IncidentLocationAttrs = {
+    location?: string | { address?: string } | null
+}
+
+type IncidentAddress = {
+    street?: string
+    city?: string
+    state?: string
+    country?: string
+}
+
+type IncidentRelationships = {
+    address?: IncidentAddress | RelationshipStub
+}
+
+type IncidentConversationCache = {
+    data?: {
+        conversation?: {
+            id: number | string
+            messages?: ConversationMessage[]
+        }
+    }
+}
+
+function userName(user: UserProfile): string {
+    return user.attributes.full_name || `User #${user.id}`
+}
+
+function parseCoords(coords?: string | null): { lat: number; lng: number } | null {
+    if (!coords) return null
+    const [lat, lng] = coords.split(',').map((value) => Number(value.trim()))
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+    return { lat, lng }
+}
+
+function getLocationName(attrs: IncidentLocationAttrs | null | undefined, rels: IncidentRelationships | null | undefined): string {
+    const address = rels?.address
+    const addressLine = address && isExpandedRelation(address)
+        ? [address.street, address.city, address.state, address.country].filter(Boolean).join(', ')
+        : null
+    if (addressLine) return addressLine
+    if (typeof attrs?.location === 'string' && attrs.location.trim()) return attrs.location
+    if (typeof attrs?.location === 'object' && attrs.location?.address) return attrs.location.address
+    return 'Incident location'
+}
+
+function normalizeMessage(msg: ConversationMessage) {
+    const attrs = msg.attributes
+    return {
+        id: msg.id,
+        body: attrs?.body ?? msg.body ?? '',
+        senderId: attrs?.sender_id ?? msg.sender_id,
+        senderRole: attrs?.sender_role ?? msg.sender_role,
+        senderName: msg.sender_name ?? attrs?.sender_role,
+        isInternal: Boolean(attrs?.is_internal ?? msg.is_internal),
+        messageType: attrs?.message_type,
+        createdAt: attrs?.created_at ?? msg.created_at,
+    }
+}
+
+function normalizeHistory(entry: WorkflowHistoryEntry) {
+    const attrs = entry.attributes
+    return {
+        id: entry.id,
+        fromStatus: attrs?.from_status ?? entry.from_status,
+        toStatus: attrs?.to_status ?? entry.to_status,
+        actor: entry.actor_name ?? attrs?.triggered_by_role ?? entry.actor_role ?? 'System',
+        reason: attrs?.reason ?? attrs?.notes ?? entry.reason ?? null,
+        createdAt: attrs?.created_at ?? entry.created_at,
+    }
+}
+
 function safeDate(d: string | null | undefined, fmt = 'dd MMM yyyy, HH:mm'): string {
     if (!d) return '—'
     const parsed = new Date(d)
@@ -97,7 +169,28 @@ interface ActionDef {
     needsAssignee?: boolean
     needsSeverity?: boolean
     noteLabel?: string
-    execute: (id: string, inputs: { note: string; assignedTo: string; severity: string }) => Promise<any>
+    execute: (id: string, inputs: { note: string; assignedTo: string; severity: string }) => Promise<unknown>
+}
+
+type ApiError = {
+    response?: {
+        data?: {
+            message?: string
+        }
+    }
+}
+
+type RelationshipStub = {
+    data: {
+        id: string
+        type: string
+    }
+}
+
+function isExpandedRelation<T extends object>(
+    value: T | RelationshipStub | null | undefined,
+): value is T {
+    return !!value && typeof value === 'object' && !('data' in value)
 }
 
 const WORKFLOW_ACTIONS: Partial<Record<IncidentStatus, ActionDef[]>> = {
@@ -197,6 +290,11 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
     const [note, setNote] = useState('')
     const [assignedTo, setAssignedTo] = useState('')
     const [severity, setSeverity] = useState('high')
+    const { data: usersData, isLoading: isLoadingUsers } = useQuery({
+        queryKey: ['users-list-simple'],
+        queryFn: () => getUsers({ per_page: 100 }),
+        enabled: !!activeAction?.needsAssignee,
+    })
 
     const isTerminal = ['closed', 'cancelled', 'dismissed'].includes(status)
     const isEscalated = status === 'escalated'
@@ -213,7 +311,7 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
             queryClient.invalidateQueries({ queryKey: ['incidents'] })
             queryClient.invalidateQueries({ queryKey: ['incident-detail', id] })
         },
-        onError: (err: any) => {
+        onError: (err: ApiError) => {
             toast.error(err?.response?.data?.message ?? 'Failed to update incident')
         },
     })
@@ -247,13 +345,19 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
             {/* Contextual inputs */}
             {activeAction?.needsAssignee && (
                 <div className="space-y-1">
-                    <MetaLabel>Assign Investigator (User ID)</MetaLabel>
-                    <Input
-                        placeholder="Enter user ID..."
-                        value={assignedTo}
-                        onChange={(e) => setAssignedTo(e.target.value)}
-                        className="h-8 text-sm"
-                    />
+                    <MetaLabel>Assign Investigator</MetaLabel>
+                    <Select value={assignedTo} onValueChange={setAssignedTo}>
+                        <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : 'Select investigator'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {usersData?.data?.users?.map((user) => (
+                                <SelectItem key={user.id} value={String(user.id)}>
+                                    {userName(user)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             )}
             {activeAction?.needsSeverity && (
@@ -375,12 +479,47 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
     const { mutate: sendMessage, isPending: isSending } = useMutation({
         mutationFn: () =>
             postIncidentMessage(incidentId!, { body: messageText, is_internal: isInternal }),
+        onMutate: async () => {
+            if (!incidentId) return { previous: undefined }
+            const optimisticBody = messageText
+            const optimisticInternal = isInternal
+            await queryClient.cancelQueries({ queryKey: ['incident-conversation', incidentId] })
+            const previous = queryClient.getQueryData(['incident-conversation', incidentId])
+            queryClient.setQueryData(['incident-conversation', incidentId], (current: IncidentConversationCache | undefined) => {
+                const conversation = current?.data?.conversation ?? { id: `incident-${incidentId}`, messages: [] }
+                return {
+                    ...current,
+                    data: {
+                        ...current?.data,
+                        conversation: {
+                            ...conversation,
+                            messages: [
+                                ...(conversation.messages ?? []),
+                                {
+                                    id: `optimistic-${Date.now()}`,
+                                    attributes: {
+                                        body: optimisticBody,
+                                        is_internal: optimisticInternal,
+                                        sender_role: 'You',
+                                        created_at: new Date().toISOString(),
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                }
+            })
+            setMessageText('')
+            return { previous }
+        },
         onSuccess: () => {
             toast.success('Message sent')
-            setMessageText('')
             queryClient.invalidateQueries({ queryKey: ['incident-conversation', incidentId] })
         },
-        onError: () => toast.error('Failed to send message'),
+        onError: (_err: unknown, _vars: unknown, context?: { previous: unknown }) => {
+            if (context?.previous && incidentId) queryClient.setQueryData(['incident-conversation', incidentId], context.previous)
+            toast.error('Failed to send message')
+        },
     })
 
     // ── Derived state ────────────────────────────────────────────────────────
@@ -395,37 +534,36 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
     const priorityStyle = attrs?.priority ? (PRIORITY_STYLES[attrs.priority] ?? PRIORITY_STYLES.low) : PRIORITY_STYLES.low
 
     // Normalize person relationships — guard against { data: { id, type } } stubs
-    const driverRaw = rels?.driver as any
+    const driverRaw = rels?.driver
     const driver: IncidentPerson | null =
-        driverRaw && typeof driverRaw === 'object' && !('data' in driverRaw)
-            ? (driverRaw as IncidentPerson)
+        isExpandedRelation<IncidentPerson>(driverRaw)
+            ? driverRaw
             : null
 
-    const reportedByRaw = rels?.reported_by as any
+    const reportedByRaw = rels?.reported_by
     const reportedBy: IncidentPerson | null =
-        reportedByRaw && typeof reportedByRaw === 'object' && !('data' in reportedByRaw)
-            ? (reportedByRaw as IncidentPerson)
+        isExpandedRelation<IncidentPerson>(reportedByRaw)
+            ? reportedByRaw
             : null
 
-    const assigneeRaw = rels?.assignee as any
+    const assigneeRaw = rels?.assignee
     const assignee: IncidentPerson | null =
-        assigneeRaw && typeof assigneeRaw === 'object' && !('data' in assigneeRaw)
-            ? (assigneeRaw as IncidentPerson)
+        isExpandedRelation<IncidentPerson>(assigneeRaw)
+            ? assigneeRaw
             : null
 
     // Normalize vehicle — guard against stub shape
-    const vehicleRaw = rels?.vehicle as any
+    const vehicleRaw = rels?.vehicle
     const vehicle: IncidentVehicle | null =
-        vehicleRaw && typeof vehicleRaw === 'object' && !('data' in vehicleRaw)
-            ? (vehicleRaw as IncidentVehicle)
+        isExpandedRelation<IncidentVehicle>(vehicleRaw)
+            ? vehicleRaw
             : null
     const hasVehicleInfo = !!(vehicle?.make || vehicle?.registration_number)
 
     // Address
-    const addressRaw = rels?.address as any
-    const addressLine = addressRaw
-        ? [addressRaw.street, addressRaw.city, addressRaw.state].filter(Boolean).join(', ')
-        : null
+    const coords = parseCoords(attrs?.coords)
+    const locationName = getLocationName(attrs, rels)
+    const directionsUrl = coords ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}` : null
 
     // History + messages
     const history = historyData?.data?.history ?? []
@@ -436,7 +574,7 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
         <Sheet open={!!incidentId} onOpenChange={(open) => { if (!open) onClose() }}>
             <SheetContent
                 side="right"
-                className="w-full sm:max-w-[700px] p-0 flex flex-col gap-0 overflow-hidden"
+                className="w-full sm:max-w-[1180px] xl:max-w-[1280px] p-0 flex flex-col gap-0 overflow-hidden"
             >
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <SheetHeader className="px-6 py-4 border-b border-slate-100 shrink-0">
@@ -503,8 +641,159 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                             <p className="text-sm font-bold">Could not load incident details.</p>
                         </div>
                     ) : incident ? (
-                        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                            {/* ── Two-pane main area ─────────────────────── */}
+                        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row min-h-0 bg-white">
+                            {/* ── LEFT PANEL — history and conversation ──── */}
+                            <section className="w-full lg:w-[420px] xl:w-[460px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-100 flex flex-col min-h-[360px] lg:min-h-0 bg-slate-50/40">
+                                <Tabs defaultValue="history" className="flex-1 flex flex-col min-h-0">
+                                    <TabsList className="shrink-0 w-full justify-start rounded-none border-b border-slate-100 bg-white px-5 h-11 gap-0">
+                                        <TabsTrigger
+                                            value="history"
+                                            className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
+                                        >
+                                            History
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="conversation"
+                                            className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
+                                        >
+                                            Conversation
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="history" className="flex-1 overflow-hidden m-0 min-h-0">
+                                        <ScrollArea className="h-full">
+                                            {isHistoryLoading ? (
+                                                <div className="p-5 space-y-2">
+                                                    {Array.from({ length: 4 }).map((_, i) => (
+                                                        <Skeleton key={i} className="h-10 rounded-xl" />
+                                                    ))}
+                                                </div>
+                                            ) : history.length === 0 ? (
+                                                <div className="py-14 text-center">
+                                                    <Clock className="h-6 w-6 text-slate-200 mx-auto mb-2" />
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                        No history yet
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="p-5">
+                                                    <WorkflowTimeline
+                                                        history={history.map((e) => ({
+                                                            status: normalizeHistory(e).toStatus,
+                                                            actor: normalizeHistory(e).actor,
+                                                            timestamp: normalizeHistory(e).createdAt,
+                                                            reason: normalizeHistory(e).reason,
+                                                        }))}
+                                                    />
+                                                </div>
+                                            )}
+                                        </ScrollArea>
+                                    </TabsContent>
+
+                                    <TabsContent value="conversation" className="flex-1 flex flex-col m-0 min-h-0">
+                                        <ScrollArea className="flex-1 min-h-0">
+                                            <div className="p-5 space-y-3">
+                                                {isConvLoading ? (
+                                                    Array.from({ length: 4 }).map((_, i) => (
+                                                        <Skeleton key={i} className="h-14 rounded-xl" />
+                                                    ))
+                                                ) : messages.length === 0 ? (
+                                                    <div className="py-12 text-center">
+                                                        <MessageSquare className="h-6 w-6 text-slate-200 mx-auto mb-2" />
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                            No messages yet
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    messages.map((msg, i) => {
+                                                        const normalized = normalizeMessage(msg)
+                                                        return (
+                                                        <div key={normalized.id ?? i} className="flex flex-col gap-0.5">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                                    {normalized.senderName ?? normalized.senderRole ?? 'System'}
+                                                                </span>
+                                                                {normalized.isInternal && (
+                                                                    <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-1 py-0.5 rounded uppercase tracking-widest">
+                                                                        Internal
+                                                                    </span>
+                                                                )}
+                                                                {normalized.createdAt && (
+                                                                    <span className="text-[9px] text-slate-300">
+                                                                        {formatDistanceToNow(new Date(normalized.createdAt), { addSuffix: true })}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div
+                                                                className={cn(
+                                                                    'rounded-xl border px-3 py-2 shadow-sm shadow-slate-200/20',
+                                                                    normalized.isInternal
+                                                                        ? 'bg-amber-50/70 border-amber-100'
+                                                                        : 'bg-white border-slate-100',
+                                                                )}
+                                                            >
+                                                                <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                                                                    {normalized.body}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )})
+                                                )}
+                                            </div>
+                                        </ScrollArea>
+
+                                        <Separator />
+                                        <div className="p-4 flex flex-col gap-2 shrink-0 bg-white">
+                                            <div className="flex gap-2">
+                                                <Textarea
+                                                    placeholder="Write a note or update... (Ctrl+Enter to send)"
+                                                    value={messageText}
+                                                    onChange={(e) => setMessageText(e.target.value)}
+                                                    className="resize-none text-sm h-16 flex-1 bg-slate-50/70 border-slate-100 focus-visible:ring-slate-300"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && messageText.trim()) {
+                                                            sendMessage(undefined)
+                                                        }
+                                                    }}
+                                                />
+                                                <Button
+                                                    size="sm"
+                                                    className="self-end h-10 w-10 p-0 bg-slate-900 hover:bg-slate-700 rounded-xl shrink-0"
+                                                    disabled={!messageText.trim() || isSending}
+                                                    onClick={() => sendMessage(undefined)}
+                                                >
+                                                    {isSending
+                                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        : <Send className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsInternal((v) => !v)}
+                                                    className={cn(
+                                                        'h-4 w-4 rounded border flex items-center justify-center transition-colors',
+                                                        isInternal
+                                                            ? 'bg-amber-500 border-amber-500 text-white'
+                                                            : 'bg-white border-slate-200',
+                                                    )}
+                                                    aria-pressed={isInternal}
+                                                    aria-label="Mark as internal note"
+                                                >
+                                                    {isInternal && (
+                                                        <Eye className="h-2.5 w-2.5" />
+                                                    )}
+                                                </button>
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                                    Internal note
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
+                            </section>
+
+                            {/* ── RIGHT PANEL — incident preview ─────────── */}
                             <div className="flex flex-1 min-h-0 overflow-hidden">
                                 {/* LEFT PANE */}
                                 <ScrollArea className="flex-1 min-w-0">
@@ -533,7 +822,7 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                         </div>
 
                                         {/* Location */}
-                                        {(addressLine || attrs?.coords) && (
+                                        {(locationName || attrs?.coords) && (
                                             <>
                                                 <Separator className="border-slate-100" />
                                                 <div>
@@ -542,11 +831,14 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                                             <MapPin className="h-2.5 w-2.5" /> Location
                                                         </span>
                                                     </MetaLabel>
-                                                    {addressLine && (
-                                                        <p className="text-sm font-bold text-slate-900">{addressLine}</p>
-                                                    )}
-                                                    {attrs?.coords && (
-                                                        <p className="text-xs text-slate-400 font-mono mt-0.5">{attrs.coords}</p>
+                                                    <p className="text-sm font-bold text-slate-900">{locationName}</p>
+                                                    {attrs?.coords && <p className="text-xs text-slate-400 font-mono mt-0.5">{attrs.coords}</p>}
+                                                    {directionsUrl && (
+                                                        <Button asChild size="sm" variant="outline" className="mt-3 h-8 rounded-xl text-xs font-black">
+                                                            <a href={directionsUrl} target="_blank" rel="noreferrer">
+                                                                Navigate <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+                                                            </a>
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </>
@@ -572,7 +864,7 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                                                 <p className="text-[10px] text-slate-500 font-medium">{w.phone}</p>
                                                                 {w.statement && (
                                                                     <p className="text-xs text-slate-600 mt-1 italic border-l-2 border-slate-200 pl-2">
-                                                                        "{w.statement}"
+                                                                        &ldquo;{w.statement}&rdquo;
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -777,152 +1069,6 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                                 </ScrollArea>
                             </div>
 
-                            {/* ── Activity section — full-width tabs ─────── */}
-                            <div className="shrink-0 border-t border-slate-100 flex flex-col" style={{ minHeight: 260 }}>
-                                <Tabs defaultValue="history" className="flex-1 flex flex-col min-h-0">
-                                    <TabsList className="shrink-0 w-full justify-start rounded-none border-b border-slate-100 bg-white px-6 h-10 gap-0">
-                                        <TabsTrigger
-                                            value="history"
-                                            className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
-                                        >
-                                            History
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="conversation"
-                                            className="text-[10px] font-black uppercase tracking-widest rounded-none border-b-2 border-transparent data-[state=active]:border-slate-900 data-[state=active]:bg-transparent data-[state=active]:shadow-none h-full px-3"
-                                        >
-                                            Conversation
-                                        </TabsTrigger>
-                                    </TabsList>
-
-                                    {/* History tab */}
-                                    <TabsContent value="history" className="flex-1 overflow-y-auto m-0">
-                                        {isHistoryLoading ? (
-                                            <div className="p-4 space-y-2">
-                                                {Array.from({ length: 3 }).map((_, i) => (
-                                                    <Skeleton key={i} className="h-10 rounded-xl" />
-                                                ))}
-                                            </div>
-                                        ) : history.length === 0 ? (
-                                            <div className="py-10 text-center">
-                                                <Clock className="h-6 w-6 text-slate-200 mx-auto mb-2" />
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    No history yet
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="p-4">
-                                                <WorkflowTimeline
-                                                    history={history.map((e) => ({
-                                                        status: e.to_status,
-                                                        actor: e.actor_name ?? e.actor_role ?? 'System',
-                                                        timestamp: e.created_at,
-                                                        reason: e.reason,
-                                                    }))}
-                                                />
-                                            </div>
-                                        )}
-                                    </TabsContent>
-
-                                    {/* Conversation tab */}
-                                    <TabsContent value="conversation" className="flex-1 flex flex-col m-0 min-h-0">
-                                        <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: 180 }}>
-                                            {isConvLoading ? (
-                                                Array.from({ length: 3 }).map((_, i) => (
-                                                    <Skeleton key={i} className="h-14 rounded-xl" />
-                                                ))
-                                            ) : messages.length === 0 ? (
-                                                <div className="py-8 text-center">
-                                                    <MessageSquare className="h-6 w-6 text-slate-200 mx-auto mb-2" />
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        No messages yet
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                messages.map((msg, i) => (
-                                                    <div key={msg.id ?? i} className="flex flex-col gap-0.5">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                                {msg.sender_name ?? msg.sender_role ?? 'System'}
-                                                            </span>
-                                                            {msg.is_internal && (
-                                                                <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-1 py-0.5 rounded uppercase tracking-widest">
-                                                                    Internal
-                                                                </span>
-                                                            )}
-                                                            {msg.created_at && (
-                                                                <span className="text-[9px] text-slate-300">
-                                                                    {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div
-                                                            className={cn(
-                                                                'rounded-xl border px-3 py-2',
-                                                                msg.is_internal
-                                                                    ? 'bg-amber-50/60 border-amber-100'
-                                                                    : 'bg-slate-50 border-slate-100',
-                                                            )}
-                                                        >
-                                                            <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                                                                {msg.body}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-
-                                        <Separator />
-                                        <div className="p-3 flex flex-col gap-2 shrink-0">
-                                            <div className="flex gap-2">
-                                                <Textarea
-                                                    placeholder="Write a note or update... (Ctrl+Enter to send)"
-                                                    value={messageText}
-                                                    onChange={(e) => setMessageText(e.target.value)}
-                                                    className="resize-none text-sm h-14 flex-1"
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && messageText.trim()) {
-                                                            sendMessage()
-                                                        }
-                                                    }}
-                                                />
-                                                <Button
-                                                    size="sm"
-                                                    className="self-end h-9 w-9 p-0 bg-slate-900 hover:bg-slate-700 rounded-xl shrink-0"
-                                                    disabled={!messageText.trim() || isSending}
-                                                    onClick={() => sendMessage()}
-                                                >
-                                                    {isSending
-                                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                        : <Send className="h-3.5 w-3.5" />}
-                                                </Button>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsInternal((v) => !v)}
-                                                    className={cn(
-                                                        'h-4 w-4 rounded border flex items-center justify-center transition-colors',
-                                                        isInternal
-                                                            ? 'bg-amber-500 border-amber-500 text-white'
-                                                            : 'bg-white border-slate-200',
-                                                    )}
-                                                    aria-pressed={isInternal}
-                                                    aria-label="Mark as internal note"
-                                                >
-                                                    {isInternal && (
-                                                        <Eye className="h-2.5 w-2.5" />
-                                                    )}
-                                                </button>
-                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Internal note
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </TabsContent>
-                                </Tabs>
-                            </div>
                         </div>
                     ) : null}
                 </div>

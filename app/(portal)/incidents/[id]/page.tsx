@@ -10,7 +10,7 @@ import {
     Car, Wrench, ShieldAlert, Fuel, UserX, MapPin,
     MessageSquare, Activity, ArrowRight, Lock, Info,
     Send, Image as ImageIcon, User,
-    CheckCircle2, Clock, Eye,
+    CheckCircle2, Clock, Eye, Navigation,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -33,6 +32,7 @@ import {
     startInvestigation, requireAction, logActionTaken, submitForResolution,
     resolveIncident, closeIncident, cancelIncident, dismissIncident, escalateIncident,
 } from '@/lib/api/incidents'
+import { getUsers } from '@/lib/api/settings'
 import type { IncidentStatus, IncidentPerson, IncidentVehicle, ConversationMessage, WorkflowHistoryEntry } from '@/types'
 
 // ─── Status / priority configs ────────────────────────────────────────────────
@@ -78,7 +78,35 @@ interface ActionDef {
     needsNote?: boolean; noteLabel?: string; noteRequired?: boolean
     needsAssignee?: boolean
     needsSeverity?: boolean
-    execute: (id: string, inputs: { note: string; assignee: string; severity: string }) => Promise<any>
+    execute: (id: string, inputs: { note: string; assignee: string; severity: string }) => Promise<unknown>
+}
+
+type ApiError = {
+    response?: {
+        data?: {
+            message?: string
+        }
+    }
+}
+
+type IncidentAddress = {
+    street?: string
+    city?: string
+    state?: string
+    country?: string
+}
+
+type IncidentLocationAttrs = {
+    location?: string | { address?: string } | null
+}
+
+type IncidentConversationCache = {
+    data?: {
+        conversation?: {
+            id: number | string
+            messages?: ConversationMessage[]
+        }
+    }
 }
 
 const MACHINE: Partial<Record<IncidentStatus, ActionDef[]>> = {
@@ -135,6 +163,48 @@ function initials(name: string): string {
     return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 }
 
+function parseCoords(coords?: string | null): { lat: number; lng: number } | null {
+    if (!coords) return null
+    const [lat, lng] = coords.split(',').map(value => Number(value.trim()))
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+    return { lat, lng }
+}
+
+function locationName(attrs: IncidentLocationAttrs, address?: IncidentAddress): string {
+    const addressLine = [address?.street, address?.city, address?.state, address?.country].filter(Boolean).join(', ')
+    if (addressLine) return addressLine
+    if (typeof attrs.location === 'string' && attrs.location.trim()) return attrs.location
+    if (typeof attrs.location === 'object' && attrs.location?.address) return attrs.location.address
+    return 'Incident location'
+}
+
+function normalizeMessage(msg: ConversationMessage) {
+    const attrs = msg.attributes
+    return {
+        id: msg.id,
+        body: attrs?.body ?? msg.body ?? '',
+        senderId: attrs?.sender_id ?? msg.sender_id,
+        senderRole: attrs?.sender_role ?? msg.sender_role,
+        senderName: msg.sender_name ?? attrs?.sender_role,
+        isInternal: Boolean(attrs?.is_internal ?? msg.is_internal),
+        createdAt: attrs?.created_at ?? msg.created_at,
+        messageType: attrs?.message_type,
+    }
+}
+
+function normalizeHistory(entry: WorkflowHistoryEntry) {
+    const attrs = entry.attributes
+    return {
+        id: entry.id,
+        fromStatus: attrs?.from_status ?? entry.from_status ?? 'reported',
+        toStatus: attrs?.to_status ?? entry.to_status ?? 'reported',
+        actorRole: attrs?.triggered_by_role ?? entry.actor_role,
+        actorName: entry.actor_name,
+        reason: attrs?.reason ?? attrs?.notes ?? entry.reason,
+        createdAt: attrs?.created_at ?? entry.created_at,
+    }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function IncidentDetailPage() {
@@ -158,6 +228,11 @@ export default function IncidentDetailPage() {
     const incidentQ = useQuery({ queryKey: ['incident', id], queryFn: () => getIncidentById(id), enabled: !!id })
     const historyQ  = useQuery({ queryKey: ['incident-history', id], queryFn: () => getIncidentHistory(id), enabled: !!id })
     const convQ     = useQuery({ queryKey: ['incident-conversation', id], queryFn: () => getIncidentConversation(id), enabled: !!id })
+    const usersQ = useQuery({
+        queryKey: ['users-list-simple'],
+        queryFn: () => getUsers({ per_page: 100 }),
+        enabled: !!activeAction?.needsAssignee,
+    })
 
     const workflowMut = useMutation({
         mutationFn: (action: ActionDef) => action.execute(id, { note: noteInput, assignee: assigneeInput, severity: severityInput }),
@@ -167,7 +242,7 @@ export default function IncidentDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['incident', id] })
             queryClient.invalidateQueries({ queryKey: ['incident-history', id] })
         },
-        onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Action failed'),
+        onError: (e: ApiError) => toast.error(e?.response?.data?.message ?? 'Action failed'),
     })
 
     // ── Loading / error ───────────────────────────────────────────────────────
@@ -210,6 +285,9 @@ export default function IncidentDetailPage() {
     const reportedBy = flatPerson(rels?.reported_by)
     const assignee   = flatPerson(rels?.assignee)
     const address    = rels?.address
+    const coords = parseCoords(attrs.coords)
+    const placeName = locationName(attrs, address)
+    const directionsUrl = coords ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}` : null
 
     const isTerminal  = ['closed', 'cancelled', 'dismissed'].includes(status)
     const isEscalated = status === 'escalated'
@@ -315,10 +393,10 @@ export default function IncidentDetailPage() {
                                 )}
                             </div>
                             <p className="text-sm text-slate-500 mt-1 line-clamp-2">{attrs.description}</p>
-                            {(address?.city || address?.state) && (
+                            {(placeName || attrs.coords) && (
                                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                                     <MapPin className="h-3 w-3" />
-                                    {[address.street, address.city, address.state].filter(Boolean).join(', ')}
+                                    {placeName}
                                 </p>
                             )}
                         </div>
@@ -354,7 +432,7 @@ export default function IncidentDetailPage() {
                                     <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{attrs.description}</p>
                                 </div>
 
-                                {attrs.location?.lat && attrs.location?.lng && (
+                                {(placeName || coords) && (
                                     <>
                                         <Separator />
                                         <div>
@@ -364,14 +442,18 @@ export default function IncidentDetailPage() {
                                             <div className="h-44 w-full bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative flex items-center justify-center">
                                                 <div className="absolute inset-0 bg-slate-200 opacity-50 mix-blend-multiply pointer-events-none" />
                                                 <div className="absolute h-5 w-5 bg-rose-600 rounded-full border-2 border-white shadow-lg animate-pulse z-10" />
-                                                <p className="absolute bottom-2 left-2 bg-white/90 backdrop-blur text-xs px-2.5 py-1.5 rounded-lg shadow-sm text-slate-700 font-mono z-10">
-                                                    {attrs.location.lat.toFixed(5)}, {attrs.location.lng.toFixed(5)}
+                                                <p className="absolute bottom-2 left-2 right-2 bg-white/90 backdrop-blur text-xs px-2.5 py-1.5 rounded-lg shadow-sm text-slate-700 z-10">
+                                                    <span className="font-bold">{placeName}</span>
+                                                    {coords && <span className="ml-2 font-mono text-slate-400">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}</span>}
                                                 </p>
                                             </div>
-                                            {attrs.location.address && (
-                                                <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
-                                                    <MapPin className="h-3 w-3" />{attrs.location.address}
-                                                </p>
+                                            {directionsUrl && (
+                                                <Button asChild variant="outline" size="sm" className="mt-3 h-8 rounded-xl text-xs font-black">
+                                                    <a href={directionsUrl} target="_blank" rel="noreferrer">
+                                                        <Navigation className="mr-1.5 h-3.5 w-3.5" />
+                                                        Navigate
+                                                    </a>
+                                                </Button>
                                             )}
                                         </div>
                                     </>
@@ -672,7 +754,18 @@ export default function IncidentDetailPage() {
                         {activeAction?.needsAssignee && (
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Assign Investigator</Label>
-                                <Input placeholder="Enter user ID or name…" value={assigneeInput} onChange={e => setAssigneeInput(e.target.value)} />
+                                <Select value={assigneeInput} onValueChange={setAssigneeInput}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={usersQ.isLoading ? 'Loading users...' : 'Select investigator'} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {usersQ.data?.data?.users?.map(user => (
+                                            <SelectItem key={user.id} value={String(user.id)}>
+                                                {user.attributes.full_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
                         {activeAction?.needsSeverity && (
@@ -743,10 +836,47 @@ function ConversationPanel({
     const [isInternal, setIsInternal] = useState(false)
     const bottomRef = useRef<HTMLDivElement>(null)
 
+    const queryClient = useQueryClient()
+
     const { mutate: send, isPending } = useMutation({
         mutationFn: () => postIncidentMessage(incidentId, { body, is_internal: isInternal }),
-        onSuccess: () => { setBody(''); onRefresh() },
-        onError: () => toast.error('Failed to send message'),
+        onMutate: async () => {
+            const optimisticBody = body
+            const optimisticInternal = isInternal
+            await queryClient.cancelQueries({ queryKey: ['incident-conversation', incidentId] })
+            const previous = queryClient.getQueryData(['incident-conversation', incidentId])
+            queryClient.setQueryData(['incident-conversation', incidentId], (current: IncidentConversationCache | undefined) => {
+                const conversation = current?.data?.conversation ?? { id: `incident-${incidentId}`, messages: [] }
+                return {
+                    ...current,
+                    data: {
+                        ...current?.data,
+                        conversation: {
+                            ...conversation,
+                            messages: [
+                                ...(conversation.messages ?? []),
+                                {
+                                    id: `optimistic-${Date.now()}`,
+                                    attributes: {
+                                        body: optimisticBody,
+                                        is_internal: optimisticInternal,
+                                        sender_role: 'You',
+                                        created_at: new Date().toISOString(),
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                }
+            })
+            setBody('')
+            return { previous }
+        },
+        onSuccess: () => onRefresh(),
+        onError: (_err: unknown, _vars: unknown, context?: { previous: unknown }) => {
+            if (context?.previous) queryClient.setQueryData(['incident-conversation', incidentId], context.previous)
+            toast.error('Failed to send message')
+        },
     })
 
     useEffect(() => {
@@ -779,15 +909,16 @@ function ConversationPanel({
                         </div>
                     ) : (
                         messages.map(msg => {
-                            const isSystem = !msg.sender_name && !msg.sender_id
+                            const normalized = normalizeMessage(msg)
+                            const isSystem = normalized.messageType === 'system' || (!normalized.senderName && !normalized.senderId)
                             if (isSystem) {
                                 return (
-                                    <div key={msg.id} className="flex items-center gap-2 py-1">
+                                    <div key={normalized.id} className="flex items-center gap-2 py-1">
                                         <div className="flex-1 h-px bg-slate-100" />
                                         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 border border-slate-100">
                                             <Info className="h-3 w-3 text-slate-400" />
-                                            <span className="text-[11px] text-slate-400 font-medium">{msg.body}</span>
-                                            <span className="text-[10px] text-slate-300">{msg.created_at ? format(new Date(msg.created_at), 'MMM d, HH:mm') : ''}</span>
+                                            <span className="text-[11px] text-slate-400 font-medium">{normalized.body}</span>
+                                            <span className="text-[10px] text-slate-300">{normalized.createdAt ? format(new Date(normalized.createdAt), 'MMM d, HH:mm') : ''}</span>
                                         </div>
                                         <div className="flex-1 h-px bg-slate-100" />
                                     </div>
@@ -795,27 +926,27 @@ function ConversationPanel({
                             }
 
                             return (
-                                <div key={msg.id} className="flex items-start gap-3">
+                                <div key={normalized.id} className="flex items-start gap-3">
                                     <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                                         <AvatarFallback className="text-xs bg-blue-100 text-blue-700">
-                                            {(msg.sender_name ?? 'U').slice(0, 2).toUpperCase()}
+                                            {(normalized.senderName ?? normalized.senderRole ?? 'U').slice(0, 2).toUpperCase()}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
-                                        <div className={cn('rounded-2xl rounded-tl-none px-4 py-3', msg.is_internal ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100')}>
+                                        <div className={cn('rounded-2xl rounded-tl-none px-4 py-3', normalized.isInternal ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100')}>
                                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                <span className="text-xs font-bold text-slate-800">{msg.sender_name ?? 'User'}</span>
-                                                {msg.sender_role && <span className="text-[10px] text-slate-400 font-medium capitalize">{msg.sender_role.replace(/_/g, ' ')}</span>}
-                                                {msg.is_internal && (
+                                                <span className="text-xs font-bold text-slate-800">{normalized.senderName ?? 'User'}</span>
+                                                {normalized.senderRole && <span className="text-[10px] text-slate-400 font-medium capitalize">{normalized.senderRole.replace(/_/g, ' ')}</span>}
+                                                {normalized.isInternal && (
                                                     <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full ml-auto">
                                                         <Lock className="h-2.5 w-2.5" />Internal
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-sm text-slate-700 leading-relaxed">{msg.body}</p>
+                                            <p className="text-sm text-slate-700 leading-relaxed">{normalized.body}</p>
                                         </div>
                                         <p className="text-[10px] text-slate-400 mt-1 ml-1">
-                                            {msg.created_at ? format(new Date(msg.created_at), 'MMM d, HH:mm') : ''}
+                                            {normalized.createdAt ? format(new Date(normalized.createdAt), 'MMM d, HH:mm') : ''}
                                         </p>
                                     </div>
                                 </div>
@@ -831,7 +962,7 @@ function ConversationPanel({
                         placeholder="Write a message…"
                         value={body}
                         onChange={e => setBody(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body.trim()) send() }}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body.trim()) send(undefined) }}
                         className="resize-none min-h-[72px] bg-white"
                     />
                     <div className="flex items-center justify-between">
@@ -846,7 +977,7 @@ function ConversationPanel({
                                 <Lock className="h-3 w-3" />Internal note (staff only)
                             </span>
                         </label>
-                        <Button size="sm" onClick={() => send()} disabled={isPending || !body.trim()} className="text-xs">
+                        <Button size="sm" onClick={() => send(undefined)} disabled={isPending || !body.trim()} className="text-xs">
                             {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
                             Send
                         </Button>
@@ -860,7 +991,9 @@ function ConversationPanel({
 // ─── History timeline ─────────────────────────────────────────────────────────
 
 function HistoryTimeline({ history, isLoading }: { history: WorkflowHistoryEntry[]; isLoading: boolean }) {
-    const sorted = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const sorted = [...history]
+        .map(normalizeHistory)
+        .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
 
     return (
         <div>
@@ -883,8 +1016,8 @@ function HistoryTimeline({ history, isLoading }: { history: WorkflowHistoryEntry
                     ) : (
                         <ol className="relative space-y-0">
                             {sorted.map((entry, i) => {
-                                const toCfg   = STATUS_CFG[entry.to_status]   ?? STATUS_CFG.reported
-                                const fromCfg = STATUS_CFG[entry.from_status] ?? STATUS_CFG.reported
+                                const toCfg   = STATUS_CFG[entry.toStatus]   ?? STATUS_CFG.reported
+                                const fromCfg = STATUS_CFG[entry.fromStatus] ?? STATUS_CFG.reported
                                 const isLast  = i === sorted.length - 1
                                 return (
                                     <li key={entry.id} className="relative pl-8">
@@ -906,14 +1039,14 @@ function HistoryTimeline({ history, isLoading }: { history: WorkflowHistoryEntry
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                                {entry.actor_name && (
-                                                    <span className="text-xs font-semibold text-slate-700">{entry.actor_name}</span>
+                                                {entry.actorName && (
+                                                    <span className="text-xs font-semibold text-slate-700">{entry.actorName}</span>
                                                 )}
-                                                {entry.actor_role && (
-                                                    <span className="text-[11px] text-slate-400 capitalize">{entry.actor_role.replace(/_/g, ' ')}</span>
+                                                {entry.actorRole && (
+                                                    <span className="text-[11px] text-slate-400 capitalize">{entry.actorRole.replace(/_/g, ' ')}</span>
                                                 )}
                                                 <span className="text-[11px] text-slate-400 ml-auto">
-                                                    {entry.created_at ? format(new Date(entry.created_at), 'dd MMM yyyy, HH:mm') : ''}
+                                                    {entry.createdAt ? format(new Date(entry.createdAt), 'dd MMM yyyy, HH:mm') : ''}
                                                 </span>
                                             </div>
                                             {entry.reason && (

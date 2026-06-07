@@ -6,6 +6,17 @@ export interface ConversationMessage {
     sender_name?: string
     is_internal: boolean
     created_at: string
+    attributes?: {
+        message_type?: string
+        sender_type?: string
+        sender_id?: number | string
+        sender_role?: string
+        body?: string
+        is_internal?: boolean
+        metadata?: Record<string, unknown> | null
+        created_at?: string
+        deleted_at?: string | null
+    }
 }
 
 export interface WorkflowHistoryEntry {
@@ -16,7 +27,20 @@ export interface WorkflowHistoryEntry {
     actor_role?: string
     actor_name?: string
     reason: string | null
+    notes?: string
     created_at: string
+    attributes?: {
+        workflow_type?: string
+        from_status?: string
+        to_status?: string
+        triggered_by_type?: string
+        triggered_by_id?: number | string
+        triggered_by_role?: string
+        reason?: string | null
+        notes?: string | null
+        metadata?: Record<string, unknown> | null
+        created_at?: string
+    }
 }
 
 export interface Webhook {
