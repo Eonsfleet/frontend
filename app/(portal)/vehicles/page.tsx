@@ -3,7 +3,7 @@
 import React from 'react'
 import { VehicleTable } from '@/components/vehicles/VehicleTable'
 import { Button } from '@/components/ui/button'
-import { Plus, Search, Settings } from 'lucide-react'
+import { Plus, Search, Settings, Upload, Download } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useQuery } from '@tanstack/react-query'
 import { getVehicles } from '@/lib/api/vehicles'
@@ -16,10 +16,14 @@ import { VehicleFiltersComponent, VehicleFilters } from '@/components/vehicles/V
 import { QueryError } from '@/components/shared/QueryError'
 import { useAuthStore } from '@/store/authStore'
 import { PolicySettingsSheet } from '@/components/shared/PolicySettingsSheet'
+import { ImportDialog } from '@/components/shared/ImportDialog'
+import { ExportDialog } from '@/components/shared/ExportDialog'
 
 export default function VehiclesPage() {
     const { token } = useAuthStore()
     const [isPolicyOpen, setIsPolicyOpen] = React.useState(false)
+    const [isImportOpen, setIsImportOpen] = React.useState(false)
+    const [isExportOpen, setIsExportOpen] = React.useState(false)
     const [search, setSearch] = React.useState('')
     const [page, setPage] = React.useState(1)
     const [filters, setFilters] = React.useState<VehicleFilters>({})
@@ -65,6 +69,12 @@ export default function VehiclesPage() {
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={() => setIsPolicyOpen(true)} title="Fleet policy settings">
                         <Settings className="h-4 w-4 text-slate-500" />
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsExportOpen(true)}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                        <Upload className="mr-2 h-4 w-4" /> Import
                     </Button>
                     <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleAdd}>
                         <Plus className="mr-2 h-4 w-4" /> Add Vehicle
@@ -138,6 +148,20 @@ export default function VehiclesPage() {
                 open={isPolicyOpen}
                 onOpenChange={setIsPolicyOpen}
                 mode="fleet-rules"
+            />
+
+            <ImportDialog
+                open={isImportOpen}
+                onOpenChange={setIsImportOpen}
+                entity="vehicles"
+                model="Vehicle"
+                onComplete={() => refetch()}
+            />
+
+            <ExportDialog
+                open={isExportOpen}
+                onOpenChange={setIsExportOpen}
+                entity="vehicles"
             />
         </div>
     )

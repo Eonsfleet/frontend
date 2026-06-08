@@ -4,9 +4,11 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Search, Mail, Loader2, ShieldCheck, UserMinus, UserCog } from 'lucide-react'
+import { Plus, Search, Mail, Loader2, UserMinus, UserCog, Upload, Download } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/settings'
+import { ImportDialog } from '@/components/shared/ImportDialog'
+import { ExportDialog } from '@/components/shared/ExportDialog'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Trash2, Lock, RefreshCw, Power } from 'lucide-react'
@@ -42,6 +44,8 @@ export default function UserManagementPage() {
     const [search, setSearch] = useState('')
     const [page, setPage] = useState(1)
     const [isInviteOpen, setIsInviteOpen] = useState(false)
+    const [isImportOpen, setIsImportOpen] = useState(false)
+    const [isExportOpen, setIsExportOpen] = useState(false)
 
     const { data, isLoading } = useQuery({
         queryKey: ['settings-users', page, search],
@@ -112,7 +116,14 @@ export default function UserManagementPage() {
                     <p className="text-slate-500 mt-1">Manage employee access, assign organizational roles, and onboard personnel.</p>
                 </div>
 
-                <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setIsExportOpen(true)}>
+                        <Download className="w-4 h-4 mr-2" /> Export
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                        <Upload className="w-4 h-4 mr-2" /> Import
+                    </Button>
+                    <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
                     <DialogTrigger asChild>
                         <Button className="shrink-0"><Plus className="w-4 h-4 mr-2" /> Invite Teammate</Button>
                     </DialogTrigger>
@@ -172,6 +183,7 @@ export default function UserManagementPage() {
                         </form>
                     </DialogContent>
                 </Dialog>
+                </div>
             </div>
 
             <Card className="shadow-sm border-slate-200">
@@ -264,6 +276,20 @@ export default function UserManagementPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            <ImportDialog
+                open={isImportOpen}
+                onOpenChange={setIsImportOpen}
+                entity="users"
+                model="User"
+                onComplete={() => queryClient.invalidateQueries({ queryKey: ['settings-users'] })}
+            />
+
+            <ExportDialog
+                open={isExportOpen}
+                onOpenChange={setIsExportOpen}
+                entity="users"
+            />
         </div>
     )
 }
