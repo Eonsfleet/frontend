@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from '@/lib/utils'
 import { BulkAssignmentModal } from './BulkAssignmentModal'
-import { BreachAnalytics } from './BreachAnalytics'
+import { GeofenceDrawer } from './GeofenceDrawer'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 
@@ -29,7 +29,7 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
     const [activeAssignment, setActiveAssignment] = useState<{ id: string; name: string } | null>(null)
-    const [activeAnalytics, setActiveAnalytics] = useState<{ id: string; name: string } | null>(null)
+    const [activeGeofenceId, setActiveGeofenceId] = useState<string | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
     const { data, isLoading } = useQuery({
@@ -197,9 +197,9 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                                         <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">ASSIGN</span>
                                     </button>
                                     <button
-                                        onClick={() => setActiveAnalytics({ id: item.id, name: item.attributes.name })}
+                                        onClick={() => setActiveGeofenceId(item.id)}
                                         className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
-                                        title="View breach analytics"
+                                        title="View zone details"
                                     >
                                         <BarChart3 className="h-4 w-4 text-slate-400 group-hover/btn:text-indigo-600 mb-1" />
                                         <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">INSIGHTS</span>
@@ -260,11 +260,9 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                 onClose={() => setActiveAssignment(null)}
             />
 
-            <BreachAnalytics
-                isOpen={!!activeAnalytics}
-                geofenceId={activeAnalytics?.id}
-                geofenceName={activeAnalytics?.name || ''}
-                onClose={() => setActiveAnalytics(null)}
+            <GeofenceDrawer
+                geofenceId={activeGeofenceId}
+                onClose={() => setActiveGeofenceId(null)}
             />
 
             {/* Delete Confirmation */}
