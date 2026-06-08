@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,8 +11,6 @@ on:
     branches: [main, sandbox]
 
 jobs:
-  # ── Build Check ───────────────────────────────────────────────────────────────
-  # Validates the build on every push and PR — runs on GitHub's cloud runners.
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -40,49 +38,3 @@ jobs:
           NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
           NEXT_PUBLIC_UPLOAD_DISK_TYPE: ${{ secrets.NEXT_PUBLIC_UPLOAD_DISK_TYPE }}
           NEXT_PUBLIC_UPLOAD_FOLDER: ${{ secrets.NEXT_PUBLIC_UPLOAD_FOLDER }}
-
-  # ── Deploy → Sandbox ──────────────────────────────────────────────────────────
-  # Runs directly on the server via a self-hosted runner — no SSH needed.
-  # Only triggered on direct pushes to sandbox after build passes.
-  deploy:
-    name: Deploy → Sandbox
-    runs-on: self-hosted
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/sandbox'
-    environment:
-      name: sandbox
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: sandbox
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline
-
-      - name: Build
-        run: npm run build
-        env:
-          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-          NEXT_PUBLIC_WEBSOCKET_HOST_URL: ${{ secrets.NEXT_PUBLIC_WEBSOCKET_HOST_URL }}
-          NEXT_PUBLIC_PUSHER_APP_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_KEY }}
-          NEXT_PUBLIC_PUSHER_HOST: ${{ secrets.NEXT_PUBLIC_PUSHER_HOST }}
-          NEXT_PUBLIC_PUSHER_PORT: ${{ secrets.NEXT_PUBLIC_PUSHER_PORT }}
-          NEXT_PUBLIC_PUSHER_SCHEME: ${{ secrets.NEXT_PUBLIC_PUSHER_SCHEME }}
-          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
-          NEXT_PUBLIC_UPLOAD_DISK_TYPE: ${{ secrets.NEXT_PUBLIC_UPLOAD_DISK_TYPE }}
-          NEXT_PUBLIC_UPLOAD_FOLDER: ${{ secrets.NEXT_PUBLIC_UPLOAD_FOLDER }}
-
-      - name: Reload app via PM2
-        run: |
-          if pm2 list | grep -q "eonsfleet-frontend"; then
-            pm2 reload eonsfleet-frontend --update-env
-          else
-            pm2 start npm --name "eonsfleet-frontend" -- run start
-            pm2 save
-          fi
