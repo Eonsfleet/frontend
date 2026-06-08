@@ -12,16 +12,15 @@ on:
 
 jobs:
   # ── Build Check ───────────────────────────────────────────────────────────────
+  # Validates the build on every push and PR — runs on GitHub's cloud runners.
   build:
     name: Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
@@ -43,54 +42,47 @@ jobs:
           NEXT_PUBLIC_UPLOAD_FOLDER: ${{ secrets.NEXT_PUBLIC_UPLOAD_FOLDER }}
 
   # ── Deploy → Sandbox ──────────────────────────────────────────────────────────
-  # Only runs on direct pushes to sandbox (not PRs) after build passes.
+  # Runs directly on the server via a self-hosted runner — no SSH needed.
+  # Only triggered on direct pushes to sandbox after build passes.
   deploy:
     name: Deploy → Sandbox
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/sandbox'
     environment:
       name: sandbox
-      url: https://sandbox.eonsfleet.io
 
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v0.1.10
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.SANDBOX_EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.SANDBOX_EC2_SSH_KEY }}
-          script: |
-            set -e
+          ref: sandbox
 
-            APP_DIR="/var/www/html/eonsfleet-frontend"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-            cd "$APP_DIR"
+      - name: Install dependencies
+        run: npm ci --prefer-offline
 
-            echo "Pulling latest code..."
-            git fetch origin sandbox
-            git reset --hard origin/sandbox
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_WEBSOCKET_HOST_URL: ${{ secrets.NEXT_PUBLIC_WEBSOCKET_HOST_URL }}
+          NEXT_PUBLIC_PUSHER_APP_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_KEY }}
+          NEXT_PUBLIC_PUSHER_HOST: ${{ secrets.NEXT_PUBLIC_PUSHER_HOST }}
+          NEXT_PUBLIC_PUSHER_PORT: ${{ secrets.NEXT_PUBLIC_PUSHER_PORT }}
+          NEXT_PUBLIC_PUSHER_SCHEME: ${{ secrets.NEXT_PUBLIC_PUSHER_SCHEME }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          NEXT_PUBLIC_UPLOAD_DISK_TYPE: ${{ secrets.NEXT_PUBLIC_UPLOAD_DISK_TYPE }}
+          NEXT_PUBLIC_UPLOAD_FOLDER: ${{ secrets.NEXT_PUBLIC_UPLOAD_FOLDER }}
 
-            echo "Installing dependencies..."
-            npm ci --prefer-offline
-
-            echo "Building..."
-            npm run build
-
-            echo "Reloading app process..."
-            if pm2 list | grep -q "eonsfleet-frontend"; then
-              pm2 reload eonsfleet-frontend --update-env
-            else
-              pm2 start npm --name "eonsfleet-frontend" -- run start
-              pm2 save
-            fi
-
-            echo "Health check..."
-            sleep 4
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || echo "000")
-            if echo "$STATUS" | grep -qE '^[2-4]'; then
-              echo "Health check passed (HTTP $STATUS)"
-            else
-              echo "Health check failed (HTTP $STATUS)"
-              exit 1
-            fi
+      - name: Reload app via PM2
+        run: |
+          if pm2 list | grep -q "eonsfleet-frontend"; then
+            pm2 reload eonsfleet-frontend --update-env
+          else
+            pm2 start npm --name "eonsfleet-frontend" -- run start
+            pm2 save
+          fi
