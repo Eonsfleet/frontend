@@ -112,17 +112,25 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
         Array.isArray(vehiclesRaw?.data?.data) ? vehiclesRaw.data.data :
         Array.isArray(vehiclesRaw?.data)       ? vehiclesRaw.data       :
         []
+    // Alerts: { data: { alerts: [...], pagination: {...} } }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const alertsRaw: any = alertsData
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const alerts: any[] =
-        alertsRaw?.data?.alerts ??
-        alertsRaw?.data?.data ??
-        (Array.isArray(alertsRaw?.data) ? alertsRaw.data : [])
+        Array.isArray(alertsRaw?.data?.alerts) ? alertsRaw.data.alerts :
+        Array.isArray(alertsRaw?.data)          ? alertsRaw.data         :
+        []
 
+    // Analytics: { data: { analytics: { total_breaches, avg_dwell_minutes, vehicle_ranking, ... } } }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const analytics: any = (analyticsData as any)?.data ?? analyticsData
-    const summary = analytics?.summary
+    const analytics: any = (analyticsData as any)?.data?.analytics ?? (analyticsData as any)?.data
+    const totalBreaches: number | null = analytics?.total_breaches ?? null
+    const avgDwellMinutes: number | null = analytics?.avg_dwell_minutes ?? null
+    const periodDays: number = analytics?.period_days ?? 30
+    const breachRatePerDay: number | null =
+        totalBreaches !== null && periodDays > 0 ? totalBreaches / periodDays : null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vehicleRanking: any[] = analytics?.vehicle_ranking ?? []
 
     // ── Render ───────────────────────────────────────────────────────────────
     return (
@@ -232,7 +240,16 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                                 <div className="p-4 space-y-2">
                                                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                                     {alerts.map((alert: any, i: number) => {
-                                                        const isEntry = alert.event_type === 'enter' || alert.event_type === 'entry'
+                                                        // Resource shape: { id, attributes: { status, coordinate, created_at }, relationships: { vehicle, geofence } }
+                                                        const status = alert.attributes?.status ?? alert.status ?? ''
+                                                        const isEntry = status === 'entry' || status === 'enter'
+                                                        const timestamp = alert.attributes?.created_at ?? alert.created_at ?? alert.timestamp
+                                                        const reg =
+                                                            alert.relationships?.vehicle?.registration_number ??
+                                                            alert.vehicle?.registration_number ??
+                                                            alert.registration_number
+                                                        const vehicleLabel = reg ?? `Vehicle #${alert.relationships?.vehicle?.id ?? alert.vehicle_id ?? '—'}`
+                                                        const coord = alert.attributes?.coordinate ?? alert.coordinate
                                                         return (
                                                             <div key={alert.id ?? i} className="p-3 rounded-2xl border border-slate-100 bg-white flex items-start gap-3 hover:border-blue-100 transition-all">
                                                                 <div className={cn(
@@ -250,19 +267,15 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                                                             {isEntry ? 'Zone Entry' : 'Zone Exit'}
                                                                         </span>
                                                                         <span className="text-[9px] text-slate-300 font-medium shrink-0">
-                                                                            {alert.timestamp
-                                                                                ? safeDate(alert.timestamp, 'dd MMM, HH:mm')
-                                                                                : '—'}
+                                                                            {timestamp ? safeDate(timestamp, 'dd MMM, HH:mm') : '—'}
                                                                         </span>
                                                                     </div>
                                                                     <p className="text-xs font-bold text-slate-700 mt-0.5 truncate">
-                                                                        {alert.vehicle?.registration_number
-                                                                            ?? alert.registration_number
-                                                                            ?? `Vehicle #${alert.vehicle_id ?? '—'}`}
+                                                                        {vehicleLabel}
                                                                     </p>
-                                                                    {alert.latitude && alert.longitude && (
+                                                                    {coord?.latitude && coord?.longitude && (
                                                                         <p className="text-[9px] text-slate-400 font-mono mt-0.5">
-                                                                            {Number(alert.latitude).toFixed(4)}, {Number(alert.longitude).toFixed(4)}
+                                                                            {Number(coord.latitude).toFixed(4)}, {Number(coord.longitude).toFixed(4)}
                                                                         </p>
                                                                     )}
                                                                 </div>
@@ -492,7 +505,7 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                         )}
 
                                         {/* Top offending vehicles */}
-                                        {analytics?.vehicle_ranking?.length > 0 && (
+                                        {vehicleRanking.length > 0 && (
                                             <>
                                                 <Separator className="border-slate-100" />
                                                 <div>
@@ -503,21 +516,18 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                                     </MetaLabel>
                                                     <div className="mt-2 space-y-2">
                                                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                                        {analytics.vehicle_ranking.slice(0, 5).map((v: any, i: number) => (
+                                                        {vehicleRanking.slice(0, 5).map((v: any, i: number) => (
                                                             <div
-                                                                key={v.registration ?? i}
+                                                                key={v.vehicle_registration ?? v.vehicle_id ?? i}
                                                                 className="p-3 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-rose-100 transition-all"
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="h-8 w-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-400">
                                                                         <TrendingDown className="h-4 w-4" />
                                                                     </div>
-                                                                    <div>
-                                                                        <p className="text-xs font-black text-slate-900 uppercase italic">{v.registration}</p>
-                                                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                                                            Last: {v.last_breach ? safeDate(v.last_breach, 'dd MMM, HH:mm') : 'N/A'}
-                                                                        </p>
-                                                                    </div>
+                                                                    <p className="text-xs font-black text-slate-900 uppercase italic">
+                                                                        {v.vehicle_registration ?? `#${v.vehicle_id}`}
+                                                                    </p>
                                                                 </div>
                                                                 <div className="text-right">
                                                                     <div className="text-sm font-black text-rose-600">{v.breach_count}</div>
@@ -607,18 +617,17 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                                 <div className="space-y-2">
                                                     <Skeleton className="h-14 rounded-xl" />
                                                     <Skeleton className="h-14 rounded-xl" />
-                                                    <Skeleton className="h-14 rounded-xl" />
                                                 </div>
                                             ) : (
                                                 <>
                                                     <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100">
                                                         <MetaLabel>Total Breaches</MetaLabel>
                                                         <p className="text-xl font-black text-slate-900 italic">
-                                                            {summary?.total_breaches ?? '—'}
+                                                            {totalBreaches ?? '—'}
                                                         </p>
-                                                        {summary?.breach_rate_per_day != null && (
+                                                        {breachRatePerDay !== null && (
                                                             <p className="text-[9px] text-rose-500 font-bold uppercase mt-0.5">
-                                                                {summary.breach_rate_per_day.toFixed(1)}/day avg
+                                                                {breachRatePerDay.toFixed(1)}/day avg
                                                             </p>
                                                         )}
                                                     </div>
@@ -626,24 +635,12 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
                                                     <div className="p-3 rounded-2xl bg-blue-50 border border-blue-100">
                                                         <MetaLabel>Avg Dwell</MetaLabel>
                                                         <p className="text-xl font-black text-slate-900 italic">
-                                                            {summary?.average_dwell_time_minutes != null
-                                                                ? `${summary.average_dwell_time_minutes}m`
+                                                            {avgDwellMinutes != null && avgDwellMinutes > 0
+                                                                ? `${avgDwellMinutes}m`
                                                                 : '—'}
                                                         </p>
                                                         <p className="text-[9px] text-blue-500 font-bold uppercase mt-0.5">Per breach</p>
                                                     </div>
-
-                                                    {summary?.peak_breach_time && (
-                                                        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
-                                                            <MetaLabel>Peak Time</MetaLabel>
-                                                            <p className="text-sm font-black text-slate-900 italic leading-tight">
-                                                                {summary.peak_breach_time}
-                                                            </p>
-                                                            <p className="text-[9px] text-emerald-500 font-bold uppercase mt-0.5">
-                                                                Highest activity
-                                                            </p>
-                                                        </div>
-                                                    )}
                                                 </>
                                             )}
                                         </div>
