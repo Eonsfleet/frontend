@@ -104,8 +104,14 @@ export function GeofenceDrawer({ geofenceId, onClose }: Props) {
     const triggerType: string = attrs?.trigger_type ?? 'both'
     const triggerStyle = TRIGGER_STYLES[triggerType] ?? TRIGGER_STYLES.both
 
+    // Laravel wraps ResourceCollection inside success() → { data: { data: [...] } }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vehicles: any[] = (vehiclesData as any)?.data ?? []
+    const vehiclesRaw: any = vehiclesData
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vehicles: any[] =
+        Array.isArray(vehiclesRaw?.data?.data) ? vehiclesRaw.data.data :
+        Array.isArray(vehiclesRaw?.data)       ? vehiclesRaw.data       :
+        []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const alertsRaw: any = alertsData
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
