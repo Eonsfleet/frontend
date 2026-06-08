@@ -119,7 +119,7 @@ const MACHINE: Partial<Record<IncidentStatus, ActionDef[]>> = {
         { key: 'cancel',      label: 'Cancel',      variant: 'outline', needsNote: true, noteLabel: 'Reason for cancellation', noteRequired: true, execute: (id, { note }) => cancelIncident(id, note) },
     ],
     under_investigation: [
-        { key: 'action_required', label: 'Action Required', variant: 'default', execute: (id) => requireAction(id) },
+        { key: 'action_required', label: 'Action Required', variant: 'default', needsNote: true, noteLabel: 'Describe the required action', noteRequired: true, execute: (id, { note }) => requireAction(id, note) },
         { key: 'escalate',        label: 'Escalate',        variant: 'destructive', needsNote: true, noteLabel: 'Escalation reason', noteRequired: true, needsSeverity: true, execute: (id, { note, severity }) => escalateIncident(id, note, severity) },
         { key: 'cancel',          label: 'Cancel',          variant: 'outline', needsNote: true, noteLabel: 'Reason for cancellation', noteRequired: true, execute: (id, { note }) => cancelIncident(id, note) },
     ],
@@ -132,7 +132,7 @@ const MACHINE: Partial<Record<IncidentStatus, ActionDef[]>> = {
     ],
     pending_resolution: [
         { key: 'resolve',     label: 'Resolve Incident',     variant: 'default', needsNote: true, noteLabel: 'Resolution notes', noteRequired: true, execute: (id, { note }) => resolveIncident(id, note) },
-        { key: 'more_action', label: 'More Action Required', variant: 'outline', execute: (id) => requireAction(id) },
+        { key: 'more_action', label: 'More Action Required', variant: 'outline', needsNote: true, noteLabel: 'Describe the required action', noteRequired: true, execute: (id, { note }) => requireAction(id, note) },
     ],
     resolved: [
         { key: 'close', label: 'Close Record', variant: 'secondary', needsNote: true, noteLabel: 'Closing notes (optional)', execute: (id, { note }) => closeIncident(id, note || undefined) },
@@ -281,7 +281,7 @@ export default function IncidentDetailPage() {
     const statusCfg   = STATUS_CFG[status] ?? STATUS_CFG.reported
     const priorityCfg = PRIORITY_CFG[attrs.priority] ?? PRIORITY_CFG.low
     const TypeIcon    = TYPE_ICON[attrs.type] ?? AlertTriangle
-    const reference   = attrs.reference_number ?? `INC-${incident.id}`
+    const reference   = attrs.reference ?? `INC-${incident.id}`
 
     const vehicle    = flatVehicle(rels?.vehicle)
     const driver     = flatPerson(rels?.driver)

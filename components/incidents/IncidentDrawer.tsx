@@ -548,8 +548,9 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['incident-conversation', incidentId] })
         },
-        onError: (_err: unknown, _vars: unknown, context?: { previous: unknown }) => {
-            if (context?.previous && incidentId) queryClient.setQueryData(['incident-conversation', incidentId], context.previous)
+        onError: (_err: unknown, _vars: unknown, context: unknown) => {
+            const ctx = context as { previous: unknown } | undefined
+            if (ctx?.previous && incidentId) queryClient.setQueryData(['incident-conversation', incidentId], ctx.previous)
             toast.error('Failed to send message')
         },
     })
@@ -668,9 +669,9 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
                             >
                                 {priorityStyle.label}
                             </span>
-                            {attrs?.reference_number && (
+                            {attrs?.reference && (
                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                    #{attrs.reference_number}
+                                    #{attrs.reference}
                                 </span>
                             )}
                         </div>
