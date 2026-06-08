@@ -5,7 +5,7 @@ import { Filter, RotateCcw, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface GeofenceFilterState {
-  status?: "active" | "inactive";
+  status?: true | false;
 }
 
 interface GeofenceFiltersProps {
@@ -14,8 +14,8 @@ interface GeofenceFiltersProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: "active" as const, label: "Active" },
-  { value: "inactive" as const, label: "Inactive" },
+  { value: true as const, label: "Active" },
+  { value: false as const, label: "Inactive" },
 ];
 
 export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersProps) {
@@ -33,7 +33,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleSelect = (value: "active" | "inactive") => {
+  const handleSelect = (value: true | false) => {
     onFiltersChange({ status: filters.status === value ? undefined : value });
     setIsOpen(false);
   };
@@ -53,7 +53,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
           onClick={() => setIsOpen((v) => !v)}
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest",
-            isOpen || filters.status
+            isOpen || filters.status !== undefined
               ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
               : "bg-slate-50 text-slate-600 border-slate-100 hover:border-blue-200 hover:text-blue-600"
           )}
@@ -67,7 +67,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
           <div className="absolute left-0 top-full mt-2 w-44 bg-white rounded-2xl border border-slate-100 shadow-xl z-50 p-2 space-y-1">
             <div className="flex items-center justify-between px-2 pb-1 border-b border-slate-50 mb-1">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
-              {filters.status && (
+              {filters.status !== undefined && (
                 <button
                   onClick={handleReset}
                   className="p-1 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors"
@@ -81,7 +81,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
               onClick={() => { onFiltersChange({}); setIsOpen(false); }}
               className={cn(
                 "w-full text-left px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors",
-                !filters.status
+                filters.status === undefined
                   ? "bg-blue-50 text-blue-700"
                   : "text-slate-600 hover:bg-slate-50"
               )}
@@ -90,7 +90,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
             </button>
             {STATUS_OPTIONS.map((opt) => (
               <button
-                key={opt.value}
+                key={String(opt.value)}
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
                   "w-full text-left px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors",
@@ -107,7 +107,7 @@ export function GeofenceFilters({ filters, onFiltersChange }: GeofenceFiltersPro
       </div>
 
       {/* Active filter badge */}
-      {filters.status && (
+      {filters.status !== undefined && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl">
           <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">
             {activeLabel}

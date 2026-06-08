@@ -9,7 +9,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { acknowledgeMaintenanceAlert, closeMaintenanceAlert } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
 import {
-    AlertTriangle, BellRing, Eye, Clock, Wrench, CheckCircle2, ChevronRight, Loader2
+    AlertTriangle, BellRing, Eye, Clock, Wrench, CheckCircle2, ChevronRight, Loader2,
+    AlertCircle
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import Link from 'next/link'
@@ -42,9 +43,10 @@ function StatusIcon({ status }: { status: string }) {
 interface MaintenanceAlertListProps {
     alerts: MaintenanceAlert[]
     isLoading?: boolean
+    showAll?: boolean
 }
 
-export function MaintenanceAlertList({ alerts, isLoading }: MaintenanceAlertListProps) {
+export function MaintenanceAlertList({ alerts, isLoading, showAll = false }: MaintenanceAlertListProps) {
     const queryClient = useQueryClient()
     const [snoozeAlert, setSnoozeAlert] = useState<MaintenanceAlert | null>(null)
     const [workOrderAlert, setWorkOrderAlert] = useState<MaintenanceAlert | null>(null)
@@ -86,6 +88,48 @@ export function MaintenanceAlertList({ alerts, isLoading }: MaintenanceAlertList
                 <p className="text-[10px] text-slate-400 mt-1">All vehicles are within maintenance thresholds.</p>
             </div>
         )
+    }
+
+    const getStatusBadge = (status: string) => {
+        const statusMap: Record<string, { label: string; className: string }> = {
+            'triggered': { label: 'Active', className: 'bg-blue-500 text-white' },
+            'overdue': { label: 'Overdue', className: 'bg-rose-600 text-white animate-pulse' },
+            'acknowledged': { label: 'Acknowledged', className: 'bg-emerald-500 text-white' },
+            'snoozed': { label: 'Snoozed', className: 'bg-amber-500 text-white' },
+            'work_order_created': { label: 'Work Order', className: 'bg-indigo-500 text-white' },
+            'closed': { label: 'Closed', className: 'bg-slate-500 text-white' },
+        }
+        const statusInfo = statusMap[status] || { label: status, className: 'bg-slate-400 text-white' }
+        return (
+            <Badge className={cn(statusInfo.className, "font-black uppercase text-[8px] h-4 tracking-tighter shadow-sm")}>
+                {statusInfo.label}
+            </Badge>
+        )
+    }
+
+    const getAlertTypeBadge = (alertType: string) => {
+        const typeMap: Record<string, { label: string; className: string; icon: React.ElementType }> = {
+            'approaching': { label: 'Approaching', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle },
+            'due': { label: 'Due Now', className: 'bg-rose-50 text-rose-700 border-rose-200', icon: AlertCircle },
+        }
+        const typeInfo = typeMap[alertType] || { label: alertType, className: 'bg-slate-50 text-slate-700 border-slate-200', icon: BellRing }
+        const Icon = typeInfo.icon
+        return (
+            <Badge variant="outline" className={cn(typeInfo.className, "font-black uppercase text-[8px] h-4 tracking-tighter border")}>
+                <Icon className="h-2.5 w-2.5 mr-1" />
+                {typeInfo.label}
+            </Badge>
+        )
+    }
+
+    // Check if snooze is allowed based on status
+    const canSnooze = (status: string) => {
+        return status === 'acknowledged'
+    }
+
+    // Check if acknowledge is allowed
+    const canAcknowledge = (status: string) => {
+        return status === 'triggered' || status === 'overdue'
     }
 
     return (

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as vehicleApi from '@/lib/api/vehicles'
 import * as geofencingApi from '@/lib/api/geofencing'
+import { toast } from 'sonner'
 
 const MOCK_VEHICLES = [
     { id: '1', plate: 'LND-123-XY', group: 'LAGOS SOUTH', status: 'active' },
@@ -37,9 +38,16 @@ export function BulkAssignmentModal({
 
     const assignMutation = useMutation({
         mutationFn: (ids: string[]) => geofencingApi.bulkAssignVehicles(geofenceId!, ids),
-        onSuccess: () => {
+        onSuccess: (data) => {
+            const count = selectedIds.length
+            toast.success(`Successfully assigned ${count} vehicle${count !== 1 ? 's' : ''} to ${geofenceName}`)
             queryClient.invalidateQueries({ queryKey: ['geofences'] })
+            setSelectedIds([])
             onClose()
+        },
+        onError: (error: any) => {
+            const errorMessage = error?.response?.data?.message || 'Failed to assign vehicles'
+            toast.error(errorMessage)
         }
     })
 
@@ -55,7 +63,7 @@ export function BulkAssignmentModal({
 
     const filteredVehicles = vehicles.filter(v =>
         v.attributes.registration_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.relationships?.cluster?.data?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        v.relationships?.cluster?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     return (
@@ -89,9 +97,6 @@ export function BulkAssignmentModal({
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 transition-colors">
-                        <Filter className="h-4 w-4" />
-                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -123,7 +128,7 @@ export function BulkAssignmentModal({
                                         {vehicle.attributes.registration_number}
                                     </h4>
                                     <p className={cn("text-[9px] font-bold uppercase tracking-widest", selectedIds.includes(vehicle.id) ? "text-blue-100" : "text-slate-400")}>
-                                        {vehicle.relationships?.cluster?.data?.name || 'GENERIC FLEET'}
+                                        {vehicle.relationships?.cluster?.name || 'GENERIC FLEET'}
                                     </p>
                                 </div>
                             </div>

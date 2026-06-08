@@ -108,9 +108,9 @@ export function IncidentList() {
                                             onClick={() => openDrawer(String(item.id))}
                                         >
                                             <td className="px-6 py-4">
-                                                <span className="font-medium text-blue-600">
-                                                    {item.attributes.reference_number}
-                                                </span>
+                                                <Link href={`/incidents/${item.id}`} className="font-medium text-blue-600 hover:underline">
+                                                    {item.attributes.reference}
+                                                </Link>
                                             </td>
                                             <td className="px-6 py-4 capitalize font-medium text-slate-700">
                                                 {item.attributes.type.replace(/_/g, ' ')}

@@ -28,7 +28,7 @@ export interface IncidentVehicle {
 export interface Incident {
     id: string
     attributes: {
-        reference_number?: string
+        reference?: string
         // PRD response fields
         victim_name?: string
         type: string

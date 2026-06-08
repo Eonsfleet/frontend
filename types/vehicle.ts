@@ -157,7 +157,7 @@ export interface Vehicle {
     attributes: VehicleAttributes
     relationships: {
         driver?: { data: { id: string; type: 'users'; name?: string } }
-        cluster?: { data: { id: string; type: 'clusters'; name?: string } }
+        cluster?: { id: string; type: 'clusters'; name?: string  }
         device?: VehicleDevice | null
         /** Assigned driver — object when assigned, empty array when unassigned */
         current_driver?:
