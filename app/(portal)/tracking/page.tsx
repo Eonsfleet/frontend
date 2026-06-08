@@ -98,7 +98,7 @@ export default function TrackingPage() {
     let result = vehicles;
     if (selectedClusterIds.length > 0) {
       result = result.filter((v: Vehicle) => {
-        const clusterId = String(v.relationships?.cluster?.data?.id || "");
+        const clusterId = String(v.relationships?.cluster?.id || "");
         return selectedClusterIds.includes(clusterId);
       });
     }
