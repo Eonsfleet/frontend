@@ -45,7 +45,7 @@ export default function EditGeofencePage() {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        trigger_type: 'both' as 'enter' | 'exit' | 'both',
+        trigger_type: '',
         location_name: '',
         speed: 0,
         is_active: true,
@@ -70,17 +70,23 @@ export default function EditGeofencePage() {
     // Seed form when data loads
     useEffect(() => {
         const g = geofenceData?.data
+        console.log('geofenceData:', geofenceData)
+        console.log('g (geofenceData.data):', g)
+        console.log('g.attributes:', g?.attributes)
+        console.log('g.attributes.trigger_type:', g?.attributes?.trigger_type)
         if (!g?.attributes) return
-        setFormData({
+        const newFormData = {
             name: g.attributes.name ?? '',
             description: g.attributes.description ?? '',
-            trigger_type: g.attributes.trigger_type ?? 'both',
+            trigger_type: g.attributes.trigger_type ?? '',
             location_name: g.attributes.location ?? '',
             speed: g.attributes.speed ?? 0,
             // API may return `status` (boolean) instead of `is_active`
             is_active: (g.attributes as any).status ?? g.attributes.is_active ?? true,
             vehicle_ids: [],
-        })
+        }
+        console.log('Setting formData with trigger_type:', newFormData.trigger_type)
+        setFormData(newFormData)
     }, [geofenceData])
 
     // Seed selected vehicles — prefer dedicated endpoint, fall back to relationships on the geofence
@@ -237,6 +243,7 @@ export default function EditGeofencePage() {
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Alert Rule</label>
                                         <Select
+                                            key={formData.trigger_type}
                                             value={formData.trigger_type}
                                             onValueChange={(val: any) => setFormData({ ...formData, trigger_type: val })}
                                         >
@@ -245,10 +252,11 @@ export default function EditGeofencePage() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="both">On Entry & Exit</SelectItem>
-                                                <SelectItem value="enter">On Entry Only</SelectItem>
+                                                <SelectItem value="entry">On Entry Only</SelectItem>
                                                 <SelectItem value="exit">On Exit Only</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                        <div className="text-xs text-slate-400 mt-1">Current value: {formData.trigger_type || '(empty)'}</div>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-700">Speed Limit (km/h)</label>
