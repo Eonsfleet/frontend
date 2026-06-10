@@ -298,7 +298,9 @@ export function MaintenanceScheduleTable({
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="h-3 w-3 text-slate-300" />
                                                     <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                                                        {attrs.due_date ? format(new Date(attrs.due_date), 'dd MMM yyyy') : 'N/A'}
+                                                        {attrs.schedule_date
+ ? format(new Date(attrs.schedule_date
+), 'dd MMM yyyy') : 'N/A'}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-0.5">

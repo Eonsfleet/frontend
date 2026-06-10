@@ -75,6 +75,11 @@ export function CreateMaintenanceScheduleModal({
   const [checklistSearch, setChecklistSearch] = React.useState("");
   const [showCreateChecklistModal, setShowCreateChecklistModal] =
     React.useState(false);
+  const [serviceCategoryOpen, setServiceCategoryOpen] = React.useState(false);
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = React.useState(false);
+  const [unitDropdownOpen, setUnitDropdownOpen] = React.useState(false);
+  const [vendorDropdownOpen, setVendorDropdownOpen] = React.useState(false);
+  const [datePopoverOpen, setDatePopoverOpen] = React.useState(false);
   const [newChecklistForm, setNewChecklistForm] = React.useState({
     name: "",
     description: "",
@@ -262,7 +267,7 @@ export function CreateMaintenanceScheduleModal({
                     </Badge>
                   </div>
                 ) : (
-                  <Popover>
+                  <Popover open={vehicleDropdownOpen} onOpenChange={setVehicleDropdownOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -307,6 +312,7 @@ export function CreateMaintenanceScheduleModal({
                                     ...formData,
                                     vehicle_id: v.id.toString(),
                                   });
+                                  setVehicleDropdownOpen(false);
                                 }}
                                 className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                               >
@@ -339,7 +345,7 @@ export function CreateMaintenanceScheduleModal({
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Service Category
                 </Label>
-                <Popover>
+                <Popover open={serviceCategoryOpen} onOpenChange={setServiceCategoryOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -381,6 +387,7 @@ export function CreateMaintenanceScheduleModal({
                                   ...formData,
                                   service_type: t.value,
                                 });
+                                setServiceCategoryOpen(false);
                               }}
                               className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                             >
@@ -475,7 +482,7 @@ export function CreateMaintenanceScheduleModal({
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Unit
                       </Label>
-                      <Popover>
+                      <Popover open={unitDropdownOpen} onOpenChange={setUnitDropdownOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
@@ -508,6 +515,7 @@ export function CreateMaintenanceScheduleModal({
                                         ...formData,
                                         interval_unit: unit.value as any,
                                       });
+                                      setUnitDropdownOpen(false);
                                     }}
                                     className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                                   >
@@ -533,7 +541,7 @@ export function CreateMaintenanceScheduleModal({
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Initial Date
                     </Label>
-                    <Popover>
+                    <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant={"outline"}
@@ -555,9 +563,10 @@ export function CreateMaintenanceScheduleModal({
                         <Calendar
                           mode="single"
                           selected={formData.schedule_date}
-                          onSelect={(d) =>
-                            setFormData({ ...formData, schedule_date: d })
-                          }
+                          onSelect={(d) => {
+                            setFormData({ ...formData, schedule_date: d });
+                            setDatePopoverOpen(false);
+                          }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -616,7 +625,7 @@ export function CreateMaintenanceScheduleModal({
                     Optional — assign later
                   </span>
                 </div>
-                <Popover>
+                <Popover open={vendorDropdownOpen} onOpenChange={setVendorDropdownOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -652,7 +661,10 @@ export function CreateMaintenanceScheduleModal({
                           {formData.vendor_id && (
                             <CommandItem
                               value="__clear__"
-                              onSelect={() => setFormData({ ...formData, vendor_id: "" })}
+                              onSelect={() => {
+                                setFormData({ ...formData, vendor_id: "" });
+                                setVendorDropdownOpen(false);
+                              }}
                               className="font-bold uppercase text-[10px] tracking-tight py-3 px-4 text-slate-400"
                             >
                               Clear selection
@@ -667,6 +679,7 @@ export function CreateMaintenanceScheduleModal({
                                   ...formData,
                                   vendor_id: v.id.toString(),
                                 });
+                                setVendorDropdownOpen(false);
                               }}
                               className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                             >
