@@ -218,7 +218,7 @@ export const getVehicleMaintenanceSchedules = async (
   vehicleId: string | number,
 ): Promise<MaintenanceListResponse> => {
   const response = await apiClient.get<MaintenanceListResponse>(
-    `/maintenances/schedules/vehicle/${vehicleId}`,
+    `/maintenances/schedule/vehicle/${vehicleId}`,
   );
   return response.data;
 };

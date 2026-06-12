@@ -25,8 +25,7 @@ export const useUpdateUser = () => {
 
 export const useUpdatePassword = () => {
     return useMutation({
-        mutationFn: ({ id, data }: { id: string | number; data: UpdatePasswordPayload }) =>
-            updatePassword(id, data),
+        mutationFn: (data: UpdatePasswordPayload) => updatePassword(data),
         onSuccess: () => {
             toast.success('Password changed securely')
         },
