@@ -8,6 +8,7 @@ import {
   MaintenanceCostSummary,
   ConversationMessage,
   WorkflowHistoryEntry,
+  ScheduleChecklist,
 } from "@/types";
 
 // ── Pagination shape (matches actual backend) ─────────────────────────────────
@@ -56,7 +57,7 @@ export interface MaintenanceAlertListResponse {
 
 export interface MaintenanceAlertDetailResponse {
   message: string;
-  data: MaintenanceAlert;
+  data: MaintenanceAlert | { alert: MaintenanceAlert }
 }
 
 export interface MaintenanceLogListResponse {
@@ -90,13 +91,9 @@ export interface HistoryResponse {
   data: { history: WorkflowHistoryEntry[] };
 }
 
-export interface ChecklistItem {
-  id: number | string;
-  name: string;
-}
-
 export interface ChecklistResponse {
-  data: { checklists: ChecklistItem[] };
+  message?: string;
+  data: { checklists: ScheduleChecklist[] };
 }
 
 export interface WorkflowSettings {
@@ -144,6 +141,7 @@ export const getMaintenances = async (params?: {
   q?: string;
   orderBy?: "asc" | "desc";
   sortBy?: string;
+  series_id?: string;
 }): Promise<MaintenanceListResponse> => {
   const response = await apiClient.get<MaintenanceListResponse>(
     "/maintenances",
@@ -172,7 +170,7 @@ export const createSchedule = async (data: {
   note?: string;
 }): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.post<MaintenanceScheduleDetailResponse>(
-    "/maintenances/schedules",
+    "/maintenances/schedule",
     data,
   );
   return response.data;
@@ -181,7 +179,7 @@ export const createSchedule = async (data: {
 export const getScheduleById = async (
   id: string | number,
 ): Promise<MaintenanceScheduleDetailResponse> => {
-  const response = await apiClient.get<any>(`/maintenances/schedules/${id}`);
+  const response = await apiClient.get<any>(`/maintenances/schedule/${id}`);
   const raw = response.data;
   // API returns { data: { id, attributes, relationships } } — normalize to { data: { schedule } }
   return {
@@ -195,14 +193,14 @@ export const updateSchedule = async (
   data: Record<string, unknown>,
 ): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.put<MaintenanceScheduleDetailResponse>(
-    `/maintenances/schedules/${id}`,
+    `/maintenances/schedule/${id}`,
     data,
   );
   return response.data;
 };
 
 export const deleteSchedule = async (id: string | number): Promise<void> => {
-  await apiClient.delete(`/maintenances/schedules/${id}`);
+  await apiClient.delete(`/maintenances/schedule/${id}`);
 };
 
 export const assignVendorToSchedule = async (
@@ -210,7 +208,7 @@ export const assignVendorToSchedule = async (
   data: { vendor_id: number | string; priority?: string },
 ): Promise<MaintenanceScheduleDetailResponse> => {
   const response = await apiClient.put<MaintenanceScheduleDetailResponse>(
-    `/maintenances/schedules/${id}/assign-vendor`,
+    `/maintenances/schedule/${id}/assign-vendor`,
     data,
   );
   return response.data;
@@ -220,7 +218,7 @@ export const getVehicleMaintenanceSchedules = async (
   vehicleId: string | number,
 ): Promise<MaintenanceListResponse> => {
   const response = await apiClient.get<MaintenanceListResponse>(
-    `/maintenances/schedules/vehicle/${vehicleId}`,
+    `/maintenances/schedule/vehicle/${vehicleId}`,
   );
   return response.data;
 };
@@ -229,7 +227,19 @@ export const getScheduleChecklists = async (
   scheduleId: string | number,
 ): Promise<ChecklistResponse> => {
   const response = await apiClient.get<ChecklistResponse>(
-    `/maintenances/schedules/${scheduleId}/checklists`,
+    `/maintenances/schedule/${scheduleId}/checklists`,
+  );
+  return response.data;
+};
+
+export const toggleChecklistItem = async (
+  scheduleId: string | number,
+  pivotId: string | number,
+  completed: boolean,
+): Promise<{ message: string; data: { pivot_id: number; status: string; completed_at: string | null } }> => {
+  const response = await apiClient.patch(
+    `/maintenances/schedule/${scheduleId}/checklists/${pivotId}`,
+    { completed },
   );
   return response.data;
 };
@@ -257,6 +267,26 @@ export const createChecklistItem = async (data: {
 }): Promise<any> => {
   const response = await apiClient.post("/maintenances/checklists", data);
   return response.data;
+};
+
+export const addChecklistItemToSchedule = async (
+  scheduleId: string | number,
+  data: { name: string; description?: string },
+): Promise<any> => {
+  const response = await apiClient.post(
+    `/maintenances/schedule/${scheduleId}/checklists`,
+    data,
+  );
+  return response.data;
+};
+
+export const removeChecklistItemFromSchedule = async (
+  scheduleId: string | number,
+  pivotId: string | number,
+): Promise<void> => {
+  await apiClient.delete(
+    `/maintenances/schedule/${scheduleId}/checklists/${pivotId}`,
+  );
 };
 
 export const getUpcomingMaintenance = async (): Promise<any> => {
@@ -416,6 +446,8 @@ export const getMaintenanceAlerts = async (params?: {
   page?: number;
   per_page?: number;
   status?: string;
+  vehicle_id?: string | number;
+  schedule_id?: string | number;
 }): Promise<MaintenanceAlertListResponse> => {
   const response = await apiClient.get<MaintenanceAlertListResponse>(
     "/maintenance/alerts",
@@ -469,6 +501,13 @@ export const createWorkOrderFromAlert = async (
     `/maintenance/alerts/${id}/work-order`,
     data,
   );
+  return response.data;
+};
+
+export const closeMaintenanceAlert = async (
+  id: string | number,
+): Promise<any> => {
+  const response = await apiClient.patch(`/maintenance/alerts/${id}/close`);
   return response.data;
 };
 

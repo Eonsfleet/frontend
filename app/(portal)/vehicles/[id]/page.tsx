@@ -109,7 +109,7 @@ export default function VehicleDetailPage() {
                 onClose={() => setIsEditModalOpen(false)}
                 initialData={vehicle}
             />
-
+            
             {/* Delete confirmation dialog */}
             {isDeleteConfirmOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">

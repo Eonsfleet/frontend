@@ -21,12 +21,12 @@ export interface UserListResponse {
     }
 }
 
-export const getUsers = async (params?: { page?: number; per_page?: number; role?: string }): Promise<UserListResponse> => {
+export const getUsers = async (params?: { page?: number; per_page?: number; q?: string }): Promise<UserListResponse> => {
     const response = await apiClient.get<UserListResponse>('/users', { params })
     return response.data
 }
 
-export const inviteUser = async (data: { email: string; first_name: string; last_name: string; role: string; cluster_id?: number }): Promise<{ message: string }> => {
+export const inviteUser = async (data: { email: string; f_name: string; l_name: string; role: string; cluster_id?: number }): Promise<{ message: string }> => {
     const response = await apiClient.post<{ message: string }>('/users', data)
     return response.data
 }
@@ -97,6 +97,11 @@ export const getClusters = async (params?: { page?: number; per_page?: number })
     return response.data
 }
 
+export const getCluster = async (id: string | number): Promise<{ message: string, data: { cluster: Cluster } }> => {
+    const response = await apiClient.get<{ message: string, data: { cluster: Cluster } }>(`/clusters/${id}`)
+    return response.data
+}
+
 export const createCluster = async (data: {
     name: string;
     description?: string;
@@ -116,6 +121,11 @@ export const updateCluster = async (id: string | number, data: {
     vehicles?: (number | string)[];
 }): Promise<{ message: string, data: Cluster }> => {
     const response = await apiClient.put<{ message: string, data: Cluster }>(`/clusters/${id}`, data)
+    return response.data
+}
+
+export const deleteCluster = async (id: string | number): Promise<{ message: string }> => {
+    const response = await apiClient.delete<{ message: string }>(`/clusters/${id}`)
     return response.data
 }
 
@@ -146,5 +156,27 @@ export const testWebhook = async (id: string): Promise<{ message: string }> => {
 
 export const getWebhookDeliveries = async (id: string): Promise<{ data: { deliveries: WebhookDelivery[] } }> => {
     const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[] } }>(`/webhooks/${id}/deliveries`)
+    return response.data
+}
+
+// Organization Policies
+export interface OrgPolicies {
+    speed_limit_kmh: number
+    idle_threshold_minutes: number
+    after_hours_enabled: boolean
+    after_hours_start: string
+    after_hours_end: string
+    maintenance_approaching_km: number
+    maintenance_approaching_days: number
+    maintenance_escalation_hours: number
+}
+
+export const getPolicies = async (): Promise<{ data: OrgPolicies }> => {
+    const response = await apiClient.get<{ data: OrgPolicies }>('/organization/policies')
+    return response.data
+}
+
+export const updatePolicies = async (data: Partial<OrgPolicies>): Promise<{ data: OrgPolicies }> => {
+    const response = await apiClient.put<{ data: OrgPolicies }>('/organization/policies', data)
     return response.data
 }

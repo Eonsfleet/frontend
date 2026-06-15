@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { IncidentList } from '@/components/incidents/IncidentList'
 
@@ -17,7 +18,9 @@ export default function IncidentsPage() {
                     </div>
                 </div>
 
-                <IncidentList />
+                <Suspense>
+                    <IncidentList />
+                </Suspense>
             </div>
         </UpgradeGate>
     )

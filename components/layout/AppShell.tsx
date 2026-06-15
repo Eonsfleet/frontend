@@ -2,8 +2,11 @@
 
 import React from 'react'
 import Sidebar from './Sidebar'
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+    useRealtimeNotifications()
+
     return (
         <div className="flex h-screen w-full overflow-hidden bg-white">
             <Sidebar />

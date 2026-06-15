@@ -13,7 +13,7 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
 
     const navItems = [
         { name: 'Expenses', href: '/fuel', icon: Fuel },
-        { name: 'Card Management', href: '/fuel/cards', icon: CreditCard },
+        // { name: 'Card Management', href: '/fuel/cards', icon: CreditCard },
         { name: 'Reconciliation', href: '/fuel/reconciliation', icon: GitCompare },
         { name: 'Reports', href: '/fuel/reports', icon: BarChart3 },
         { name: 'Live Monitor', href: '/fuel/monitor', icon: Radio },

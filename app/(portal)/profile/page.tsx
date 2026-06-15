@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { toast } from 'sonner'
-import { Loader2, UserCircle, Upload, Shield, Calendar, Phone } from 'lucide-react'
+import { Loader2, UserCircle, Upload, Shield, Calendar, Phone, Eye, EyeOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { useUpdateUser, useUpdatePassword, useUploadFile } from '@/lib/hooks/useUpdateUser'
@@ -33,6 +33,27 @@ const passwordSchema = z.object({
 });
 
 type PasswordFormValues = z.infer<typeof passwordSchema>
+
+const PasswordInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+    (props, ref) => {
+        const [show, setShow] = React.useState(false)
+        return (
+            <div className="relative">
+                <Input type={show ? 'text' : 'password'} ref={ref} {...props} className="pr-10" />
+                <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShow((s) => !s)}
+                    aria-label={show ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                    {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+            </div>
+        )
+    }
+)
+PasswordInput.displayName = 'PasswordInput'
 
 export default function ProfilePage() {
     const { user, updateUser: updateUserStore } = useAuthStore()
@@ -145,19 +166,18 @@ export default function ProfilePage() {
     }
 
     const onSubmitPassword = async (data: PasswordFormValues) => {
+        // new_password/confirm_password match is enforced client-side by the schema;
+        // the API only expects { current_password, password }
         const payload = {
             current_password: data.current_password,
-            new_password: data.new_password,
+            password: data.new_password,
         }
 
-        updatePasswordMutation.mutate(
-            { id: user!.id, data: payload },
-            {
-                onSuccess: () => {
-                    resetPassword()
-                }
+        updatePasswordMutation.mutate(payload, {
+            onSuccess: () => {
+                resetPassword()
             }
-        )
+        })
     }
 
     if (!user) return <div role="status" aria-label="Loading" className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>
@@ -272,18 +292,18 @@ export default function ProfilePage() {
                             <CardContent className="p-6 space-y-4">
                                 <div className="space-y-2 max-w-sm">
                                     <Label>Current Password</Label>
-                                    <Input type="password" {...registerObj('current_password')} />
+                                    <PasswordInput {...registerObj('current_password')} />
                                     {passwordErrors.current_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.current_password.message}</p>}
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl pt-2 border-t border-slate-100">
                                     <div className="space-y-2">
                                         <Label>New Password</Label>
-                                        <Input type="password" {...registerObj('new_password')} />
+                                        <PasswordInput {...registerObj('new_password')} />
                                         {passwordErrors.new_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.new_password.message}</p>}
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Confirm Password</Label>
-                                        <Input type="password" {...registerObj('confirm_password')} />
+                                        <PasswordInput {...registerObj('confirm_password')} />
                                         {passwordErrors.confirm_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.confirm_password.message}</p>}
                                     </div>
                                 </div>

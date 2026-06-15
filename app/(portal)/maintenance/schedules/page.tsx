@@ -5,20 +5,35 @@ import { MaintenanceScheduleTable } from '@/components/maintenance/MaintenanceSc
 import { useQuery } from '@tanstack/react-query'
 import { getMaintenances } from '@/lib/api/maintenance'
 import { Button } from '@/components/ui/button'
-import { Plus, Filter, CalendarRange, Search, Download } from 'lucide-react'
+import { Plus, Search, Download, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { CreateMaintenanceScheduleModal } from '@/components/maintenance/CreateScheduleModal'
+import { cn } from '@/lib/utils'
+
+const STATUS_FILTERS: { label: string; value: string | undefined }[] = [
+    { label: 'All Cycles', value: undefined },
+    { label: 'Upcoming',   value: 'upcoming' },
+    { label: 'Overdue',    value: 'overdue' },
+    { label: 'Completed',  value: 'completed' },
+    { label: 'Cancelled',  value: 'cancelled' },
+]
 
 export default function MaintenanceSchedulesPage() {
     const [page, setPage] = React.useState(1)
     const [searchQuery, setSearchQuery] = React.useState('')
+    const [statusFilter, setStatusFilter] = React.useState<string | undefined>(undefined)
     const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
 
     const { data: scheduleData, isLoading } = useQuery({
-        queryKey: ['maintenance-schedules-full', page, searchQuery],
-        queryFn: () => getMaintenances({ page, per_page: 20 }),
+        queryKey: ['maintenance-schedules-full', page, searchQuery, statusFilter],
+        queryFn: () => getMaintenances({
+            page,
+            per_page: 20,
+            q: searchQuery || undefined,
+            status: statusFilter,
+        }),
     })
 
     return (
@@ -57,12 +72,32 @@ export default function MaintenanceSchedulesPage() {
                         placeholder="Filter by Registration, Asset ID or Service Type..."
                         className="pl-11 h-12 rounded-xl border-slate-200 bg-white shadow-sm font-medium text-sm focus:ring-slate-900 transition-all"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value)
+                            setPage(1)
+                        }}
                     />
                 </div>
-                <Button variant="outline" className="h-12 border-slate-200 bg-white font-black text-[10px] uppercase tracking-widest px-6 shadow-sm">
-                    <Filter className="h-3.5 w-3.5 mr-2 text-slate-400" /> Filter
-                </Button>
+            </div>
+
+            <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner w-fit overflow-x-auto max-w-full">
+                {STATUS_FILTERS.map((opt) => (
+                    <button
+                        key={opt.label}
+                        onClick={() => {
+                            setStatusFilter(opt.value)
+                            setPage(1)
+                        }}
+                        className={cn(
+                            'px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap',
+                            statusFilter === opt.value
+                                ? 'bg-white text-slate-900 shadow-lg'
+                                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/50'
+                        )}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
             </div>
 
             <Card className="border-slate-200/60 shadow-sm overflow-hidden bg-white">
@@ -82,8 +117,4 @@ export default function MaintenanceSchedulesPage() {
             />
         </div>
     )
-}
-
-function ChevronRight({ className }: { className?: string }) {
-    return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
 }

@@ -5,13 +5,34 @@ export interface Notification {
     id: string
     attributes: {
         type: string
-        subject: string
-        body: string
-        data: any
+        subject: string | null
+        body: string | null
+        data: Record<string, unknown>
         is_read: boolean
         read_at: string | null
         created_at: string
     }
+}
+
+export interface NotificationType {
+    id: number
+    code: string
+    key?: string
+    name: string
+    category?: string
+    module?: string
+    description?: string | null
+    default_priority?: string | null
+    default_channels?: string[]
+    is_mandatory?: boolean
+    notification_category?: string
+}
+
+export interface RealtimeNotificationPayload {
+    title: string
+    body: string
+    action_url?: string | null
+    icon?: string | null
 }
 
 export interface NotificationInboxResponse {
@@ -21,7 +42,7 @@ export interface NotificationInboxResponse {
     }
 }
 
-export const getInbox = async (params?: { page?: number; unread_only?: boolean }): Promise<NotificationInboxResponse> => {
+export const getInbox = async (params?: { page?: number; per_page?: number; unread_only?: boolean }): Promise<NotificationInboxResponse> => {
     const response = await apiClient.get<NotificationInboxResponse>('/notifications/user/inbox', { params })
     return response.data
 }
@@ -35,6 +56,10 @@ export const markAsRead = async (ids: string | string[]): Promise<{ message: str
 export const markAllAsRead = async (): Promise<{ message: string }> => {
     const response = await apiClient.post<{ message: string }>('/notifications/user/inbox/read-all')
     return response.data
+}
+
+export const deleteNotification = async (id: string): Promise<void> => {
+    await apiClient.delete(`/notifications/user/inbox/${id}`)
 }
 
 export const getPreferences = async (): Promise<{ data: { channels: ChannelAvailability } }> => {
@@ -69,18 +94,18 @@ export const getRules = async (): Promise<{ data: { success: boolean; rules: Not
     return response.data
 }
 
-export const getNotificationTypes = async (params?: { configurable?: boolean }): Promise<{ data: { id: number; code: string; name: string }[] }> => {
-    const response = await apiClient.get<{ data: { id: number; code: string; name: string }[] }>('/notifications/types', { params })
+export const getNotificationTypes = async (params?: { configurable?: boolean; category?: string }): Promise<{ data: NotificationType[] }> => {
+    const response = await apiClient.get<{ data: NotificationType[] }>('/notifications/types', { params })
     return response.data
 }
 
 export const createRule = async (data: {
     notification_type_id: number;
     is_enabled: boolean;
-    channel_types: string[];
-    recipient_groups?: (string | number)[];
+    enabled_channels: string[];
+    recipient_group_ids?: (string | number)[];
     recipient_roles?: string[];
-    recipient_users?: (string | number)[];
+    recipient_user_ids?: (string | number)[];
 }): Promise<{ data: NotificationRule }> => {
     const response = await apiClient.post<{ data: NotificationRule }>('/notifications/config/rules', data)
     return response.data
@@ -93,10 +118,11 @@ export const getDelegations = async (): Promise<{ data: { success: boolean; dele
 }
 
 export const createDelegation = async (data: {
-    initial_user_id?: string | number;
-    delegated_to_id: string | number;
-    event_types: string[];
-    expires_at: string;
+    initial_user_id: string | number;
+    delegate_user_id: string | number;
+    start_date: string;
+    end_date?: string;
+    notification_type_ids?: number[];
     reason?: string;
 }): Promise<{ data: NotificationDelegation }> => {
     const response = await apiClient.post<{ data: NotificationDelegation }>('/notifications/delegations', data)

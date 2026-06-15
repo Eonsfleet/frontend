@@ -12,7 +12,7 @@ export interface UpdateUserPayload {
 
 export interface UpdatePasswordPayload {
     current_password: string
-    new_password: string
+    password: string
 }
 
 export interface FileUploadResponse {
@@ -35,10 +35,9 @@ export const updateUser = async (
 }
 
 export const updatePassword = async (
-    id: string | number,
     data: UpdatePasswordPayload
 ): Promise<{ message: string }> => {
-    const response = await apiClient.put<{ message: string }>(`/users/${id}/password`, data)
+    const response = await apiClient.put<{ message: string }>('/auth/change-password', data)
     return response.data
 }
 

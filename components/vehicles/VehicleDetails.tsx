@@ -141,6 +141,8 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const maintenanceSchedules = maintenanceResponse?.data?.schedules || [];
   const documents = documentsResponse?.data?.documents || [];
 
+  
+
   // GPS device from relationships
   const device = vehicle.relationships?.device ?? null;
 
@@ -238,7 +240,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 <DetailItem
                   label="Cluster"
                   value={
-                    vehicle.relationships?.cluster?.data?.name || "Unassigned"
+                    vehicle.relationships?.cluster?.name || "Unassigned"
                   }
                   action={
                     <PermissionGate permission="vehicles:assign">
@@ -247,7 +249,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                         className="h-auto p-0 text-xs text-blue-600 font-semibold"
                         onClick={() => setIsAssignClusterOpen(true)}
                       >
-                        {vehicle.relationships?.cluster?.data
+                        {vehicle.relationships?.cluster
                           ? "Change"
                           : "Assign"}
                       </Button>
@@ -1109,6 +1111,8 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                   {maintenanceSchedules.map((schedule: any) => {
                     const attrs = schedule.attributes || {};
                     const logs = schedule.relationships?.logs || [];
+
+                    console.log(logs.due_date)
                     return (
                       <div key={schedule.id} className="space-y-3">
                         <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
@@ -1164,7 +1168,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                                     <p className="text-xs font-semibold text-slate-700">
                                       Due:{" "}
                                       {new Date(
-                                        log.due_date,
+                                        log?.attributes?.due_date
                                       ).toLocaleDateString()}
                                     </p>
                                     {log.completed_date && (

@@ -35,9 +35,6 @@ import {
   CalendarIcon,
   Car,
   Wrench,
-  Clock,
-  CheckSquare,
-  Bell,
   ChevronRight,
   ChevronLeft,
   Loader2,
@@ -78,6 +75,11 @@ export function CreateMaintenanceScheduleModal({
   const [checklistSearch, setChecklistSearch] = React.useState("");
   const [showCreateChecklistModal, setShowCreateChecklistModal] =
     React.useState(false);
+  const [serviceCategoryOpen, setServiceCategoryOpen] = React.useState(false);
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = React.useState(false);
+  const [unitDropdownOpen, setUnitDropdownOpen] = React.useState(false);
+  const [vendorDropdownOpen, setVendorDropdownOpen] = React.useState(false);
+  const [datePopoverOpen, setDatePopoverOpen] = React.useState(false);
   const [newChecklistForm, setNewChecklistForm] = React.useState({
     name: "",
     description: "",
@@ -150,7 +152,7 @@ export function CreateMaintenanceScheduleModal({
         toast.success("Checklist created successfully");
         queryClient.invalidateQueries({ queryKey: ["checklists-templates"] });
         // Auto-add the newly created checklist to the form
-        const newChecklistId = response?.data?.id;
+        const newChecklistId = response?.data?.id ? Number(response.data.id) : null;
         if (newChecklistId) {
           setFormData((prev) => ({
             ...prev,
@@ -196,6 +198,7 @@ export function CreateMaintenanceScheduleModal({
       schedule_date: formData.schedule_date
         ? format(formData.schedule_date, "yyyy-MM-dd")
         : undefined,
+      vendor_id: formData.vendor_id || undefined,
     });
   };
 
@@ -264,7 +267,7 @@ export function CreateMaintenanceScheduleModal({
                     </Badge>
                   </div>
                 ) : (
-                  <Popover>
+                  <Popover open={vehicleDropdownOpen} onOpenChange={setVehicleDropdownOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -309,6 +312,7 @@ export function CreateMaintenanceScheduleModal({
                                     ...formData,
                                     vehicle_id: v.id.toString(),
                                   });
+                                  setVehicleDropdownOpen(false);
                                 }}
                                 className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                               >
@@ -341,7 +345,7 @@ export function CreateMaintenanceScheduleModal({
                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Service Category
                 </Label>
-                <Popover>
+                <Popover open={serviceCategoryOpen} onOpenChange={setServiceCategoryOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -383,6 +387,7 @@ export function CreateMaintenanceScheduleModal({
                                   ...formData,
                                   service_type: t.value,
                                 });
+                                setServiceCategoryOpen(false);
                               }}
                               className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                             >
@@ -477,7 +482,7 @@ export function CreateMaintenanceScheduleModal({
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Unit
                       </Label>
-                      <Popover>
+                      <Popover open={unitDropdownOpen} onOpenChange={setUnitDropdownOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
@@ -510,6 +515,7 @@ export function CreateMaintenanceScheduleModal({
                                         ...formData,
                                         interval_unit: unit.value as any,
                                       });
+                                      setUnitDropdownOpen(false);
                                     }}
                                     className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                                   >
@@ -535,7 +541,7 @@ export function CreateMaintenanceScheduleModal({
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Initial Date
                     </Label>
-                    <Popover>
+                    <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant={"outline"}
@@ -557,10 +563,10 @@ export function CreateMaintenanceScheduleModal({
                         <Calendar
                           mode="single"
                           selected={formData.schedule_date}
-                          onSelect={(d) =>
-                            setFormData({ ...formData, schedule_date: d })
-                          }
-                          initialFocus
+                          onSelect={(d) => {
+                            setFormData({ ...formData, schedule_date: d });
+                            setDatePopoverOpen(false);
+                          }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -611,10 +617,15 @@ export function CreateMaintenanceScheduleModal({
           {step === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Service Provider
-                </Label>
-                <Popover>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Service Provider
+                  </Label>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    Optional — assign later
+                  </span>
+                </div>
+                <Popover open={vendorDropdownOpen} onOpenChange={setVendorDropdownOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -647,6 +658,18 @@ export function CreateMaintenanceScheduleModal({
                       <CommandList className="max-h-[200px]">
                         <CommandEmpty>No vendor found.</CommandEmpty>
                         <CommandGroup>
+                          {formData.vendor_id && (
+                            <CommandItem
+                              value="__clear__"
+                              onSelect={() => {
+                                setFormData({ ...formData, vendor_id: "" });
+                                setVendorDropdownOpen(false);
+                              }}
+                              className="font-bold uppercase text-[10px] tracking-tight py-3 px-4 text-slate-400"
+                            >
+                              Clear selection
+                            </CommandItem>
+                          )}
                           {vendorData?.data?.map((v: any) => (
                             <CommandItem
                               key={v.id}
@@ -656,6 +679,7 @@ export function CreateMaintenanceScheduleModal({
                                   ...formData,
                                   vendor_id: v.id.toString(),
                                 });
+                                setVendorDropdownOpen(false);
                               }}
                               className="font-bold uppercase text-[10px] tracking-tight py-3 px-4"
                             >
@@ -689,7 +713,7 @@ export function CreateMaintenanceScheduleModal({
                       const checklistName =
                         (
                           checklistData?.data?.checklists?.find(
-                            (c: any) => c.id === checklistId,
+                            (c: any) => Number(c.id) === checklistId,
                           ) as any
                         )?.attributes?.name || "Checklist";
                       return (
@@ -766,13 +790,14 @@ export function CreateMaintenanceScheduleModal({
                                   key={c.id}
                                   value={c.attributes.name}
                                   onSelect={() => {
+                                    const numId = Number(c.id);
                                     const isSelected =
-                                      formData.checklists.includes(c.id);
+                                      formData.checklists.includes(numId);
                                     if (isSelected) {
                                       setFormData({
                                         ...formData,
                                         checklists: formData.checklists.filter(
-                                          (id) => id !== c.id,
+                                          (id) => id !== numId,
                                         ),
                                       });
                                     } else {
@@ -780,7 +805,7 @@ export function CreateMaintenanceScheduleModal({
                                         ...formData,
                                         checklists: [
                                           ...formData.checklists,
-                                          c.id,
+                                          numId,
                                         ],
                                       });
                                     }
@@ -788,7 +813,7 @@ export function CreateMaintenanceScheduleModal({
                                   className="font-bold uppercase text-[10px] tracking-tight py-3 px-4 cursor-pointer"
                                 >
                                   <Checkbox
-                                    checked={formData.checklists.includes(c.id)}
+                                    checked={formData.checklists.includes(Number(c.id))}
                                     onCheckedChange={() => {}}
                                     className="mr-2"
                                   />

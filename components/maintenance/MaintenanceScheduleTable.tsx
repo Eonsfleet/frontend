@@ -1,6 +1,5 @@
 'use client'
 
-import React from 'react'
 import {
     Table,
     TableBody,
@@ -20,7 +19,7 @@ import {
 import { MaintenanceSchedule } from '@/types'
 import { format, differenceInDays, isPast, isToday } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
-import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Wrench, Eye } from 'lucide-react'
+import { Car, AlertTriangle, CheckCircle2, Clock, MoreHorizontal, Calendar, Eye, RefreshCw, ChevronDown, ChevronRight, Repeat2 } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -33,9 +32,20 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { deleteSchedule } from '@/lib/api/maintenance'
+import { deleteSchedule, updateSchedule } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { MaintenanceScheduleDrawer } from './MaintenanceScheduleDrawer'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface MaintenanceScheduleTableProps {
     data: MaintenanceSchedule[]
@@ -108,6 +118,61 @@ export function MaintenanceScheduleTable({
 }: MaintenanceScheduleTableProps) {
     const queryClient = useQueryClient()
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const scheduleDrawerId = searchParams.get('id')
+
+    const openDrawer = (id: string) => router.replace(`${pathname}?id=${id}`, { scroll: false })
+    const closeDrawer = () => router.replace(pathname, { scroll: false })
+
+    const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set())
+    const [rescheduleTarget, setRescheduleTarget] = useState<{ id: string; currentDate: string } | null>(null)
+    const [rescheduleDate, setRescheduleDate] = useState('')
+
+    // Group recurring schedules by series_id
+    const { masterRows, seriesMap } = useMemo(() => {
+        const seriesMap = new Map<string, MaintenanceSchedule[]>()
+        const seen = new Set<string>()
+        const masterRows: MaintenanceSchedule[] = []
+
+        data?.forEach(s => {
+            const sid = s.attributes?.series_id
+            if (sid) {
+                if (!seriesMap.has(sid)) seriesMap.set(sid, [])
+                seriesMap.get(sid)!.push(s)
+            }
+        })
+
+        // Sort each series by occurrence_number
+        seriesMap.forEach(items =>
+            items.sort((a, b) => (a.attributes?.occurrence_number ?? 0) - (b.attributes?.occurrence_number ?? 0))
+        )
+
+        data?.forEach(s => {
+            const sid = s.attributes?.series_id
+            if (!sid) {
+                masterRows.push(s)
+            } else if (!seen.has(sid)) {
+                seen.add(sid)
+                const items = seriesMap.get(sid)!
+                // Prefer is_master_schedule flag, then occurrence #1, then first item
+                const master = items.find(i => i.attributes?.is_master_schedule)
+                    ?? items.find(i => i.attributes?.occurrence_number === 1)
+                    ?? items[0]
+                masterRows.push(master)
+            }
+        })
+
+        return { masterRows, seriesMap }
+    }, [data])
+
+    const toggleSeries = (seriesId: string) => {
+        setExpandedSeries(prev => {
+            const next = new Set(prev)
+            next.has(seriesId) ? next.delete(seriesId) : next.add(seriesId)
+            return next
+        })
+    }
 
     const { mutate: cancelSchedule, variables: cancellingId } = useMutation({
         mutationFn: (id: string) => deleteSchedule(id),
@@ -117,6 +182,19 @@ export function MaintenanceScheduleTable({
             queryClient.invalidateQueries({ queryKey: ['maintenance-schedules-full'] })
         },
         onError: () => toast.error('Failed to cancel schedule.'),
+    })
+
+    const { mutate: doReschedule, isPending: isRescheduling } = useMutation({
+        mutationFn: ({ id, date }: { id: string; date: string }) =>
+            updateSchedule(id, { schedule_date: date }),
+        onSuccess: () => {
+            toast.success('Schedule date updated.')
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules'] })
+            queryClient.invalidateQueries({ queryKey: ['maintenance-schedules-full'] })
+            setRescheduleTarget(null)
+            setRescheduleDate('')
+        },
+        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to reschedule.'),
     })
 
     if (isLoading) {
@@ -130,6 +208,7 @@ export function MaintenanceScheduleTable({
     }
 
     return (
+        <>
         <div className="space-y-4">
             <div className="overflow-x-auto">
                 <Table>
@@ -144,22 +223,43 @@ export function MaintenanceScheduleTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {data?.length ? (
-                            data.map((row) => {
+                        {masterRows?.length ? (
+                            masterRows.flatMap((row) => {
                                 const attrs = row.attributes || {}
                                 const statusInfo = getStatusStyles(attrs.status, attrs.due_date)
                                 const vehicle = row.relationships?.vehicle
+                                const seriesId = attrs.series_id
+                                const isSeries = !!seriesId
+                                const seriesItems = seriesId ? (seriesMap.get(seriesId) ?? []) : []
+                                const isExpanded = isSeries && expandedSeries.has(seriesId!)
+                                const occurrenceCount = seriesItems.length
 
-                                return (
-                                    <TableRow key={row.id} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50">
+                                const masterRow = (
+                                    <TableRow
+                                        key={row.id}
+                                        className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50 cursor-pointer"
+                                        onClick={() => openDrawer(String(row.id))}
+                                    >
                                         <TableCell className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform">
+                                                {/* Expand toggle for series */}
+                                                {isSeries && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={e => { e.stopPropagation(); toggleSeries(seriesId!) }}
+                                                        className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors shrink-0"
+                                                    >
+                                                        {isExpanded
+                                                            ? <ChevronDown className="h-3.5 w-3.5" />
+                                                            : <ChevronRight className="h-3.5 w-3.5" />}
+                                                    </button>
+                                                )}
+                                                <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform shrink-0">
                                                     <Car className="h-5 w-5 text-white" />
                                                 </div>
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col min-w-0">
                                                     <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                                                        {vehicle?.registration_number ?? attrs.vehicle_id ?? 'N/A'}
+                                                        {vehicle?.registration_number ?? 'N/A'}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]">
                                                         {vehicle?.make} {vehicle?.model}
@@ -168,10 +268,18 @@ export function MaintenanceScheduleTable({
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-black text-slate-700 uppercase tracking-tight">
-                                                    {(attrs.service_type || 'Maintenance').replace(/_/g, ' ')}
-                                                </span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black text-slate-700 uppercase tracking-tight">
+                                                        {(attrs.service_type || 'Maintenance').replace(/_/g, ' ')}
+                                                    </span>
+                                                    {isSeries && (
+                                                        <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
+                                                            <Repeat2 className="h-2.5 w-2.5" />
+                                                            {occurrenceCount} runs
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">
                                                     {attrs.description || attrs.notes || 'Routine checkup'}
                                                 </span>
@@ -190,7 +298,9 @@ export function MaintenanceScheduleTable({
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="h-3 w-3 text-slate-300" />
                                                     <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                                                        {attrs.due_date ? format(new Date(attrs.due_date), 'dd MMM yyyy') : 'N/A'}
+                                                        {attrs.schedule_date
+ ? format(new Date(attrs.schedule_date
+), 'dd MMM yyyy') : 'N/A'}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -210,7 +320,7 @@ export function MaintenanceScheduleTable({
                                                 {getDueDateDisplay(attrs.due_date)}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="px-6 py-4 text-right">
+                                        <TableCell className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg">
@@ -220,24 +330,21 @@ export function MaintenanceScheduleTable({
                                                 <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl shadow-2xl border-slate-100">
                                                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3 py-2">Schedule Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
-                                                    {/* <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
-                                                        <Wrench className="h-3.5 w-3.5" /> Create Work Order
-                                                    </DropdownMenuItem> */}
-                                                    <DropdownMenuItem
-                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
-                                                        onClick={() => router.push(`/maintenance/schedules/${row.id}`)}
-                                                    >
+                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
+                                                        onClick={() => openDrawer(String(row.id))}>
                                                         <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer">
-                                                        <Clock className="h-3.5 w-3.5" /> Reschedule
+                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 cursor-pointer"
+                                                        onClick={() => {
+                                                            setRescheduleTarget({ id: String(row.id), currentDate: attrs.schedule_date ?? attrs.due_date ?? '' })
+                                                            setRescheduleDate(attrs.schedule_date ?? attrs.due_date ?? '')
+                                                        }}>
+                                                        <RefreshCw className="h-3.5 w-3.5" /> Reschedule
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                        className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer"
+                                                    <DropdownMenuItem className="rounded-lg text-xs font-bold uppercase tracking-tight gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer"
                                                         disabled={cancellingId === row.id}
-                                                        onClick={() => cancelSchedule(String(row.id))}
-                                                    >
+                                                        onClick={() => cancelSchedule(String(row.id))}>
                                                         <AlertTriangle className="h-3.5 w-3.5" /> Cancel Schedule
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -245,6 +352,61 @@ export function MaintenanceScheduleTable({
                                         </TableCell>
                                     </TableRow>
                                 )
+
+                                // Child occurrence rows (shown when series is expanded)
+                                const childRows = isExpanded ? seriesItems
+                                    .filter(child => String(child.id) !== String(row.id))
+                                    .map(child => {
+                                        const ca = child.attributes || {}
+                                        const cStatus = getStatusStyles(ca.status, ca.due_date)
+                                        return (
+                                            <TableRow
+                                                key={`child-${child.id}`}
+                                                className="bg-slate-50/60 hover:bg-slate-100/60 cursor-pointer border-b border-slate-50"
+                                                onClick={() => openDrawer(String(child.id))}
+                                            >
+                                                <TableCell className="px-6 py-3 pl-16">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />
+                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                            Run #{ca.occurrence_number ?? '—'}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="px-6 py-3">
+                                                    <span className="text-[10px] font-medium text-slate-500 truncate">
+                                                        {ca.description || ca.notes || '—'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="px-6 py-3 text-center">
+                                                    <span className="text-[10px] font-bold text-slate-400">—</span>
+                                                </TableCell>
+                                                <TableCell className="px-6 py-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Calendar className="h-3 w-3 text-slate-300" />
+                                                        <span className="text-[10px] font-bold text-slate-700">
+                                                            {ca.due_date ? format(new Date(ca.due_date), 'dd MMM yyyy') : 'N/A'}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="px-6 py-3">
+                                                    <Badge variant="outline" className={cn("text-[8px] uppercase px-2 py-0.5 rounded-full border w-fit", cStatus.className)}>
+                                                        <cStatus.icon className="h-2 w-2" />
+                                                        {cStatus.label}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="px-6 py-3 text-right" onClick={e => e.stopPropagation()}>
+                                                    <Button variant="ghost" size="sm"
+                                                        onClick={() => openDrawer(String(child.id))}
+                                                        className="h-7 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 px-2">
+                                                        <Eye className="h-3 w-3" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    }) : []
+
+                                return [masterRow, ...childRows]
                             })
                         ) : (
                             <TableRow>
@@ -327,5 +489,52 @@ export function MaintenanceScheduleTable({
                 </div>
             )}
         </div>
+
+        <MaintenanceScheduleDrawer
+            scheduleId={scheduleDrawerId}
+            onClose={() => closeDrawer()}
+        />
+
+        {/* Reschedule modal */}
+        <Dialog open={!!rescheduleTarget} onOpenChange={(open) => { if (!open) { setRescheduleTarget(null); setRescheduleDate('') } }}>
+            <DialogContent className="sm:max-w-sm rounded-2xl">
+                <DialogHeader>
+                    <DialogTitle className="text-sm font-black uppercase tracking-widest">Reschedule</DialogTitle>
+                </DialogHeader>
+                <div className="py-2 space-y-4">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                        Set a new schedule date. Pending service logs will be updated automatically.
+                    </p>
+                    <div className="space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Schedule Date</Label>
+                        <Input
+                            type="date"
+                            value={rescheduleDate}
+                            onChange={(e) => setRescheduleDate(e.target.value)}
+                            className="text-xs font-bold"
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs font-black uppercase tracking-widest"
+                        onClick={() => { setRescheduleTarget(null); setRescheduleDate('') }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        size="sm"
+                        disabled={!rescheduleDate || isRescheduling}
+                        className="text-xs font-black uppercase tracking-widest"
+                        onClick={() => rescheduleTarget && doReschedule({ id: rescheduleTarget.id, date: rescheduleDate })}
+                    >
+                        {isRescheduling ? 'Saving…' : 'Confirm'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     )
 }

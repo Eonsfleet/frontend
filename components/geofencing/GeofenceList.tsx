@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from '@/lib/utils'
 import { BulkAssignmentModal } from './BulkAssignmentModal'
-import { BreachAnalytics } from './BreachAnalytics'
+import { GeofenceDrawer } from './GeofenceDrawer'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 
 interface GeofenceListProps {
     searchTerm?: string
-    statusFilter?: 'active' | 'inactive'
+    statusFilter?: boolean
 }
 
 export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProps) {
@@ -29,7 +29,7 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
     const [activeAssignment, setActiveAssignment] = useState<{ id: string; name: string } | null>(null)
-    const [activeAnalytics, setActiveAnalytics] = useState<{ id: string; name: string } | null>(null)
+    const [activeGeofenceId, setActiveGeofenceId] = useState<string | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
     const { data, isLoading } = useQuery({
@@ -38,7 +38,7 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
             page,
             per_page: 9,
             q: searchTerm || undefined,
-            status: statusFilter ?? undefined,
+            status: statusFilter !== undefined ? (statusFilter ? 'active' : 'inactive') : undefined,
         }),
     })
 
@@ -81,10 +81,16 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                         <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
                             <Navigation className="h-10 w-10 text-slate-200" />
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 uppercase italic">No Active Zones</h3>
+                        <h3 className="text-xl font-black text-slate-900 uppercase italic">
+                            {statusFilter === true ? 'No Active Zones' : statusFilter === false ? 'No Inactive Zones' : 'No Zones Found'}
+                        </h3>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2 max-w-xs leading-relaxed">
                             {searchTerm
                                 ? `No geofences match "${searchTerm}". Try a different search.`
+                                : statusFilter === true 
+                                ? 'No active geofences found. Create new zones or activate existing ones.'
+                                : statusFilter === false
+                                ? 'No inactive geofences found. All zones are currently active.'
                                 : 'Define virtual boundaries to monitor fleet compliance and automate security alerts.'}
                         </p>
                     </div>
@@ -101,9 +107,9 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                                         <div className="flex items-center gap-2">
                                             <Badge className={cn(
                                                 "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-none shadow-sm",
-                                                item.attributes.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                                                item.attributes.status ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
                                             )}>
-                                                {item.attributes.is_active ? 'MONITORING ACTIVE' : 'INACTIVE'}
+                                                {item.attributes.status ? 'ACTIVE' : 'INACTIVE'}
                                             </Badge>
 
                                             <DropdownMenu>
@@ -197,9 +203,9 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                                         <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">ASSIGN</span>
                                     </button>
                                     <button
-                                        onClick={() => setActiveAnalytics({ id: item.id, name: item.attributes.name })}
+                                        onClick={() => setActiveGeofenceId(item.id)}
                                         className="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all group/btn"
-                                        title="View breach analytics"
+                                        title="View zone details"
                                     >
                                         <BarChart3 className="h-4 w-4 text-slate-400 group-hover/btn:text-indigo-600 mb-1" />
                                         <span className="text-[8px] font-black text-slate-400 group-hover/btn:text-slate-900 uppercase tracking-widest">INSIGHTS</span>
@@ -260,11 +266,9 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                 onClose={() => setActiveAssignment(null)}
             />
 
-            <BreachAnalytics
-                isOpen={!!activeAnalytics}
-                geofenceId={activeAnalytics?.id}
-                geofenceName={activeAnalytics?.name || ''}
-                onClose={() => setActiveAnalytics(null)}
+            <GeofenceDrawer
+                geofenceId={activeGeofenceId}
+                onClose={() => setActiveGeofenceId(null)}
             />
 
             {/* Delete Confirmation */}

@@ -28,7 +28,7 @@ export interface IncidentVehicle {
 export interface Incident {
     id: string
     attributes: {
-        reference_number?: string
+        reference?: string
         // PRD response fields
         victim_name?: string
         type: string
@@ -37,7 +37,7 @@ export interface Incident {
         description: string
         // Location — PRD sends coords as "lat,lng" string, legacy sends object
         coords?: string
-        location?: { lat: number; lng: number; address?: string } | null
+        location?: string | { lat: number; lng: number; address?: string } | null
         occured_date?: string
         occured_time?: string
         media?: string[]

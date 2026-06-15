@@ -19,7 +19,16 @@ export interface IncidentConversationResponse {
     data: {
         conversation: {
             id: number | string
-            messages: ConversationMessage[]
+            attributes?: {
+                title?: string
+                status?: string
+                participants?: unknown[]
+                last_activity_at?: string
+                created_at?: string
+            }
+            relationships?: {
+                messages?: ConversationMessage[]
+            }
         }
     }
 }
@@ -70,6 +79,13 @@ export const createIncident = async (data: {
 export const updateIncident = async (id: string, data: {
     description?: string
     priority?: string
+    victim_name?: string
+    type?: string
+    date?: string
+    time?: string
+    city?: string
+    state?: string
+    street?: string
     media?: string[]
 }): Promise<IncidentDetailResponse> => {
     const response = await apiClient.put<IncidentDetailResponse>(`/incidents/${id}`, data)
@@ -95,10 +111,9 @@ export const transitionIncidentState = async (
 export const startInvestigation = (id: string, assignedTo: number | string) =>
     transitionIncidentState(id, 'investigate', { assigned_to: assignedTo })
 
-// under_investigation → action_required; no body required
-// B2 fix: 'action-required' not the legacy 'action'
-export const requireAction = (id: string) =>
-    transitionIncidentState(id, 'action-required')
+// under_investigation → action_required; action_plan required
+export const requireAction = (id: string, actionPlan: string) =>
+    transitionIncidentState(id, 'action-required', { action_plan: actionPlan })
 
 // action_required → action_taken; requires action_taken string
 export const logActionTaken = (id: string, actionTaken: string) =>

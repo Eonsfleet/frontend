@@ -3,24 +3,28 @@
 import React from "react";
 import { DriverTable } from "@/components/drivers/DriverTable";
 import { Button } from "@/components/ui/button";
-import { Search, Filter } from "lucide-react";
+import { Search, Upload, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AddDriverDialog } from "@/components/drivers/AddDriverDialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDrivers } from "@/lib/api/drivers";
-import { PermissionGate } from "@/components/shared/PermissionGate";
 import { AssignVehicleDialog } from "@/components/drivers/AssignVehicleDialog";
+import { ImportDialog } from "@/components/shared/ImportDialog";
+import { ExportDialog } from "@/components/shared/ExportDialog";
 import { QueryError } from "@/components/shared/QueryError";
 import { UserProfile } from "@/types";
 import { DriverFilters } from "@/components/drivers/DriverFilters";
 
 export default function DriversPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [selectedDriver, setSelectedDriver] =
     React.useState<UserProfile | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [filter, setFilter] = React.useState<{ status?: string }>({});
+  const [isImportOpen, setIsImportOpen] = React.useState(false);
+  const [isExportOpen, setIsExportOpen] = React.useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["drivers", search, page, filter],
@@ -48,7 +52,15 @@ export default function DriversPage() {
             Manage driver registry, performance, and vehicle assignments.
           </p>
         </div>
-        <AddDriverDialog />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setIsExportOpen(true)}>
+            <Download className="mr-2 h-4 w-4" /> Export
+          </Button>
+          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" /> Import
+          </Button>
+          <AddDriverDialog />
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -87,6 +99,20 @@ export default function DriversPage() {
           driverName={selectedDriver.attributes.full_name}
         />
       )}
+
+      <ImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        entity="drivers"
+        model="User"
+        onComplete={() => queryClient.invalidateQueries({ queryKey: ["drivers"] })}
+      />
+
+      <ExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        entity="drivers"
+      />
     </div>
   );
 }
