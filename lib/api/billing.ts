@@ -5,6 +5,7 @@ export interface OrganizationSubscription {
     id: number
     status: 'active' | 'trial' | 'grace' | 'restricted' | 'suspended' | 'expired'
     dunning_stage: DunningStage
+    billing_cycle: 'monthly' | 'yearly'
     plan: { id: number; name: string; tier: PlanTier; price: number }
     capabilities: Capability[]
     vehicle_limit: number | null
@@ -41,6 +42,7 @@ export interface SubscriptionApiResponse {
                 advanced_capabilities?: { name: string; slug: string }[]
             }
         }
+        billing_cycle?: 'monthly' | 'yearly'
     }
 }
 
@@ -93,6 +95,7 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         id: rawData.id,
         status: rawData.attributes.status,
         dunning_stage: null,
+        billing_cycle: rawData.billing_cycle ?? 'monthly',
         plan: {
             id: rawData.relationships.plan.id,
             name: planName,
@@ -119,6 +122,13 @@ export interface SubscriptionPlan {
         vehicle_limit: number | null
         user_limit: number | null
         admin_limit: number | null
+        // Per-asset pricing (kobo)
+        vehicle_price_monthly_kobo?: number
+        vehicle_price_yearly_kobo?: number
+        device_price_monthly_kobo?: number
+        device_price_yearly_kobo?: number
+        trial_vehicle_limit?: number
+        trial_device_limit?: number
     }
     relationships: {
         core_modules: { name: string; slug: string }[]
@@ -203,4 +213,71 @@ export const getSubscriptionHistory = async (params?: { page?: number }): Promis
 export const getSubscriptionAddons = async (): Promise<{ data: any[] }> => {
     const response = await apiClient.get<{ data: any[] }>('/subscriptions/addons')
     return response.data
+}
+
+// ─── Per-asset Subscriptions ──────────────────────────────────────────────────
+
+export type AssetSubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired'
+export type AssetDunningStage = 'grace' | 'restricted' | 'suspended' | null
+
+export interface AssetSubscription {
+    id: number
+    subscribable_type: 'Vehicle' | 'Device' | string
+    subscribable_id: number
+    billing_cycle: 'monthly' | 'yearly'
+    price_kobo: number
+    price_naira: number
+    currency: string
+    status: AssetSubscriptionStatus
+    status_label: string
+    dunning_stage: AssetDunningStage
+    started_at: string | null
+    current_period_start: string | null
+    current_period_end: string | null
+    next_billing_at: string | null
+    dunning_started_at: string | null
+    cancelled_at: string | null
+    expires_at: string | null
+    last_billed_at: string | null
+    plan: { id: number; name: string } | null
+}
+
+export interface AssetSubscriptionSummary {
+    total: number
+    active: number
+    trialing: number
+    past_due: number
+    cancelled: number
+    expired: number
+    monthly_arr_kobo: number
+    monthly_arr_naira: number
+}
+
+export interface AssetSubscriptionListParams {
+    status?: AssetSubscriptionStatus
+    type?: 'Vehicle' | 'Device'
+    per_page?: number
+    page?: number
+}
+
+export const getAssetSubscriptions = async (
+    params?: AssetSubscriptionListParams
+): Promise<{ data: AssetSubscription[]; meta: { current_page: number; last_page: number; total: number } }> => {
+    const response = await apiClient.get('/subscriptions/assets', { params })
+    return response.data
+}
+
+export const getAssetSubscriptionSummary = async (): Promise<AssetSubscriptionSummary> => {
+    const response = await apiClient.get<{ data: AssetSubscriptionSummary }>('/subscriptions/assets/summary')
+    return response.data.data
+}
+
+export const getAssetSubscription = async (id: number): Promise<AssetSubscription> => {
+    const response = await apiClient.get<{ data: AssetSubscription }>(`/subscriptions/assets/${id}`)
+    return response.data.data
+}
+
+export const cancelAssetSubscription = async (id: number): Promise<AssetSubscription> => {
+    const response = await apiClient.post<{ data: AssetSubscription }>(`/subscriptions/assets/${id}/cancel`)
+    return response.data.data
 }
