@@ -22,6 +22,11 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -30,8 +35,8 @@ import { toast } from 'sonner'
 import { RoleSlug } from '@/types'
 
 const inviteSchema = z.object({
-    first_name: z.string().min(2, 'Required'),
-    last_name: z.string().min(2, 'Required'),
+    f_name: z.string().min(2, 'Required'),
+    l_name: z.string().min(2, 'Required'),
     email: z.string().email('Invalid email address'),
     role: z.enum(['administrator', 'fleet_manager', 'dispatcher', 'driver', 'mechanic', 'finance', 'compliance', 'vendor'] as const),
     cluster_id: z.string().optional() // Mocking string for Select element, parse to int for API
@@ -46,15 +51,16 @@ export default function UserManagementPage() {
     const [isInviteOpen, setIsInviteOpen] = useState(false)
     const [isImportOpen, setIsImportOpen] = useState(false)
     const [isExportOpen, setIsExportOpen] = useState(false)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
     const { data, isLoading } = useQuery({
         queryKey: ['settings-users', page, search],
-        queryFn: () => api.getUsers({ page, per_page: 15, role: search }), // Mocking search via role param for now
+        queryFn: () => api.getUsers({ page, per_page: 15, q: search }), // Mocking search via role param for now
     })
 
     const { control, register, handleSubmit, reset, formState: { errors } } = useForm<InviteFormValues>({
         resolver: zodResolver(inviteSchema),
-        defaultValues: { role: 'driver', first_name: '', last_name: '', email: '' }
+        defaultValues: { role: 'driver', f_name: '', l_name: '', email: '' }
     })
 
     const inviteMutation = useMutation({
@@ -88,6 +94,7 @@ export default function UserManagementPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['settings-users'] })
             toast.success('User permanently removed from directory')
+            setConfirmDeleteId(null)
         },
         onError: () => toast.error('Account removal failed')
     })
@@ -138,13 +145,13 @@ export default function UserManagementPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>First Name <span className="text-red-500">*</span></Label>
-                                    <Input {...register('first_name')} />
-                                    {errors.first_name && <p className="text-[10px] text-red-500">{errors.first_name.message}</p>}
+                                    <Input {...register('f_name')} />
+                                    {errors.f_name && <p className="text-[10px] text-red-500">{errors.f_name.message}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Last Name <span className="text-red-500">*</span></Label>
-                                    <Input {...register('last_name')} />
-                                    {errors.last_name && <p className="text-[10px] text-red-500">{errors.last_name.message}</p>}
+                                    <Input {...register('l_name')} />
+                                    {errors.l_name && <p className="text-[10px] text-red-500">{errors.l_name.message}</p>}
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -258,15 +265,59 @@ export default function UserManagementPage() {
                                                 {u.attributes.last_login || 'Never logged in'}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                                                    onClick={() => deactivate(u.id)}
-                                                    disabled={isDeactivating}
+                                                <Popover
+                                                    open={confirmDeleteId === u.id}
+                                                    onOpenChange={(open) => setConfirmDeleteId(open ? u.id : null)}
                                                 >
-                                                    <UserMinus className="w-4 h-4" />
-                                                </Button>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                                        >
+                                                            <UserMinus className="w-4 h-4" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent align="end" className="w-72 p-4">
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="w-9 h-9 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                                                                    <Trash2 className="w-4 h-4 text-rose-600" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-slate-900">Delete this user?</p>
+                                                                    <p className="text-xs text-slate-500 mt-0.5">
+                                                                        {u.attributes.full_name} will be permanently removed from the directory. This action cannot be undone.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex justify-end gap-2">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="h-8"
+                                                                    onClick={() => setConfirmDeleteId(null)}
+                                                                    disabled={isDeleting}
+                                                                >
+                                                                    No, keep user
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="h-8 bg-rose-600 hover:bg-rose-700 text-white"
+                                                                    onClick={() => deleteUser(u.id)}
+                                                                    disabled={isDeleting}
+                                                                >
+                                                                    {isDeleting ? (
+                                                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                                    ) : (
+                                                                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                                                                    )}
+                                                                    Yes, delete
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </td>
                                         </tr>
                                     ))

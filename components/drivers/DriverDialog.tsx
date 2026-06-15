@@ -38,7 +38,7 @@ export function DriverDialog({
     email: "",
     phone_number: "",
     employee_id: "",
-    dob: "",
+    date_of_birth: "",
   });
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export function DriverDialog({
           email: initialData.attributes.email || "",
           phone_number: initialData.attributes.phone_number || "",
           employee_id: initialData.attributes.employee_id || "",
-          dob: dob,
+          date_of_birth: dob,
         });
       } else if (mode === "add") {
         setFormData({
@@ -66,7 +66,7 @@ export function DriverDialog({
           email: "",
           phone_number: "",
           employee_id: "",
-          dob: "",
+          date_of_birth: "",
         });
       }
     }
@@ -163,12 +163,12 @@ export function DriverDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dob">Date of Birth</Label>
+                <Label htmlFor="date_of_birth">Date of Birth</Label>
                 <Input
-                  id="dob"
-                  name="dob"
+                  id="date_of_birth"
+                  name="date_of_birth"
                   type="date"
-                  value={formData.dob}
+                  value={formData.date_of_birth}
                   onChange={handleChange}
                 />
               </div>
