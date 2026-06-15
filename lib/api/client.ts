@@ -33,9 +33,29 @@ const processQueue = (error: any, token: string | null = null) => {
     failedQueue = []
 }
 
+// When responseType:'blob', Axios delivers the error body as a Blob, not parsed
+// JSON. Convert it back so all downstream error handling (403 codes, catch blocks)
+// receives a plain object regardless of request type.
+const normaliseBlobError = async (error: any): Promise<any> => {
+    if (
+        error.response?.data instanceof Blob &&
+        error.response.data.type?.includes('application/json')
+    ) {
+        try {
+            const text = await error.response.data.text()
+            error.response.data = JSON.parse(text)
+        } catch {
+            // leave as Blob if unparseable
+        }
+    }
+    return error
+}
+
 apiClient.interceptors.response.use(
     (res) => res,
     async (error) => {
+        error = await normaliseBlobError(error)
+
         const original = error.config
 
         // Prevent infinite reload loop or clearing auth on failed login attempt.
