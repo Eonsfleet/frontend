@@ -123,8 +123,13 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
 
             toast.success(`${label} exported successfully.`)
             onOpenChange(false)
-        } catch {
-            toast.error('Export failed. Please try again.')
+        } catch (err: any) {
+            const msg =
+                err?.response?.data?.message ||
+                err?.response?.data?.errors?.[0]?.detail ||
+                err?.message ||
+                'Export failed. Please try again.'
+            toast.error(msg)
         } finally {
             setIsExporting(false)
         }
