@@ -70,7 +70,7 @@ export function useVehicleLocations({
           heading: 0,
           status: derivedStatus,
           is_online: isOnline,
-          odometer: v.attributes?.total_odometer ?? null,
+          odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
           raw: loc,

@@ -63,13 +63,13 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
     const [isExporting, setIsExporting] = useState(false)
 
     // Vehicle-specific filters
-    const [vehicleStatus, setVehicleStatus]   = useState<string>('')
-    const [deviceStatus, setDeviceStatus]     = useState<string>('')
-    const [isAllocated, setIsAllocated]       = useState<string>('')
+    const [vehicleStatus, setVehicleStatus]   = useState<string>('all')
+    const [deviceStatus, setDeviceStatus]     = useState<string>('all')
+    const [isAllocated, setIsAllocated]       = useState<string>('all')
 
     // User/Driver-specific filters
-    const [userStatus, setUserStatus] = useState<string>('')
-    const [driverRole, setDriverRole] = useState<string>('')
+    const [userStatus, setUserStatus] = useState<string>('all')
+    const [driverRole, setDriverRole] = useState<string>('all')
 
     const label   = ENTITY_LABELS[entity]
     const columns = ENTITY_COLUMNS[entity]
@@ -101,23 +101,23 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                 await exportVehicles({
                     format,
                     columns: cols,
-                    status:       vehicleStatus || undefined,
-                    device_status: deviceStatus || undefined,
-                    is_allocated:  isAllocated !== '' ? isAllocated === 'true' : undefined,
+                    status:       vehicleStatus !== 'all' ? vehicleStatus : undefined,
+                    device_status: deviceStatus !== 'all' ? deviceStatus : undefined,
+                    is_allocated:  isAllocated !== 'all' ? isAllocated === 'true' : undefined,
                 })
             } else if (entity === 'drivers') {
                 await exportDrivers({
                     format,
                     columns: cols,
                     role:   'driver',
-                    status: userStatus || undefined,
+                    status: userStatus !== 'all' ? userStatus : undefined,
                 })
             } else {
                 await exportUsers({
                     format,
                     columns: cols,
-                    status: userStatus || undefined,
-                    role:   driverRole || undefined,
+                    status: userStatus !== 'all' ? userStatus : undefined,
+                    role:   driverRole !== 'all' ? driverRole : undefined,
                 })
             }
 
@@ -173,7 +173,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                                         <SelectValue placeholder="All statuses" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All</SelectItem>
+                                        <SelectItem value="all">All</SelectItem>
                                         {VEHICLE_STATUS_OPTIONS.map(s => (
                                             <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                                         ))}
@@ -187,7 +187,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                                         <SelectValue placeholder="All" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All</SelectItem>
+                                        <SelectItem value="all">All</SelectItem>
                                         {DEVICE_STATUS_OPTIONS.map(s => (
                                             <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                                         ))}
@@ -201,7 +201,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                                         <SelectValue placeholder="All vehicles" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All vehicles</SelectItem>
+                                        <SelectItem value="all">All vehicles</SelectItem>
                                         <SelectItem value="true">Assigned to driver</SelectItem>
                                         <SelectItem value="false">Unassigned</SelectItem>
                                     </SelectContent>
@@ -220,7 +220,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                                         <SelectValue placeholder="All" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All</SelectItem>
+                                        <SelectItem value="all">All</SelectItem>
                                         <SelectItem value="active">Active</SelectItem>
                                         <SelectItem value="inactive">Inactive</SelectItem>
                                     </SelectContent>
@@ -234,7 +234,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
                                             <SelectValue placeholder="All roles" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All roles</SelectItem>
+                                            <SelectItem value="all">All roles</SelectItem>
                                             <SelectItem value="fleet_manager">Fleet Manager</SelectItem>
                                             <SelectItem value="dispatcher">Dispatcher</SelectItem>
                                             <SelectItem value="driver">Driver</SelectItem>
