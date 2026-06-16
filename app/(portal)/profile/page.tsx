@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,13 @@ import * as z from 'zod'
 import { toast } from 'sonner'
 import { Loader2, UserCircle, Upload, Shield, Calendar, Phone, Eye, EyeOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { format } from 'date-fns'
 import { useUpdateUser, useUpdatePassword, useUploadFile } from '@/lib/hooks/useUpdateUser'
 
@@ -58,6 +65,7 @@ PasswordInput.displayName = 'PasswordInput'
 export default function ProfilePage() {
     const { user, updateUser: updateUserStore } = useAuthStore()
     const fileInputRef = React.useRef<HTMLInputElement>(null)
+    const [securityOpen, setSecurityOpen] = React.useState(false)
     
     // React Query mutations
     const updateUserMutation = useUpdateUser() // For profile updates
@@ -176,6 +184,7 @@ export default function ProfilePage() {
         updatePasswordMutation.mutate(payload, {
             onSuccess: () => {
                 resetPassword()
+                setSecurityOpen(false)
             }
         })
     }
@@ -268,9 +277,16 @@ export default function ProfilePage() {
                                     </div>
                                 </div>
                             </CardContent>
-                            <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex justify-end">
-                                <Button 
-                                    type="submit" 
+                            <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => setSecurityOpen(true)}
+                                >
+                                    <Shield className="w-4 h-4 mr-2" /> Manage Security
+                                </Button>
+                                <Button
+                                    type="submit"
                                     disabled={!isDirty || isSubmitting || updateUserMutation.isPending}
                                 >
                                     {(isSubmitting || updateUserMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -280,49 +296,61 @@ export default function ProfilePage() {
                         </form>
                     </Card>
 
-                    {/* Security */}
-                    <Card className="shadow-sm border-slate-200 border-l-4 border-l-amber-400">
-                        <CardHeader className="border-b border-slate-100 bg-white pb-4">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-amber-500" /> Security
-                            </CardTitle>
-                            <CardDescription>Update your password to keep your account secure.</CardDescription>
-                        </CardHeader>
-                        <form onSubmit={handleSubmitPassword(onSubmitPassword)}>
-                            <CardContent className="p-6 space-y-4">
-                                <div className="space-y-2 max-w-sm">
-                                    <Label>Current Password</Label>
-                                    <PasswordInput {...registerObj('current_password')} />
-                                    {passwordErrors.current_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.current_password.message}</p>}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl pt-2 border-t border-slate-100">
-                                    <div className="space-y-2">
-                                        <Label>New Password</Label>
-                                        <PasswordInput {...registerObj('new_password')} />
-                                        {passwordErrors.new_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.new_password.message}</p>}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Confirm Password</Label>
-                                        <PasswordInput {...registerObj('confirm_password')} />
-                                        {passwordErrors.confirm_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.confirm_password.message}</p>}
-                                    </div>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="bg-white px-6 pb-6 pt-0 flex justify-start">
-                                <Button 
-                                    type="submit" 
-                                    variant="secondary" 
-                                    disabled={isSubmittingPassword || updatePasswordMutation.isPending}
-                                >
-                                    {(isSubmittingPassword || updatePasswordMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                    Update Password
-                                </Button>
-                            </CardFooter>
-                        </form>
-                    </Card>
-
                 </div>
             </div>
+
+            {/* Security Modal */}
+            <Dialog
+                open={securityOpen}
+                onOpenChange={(open) => {
+                    setSecurityOpen(open)
+                    if (!open) resetPassword()
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Shield className="w-5 h-5 text-amber-500" /> Security
+                        </DialogTitle>
+                        <DialogDescription>Update your password to keep your account secure.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Current Password</Label>
+                            <PasswordInput {...registerObj('current_password')} />
+                            {passwordErrors.current_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.current_password.message}</p>}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                            <div className="space-y-2">
+                                <Label>New Password</Label>
+                                <PasswordInput {...registerObj('new_password')} />
+                                {passwordErrors.new_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.new_password.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Confirm Password</Label>
+                                <PasswordInput {...registerObj('confirm_password')} />
+                                {passwordErrors.confirm_password && <p className="text-xs text-red-500 mt-1">{passwordErrors.confirm_password.message}</p>}
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSecurityOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isSubmittingPassword || updatePasswordMutation.isPending}
+                            >
+                                {(isSubmittingPassword || updatePasswordMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                Update Password
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
