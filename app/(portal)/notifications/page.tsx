@@ -39,6 +39,8 @@ import {
   SlidersHorizontal,
   Users,
   CalendarClock,
+  Pencil,
+  Settings2,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
@@ -124,6 +126,10 @@ export default function NotificationsPage() {
   const { can } = usePermission();
   const [activeTab, setActiveTab] = useState("inbox");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<any>(null);
+  const [managingGroup, setManagingGroup] = useState<any>(null);
+  const [groupEditData, setGroupEditData] = useState({ name: "", description: "" });
+  const [groupMemberIds, setGroupMemberIds] = useState<(string | number)[]>([]);
   const [formData, setFormData] = useState<any>({
     notification_type_id: "",
     is_enabled: true,
@@ -307,8 +313,69 @@ export default function NotificationsPage() {
     onError: () => toast.error("Failed to end delegation"),
   });
 
+  const deleteRuleMutation = useMutation({
+    mutationFn: api.deleteRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-rules"] });
+      toast.success("Rule deleted");
+    },
+    onError: () => toast.error("Failed to delete rule"),
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string | number; data: { name: string; description?: string } }) =>
+      api.updateGroup(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-groups"] });
+      toast.success("Group updated");
+    },
+    onError: () => toast.error("Failed to update group"),
+  });
+
+  const syncGroupMembersMutation = useMutation({
+    mutationFn: ({ id, user_ids }: { id: string | number; user_ids: (string | number)[] }) =>
+      api.syncGroupMembers(id, user_ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-groups"] });
+      toast.success("Members updated");
+    },
+    onError: () => toast.error("Failed to update members"),
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: api.deleteGroup,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-groups"] });
+      setManagingGroup(null);
+      toast.success("Group deleted");
+    },
+    onError: () => toast.error("Failed to delete group"),
+  });
+
+  const openManageGroup = (group: any) => {
+    setManagingGroup(group);
+    setGroupEditData({ name: group.name || "", description: group.description || "" });
+    const members = getGroupMembers(group);
+    setGroupMemberIds(members.map((m: any) => m.id));
+  };
+
+  const openEditRule = (rule: any) => {
+    setEditingRule(rule);
+    setFormData({
+      ...formData,
+      notification_type_id: String(rule.notification_type_id || rule.notification_type?.id || ""),
+      is_enabled: isRuleEnabled(rule),
+      channel_types: getRuleChannels(rule),
+      recipient_groups: rule.recipient_group_ids || rule.relationships?.recipient_groups?.data?.map((g: any) => g.id) || [],
+      recipient_roles: rule.recipient_roles || [],
+      recipient_users: rule.recipient_user_ids || [],
+    });
+    setIsCreateOpen(true);
+  };
+
   const handleClose = () => {
     setIsCreateOpen(false);
+    setEditingRule(null);
     setFormData({
       notification_type_id: "",
       is_enabled: true,
@@ -705,13 +772,14 @@ export default function NotificationsPage() {
                           <TableHead>Event Code</TableHead>
                           <TableHead>Target Groups</TableHead>
                           <TableHead>Channels</TableHead>
-                          <TableHead className="text-right">Status</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {isLoadingRules ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="h-32 text-center">
+                            <TableCell colSpan={5} className="h-32 text-center">
                               <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-300" />
                             </TableCell>
                           </TableRow>
@@ -759,7 +827,7 @@ export default function NotificationsPage() {
                                   ))}
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right">
+                              <TableCell>
                                 <Badge
                                   className={
                                     isRuleEnabled(rule)
@@ -770,13 +838,34 @@ export default function NotificationsPage() {
                                   {isRuleEnabled(rule) ? "Active" : "Muted"}
                                 </Badge>
                               </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                                    onClick={() => openEditRule(rule)}
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                    disabled={deleteRuleMutation.isPending}
+                                    onClick={() => deleteRuleMutation.mutate(rule.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
                             </TableRow>
                           ))
                         )}
                         {rulesData?.data?.rules?.length === 0 && (
                           <TableRow>
                             <TableCell
-                              colSpan={4}
+                              colSpan={5}
                               className="h-32 text-center text-slate-400 text-sm italic"
                             >
                               No routing rules defined.
@@ -868,13 +957,17 @@ export default function NotificationsPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold"
-                                >
-                                  Manage
-                                </Button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold"
+                                    onClick={() => openManageGroup(group)}
+                                  >
+                                    <Settings2 className="w-3.5 h-3.5 mr-1" />
+                                    Manage
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))
@@ -1025,14 +1118,16 @@ export default function NotificationsPage() {
           <DialogHeader>
             <DialogTitle>
               {activeTab === "rules"
-                ? "Create Routing Rule"
+                ? editingRule ? "Edit Routing Rule" : "Create Routing Rule"
                 : activeTab === "groups"
                   ? "Create Notification Group"
                   : "New Temporary Delegation"}
             </DialogTitle>
             <DialogDescription>
               {activeTab === "rules"
-                ? "Define automated routing conditions for operational events."
+                ? editingRule
+                  ? "Update channels and recipients for this notification type."
+                  : "Define automated routing conditions for operational events."
                 : activeTab === "groups"
                   ? "Group users together to receive batch alerts."
                   : "Temporarily hand over alerts to another teammate."}
@@ -1425,10 +1520,94 @@ export default function NotificationsPage() {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               {activeTab === "rules"
-                ? "Create Rule"
+                ? editingRule ? "Save Changes" : "Create Rule"
                 : activeTab === "groups"
                   ? "Create Group"
                   : "Assign Delegation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Group Dialog */}
+      <Dialog open={!!managingGroup} onOpenChange={(v) => { if (!v) setManagingGroup(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Group</DialogTitle>
+            <DialogDescription>Edit name, members, or delete this notification group.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 py-2 max-h-[65vh] overflow-y-auto px-1">
+            <div className="space-y-2">
+              <Label>Group Name</Label>
+              <Input
+                value={groupEditData.name}
+                onChange={(e) => setGroupEditData({ ...groupEditData, name: e.target.value })}
+                placeholder="Group name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input
+                value={groupEditData.description}
+                onChange={(e) => setGroupEditData({ ...groupEditData, description: e.target.value })}
+                placeholder="Optional description"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Members</Label>
+              <div className="border rounded-lg p-2 space-y-1 max-h-52 overflow-y-auto bg-slate-50">
+                {userData?.data?.users?.map((u) => (
+                  <div key={u.id} className="flex items-center space-x-2 p-2 rounded hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      id={`mg-user-${u.id}`}
+                      checked={groupMemberIds.includes(u.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600"
+                      onChange={(e) => {
+                        setGroupMemberIds(e.target.checked
+                          ? [...groupMemberIds, u.id]
+                          : groupMemberIds.filter((id) => id !== u.id)
+                        );
+                      }}
+                    />
+                    <label htmlFor={`mg-user-${u.id}`} className="text-sm font-medium cursor-pointer flex-1">
+                      {u.attributes.full_name}
+                      <span className="text-xs text-slate-400 font-normal ml-2">{u.attributes.email}</span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="pt-2 border-t border-slate-100">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs"
+                disabled={deleteGroupMutation.isPending}
+                onClick={() => managingGroup && deleteGroupMutation.mutate(managingGroup.id)}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Delete this group
+              </Button>
+            </div>
+          </div>
+          <DialogFooter className="gap-3 pt-2">
+            <Button variant="outline" onClick={() => setManagingGroup(null)}>Cancel</Button>
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700"
+              disabled={updateGroupMutation.isPending || syncGroupMembersMutation.isPending}
+              onClick={async () => {
+                if (!managingGroup) return;
+                if (!groupEditData.name.trim()) return toast.error("Group name is required");
+                await updateGroupMutation.mutateAsync({ id: managingGroup.id, data: { name: groupEditData.name, description: groupEditData.description } });
+                await syncGroupMembersMutation.mutateAsync({ id: managingGroup.id, user_ids: groupMemberIds });
+                setManagingGroup(null);
+              }}
+            >
+              {(updateGroupMutation.isPending || syncGroupMembersMutation.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
