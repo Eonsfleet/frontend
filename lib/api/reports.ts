@@ -105,7 +105,7 @@ export const getScheduledReport = async (id: number | string) => {
 
 export const updateScheduledReport = async (id: number | string, data: Partial<ScheduledReport>) => {
     const res = await apiClient.patch(`/analytics/reports/scheduled/${id}`, data)
-    return res.data?.data ?? res.data
+    return res.data
 }
 
 export const deleteScheduledReport = async (id: number | string) => {
