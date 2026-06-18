@@ -88,6 +88,15 @@ export const syncGroupMembers = async (groupId: string | number, user_ids: (stri
     return response.data
 }
 
+export const updateGroup = async (groupId: string | number, data: { name: string; description?: string }): Promise<{ data: { group: NotificationGroup } }> => {
+    const response = await apiClient.put<{ data: { group: NotificationGroup } }>(`/notifications/groups/${groupId}`, data)
+    return response.data
+}
+
+export const deleteGroup = async (groupId: string | number): Promise<void> => {
+    await apiClient.delete(`/notifications/groups/${groupId}`)
+}
+
 // Routing Rules
 export const getRules = async (): Promise<{ data: { success: boolean; rules: NotificationRule[] } }> => {
     const response = await apiClient.get<{ data: { success: boolean; rules: NotificationRule[] } }>('/notifications/config/rules')
@@ -109,6 +118,10 @@ export const createRule = async (data: {
 }): Promise<{ data: NotificationRule }> => {
     const response = await apiClient.post<{ data: NotificationRule }>('/notifications/config/rules', data)
     return response.data
+}
+
+export const deleteRule = async (ruleId: string | number): Promise<void> => {
+    await apiClient.delete(`/notifications/config/rules/${ruleId}`)
 }
 
 // Delegations

@@ -31,10 +31,12 @@ interface TripVehicleInfoProps {
             fuel_capacity_unit?: string
             fuel_sensor_conversion_factor?: number | null
             odometer_when_join?: number
-            current_odometer?: number
-            total_odometer?: number
-            total_mileage?: number | null
-            last_odometer_value?: number | null
+            odometer?: {
+                at_join_km?: number
+                lifetime_km?: number
+                today_km?: number
+                source?: string | null
+            } | null
             tire_psi?: number | null
             gvm?: number | null
             created_at?: string
@@ -128,8 +130,8 @@ export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
                         <span className="text-xs font-semibold uppercase tracking-wider">Odometer</span>
                     </div>
                     <p className="text-sm text-slate-900 font-medium">
-                        {vehicle.attributes.current_odometer 
-                            ? `${vehicle.attributes.current_odometer.toLocaleString()} KM` 
+                        {vehicle.attributes.odometer?.lifetime_km
+                            ? `${vehicle.attributes.odometer.lifetime_km.toLocaleString()} KM`
                             : 'N/A'}
                     </p>
                 </div>
@@ -191,15 +193,15 @@ export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
                     </p>
                 </div>
 
-                {/* Total Odometer */}
-                {vehicle.attributes.total_odometer !== undefined && vehicle.attributes.total_odometer > 0 && (
+                {/* Lifetime Odometer */}
+                {(vehicle.attributes.odometer?.lifetime_km ?? 0) > 0 && (
                     <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
                         <div className="flex items-center gap-2 text-slate-500">
                             <Gauge className="h-4 w-4" />
-                            <span className="text-xs font-semibold uppercase tracking-wider">Total Mileage</span>
+                            <span className="text-xs font-semibold uppercase tracking-wider">Lifetime Odometer</span>
                         </div>
                         <p className="text-sm text-slate-900 font-medium">
-                            {vehicle.attributes.total_odometer.toLocaleString()} KM
+                            {vehicle.attributes.odometer!.lifetime_km!.toLocaleString()} KM
                         </p>
                     </div>
                 )}

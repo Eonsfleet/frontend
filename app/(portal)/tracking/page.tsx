@@ -296,7 +296,7 @@ export default function TrackingPage() {
                   ignition: loc?.ignition ?? false,
                   odometer:
                     loc?.odometer ??
-                    selectedVehicle.attributes?.total_odometer,
+                    selectedVehicle.attributes?.odometer?.lifetime_km,
                   lat: loc?.lat ?? rel?.latitude,
                   lng: loc?.lng ?? rel?.longitude,
                   lastUpdate:

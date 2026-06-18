@@ -40,8 +40,8 @@ export function useVehicleTelemetry(
         let statusChannel: ReturnType<typeof echo.private> | null = null
         if (deviceId) {
             statusChannel = echo.private(`devicestatus.${orgIdentifier}.${deviceId}`)
-            statusChannel.listen('.device.status', (event: { status: string }) => {
-                setDeviceStatus(event.status)
+            statusChannel.listen('.device.status', (event: { is_online: boolean }) => {
+                setDeviceStatus(event.is_online ? 'online' : 'offline')
             })
         }
 

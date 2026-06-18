@@ -76,7 +76,7 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             type: initialData.attributes.type || 'Fleet',
             status: initialData.attributes.status,
             device_id: initialData.attributes.device_id || '',
-            odometer_when_join: initialData.attributes.odometer_when_join || 0,
+            odometer_when_join: initialData.attributes.odometer?.at_join_km || 0,
             gvm: initialData.attributes.gvm || 0,
             fuel_capacity: initialData.attributes.fuel_capacity || 0,
             fuel_capacity_unit: initialData.attributes.fuel_capacity_unit || 'L',

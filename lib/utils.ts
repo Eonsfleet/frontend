@@ -67,5 +67,11 @@ export function normalizeTelemetry(telemetry: any, overrides?: any) {
   if (typeof normalized.speed === 'string') normalized.speed = parseFloat(normalized.speed) || 0
   if (typeof normalized.heading === 'string') normalized.heading = parseFloat(normalized.heading) || 0
 
+  // Normalize movement/ignition binary variants ("1"/"0") to "on"/"off" for consistent drawer display
+  if (normalized.movement === '1') normalized.movement = 'on'
+  else if (normalized.movement === '0') normalized.movement = 'off'
+  if (normalized.ignition === '1') normalized.ignition = 'on'
+  else if (normalized.ignition === '0') normalized.ignition = 'off'
+
   return normalized
 }

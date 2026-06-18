@@ -226,8 +226,20 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                   value={vehicle.attributes.year?.toString() || "N/A"}
                 />
                 <DetailItem
-                  label="Odometer"
-                  value={`${(vehicle.attributes.total_odometer ?? 0).toLocaleString()} km`}
+                  label="Lifetime Odometer"
+                  value={
+                    vehicle.attributes.odometer
+                      ? `${vehicle.attributes.odometer.lifetime_km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
+                      : 'N/A'
+                  }
+                />
+                <DetailItem
+                  label="Today's Distance"
+                  value={
+                    vehicle.attributes.odometer?.today_km
+                      ? `${vehicle.attributes.odometer.today_km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
+                      : '0 km'
+                  }
                 />
                 <DetailItem
                   label="Body Type"
@@ -496,9 +508,19 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 <DetailItem
                   label="Odometer When Joined"
                   value={
-                    vehicle.attributes.odometer_when_join
-                      ? `${vehicle.attributes.odometer_when_join.toLocaleString()} km`
+                    vehicle.attributes.odometer?.at_join_km
+                      ? `${vehicle.attributes.odometer.at_join_km.toLocaleString()} km`
                       : "N/A"
+                  }
+                />
+                <DetailItem
+                  label="Odometer Source"
+                  value={
+                    vehicle.attributes.odometer?.source === 'device_native'
+                      ? 'Device (GPS)'
+                      : vehicle.attributes.odometer?.source === 'haversine'
+                      ? 'Estimated (GPS position)'
+                      : 'N/A'
                   }
                 />
                 <DetailItem

@@ -9,7 +9,12 @@ export interface VehicleAttributes {
     make: string
     model: string
     image: string | null
-    total_odometer: number | null
+    odometer: {
+        at_join_km: number
+        lifetime_km: number
+        today_km: number
+        source: 'device_native' | 'haversine' | null
+    } | null
     chasis_number: string
     registration_number: string
     display_number: string

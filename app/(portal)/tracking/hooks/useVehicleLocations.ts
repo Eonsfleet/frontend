@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { normalizeTelemetry } from "@/lib/utils";
 import { getEcho } from "@/lib/echo";
 import { Vehicle } from "@/types";
-import { deriveVehicleStatus, isStaleOffline } from "../utils";
+import { isStaleOffline } from "../utils";
 
 interface UseVehicleLocationsProps {
   vehicles: Vehicle[];
@@ -70,7 +70,7 @@ export function useVehicleLocations({
           heading: 0,
           status: derivedStatus,
           is_online: isOnline,
-          odometer: v.attributes?.total_odometer ?? null,
+          odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
           raw: loc,
@@ -114,11 +114,7 @@ export function useVehicleLocations({
       (packet: any) => {
         if (packet.vehicle_id) {
           const normalized = normalizeTelemetry(packet);
-          const status =
-            deriveVehicleStatus(
-              { state: packet.state, speed: packet.speed },
-              null,
-            ) ?? normalized.status;
+          const status = normalized.status;
           setLocations((prev) => ({
             ...prev,
             [packet.vehicle_id]: {
@@ -146,7 +142,7 @@ export function useVehicleLocations({
                 normalized.ignition === "on" ||
                 normalized.ignition === "1" ||
                 normalized.ignition === true,
-              raw: prev[packet.vehicle_id]?.raw,
+              raw: normalized,
             },
           }));
         }

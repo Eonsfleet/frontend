@@ -111,10 +111,12 @@ export interface Trip {
                 fuel_capacity_unit?: string
                 fuel_sensor_conversion_factor?: number | null
                 odometer_when_join?: number
-                current_odometer?: number
-                total_odometer?: number
-                total_mileage?: number | null
-                last_odometer_value?: number | null
+                odometer?: {
+                    at_join_km?: number
+                    lifetime_km?: number
+                    today_km?: number
+                    source?: string | null
+                } | null
                 tire_psi?: number | null
                 gvm?: number | null
                 created_at?: string
