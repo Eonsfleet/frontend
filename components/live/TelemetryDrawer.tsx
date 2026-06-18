@@ -221,10 +221,16 @@ export function TelemetryDrawer({
     vehicle?.lng,
   ]);
 
+  // Metadata must be hoisted — used by resolvedFuel before the main resolved-values block.
+  // useVehicleTelemetry stores the raw (unnormalized) WS packet, so fuel lives under
+  // telemetry.metadata, NOT at telemetry.fuel_level_percent.
+  const meta = (telemetry as any)?.metadata ?? {};
+
   // Compute resolved fuel before early return (used internally in drawer)
   const apiFuel = currentFuelData?.data?.fuel_level;
   const resolvedFuel =
     vehicle?.fuel ??
+    meta.fuel_level_percent ??
     telemetry?.fuel_level_percent ??
     apiFuel?.fuel_level_percent;
 
@@ -245,10 +251,6 @@ export function TelemetryDrawer({
   const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
   const liveOdo = telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
   const liveLastUpdate = telemetry?.gps_datetime ?? vehicle?.lastUpdate;
-
-  // Metadata fields — WS flattens metadata to top-level after normalizeTelemetry;
-  // raw WS keeps them under metadata; REST snapshot is in raw.*
-  const meta = telemetry?.metadata ?? {};
   const liveRpm =
     meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
   const liveRpmObd =
@@ -360,6 +362,7 @@ export function TelemetryDrawer({
   const liveFuel = resolvedFuel;
   const liveFuelLiters =
     vehicle?.fuel_liters ??
+    meta.fuel_level_liters ??
     telemetry?.fuel_level_liters ??
     apiFuel?.fuel_level_liters;
   const fuelTankCap = apiFuel?.tank_capacity ?? null;

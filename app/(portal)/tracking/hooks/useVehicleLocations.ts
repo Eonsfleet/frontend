@@ -131,12 +131,10 @@ export function useVehicleLocations({
                 packet.last_packet_received_at ??
                 prev[packet.vehicle_id]?.lastPacket,
               fuel:
-                packet.fuel_level_percent ??
-                packet.fuel ??
+                normalized.fuel_level_percent ??
                 prev[packet.vehicle_id]?.fuel,
               fuel_liters:
-                packet.fuel_level_liters ??
-                packet.fuel_liters ??
+                normalized.fuel_level_liters ??
                 prev[packet.vehicle_id]?.fuel_liters,
               ignition:
                 normalized.ignition === "on" ||
