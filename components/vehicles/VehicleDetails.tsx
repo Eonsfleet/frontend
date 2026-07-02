@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
+import { TelemetryRow } from "@/components/shared/TelemetryRow";
 
 // Dynamically import the map for the location tab
 const MapView = dynamic(
@@ -62,30 +63,6 @@ const MapView = dynamic(
 
 interface VehicleDetailsProps {
   vehicle: Vehicle;
-}
-
-// ── Small helper: one row inside a telemetry group card ──────────────────────
-function TelemetryRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
-      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-        {label}
-      </span>
-      <span className="text-xs font-semibold text-slate-800 text-right max-w-[60%]">
-        {value === null || value === undefined || value === "" ? (
-          <span className="text-slate-300 font-normal italic">—</span>
-        ) : (
-          String(value)
-        )}
-      </span>
-    </div>
-  );
 }
 
 export function VehicleDetails({ vehicle }: VehicleDetailsProps) {

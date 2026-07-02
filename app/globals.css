@@ -80,6 +80,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Live Tracking status colors — keep in sync with lib/vehicleStatus.ts */
+  --status-moving: oklch(0.6 0.148 155);
+  --status-parked: oklch(0.55 0.22 260);
+  --status-idle: oklch(0.65 0.19 70);
+  --status-offline: oklch(0.6 0.22 15);
+  --status-alarm: oklch(0.5 0.25 300);
 }
 
 .dark {

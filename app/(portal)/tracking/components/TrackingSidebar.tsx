@@ -1,12 +1,17 @@
 "use client";
 
-import { Loader2, Navigation, Search, Activity } from "lucide-react";
+import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Navigation, Search, Activity, ChevronLeft, ChevronRight } from "lucide-react";
 import { Vehicle } from "@/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { StatusFilters, StatusFilter } from "./StatusFilters";
 import { VehicleListItem } from "./VehicleListItem";
 import { TripListItem } from "./TripListItem";
+import { AssetCardSkeleton } from "./AssetCardSkeleton";
+import { VIRTUALIZE_LIST_THRESHOLD } from "@/lib/config";
+import { useTrackingUiStore } from "@/store/trackingUiStore";
 
 interface TrackingSidebarProps {
   viewMode: "all" | "focused";
@@ -15,7 +20,6 @@ interface TrackingSidebarProps {
   locations: Record<string, any>;
   selectedVehicleId: string | null;
   setSelectedVehicleId: (id: string | null) => void;
-  setIsTelemetryOpen: (open: boolean) => void;
   isLoadingVehicles: boolean;
   statusFilter: StatusFilter;
   setStatusFilter: (filter: StatusFilter) => void;
@@ -25,6 +29,7 @@ interface TrackingSidebarProps {
   ongoingTripsData: any[];
   setIsReplayOpen: (open: boolean) => void;
   isLoadingTrips: boolean;
+  alarmState?: Record<string, boolean>;
 }
 
 export function TrackingSidebar({
@@ -34,7 +39,6 @@ export function TrackingSidebar({
   locations,
   selectedVehicleId,
   setSelectedVehicleId,
-  setIsTelemetryOpen,
   isLoadingVehicles,
   statusFilter,
   setStatusFilter,
@@ -44,17 +48,65 @@ export function TrackingSidebar({
   ongoingTripsData,
   setIsReplayOpen,
   isLoadingTrips,
+  alarmState = {},
 }: TrackingSidebarProps) {
+  const listParentRef = useRef<HTMLDivElement>(null);
+  const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD;
+  const { isAssetListCollapsed, toggleAssetList } = useTrackingUiStore();
+
+  const virtualizer = useVirtualizer({
+    count: filteredVehicles.length,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: () => 92,
+    overscan: 8,
+    enabled: shouldVirtualize,
+  });
+
+  const renderCard = (v: Vehicle) => (
+    <VehicleListItem
+      key={v.id}
+      vehicle={v}
+      loc={locations[v.id]}
+      isSelected={String(selectedVehicleId) === String(v.id)}
+      hasActiveAlarm={alarmState[v.id] === true}
+      onSelect={() => {
+        const isSelected = String(selectedVehicleId) === String(v.id);
+        setSelectedVehicleId(isSelected ? null : v.id);
+      }}
+    />
+  );
+
+  if (isAssetListCollapsed) {
+    return (
+      <div className="hidden md:flex absolute left-6 top-6 bottom-6 z-20 flex-col pointer-events-none">
+        <button
+          onClick={toggleAssetList}
+          aria-label="Expand asset list"
+          className="pointer-events-auto self-start mt-2 h-12 w-8 rounded-r-2xl bg-white/95 backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="absolute left-6 top-6 bottom-6 z-20 flex flex-col pointer-events-none">
+    <div className="hidden md:flex absolute left-6 top-6 bottom-6 z-20 flex-col pointer-events-none">
       <div
         className={cn(
-          "w-72 h-full border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out",
+          "w-72 h-full border border-white/20 rounded-[24px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden pointer-events-auto transition-all duration-500 ease-in-out relative",
           viewMode === "focused"
             ? "bg-white"
             : "bg-white/95 backdrop-blur-xl",
         )}
       >
+        <button
+          onClick={toggleAssetList}
+          aria-label="Collapse asset list"
+          className="lg:hidden absolute -right-3 top-4 z-10 h-7 w-7 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
         <div className="p-6 border-b border-slate-100/50">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight italic flex items-center gap-2">
@@ -85,50 +137,62 @@ export function TrackingSidebar({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
+        <div className="flex-1 overflow-hidden flex flex-col p-4 gap-4">
           {viewMode === "all" ? (
             <>
               <StatusFilters
                 vehicles={vehicles}
                 locations={locations}
+                alarmState={alarmState}
                 statusFilter={statusFilter}
                 onStatusChange={setStatusFilter}
               />
-              <div className="space-y-2">
-                {isLoadingVehicles ? (
-                  <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      Hydrating Fleet...
-                    </span>
+
+              {isLoadingVehicles ? (
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <AssetCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : filteredVehicles.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      {vehicles.length === 0 ? "No assets yet" : "No assets match your filters"}
+                    </p>
                   </div>
-                ) : (
-                  filteredVehicles.map((v: Vehicle) => (
-                    <VehicleListItem
-                      key={v.id}
-                      vehicle={v}
-                      loc={locations[v.id]}
-                      isSelected={String(selectedVehicleId) === String(v.id)}
-                      onSelect={() => {
-                        const isSelected =
-                          String(selectedVehicleId) === String(v.id);
-                        setSelectedVehicleId(isSelected ? null : v.id);
-                        setIsTelemetryOpen(false);
-                      }}
-                    />
-                  ))
-                )}
-              </div>
+                </div>
+              ) : shouldVirtualize ? (
+                <div ref={listParentRef} className="flex-1 overflow-y-auto no-scrollbar">
+                  <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+                    {virtualizer.getVirtualItems().map((virtualRow) => (
+                      <div
+                        key={filteredVehicles[virtualRow.index].id}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${virtualRow.start}px)`,
+                          paddingBottom: 8,
+                        }}
+                      >
+                        {renderCard(filteredVehicles[virtualRow.index])}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+                  {filteredVehicles.map(renderCard)}
+                </div>
+              )}
             </>
           ) : (
-            <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
               {isLoadingTrips ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    Scanning Missions...
-                  </span>
-                </div>
+                Array.from({ length: 6 }).map((_, i) => <AssetCardSkeleton key={i} />)
               ) : ongoingTripsData.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
                   <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />

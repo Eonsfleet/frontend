@@ -28,7 +28,7 @@ export function SelectedVehicleBar({
   const loc = locations[selectedVehicle.id];
 
   return (
-    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in slide-in-from-bottom-5 duration-500 delay-100 w-full max-w-xl">
+    <div className="hidden md:block absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in slide-in-from-bottom-5 duration-500 delay-100 w-full max-w-xl">
       <div className="bg-white/95 backdrop-blur-2xl rounded-[28px] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.3)] border border-white/50 p-4 flex items-center gap-6 pointer-events-auto">
         <div className="flex items-center gap-4 flex-1">
           <div className="p-3.5 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
