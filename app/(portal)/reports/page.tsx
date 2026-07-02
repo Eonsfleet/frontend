@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { UpgradeGate } from "@/components/shared/UpgradeGate";
 import {
   Card,
   CardContent,
@@ -311,7 +312,7 @@ async function blobDownload(blob: Blob, filename: string) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ReportsCentralPage() {
+function ReportsCentralPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("export");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -1316,5 +1317,18 @@ export default function ReportsCentralPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <UpgradeGate
+      requiredPlan="growth"
+      module="analytics"
+      featureName="Reports Central"
+      description="Generate, schedule, and export fleet business reports."
+    >
+      <ReportsCentralPage />
+    </UpgradeGate>
   );
 }

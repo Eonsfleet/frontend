@@ -8,6 +8,11 @@ import {
   ShieldCheck,
   Map as MapIcon,
   SlidersHorizontal,
+  Maximize,
+  Minimize,
+  Satellite,
+  Layers,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -16,17 +21,34 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { TrackingMapStyle } from "../utils";
+
+const MAP_STYLE_CYCLE: TrackingMapStyle[] = ["standard", "satellite", "hybrid", "traffic"];
+const MAP_STYLE_ICON: Record<TrackingMapStyle, typeof MapIcon> = {
+  standard: MapIcon,
+  satellite: Satellite,
+  hybrid: Layers,
+  traffic: Radio,
+};
+const MAP_STYLE_LABEL: Record<TrackingMapStyle, string> = {
+  standard: "Street",
+  satellite: "Satellite",
+  hybrid: "Hybrid",
+  traffic: "Traffic (Fleet Speed)",
+};
 
 interface TrackingControlDeckProps {
   viewMode: "all" | "focused";
   setViewMode: (mode: "all" | "focused") => void;
-  mapStyle: "standard" | "satellite" | "hybrid";
-  setMapStyle: (style: "standard" | "satellite" | "hybrid") => void;
+  mapStyle: TrackingMapStyle;
+  setMapStyle: (style: TrackingMapStyle) => void;
   showGeofences: boolean;
   setShowGeofences: (show: boolean) => void;
   selectedClusterIds: string[];
   onOpenClusterModal: () => void;
   onRefresh: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export function TrackingControlDeck({
@@ -39,11 +61,19 @@ export function TrackingControlDeck({
   selectedClusterIds,
   onOpenClusterModal,
   onRefresh,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: TrackingControlDeckProps) {
   const router = useRouter();
+  const cycleMapStyle = () => {
+    const idx = MAP_STYLE_CYCLE.indexOf(mapStyle);
+    setMapStyle(MAP_STYLE_CYCLE[(idx + 1) % MAP_STYLE_CYCLE.length]);
+  };
+  const CurrentStyleIcon = MAP_STYLE_ICON[mapStyle];
+  const nextStyle = MAP_STYLE_CYCLE[(MAP_STYLE_CYCLE.indexOf(mapStyle) + 1) % MAP_STYLE_CYCLE.length];
 
   return (
-    <div className="absolute right-6 top-6 z-30 flex flex-col gap-4">
+    <div className="hidden md:flex absolute right-6 top-6 z-30 flex-col gap-4">
       <TooltipProvider delayDuration={0}>
         <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col gap-2 overflow-hidden items-center">
           <Tooltip>
@@ -119,24 +149,22 @@ export function TrackingControlDeck({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={() =>
-                  setMapStyle(mapStyle === "standard" ? "satellite" : "standard")
-                }
+                onClick={cycleMapStyle}
                 className={cn(
                   "h-12 w-12 rounded-2xl flex items-center justify-center transition-all group",
-                  mapStyle === "satellite"
+                  mapStyle !== "standard"
                     ? "bg-blue-600 text-white shadow-lg"
                     : "text-slate-400 hover:bg-slate-50 hover:text-blue-600",
                 )}
               >
-                <MapIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                <CurrentStyleIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
               </button>
             </TooltipTrigger>
             <TooltipContent
               side="left"
               className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
             >
-              Toggle Satellite View
+              {MAP_STYLE_LABEL[mapStyle]} — switch to {MAP_STYLE_LABEL[nextStyle]}
             </TooltipContent>
           </Tooltip>
 
@@ -216,6 +244,31 @@ export function TrackingControlDeck({
             -
           </button>
         </div>
+
+        {onToggleFullscreen && (
+          <div className="bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white/20 p-2 flex flex-col items-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onToggleFullscreen}
+                  className="h-10 w-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-all group"
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                  ) : (
+                    <Maximize className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="left"
+                className="bg-slate-900 text-white border-none font-black text-[10px] uppercase tracking-widest"
+              >
+                {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </TooltipProvider>
     </div>
   );

@@ -1,0 +1,315 @@
+/**
+ * Shared vehicle telemetry resolution — extracted from the retired
+ * components/live/TelemetryDrawer.tsx so every Live Tracking detail tab and
+ * bottom card resolves the same values the same way, instead of re-deriving
+ * this fallback-chain logic independently in each component.
+ *
+ * Resolution priority throughout: WS telemetry (live) > tracking-list prop
+ * (REST/WS-merged snapshot) > raw REST snapshot > API endpoint fallback.
+ */
+
+export interface ResolvedVehicleTelemetryInput {
+  vehicle: {
+    plate: string;
+    make?: string;
+    model?: string;
+    speed?: number;
+    fuel?: number;
+    fuel_liters?: number;
+    temp?: number;
+    status?: string;
+    voltage?: number | string;
+    ext_voltage?: number | string;
+    signal?: string;
+    ignition?: boolean;
+    odometer?: number;
+    lat?: number;
+    lng?: number;
+    lastUpdate?: string;
+    address?: string | null;
+    heading?: number;
+    rpm?: number;
+    fuel_rate?: number;
+    eco_score?: number;
+    idling?: boolean;
+    jamming?: boolean;
+    immobilizer?: boolean;
+    driving_state?: string;
+    altitude?: number | null;
+    movement?: string | null;
+    raw?: any;
+  } | null;
+  telemetry: any;
+  apiFuel?: {
+    fuel_level_percent?: number;
+    fuel_level_liters?: number;
+    tank_capacity?: number;
+    data_quality_score?: number;
+    last_updated?: string;
+  } | null;
+  deviceHasFuel?: boolean | null;
+  deviceStatus: string | null;
+  sensorHealth?: { battery_voltage?: any; signal_strength?: string; obd_status?: string } | null;
+  /** Last known-good battery/ext voltage, to avoid flicker when a packet momentarily omits it */
+  lastKnownBatteryV?: number | string | null;
+  lastKnownExtV?: number | string | null;
+}
+
+/**
+ * Builds the flat "vehicle snapshot" shape resolveVehicleTelemetry expects, from
+ * a tracking-list Vehicle record plus its merged locations[id] entry. Centralizes
+ * what used to be an inline object literal built ad hoc wherever the telemetry
+ * panel was opened.
+ */
+export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
+  if (!selectedVehicle) return null;
+  const rel = selectedVehicle.relationships?.current_location;
+  return {
+    plate: selectedVehicle.attributes.registration_number,
+    make: selectedVehicle.attributes.make,
+    model: selectedVehicle.attributes.model,
+    device_id: selectedVehicle.attributes.device_id ?? null,
+    imei:
+      selectedVehicle.relationships?.device?.imei ??
+      selectedVehicle.relationships?.device?.data?.imei ??
+      null,
+    altitude: loc?.altitude ?? null,
+    movement: loc?.movement ?? null,
+    speed: loc?.speed ?? rel?.speed ?? 0,
+    fuel: loc?.fuel ?? loc?.fuel_level_percent ?? 0,
+    fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters,
+    temp: loc?.engine_temperature ?? 0,
+    status: loc?.status,
+    voltage: loc?.battery_voltage,
+    ext_voltage: loc?.external_voltage,
+    signal: loc?.satellites != null ? `${loc.satellites} Sats` : "---",
+    ignition: loc?.ignition ?? false,
+    odometer: loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+    lat: loc?.lat ?? rel?.latitude,
+    lng: loc?.lng ?? rel?.longitude,
+    lastUpdate:
+      loc?.lastUpdate ??
+      selectedVehicle.attributes?.last_packet_received_at ??
+      rel?.last_packet_received_at ??
+      rel?.created_at,
+    address: loc?.address ?? null,
+    heading: loc?.heading ?? 0,
+    rpm: loc?.engine_rpm,
+    fuel_rate: loc?.fuel_rate,
+    eco_score: loc?.eco_score,
+    idling: loc?.idling ?? false,
+    jamming: loc?.jamming ?? false,
+    immobilizer: loc?.immobilizer ?? false,
+    driving_state: loc?.driving_state,
+    raw: loc?.raw ?? rel,
+  };
+}
+
+export function formatVoltage(value: number | string | null | undefined): string {
+  if (value == null) return "---";
+  let numValue: number;
+  if (typeof value === "string") {
+    numValue = parseFloat(value.toLowerCase().replace(/v$/, "").trim());
+  } else {
+    numValue = value;
+  }
+  if (isNaN(numValue)) return "---";
+  return `${numValue.toFixed(3)}V`;
+}
+
+export function parseTS(ts: string | null | undefined): Date | null {
+  if (!ts) return null;
+  return new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
+}
+
+export function fmtTime(ts: string | null | undefined): string | null {
+  const d = parseTS(ts);
+  return d
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : null;
+}
+
+export function compassLabel(deg: number): string {
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+export function statusLabel(s: string): string {
+  if (s === "in_transit") return "Moving";
+  if (s === "stopped" || s === "parked") return "Stopped";
+  if (s === "idle") return "Idling";
+  if (s === "offline") return "Offline";
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Online";
+}
+
+export function resolveVehicleTelemetry({
+  vehicle,
+  telemetry,
+  apiFuel,
+  deviceHasFuel,
+  deviceStatus,
+  sensorHealth,
+  lastKnownBatteryV,
+  lastKnownExtV,
+}: ResolvedVehicleTelemetryInput) {
+  const meta = (telemetry as any)?.metadata ?? {};
+  const raw = vehicle?.raw ?? {};
+
+  const resolvedFuel =
+    vehicle?.fuel ??
+    meta.fuel_level_percent ??
+    telemetry?.fuel_level_percent ??
+    apiFuel?.fuel_level_percent;
+
+  const liveSpeed = telemetry?.speed ?? vehicle?.speed ?? 0;
+  const liveHeading = telemetry?.heading ?? vehicle?.heading ?? 0;
+  const liveIgnition = telemetry
+    ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
+    : vehicle?.ignition;
+  const liveMovement = telemetry?.movement ?? vehicle?.movement;
+  const liveStatus = telemetry?.status ?? vehicle?.status;
+  const liveLat = telemetry?.latitude ?? vehicle?.lat;
+  const liveLng = telemetry?.longitude ?? vehicle?.lng;
+  const liveAltitude = telemetry?.altitude ?? vehicle?.altitude ?? raw.altitude;
+  const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
+  const liveOdo = telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
+  // Not every device/protocol reports engine hours — surface it only when the
+  // device actually sends it rather than fabricating a value from unrelated data.
+  const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;
+  const liveLastUpdate = telemetry?.gps_datetime ?? vehicle?.lastUpdate;
+  const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
+  const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
+  const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
+  const liveFuelRate =
+    meta.fuel_rate_gps ?? meta.fuel_rate ?? telemetry?.fuel_rate ?? raw.fuel_rate ?? vehicle?.fuel_rate;
+  const liveFuelConsumed = meta.fuel_consumed ?? telemetry?.fuel_consumed ?? raw.fuel_consumed;
+  const liveFuelUsedGps = meta.fuel_used_gps ?? telemetry?.fuel_used_gps ?? raw.fuel_used_gps;
+  const liveFuelLevelObd = meta.fuel_level_obd ?? telemetry?.fuel_level_obd ?? raw.fuel_level_obd;
+  const liveFuelSource = meta.fuel_source ?? telemetry?.fuel_source ?? raw.fuel_source;
+  const liveEcoScore = meta.eco_score ?? telemetry?.eco_score ?? raw.eco_score ?? vehicle?.eco_score;
+  const liveIdling = meta.idling ?? telemetry?.idling ?? raw.idling ?? vehicle?.idling ?? false;
+  const liveJamming = meta.jamming ?? telemetry?.jamming ?? raw.jamming ?? vehicle?.jamming ?? false;
+  const liveImmobilizer =
+    meta.immobilizer ?? telemetry?.immobilizer ?? raw.immobilizer ?? vehicle?.immobilizer ?? false;
+  const liveUnplug = meta.unplug ?? telemetry?.unplug ?? raw.unplug ?? false;
+  const liveSleepMode = meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
+  const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
+  const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
+  const liveDrivingState =
+    meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle?.driving_state;
+
+  const currentBatteryV =
+    meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle?.voltage;
+  const currentExtV =
+    meta.external_voltage ?? telemetry?.external_voltage ?? raw.external_voltage ?? vehicle?.ext_voltage;
+
+  const liveBatteryV =
+    currentBatteryV != null && currentBatteryV !== "---" ? currentBatteryV : lastKnownBatteryV;
+  const liveExtV = currentExtV != null && currentExtV !== "---" ? currentExtV : lastKnownExtV;
+
+  const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
+  const liveEngineTemp =
+    meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? 0;
+  const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
+  const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
+  const liveMileage = meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
+  const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
+  const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
+  const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
+  const liveConfidence = meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
+
+  const liveFuel = resolvedFuel;
+  const liveFuelLiters =
+    vehicle?.fuel_liters ?? meta.fuel_level_liters ?? telemetry?.fuel_level_liters ?? apiFuel?.fuel_level_liters;
+  const fuelTankCap = apiFuel?.tank_capacity ?? null;
+  const fuelQuality = apiFuel?.data_quality_score ?? null;
+  const fuelLastUpdate = apiFuel?.last_updated ?? null;
+
+  const isDeviceOnline =
+    deviceStatus === "online" ? true : deviceStatus === "offline" ? false : vehicle?.status !== "offline";
+
+  const fuelColor = (liveFuel ?? 0) < 20 ? "bg-rose-500" : (liveFuel ?? 0) < 40 ? "bg-amber-500" : "bg-emerald-500";
+  const ecoColor =
+    liveEcoScore == null ? "" : liveEcoScore >= 70 ? "text-emerald-600" : liveEcoScore >= 40 ? "text-amber-600" : "text-rose-600";
+  const ecoRingColor =
+    liveEcoScore == null ? "#e2e8f0" : liveEcoScore >= 70 ? "#16a34a" : liveEcoScore >= 40 ? "#d97706" : "#dc2626";
+
+  const parsedBatteryV = (() => {
+    if (liveBatteryV == null) return null;
+    if (typeof liveBatteryV === "string") {
+      return parseFloat(liveBatteryV.toLowerCase().replace(/v$/, "").trim());
+    }
+    return Number(liveBatteryV);
+  })();
+
+  const batteryWarn = parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
+  const tempWarn = liveEngineTemp > 105;
+  const weakGps = liveSatellites != null && liveSatellites < 4;
+
+  const health = sensorHealth || {
+    battery_voltage: liveBatteryV || "---",
+    signal_strength:
+      liveRssi != null ? `${liveRssi} dBm` : liveSatellites != null ? `${liveSatellites} Sats` : vehicle?.signal || "---",
+    obd_status: liveDrivingState || "---",
+  };
+
+  return {
+    address: telemetry?.address ?? vehicle?.address ?? null,
+    speed: liveSpeed,
+    heading: liveHeading,
+    ignition: liveIgnition,
+    movement: liveMovement,
+    status: liveStatus,
+    lat: liveLat,
+    lng: liveLng,
+    altitude: liveAltitude,
+    satellites: liveSatellites,
+    odometer: liveOdo,
+    engineHours: liveEngineHours,
+    lastUpdate: liveLastUpdate,
+    rpm: liveRpm,
+    rpmObd: liveRpmObd,
+    oilLevel: liveOilLevel,
+    fuelRate: liveFuelRate,
+    fuelConsumed: liveFuelConsumed,
+    fuelUsedGps: liveFuelUsedGps,
+    fuelLevelObd: liveFuelLevelObd,
+    fuelSource: liveFuelSource,
+    ecoScore: liveEcoScore,
+    idling: liveIdling,
+    jamming: liveJamming,
+    immobilizer: liveImmobilizer,
+    unplug: liveUnplug,
+    sleepMode: liveSleepMode,
+    doorStatus: liveDoorStatus,
+    loadWeight: liveLoadWeight,
+    drivingState: liveDrivingState,
+    batteryV: liveBatteryV,
+    extV: liveExtV,
+    batteryCurrent: liveBatteryCurrent,
+    engineTemp: liveEngineTemp,
+    rssi: liveRssi,
+    hdop: liveHdop,
+    mileage: liveMileage,
+    tripOdo: liveTripOdo,
+    odoSource: liveOdoSource,
+    protocol: liveProtocol,
+    confidence: liveConfidence,
+    fuel: liveFuel,
+    fuelLiters: liveFuelLiters,
+    fuelTankCap,
+    fuelQuality,
+    fuelLastUpdate,
+    deviceHasFuel: deviceHasFuel ?? null,
+    isDeviceOnline,
+    fuelColor,
+    ecoColor,
+    ecoRingColor,
+    batteryWarn,
+    tempWarn,
+    weakGps,
+    health,
+  };
+}
+
+export type ResolvedVehicleTelemetry = ReturnType<typeof resolveVehicleTelemetry>;

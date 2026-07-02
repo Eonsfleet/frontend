@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Truck, Users, Activity, Wrench, ShieldAlert, Map, FileText } from 'lucide-react'
+import { LayoutDashboard, Truck, Users, Activity, Wrench, ShieldAlert, Map } from 'lucide-react'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 
 const navItems = [
@@ -14,7 +14,6 @@ const navItems = [
     { name: 'Maintenance', href: '/analytics/maintenance', icon: Wrench },
     { name: 'Incidents', href: '/analytics/incidents', icon: ShieldAlert },
     { name: 'GPS & Routes', href: '/analytics/gps', icon: Map },
-    { name: 'Scheduled Reports', href: '/analytics/reports', icon: FileText },
 ]
 
 export default function AnalyticsLayout({ children }: { children: React.ReactNode }) {

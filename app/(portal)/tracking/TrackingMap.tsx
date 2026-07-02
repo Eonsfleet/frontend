@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -19,6 +19,11 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
+import { getMarkerState, buildMarkerHtml } from "./utils";
+import type { VehicleInterpolator } from "@/lib/vehicleInterpolation";
+import { TrafficOverlay } from "./components/TrafficOverlay";
+import type { TrackingMapStyle } from "./utils";
 
 // Normalization & Helpers (Passed from parent or redefined if pure)
 const normalizeReg = (reg: string) => (reg || "").toUpperCase();
@@ -34,6 +39,7 @@ interface TrackingMapProps {
   setSelectedVehicle: (v: any) => void;
   vehicles: any[];
   TILE_URL: string;
+  mapStyle?: TrackingMapStyle;
   getMarkerSVG: (bodyType: string) => string;
   getVehicleIcon: (bodyType: string, status: string) => React.ReactNode;
   playbackData?: any[];
@@ -43,6 +49,8 @@ interface TrackingMapProps {
   zoomResetKey?: number;
   showGeofences?: boolean;
   geofences?: any[];
+  interpolator?: VehicleInterpolator;
+  alarmState?: Record<string, boolean>;
 }
 
 const MapController = ({ selected, locs, allVehicles }: any) => {
@@ -112,6 +120,7 @@ export default function TrackingMap({
   setSelectedVehicle,
   vehicles,
   TILE_URL,
+  mapStyle = "standard",
   getMarkerSVG,
   getVehicleIcon,
   playbackData = [],
@@ -121,7 +130,11 @@ export default function TrackingMap({
   zoomResetKey = 0,
   showGeofences = false,
   geofences = [],
+  interpolator,
+  alarmState = {},
 }: TrackingMapProps) {
+  const markerRefs = useRef<Map<string, L.Marker>>(new Map());
+
   const createClusterCustomIcon = (cluster: any) => {
     return L.divIcon({
       html: `<div><span>${cluster.getChildCount()}</span></div>`,
@@ -129,6 +142,31 @@ export default function TrackingMap({
       iconSize: L.point(40, 40, true),
     });
   };
+
+  // Shared rAF loop driving smooth marker movement/rotation between GPS packets —
+  // one loop for the whole fleet, not one per vehicle, so this stays cheap at scale.
+  // Position updates are applied imperatively to the underlying Leaflet marker
+  // instances, bypassing React re-render entirely for motion.
+  useEffect(() => {
+    if (!interpolator) return;
+    let frameId: number;
+
+    const tick = () => {
+      const now = performance.now();
+      markerRefs.current.forEach((marker, id) => {
+        const interp = interpolator.getInterpolated(id, now);
+        if (!interp) return;
+        marker.setLatLng([interp.lat, interp.lng]);
+        const el = marker.getElement();
+        const base = el?.querySelector<HTMLElement>(".marker-base");
+        if (base) base.style.transform = `rotate(${interp.heading || 0}deg)`;
+      });
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [interpolator]);
 
   const currentPlayback = playbackData[playbackIndex];
   return (
@@ -157,6 +195,10 @@ export default function TrackingMap({
           }}
         />
 
+        {mapStyle === "traffic" && !isReplayMode && (
+          <TrafficOverlay filteredVehicles={filteredVehicles} locations={locations} />
+        )}
+
         {isReplayMode && playbackData.length > 0 && (
           <>
             <Polyline
@@ -171,18 +213,18 @@ export default function TrackingMap({
                 position={[currentPlayback.lat, currentPlayback.lng]}
                 icon={L.divIcon({
                   className: "custom-marker-wrapper",
-                  html: `
-                                        <div class="marker-container is-active is-online">
-                                            <div class="marker-pulse"></div>
-                                            <div class="marker-base" style="transform: rotate(${currentPlayback.heading || 0}deg); background: #2563eb; border-color: #fff;">
-                                                <div class="marker-icon-wrapper">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-                                                        <path d="M12 19V5M5 12l7-7 7 7"/>
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `,
+                  html: buildMarkerHtml({
+                    bodySvg:
+                      '<path d="M12 19V5M5 12l7-7 7 7"/>',
+                    heading: currentPlayback.heading || 0,
+                    state: {
+                      statusKey: "parked",
+                      pulse: true,
+                      greyed: false,
+                      scale: 1,
+                      zIndexOffset: 0,
+                    },
+                  }),
                   iconSize: [40, 40],
                   iconAnchor: [20, 20],
                 })}
@@ -200,7 +242,7 @@ export default function TrackingMap({
               // coordinates can be {lat, lng} or {latitude, longitude}
               const lat = coordinates.lat ?? coordinates.latitude;
               const lng = coordinates.lng ?? coordinates.longitude;
-              
+
               // Skip if coordinates are invalid
               if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
                 console.warn(`Geofence ${g.id} has invalid circle coordinates:`, coordinates);
@@ -284,35 +326,57 @@ export default function TrackingMap({
             })
             .map((v) => {
               const loc = locations[v.id];
-              const isActive =
-                loc.status === "in_transit" || (loc.speed || 0) > 0;
-              const isOnline = loc.is_online || v.attributes.is_online;
+              const idKey = String(v.id);
+              const isSelected = selectedVehicle?.id === v.id;
+              const hasAlarm = alarmState[idKey] === true;
+              const markerState = getMarkerState(
+                { status: loc.status, is_online: loc.is_online, speed: loc.speed },
+                isSelected,
+                hasAlarm,
+              );
+              const statusCfg = VEHICLE_STATUS[markerState.statusKey];
+
+              // Bind the declarative position/heading to the raw target — this is
+              // only what places a freshly-mounted marker or reconciles the prop;
+              // the rAF loop below owns the actual frame-by-frame smooth motion via
+              // direct Leaflet calls, correcting any prop-triggered snap within a
+              // single frame (~16ms, imperceptible). Reading the interpolator's
+              // time-varying position here (at render time) would be an impure
+              // render, so that read only happens inside the rAF callback.
+              const lat = loc.lat;
+              const lng = loc.lng;
+              const heading = loc.heading ?? 0;
+              const size = Math.round(40 * markerState.scale);
 
               return (
                 <Marker
                   key={v.id}
-                  position={[loc.lat, loc.lng]}
+                  ref={(instance) => {
+                    if (instance) markerRefs.current.set(idKey, instance);
+                    else markerRefs.current.delete(idKey);
+                  }}
+                  position={[lat, lng]}
+                  zIndexOffset={markerState.zIndexOffset}
                   icon={L.divIcon({
                     className: "custom-marker-wrapper",
-                    html: `
-                                        <div class="marker-container ${isActive ? "is-active" : ""} ${isOnline ? "is-online" : "is-offline"}">
-                                            <div class="marker-pulse"></div>
-                                            <div class="marker-base" style="transform: rotate(${loc.heading || 0}deg)">
-                                                <div class="marker-icon-wrapper">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-                                                        ${getMarkerSVG(v.attributes.body_type)}
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20],
+                    html: buildMarkerHtml({
+                      bodySvg: getMarkerSVG(v.attributes.body_type),
+                      heading,
+                      state: markerState,
+                    }),
+                    iconSize: [size, size],
+                    iconAnchor: [size / 2, size / 2],
                   })}
                   eventHandlers={{
                     click: () => {
                       const isAlreadySelected = selectedVehicle?.id === v.id;
                       setSelectedVehicle(isAlreadySelected ? null : v);
+                    },
+                    keydown: (e: any) => {
+                      if (e.originalEvent?.key === "Enter" || e.originalEvent?.key === " ") {
+                        const isAlreadySelected = selectedVehicle?.id === v.id;
+                        setSelectedVehicle(isAlreadySelected ? null : v);
+                      }
                     },
                   }}
                 >
@@ -321,31 +385,17 @@ export default function TrackingMap({
                       <div className="flex items-center justify-between mb-3">
                         <Badge
                           className={cn(
-                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none",
-                            !isOnline
-                              ? "bg-rose-600 text-white"
-                              : loc.status === "in_transit"
-                                ? "bg-emerald-600 text-white"
-                                : loc.status === "stopped" ||
-                                    loc.status === "parked"
-                                  ? "bg-slate-500 text-white"
-                                  : "bg-blue-600 text-white",
+                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none text-white",
                           )}
+                          style={{ backgroundColor: statusCfg.marker }}
                         >
-                          {!isOnline
-                            ? "Offline"
-                            : loc.status === "in_transit"
-                              ? "Moving"
-                              : loc.status === "stopped" ||
-                                  loc.status === "parked"
-                                ? "Stopped"
-                                : capitalize(loc.status || "Online")}
+                          {statusCfg.label}
                         </Badge>
                         <div className="flex items-center gap-1.5">
                           <div
                             className={cn(
                               "w-1.5 h-1.5 rounded-full",
-                              isOnline
+                              markerState.statusKey !== "offline"
                                 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                                 : "bg-slate-300",
                             )}
@@ -357,7 +407,7 @@ export default function TrackingMap({
                       </div>
                       <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
                         <div className="p-2 bg-white rounded-lg shadow-sm">
-                          {getVehicleIcon(v.attributes.body_type, loc.status)}
+                          {getVehicleIcon(v.attributes.body_type, markerState.statusKey)}
                         </div>
                         <div>
                           <p className="text-xs font-black text-slate-900 leading-none">
@@ -382,7 +432,7 @@ export default function TrackingMap({
                             Heading
                           </span>
                           <span className="text-sm font-black text-slate-900 italic">
-                            {loc.heading || 0}°
+                            {Math.round(heading)}°
                           </span>
                         </div>
                       </div>
@@ -396,7 +446,7 @@ export default function TrackingMap({
 
       <style jsx global>{`
         .leaflet-marker-icon {
-          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: transform 0.2s linear;
         }
 
         .marker-container {
@@ -413,43 +463,30 @@ export default function TrackingMap({
           z-index: 2;
           width: 32px;
           height: 32px;
-          background: #1e293b;
           border: 2px solid white;
           border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-          transition: transform 0.5s ease;
         }
 
-        .marker-container.is-active .marker-base {
-          background: #059669;
-          border-color: #10b981;
-        }
-
-        .marker-container.is-online .marker-base {
-          background: #2563eb;
-          border-color: #60a5fa;
-        }
-
-        .marker-container.is-offline .marker-base {
-          background: #e11d48;
-          border-color: #fb7185;
+        .marker-container.is-greyed .marker-base {
+          opacity: 0.55;
+          filter: grayscale(0.4);
         }
 
         .marker-pulse {
           position: absolute;
           width: 40px;
           height: 40px;
-          background: rgba(37, 99, 235, 0.2);
           border-radius: 50%;
           transform: scale(0);
           opacity: 0;
           z-index: 1;
         }
 
-        .marker-container.is-active .marker-pulse {
+        .marker-container.is-pulsing .marker-pulse {
           animation: marker-pulse 2s infinite;
         }
 
@@ -506,16 +543,25 @@ export default function TrackingMap({
           background: #0f172a;
         }
         .cluster-moving div {
-          background: #059669;
+          background: ${VEHICLE_STATUS.moving.marker};
+        }
+        .cluster-idle div {
+          background: ${VEHICLE_STATUS.idle.marker};
+        }
+        .cluster-parked div {
+          background: ${VEHICLE_STATUS.parked.marker};
         }
         .cluster-stopped div {
           background: #64748b;
         }
         .cluster-offline div {
-          background: #e11d48;
+          background: ${VEHICLE_STATUS.offline.marker};
         }
         .cluster-online div {
           background: #2563eb;
+        }
+        .cluster-alarm div {
+          background: ${VEHICLE_STATUS.alarm.marker};
         }
 
         .custom-marker-cluster:hover div {

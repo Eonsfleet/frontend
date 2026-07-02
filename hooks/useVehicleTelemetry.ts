@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { getEcho } from '@/lib/echo'
 import { useAuthStore } from '@/store/authStore'
 import { VehicleTelemetry } from '@/types'
+import { buildPacketEntry } from '@/lib/packetStream'
+import { usePacketStreamStore } from '@/store/packetStreamStore'
 
 export function useVehicleTelemetry(
     vehicleId: string | null,
@@ -20,10 +22,14 @@ export function useVehicleTelemetry(
         const echo = getEcho()
         if (!echo || !vehicleId || !orgIdentifier) return
 
+        const push = (event: string, payload: unknown) =>
+            usePacketStreamStore.getState().push(buildPacketEntry(vehicleId, event, payload))
+
         // Layer 2a: Per-vehicle location stream
         const vehicleChannel = echo.private(`location.vehicle.${vehicleId}`)
         vehicleChannel.listen('.current.recent', (packet: VehicleTelemetry) => {
             setTelemetry(packet)
+            push('.current.recent', packet)
         })
 
         // Layer 2b: Location by device IMEI (raw device stream)
@@ -33,6 +39,7 @@ export function useVehicleTelemetry(
             imeiChannel.listen('.current.recent', (packet: VehicleTelemetry) => {
                 // Only apply if no vehicle-level data has arrived yet
                 setTelemetry((prev) => prev ?? packet)
+                push('.current.recent', packet)
             })
         }
 
@@ -42,13 +49,21 @@ export function useVehicleTelemetry(
             statusChannel = echo.private(`devicestatus.${orgIdentifier}.${deviceId}`)
             statusChannel.listen('.device.status', (event: { is_online: boolean }) => {
                 setDeviceStatus(event.is_online ? 'online' : 'offline')
+                push('.device.status', event)
             })
         }
+
+        // Layer 2d: Per-vehicle fuel level stream
+        const fuelChannel = echo.private(`fuel.vehicle.${vehicleId}`)
+        fuelChannel.listen('.fuel.level', (event: unknown) => {
+            push('.fuel.level', event)
+        })
 
         return () => {
             echo.leave(`location.vehicle.${vehicleId}`)
             if (imei) echo.leave(`location.${imei}`)
             if (deviceId) echo.leave(`devicestatus.${orgIdentifier}.${deviceId}`)
+            echo.leave(`fuel.vehicle.${vehicleId}`)
         }
     }, [vehicleId, orgIdentifier, deviceId, imei])
 

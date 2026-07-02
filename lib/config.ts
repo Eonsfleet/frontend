@@ -29,3 +29,23 @@ export const REFETCH_INTERVAL_MAP = 30_000
 
 /** Maximum number of geofence alert events kept in memory */
 export const ALERTS_BUFFER_SIZE = 50
+
+/** Maximum packets retained per-vehicle in the Live IoT Packet Stream ring buffer */
+export const PACKET_STREAM_MAX_ROWS_DEFAULT = 200
+
+// ── Live Tracking map/perf tuning ─────────────────────────────────────────────
+
+/** Target frame budget (ms) for the shared marker-interpolation rAF loop */
+export const INTERPOLATION_FRAME_BUDGET_MS = 16
+
+/** Debounce (ms) before flipping the WS connection-status banner, to avoid flicker on brief blips */
+export const WS_RECONNECT_DEBOUNCE_MS = 1500
+
+/** Debounce (ms) for subscribing to a vehicle's Layer-2 (per-vehicle) WS channels after selection */
+export const LAYER2_SUBSCRIBE_DEBOUNCE_MS = 250
+
+/** Vehicle count above which the map prefers clustering over individual markers */
+export const CLUSTER_THRESHOLD = 50
+
+/** Asset list length above which the sidebar switches to virtualized rendering */
+export const VIRTUALIZE_LIST_THRESHOLD = 50
