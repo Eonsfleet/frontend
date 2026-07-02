@@ -34,4 +34,15 @@ describe('StatusFilters', () => {
     fireEvent.click(screen.getByText('Moving 1'))
     expect(onStatusChange).toHaveBeenCalledWith('moving')
   })
+
+  it('keeps each status tab colored even when not the active filter', () => {
+    render(
+      <StatusFilters vehicles={vehicles} locations={locations} statusFilter="all" onStatusChange={vi.fn()} />,
+    )
+    // "moving" is not the active filter here ("all" is), but its tab should
+    // still carry the moving status color, not a neutral grey.
+    expect(screen.getByText('Moving 1').className).toMatch(/text-emerald-600/)
+    expect(screen.getByText('Idle 1').className).toMatch(/text-amber-600/)
+    expect(screen.getByText('Offline 1').className).toMatch(/text-rose-600/)
+  })
 })

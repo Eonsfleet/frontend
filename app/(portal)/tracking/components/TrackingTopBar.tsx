@@ -8,11 +8,6 @@ import {
   Satellite,
   Layers,
   Radio,
-  RefreshCw,
-  SlidersHorizontal,
-  Maximize,
-  Minimize,
-  Crosshair,
   Menu,
 } from "lucide-react";
 import {
@@ -50,15 +45,13 @@ interface TrackingTopBarProps {
   setShowTraffic: (v: boolean) => void;
   showGeofences: boolean;
   setShowGeofences: (v: boolean) => void;
-  viewMode: "all" | "focused";
-  setViewMode: (m: "all" | "focused") => void;
-  selectedClusterIds: string[];
-  onOpenClusterModal: () => void;
-  onRefresh: () => void;
-  isFullscreen: boolean;
-  onToggleFullscreen: () => void;
 }
 
+/**
+ * Floats directly over the map area (rendered inside the map's own relative
+ * container in page.tsx) — it is not a page-wide docked bar, so it never
+ * extends over the asset sidebar or the vehicle detail panel columns.
+ */
 export function TrackingTopBar({
   locationSearch,
   setLocationSearch,
@@ -69,13 +62,6 @@ export function TrackingTopBar({
   setShowTraffic,
   showGeofences,
   setShowGeofences,
-  viewMode,
-  setViewMode,
-  selectedClusterIds,
-  onOpenClusterModal,
-  onRefresh,
-  isFullscreen,
-  onToggleFullscreen,
 }: TrackingTopBarProps) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const CurrentStyleIcon = MAP_STYLE_ICON[mapStyle];
@@ -85,7 +71,7 @@ export function TrackingTopBar({
   const activeIconButtonClass = "bg-blue-50 text-blue-600 hover:bg-blue-100";
 
   return (
-    <div className="h-14 w-full flex items-center gap-3 px-4 border-b border-slate-200 bg-white">
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-slate-200 bg-white shadow-lg">
       <div className="relative flex-1 max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
@@ -143,29 +129,6 @@ export function TrackingTopBar({
           className={cn(iconButtonClass, showGeofences && activeIconButtonClass)}
         >
           <Layers className="h-4 w-4" />
-        </button>
-
-        <div className="h-6 w-px bg-slate-200 mx-1" />
-
-        <button
-          onClick={() => setViewMode(viewMode === "all" ? "focused" : "all")}
-          aria-label="Toggle focus mode"
-          className={cn(iconButtonClass, viewMode === "focused" && activeIconButtonClass)}
-        >
-          <Crosshair className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onOpenClusterModal}
-          aria-label="Filter by cluster"
-          className={cn(iconButtonClass, selectedClusterIds.length > 0 && activeIconButtonClass)}
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-        </button>
-        <button onClick={onRefresh} aria-label="Re-sync fleet data" className={iconButtonClass}>
-          <RefreshCw className="h-4 w-4" />
-        </button>
-        <button onClick={onToggleFullscreen} aria-label="Fullscreen" className={iconButtonClass}>
-          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
         </button>
       </div>
 
@@ -226,12 +189,6 @@ export function TrackingTopBar({
                 className="h-4 w-4"
               />
             </label>
-            <button
-              onClick={onRefresh}
-              className="w-full h-10 rounded-xl border border-slate-200 flex items-center justify-center gap-2 text-sm font-medium text-slate-700"
-            >
-              <RefreshCw className="h-4 w-4" /> Re-sync fleet data
-            </button>
           </div>
         </SheetContent>
       </Sheet>

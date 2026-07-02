@@ -22,6 +22,7 @@ import { usePlaybackData } from "./hooks/usePlaybackData";
 import { TrackingSidebar } from "./components/TrackingSidebar";
 import { TrackingTopBar } from "./components/TrackingTopBar";
 import { MapZoomControl } from "./components/MapZoomControl";
+import { MapExtraControls } from "./components/MapExtraControls";
 import { MapLegend } from "./components/MapLegend";
 import { ClusterFilterModal } from "./components/ClusterFilterModal";
 import { StatusFilter } from "./components/StatusFilters";
@@ -39,7 +40,11 @@ export default function TrackingPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [isReplayOpen, setIsReplayOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"all" | "focused">("all");
+  // The view-mode toggle UI (All Assets / Active Trips) was removed from the map
+  // toolbar per design feedback; "focused" is currently unreachable, but the
+  // underlying Active Trips code path in TrackingSidebar is left intact in case
+  // this is reintroduced elsewhere later.
+  const [viewMode] = useState<"all" | "focused">("all");
   const [mapStyle, setMapStyle] = useState<TrackingMapStyle>("standard");
   const [showTraffic, setShowTraffic] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -273,35 +278,13 @@ export default function TrackingPage() {
         ref={containerRef}
         className={cn(
           "h-screen w-full grid overflow-hidden bg-white",
-          "grid-rows-[56px_1fr]",
-          selectedVehicle ? "lg:grid-rows-[56px_1fr_auto]" : "lg:grid-rows-[56px_1fr]",
+          selectedVehicle ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]",
           "grid-cols-1",
           selectedVehicle ? "lg:grid-cols-[320px_1fr_380px]" : "lg:grid-cols-[320px_1fr_0px]",
           "transition-[grid-template-columns] duration-300 ease-in-out",
         )}
       >
-        <div className="col-span-full row-start-1">
-          <TrackingTopBar
-            locationSearch={locationSearch}
-            setLocationSearch={setLocationSearch}
-            onLocationSearchSubmit={handleLocationSearchSubmit}
-            mapStyle={mapStyle}
-            setMapStyle={setMapStyle}
-            showTraffic={showTraffic}
-            setShowTraffic={setShowTraffic}
-            showGeofences={showGeofences}
-            setShowGeofences={setShowGeofences}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            selectedClusterIds={selectedClusterIds}
-            onOpenClusterModal={() => setClusterModalOpen(true)}
-            onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={toggleFullscreen}
-          />
-        </div>
-
-        <div className="hidden lg:block row-start-2 border-r border-slate-200 overflow-hidden">
+        <div className="hidden lg:block row-start-1 border-r border-slate-200 overflow-hidden">
           <TrackingSidebar
             viewMode={viewMode}
             vehicles={vehicles}
@@ -319,10 +302,13 @@ export default function TrackingPage() {
             setIsReplayOpen={setIsReplayOpen}
             isLoadingTrips={isLoadingTrips}
             alarmState={alarmState}
+            selectedClusterIds={selectedClusterIds}
+            onOpenClusterModal={() => setClusterModalOpen(true)}
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
           />
         </div>
 
-        <div className="relative row-start-2 overflow-hidden">
+        <div className="relative row-start-1 overflow-hidden">
           <TrackingMap
             filteredVehicles={filteredVehicles}
             locations={locations}
@@ -342,12 +328,35 @@ export default function TrackingPage() {
             interpolator={interpolator}
             alarmState={alarmState}
           />
-          <MapZoomControl />
+
+          <div className="absolute top-4 left-4 right-4 z-30">
+            <TrackingTopBar
+              locationSearch={locationSearch}
+              setLocationSearch={setLocationSearch}
+              onLocationSearchSubmit={handleLocationSearchSubmit}
+              mapStyle={mapStyle}
+              setMapStyle={setMapStyle}
+              showTraffic={showTraffic}
+              setShowTraffic={setShowTraffic}
+              showGeofences={showGeofences}
+              setShowGeofences={setShowGeofences}
+            />
+          </div>
+
+          <div className="absolute left-4 top-24 z-30 flex flex-col gap-3">
+            <MapZoomControl />
+            <MapExtraControls
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              onRecenter={resetZoom}
+            />
+          </div>
+
           <MapLegend />
           <ConnectionBanner />
         </div>
 
-        <div className="hidden lg:block row-start-2 overflow-hidden">
+        <div className="hidden lg:block row-start-1 overflow-hidden">
           <AssetPanel
             isOpen={!!selectedVehicle}
             onClose={() => {
@@ -363,12 +372,14 @@ export default function TrackingPage() {
         </div>
 
         {selectedVehicle && (
-          <div className="hidden lg:flex row-start-3 col-start-2 border-t border-slate-200 p-4 gap-3 overflow-x-auto">
-            <BottomCards
-              selectedVehicle={selectedVehicle}
-              loc={locations[selectedVehicle.id]}
-              hasActiveAlarm={alarmState[selectedVehicle.id] === true}
-            />
+          <div className="hidden lg:flex row-start-2 col-start-2 min-w-0 overflow-hidden border-t border-slate-200 bg-white">
+            <div className="flex-1 min-w-0 overflow-x-auto">
+              <BottomCards
+                selectedVehicle={selectedVehicle}
+                loc={locations[selectedVehicle.id]}
+                hasActiveAlarm={alarmState[selectedVehicle.id] === true}
+              />
+            </div>
           </div>
         )}
 

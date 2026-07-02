@@ -4,7 +4,7 @@ import { Plus, Minus } from "lucide-react";
 
 export function MapZoomControl() {
   return (
-    <div className="hidden md:flex absolute left-4 top-4 z-30 flex-col bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden">
+    <div className="hidden md:flex flex-col bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden">
       <button
         onClick={() => (window as any).leafletMap?.zoomIn()}
         aria-label="Zoom in"

@@ -73,9 +73,8 @@ export function StatusFilters({
             onClick={() => onStatusChange(s)}
             className={cn(
               "shrink-0 pb-2 pt-1 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors",
-              isActive
-                ? cn(ACTIVE_TEXT[s], "border-current")
-                : "text-slate-400 border-transparent hover:text-slate-600",
+              ACTIVE_TEXT[s],
+              isActive ? "border-current" : "border-transparent opacity-60 hover:opacity-100",
             )}
           >
             {label} {count}
