@@ -15,10 +15,10 @@ export function AIInsightsCard({ input }: { input: AIInsightsInput }) {
   const insights = useMemo(() => computeAIInsights(input), [input]);
 
   return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-100">
-      <div className="flex items-center gap-2 mb-3">
+    <div>
+      <div className="flex items-center gap-2 mb-2">
         <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AI Insights</span>
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">AI Insights</span>
       </div>
       {insights.length === 0 ? (
         <div className="flex items-center gap-2 text-emerald-600">

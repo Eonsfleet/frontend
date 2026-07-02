@@ -13,13 +13,6 @@ const baseProps = {
   setShowTraffic: vi.fn(),
   showGeofences: false,
   setShowGeofences: vi.fn(),
-  viewMode: 'all' as const,
-  setViewMode: vi.fn(),
-  selectedClusterIds: [],
-  onOpenClusterModal: vi.fn(),
-  onRefresh: vi.fn(),
-  isFullscreen: false,
-  onToggleFullscreen: vi.fn(),
 }
 
 describe('TrackingTopBar', () => {
@@ -37,15 +30,17 @@ describe('TrackingTopBar', () => {
     expect(baseProps.onLocationSearchSubmit).toHaveBeenCalled()
   })
 
-  it('calls onRefresh when the refresh button is clicked', () => {
+  it('calls setShowGeofences when the layers toggle is clicked', () => {
     render(<TrackingTopBar {...baseProps} />)
-    fireEvent.click(screen.getByLabelText('Re-sync fleet data'))
-    expect(baseProps.onRefresh).toHaveBeenCalled()
+    fireEvent.click(screen.getByLabelText('Toggle layers'))
+    expect(baseProps.setShowGeofences).toHaveBeenCalledWith(true)
   })
 
-  it('calls onToggleFullscreen when the fullscreen button is clicked', () => {
+  it('does not render view-mode, cluster-filter, refresh, or fullscreen controls (moved elsewhere)', () => {
     render(<TrackingTopBar {...baseProps} />)
-    fireEvent.click(screen.getByLabelText('Fullscreen'))
-    expect(baseProps.onToggleFullscreen).toHaveBeenCalled()
+    expect(screen.queryByLabelText('Toggle focus mode')).toBeNull()
+    expect(screen.queryByLabelText('Filter by cluster')).toBeNull()
+    expect(screen.queryByLabelText('Re-sync fleet data')).toBeNull()
+    expect(screen.queryByLabelText('Fullscreen')).toBeNull()
   })
 })

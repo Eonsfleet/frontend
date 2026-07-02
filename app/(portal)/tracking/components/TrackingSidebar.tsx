@@ -2,8 +2,9 @@
 
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Navigation, Search, ChevronRight } from "lucide-react";
+import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { Vehicle } from "@/types";
+import { cn } from "@/lib/utils";
 import { StatusFilters, StatusFilter } from "./StatusFilters";
 import { VehicleListItem } from "./VehicleListItem";
 import { TripListItem } from "./TripListItem";
@@ -28,6 +29,9 @@ interface TrackingSidebarProps {
   setIsReplayOpen: (open: boolean) => void;
   isLoadingTrips: boolean;
   alarmState?: Record<string, boolean>;
+  selectedClusterIds: string[];
+  onOpenClusterModal: () => void;
+  onRefresh: () => void;
 }
 
 export function TrackingSidebar({
@@ -47,6 +51,9 @@ export function TrackingSidebar({
   setIsReplayOpen,
   isLoadingTrips,
   alarmState = {},
+  selectedClusterIds,
+  onOpenClusterModal,
+  onRefresh,
 }: TrackingSidebarProps) {
   const listParentRef = useRef<HTMLDivElement>(null);
   const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD;
@@ -92,12 +99,40 @@ export function TrackingSidebar({
     <div className="h-full w-full flex flex-col bg-white overflow-hidden">
       <div className="p-4 border-b border-slate-100 shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-slate-900">
-            {viewMode === "all" ? "Assets" : "Active Trips"}
-          </h2>
-          <span className="text-xs font-semibold text-slate-400">
-            ({viewMode === "all" ? vehicles.length : ongoingTripsCount})
-          </span>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-bold text-slate-900">
+              {viewMode === "all" ? "Assets" : "Active Trips"}
+            </h2>
+            <span className="text-xs font-semibold text-slate-400">
+              ({viewMode === "all" ? vehicles.length : ongoingTripsCount})
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onOpenClusterModal}
+              aria-label="Filter by cluster"
+              className={cn(
+                "h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors",
+                selectedClusterIds.length > 0 && "bg-blue-50 text-blue-600 hover:bg-blue-100",
+              )}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onRefresh}
+              aria-label="Re-sync fleet data"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button
+              onClick={toggleAssetList}
+              aria-label="Collapse asset list"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="relative">
