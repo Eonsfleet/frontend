@@ -170,49 +170,59 @@ export function AssetPanel({
   return (
     <div
       className={cn(
-        "fixed z-50 bg-white shadow-2xl transition-transform duration-500 flex flex-col",
-        // Mobile: bottom sheet spanning the full width, peeking up from the bottom
-        "inset-x-0 bottom-0 top-auto h-[75vh] w-full rounded-t-3xl",
-        // Tablet/desktop: right-side slide-in panel, full height
-        "md:inset-y-0 md:right-0 md:left-auto md:top-0 md:bottom-0 md:h-auto md:w-105 md:rounded-none",
-        isOpen ? "translate-y-0 md:translate-x-0" : "translate-y-full md:translate-y-0 md:translate-x-full",
+        "bg-white shadow-2xl flex flex-col",
+        // Mobile/tablet (<lg): fixed bottom sheet, unchanged behavior
+        "fixed inset-x-0 bottom-0 top-auto h-[75vh] w-full rounded-t-3xl z-50 transition-transform duration-500",
+        isOpen ? "translate-y-0" : "translate-y-full",
+        // Desktop (lg+): static grid cell so the map column can reflow around it
+        "lg:static lg:translate-y-0 lg:inset-auto lg:h-full lg:w-full lg:rounded-none lg:z-auto lg:shadow-none lg:border-l lg:border-slate-200",
       )}
       role="complementary"
       aria-label="Asset details panel"
     >
       {/* Header */}
-      <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/50 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-11 w-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shrink-0">
-            <Truck className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-black text-slate-900 truncate">
-              {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
-            </h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{plate}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="relative border-b border-slate-100 bg-slate-50 shrink-0">
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <span
-            className={cn("px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border", statusCfg.badge)}
+            className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border", statusCfg.badge)}
           >
             {statusCfg.label}
           </span>
           <button
             onClick={toggleAssetPanel}
             aria-label="Collapse asset panel"
-            className="hidden md:flex lg:hidden h-8 w-8 rounded-full hover:bg-white items-center justify-center text-slate-400 transition-colors"
+            className="hidden md:flex lg:hidden h-8 w-8 rounded-full bg-white/80 hover:bg-white items-center justify-center text-slate-400 transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
           <button
             onClick={onClose}
             aria-label="Close asset panel"
-            className="h-8 w-8 rounded-full hover:bg-white flex items-center justify-center text-slate-400 transition-colors"
+            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-slate-400 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+
+        <div className="h-32 flex items-center justify-center bg-white">
+          {selectedVehicle.attributes.image ? (
+            <img
+              src={selectedVehicle.attributes.image}
+              alt={`${selectedVehicle.attributes.make} ${selectedVehicle.attributes.model}`}
+              className="h-full object-contain"
+            />
+          ) : (
+            <div data-testid="asset-panel-photo-fallback" className="h-20 w-20 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+              <Truck className="h-8 w-8" />
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 pb-4">
+          <h2 className="text-sm font-bold text-slate-900 truncate">
+            {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
+          </h2>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{plate}</p>
         </div>
       </div>
 

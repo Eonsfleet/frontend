@@ -5,6 +5,7 @@ import { isStaleOffline } from "../utils";
 import { VehicleInterpolator } from "@/lib/vehicleInterpolation";
 import { buildPacketEntry } from "@/lib/packetStream";
 import { usePacketStreamStore } from "@/store/packetStreamStore";
+import { appendTrailPoint, type TrailPoint } from "@/lib/vehicleTrail";
 
 interface UseVehicleLocationsProps {
   vehicles: Vehicle[];
@@ -41,10 +42,15 @@ export function useVehicleLocations({
   // render without tripping the "no ref access during render" rule — the setter
   // is never called again after the initial render, so this never re-renders.
   const [interpolator] = useState(() => new VehicleInterpolator());
+  const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
   const selectedIdRef = useRef<string | null | undefined>(selectedVehicleId);
 
   useEffect(() => {
     selectedIdRef.current = selectedVehicleId;
+  }, [selectedVehicleId]);
+
+  useEffect(() => {
+    setTrails({});
   }, [selectedVehicleId]);
 
   const pushIfSelected = (idKey: string, event: string, payload: any) => {
@@ -185,6 +191,22 @@ export function useVehicleLocations({
             }
           }
 
+          if (
+            normalized.lat != null &&
+            normalized.lng != null &&
+            selectedIdRef.current != null &&
+            String(selectedIdRef.current) === idKey
+          ) {
+            setTrails((prev) => ({
+              ...prev,
+              [idKey]: appendTrailPoint(prev[idKey] ?? [], {
+                lat: normalized.lat,
+                lng: normalized.lng,
+                timestamp: Date.now(),
+              }),
+            }));
+          }
+
           setLocations((prev) => {
             const prevEntry = prev[packet.vehicle_id];
             const statusSinceMs =
@@ -298,5 +320,6 @@ export function useVehicleLocations({
     setLocations,
     interpolator,
     alarmState,
+    trails,
   };
 }

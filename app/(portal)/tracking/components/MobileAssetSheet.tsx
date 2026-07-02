@@ -23,9 +23,9 @@ interface MobileAssetSheetProps {
 }
 
 /**
- * Mobile-only (<md) entry point to the fleet list. The desktop/tablet floating
- * TrackingSidebar is hidden below the md breakpoint (see page.tsx); this bottom
- * sheet is the mobile equivalent, keeping the map as the full-screen background
+ * Mobile-only (<lg) entry point to the fleet list. The desktop docked
+ * TrackingSidebar is hidden below the lg breakpoint (see page.tsx); this bottom
+ * sheet is the mobile/tablet equivalent, keeping the map as the full-screen background
  * at all times per the "preserve map area" requirement.
  */
 export function MobileAssetSheet({
@@ -47,14 +47,14 @@ export function MobileAssetSheet({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed bottom-6 left-6 z-40 h-14 px-5 rounded-full bg-slate-900 text-white shadow-2xl flex items-center gap-2 text-xs font-black uppercase tracking-widest"
+        className="lg:hidden fixed bottom-6 left-6 z-40 h-14 px-5 rounded-full bg-slate-900 text-white shadow-2xl flex items-center gap-2 text-xs font-black uppercase tracking-widest"
       >
         <List className="h-4 w-4" />
         Assets ({vehicles.length})
       </button>
 
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent side="bottom" className="h-[75vh] rounded-t-3xl md:hidden">
+        <SheetContent side="bottom" className="h-[75vh] rounded-t-3xl lg:hidden">
           <SheetHeader>
             <SheetTitle>Fleet Assets</SheetTitle>
           </SheetHeader>
@@ -63,8 +63,8 @@ export function MobileAssetSheet({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="SEARCH ASSETS..."
-                className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-10 pr-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
+                placeholder="Search vehicle"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -78,13 +78,13 @@ export function MobileAssetSheet({
                 onStatusChange={setStatusFilter}
               />
             </div>
-            <div className="flex-1 overflow-y-auto space-y-2 pb-4">
+            <div className="flex-1 overflow-y-auto pb-4">
               {isLoadingVehicles ? (
                 Array.from({ length: 6 }).map((_, i) => <AssetCardSkeleton key={i} />)
               ) : filteredVehicles.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                <div className="p-8 text-center">
                   <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-xs font-semibold text-slate-400">
                     No assets match your filters
                   </p>
                 </div>
