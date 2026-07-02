@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { requestPasswordReset } from '@/lib/api/auth'
+import { extractApiError } from '@/lib/utils'
 import Link from 'next/link'
 
 const schema = z.object({
@@ -26,7 +27,7 @@ export default function ForgotPasswordPage() {
             router.push(`/verify-otp?email=${encodeURIComponent(variables.email)}`)
         },
         onError: (err: any) => {
-            const msg = err.response?.data?.message ?? 'Failed to send OTP'
+            const msg = extractApiError(err, 'Failed to send OTP')
             toast.error(msg)
         },
     })

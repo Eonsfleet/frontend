@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import * as api from '@/lib/api/billing'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 function formatNaira(amount: number) {
     return `₦${amount.toLocaleString('en-NG')}`
@@ -41,7 +41,7 @@ export default function PlanUpgradePage() {
         },
         onError: (err: any) => {
             setIsCheckoutLoading(null)
-            toast.error(err.response?.data?.message || 'Failed to initialise plan change.')
+            toast.error(extractApiError(err, 'Failed to initialise plan change.'))
         },
     })
 

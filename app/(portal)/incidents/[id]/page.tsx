@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import {
     getIncidentById, getIncidentHistory, getIncidentConversation, postIncidentMessage,
@@ -79,14 +79,6 @@ interface ActionDef {
     needsAssignee?: boolean
     needsSeverity?: boolean
     execute: (id: string, inputs: { note: string; assignee: string; severity: string }) => Promise<unknown>
-}
-
-type ApiError = {
-    response?: {
-        data?: {
-            message?: string
-        }
-    }
 }
 
 type IncidentAddress = {
@@ -245,7 +237,7 @@ export default function IncidentDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['incident', id] })
             queryClient.invalidateQueries({ queryKey: ['incident-history', id] })
         },
-        onError: (e: ApiError) => toast.error(e?.response?.data?.message ?? 'Action failed'),
+        onError: (e: unknown) => toast.error(extractApiError(e, 'Action failed')),
     })
 
     // ── Loading / error ───────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ import {
     Trash2
 } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -136,8 +136,8 @@ export default function MaintenanceJobBoardPage() {
             toast.success('Job status updated.', { id: 'transition' })
             queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
         },
-        onError: (err: any) => {
-            toast.error(err?.response?.data?.message || 'Failed to update job status.', { id: 'transition' })
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to update job status.'), { id: 'transition' })
         },
     })
 
@@ -149,7 +149,7 @@ export default function MaintenanceJobBoardPage() {
             queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
             setDeleteTarget(null)
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to delete job.'),
+        onError: (err: unknown) => toast.error(extractApiError(err, 'Failed to delete job.')),
     })
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -332,7 +332,7 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
             onOpenChange(false)
             setForm({ vehicle_id: '', title: '', description: '', fault_category: '', cost_estimate: '' })
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to create job.'),
+        onError: (err: unknown) => toast.error(extractApiError(err, 'Failed to create job.')),
     })
 
     const canSubmit = form.vehicle_id && form.title && form.fault_category

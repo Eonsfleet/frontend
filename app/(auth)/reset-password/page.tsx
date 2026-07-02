@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { resetPassword } from '@/lib/api/auth'
+import { extractApiError } from '@/lib/utils'
 
 const schema = z.object({
     password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -35,7 +36,7 @@ function ResetPasswordContent() {
             router.push('/login')
         },
         onError: (err: any) => {
-            const msg = err.response?.data?.message ?? 'Failed to reset password'
+            const msg = extractApiError(err, 'Failed to reset password')
             toast.error(msg)
         },
     })

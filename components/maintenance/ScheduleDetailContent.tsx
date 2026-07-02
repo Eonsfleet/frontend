@@ -35,7 +35,7 @@ import {
     snoozeMaintenanceAlert, closeMaintenanceAlert,
 } from '@/lib/api/maintenance'
 import { getVendors } from '@/lib/api/vendors'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import type { MaintenanceSchedule, ScheduleChecklist } from '@/types'
 
 // ── Status / priority config ──────────────────────────────────────────────────
@@ -792,9 +792,9 @@ export function ScheduleDetailContent({
             setVendorPopoverOpen(false)
             setVendorSearch('')
         },
-        onError: (err: any, _vars, context) => {
+        onError: (err: unknown, _vars, context) => {
             if (context?.prev) queryClient.setQueryData(['schedule-detail', scheduleId], context.prev)
-            toast.error(err?.response?.data?.message ?? 'Failed to assign vendor')
+            toast.error(extractApiError(err, 'Failed to assign vendor'))
         },
     })
 

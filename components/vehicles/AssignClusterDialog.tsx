@@ -28,7 +28,7 @@ import { getClusters } from '@/lib/api/settings'
 import { assignCluster } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { LayoutGrid, Loader2, Check, ChevronsUpDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 interface AssignClusterDialogProps {
     vehicleId: string | number
@@ -57,7 +57,7 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
             onClose()
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to assign cluster')
+            toast.error(extractApiError(error, 'Failed to assign cluster'))
         }
     })
 

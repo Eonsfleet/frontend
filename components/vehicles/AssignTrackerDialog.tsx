@@ -28,7 +28,7 @@ import { getDevices } from '@/lib/api/tracking'
 import { assignDevice } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { Cpu, Loader2, Check, ChevronsUpDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 interface AssignTrackerDialogProps {
     vehicleId: string | number
@@ -57,7 +57,7 @@ export function AssignTrackerDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
             onClose()
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to assign tracker')
+            toast.error(extractApiError(error, 'Failed to assign tracker'))
         }
     })
 

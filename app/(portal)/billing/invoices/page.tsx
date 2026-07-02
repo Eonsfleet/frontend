@@ -9,6 +9,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import * as api from '@/lib/api/billing'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 import {
     Dialog,
     DialogContent,
@@ -50,7 +51,7 @@ export default function InvoiceHistoryPage() {
             toast.success('Invoice PDF downloaded successfully')
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to download PDF')
+            toast.error(extractApiError(error, 'Failed to download PDF'))
         }
     })
 

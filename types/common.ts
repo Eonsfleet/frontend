@@ -7,8 +7,11 @@ export interface Address {
 }
 
 export interface ApiError {
-    message: string
-    errors: Array<{
+    message?: string
+    // Legacy flat shape used by a few endpoints (OAuthController, FuelCardWebhookController,
+    // dead auth middleware) that bypass the standard exception handler and never set `errors[]`.
+    error?: string
+    errors?: Array<{
         status: string
         code: string
         title: string

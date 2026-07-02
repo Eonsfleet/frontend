@@ -13,6 +13,7 @@ import { Vehicle } from '@/types'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createVehicle, updateVehicle } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 interface VehicleModalProps {
     isOpen: boolean
@@ -39,7 +40,7 @@ export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps
             onClose()
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Something went wrong')
+            toast.error(extractApiError(error, 'Something went wrong'))
         }
     })
 

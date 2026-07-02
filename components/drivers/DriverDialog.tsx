@@ -17,6 +17,7 @@ import { createDriver, updateDriver } from "@/lib/api/drivers";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { UserProfile } from "@/types";
+import { extractApiError } from "@/lib/utils";
 
 interface DriverDialogProps {
   open: boolean;
@@ -92,7 +93,7 @@ export function DriverDialog({
       onOpenChange(false);
     },
     onError: (error: any) => {
-      const msg = error.response?.data?.message || `Failed to ${mode} driver`;
+      const msg = extractApiError(error, `Failed to ${mode} driver`);
       toast.error(msg);
     },
   });

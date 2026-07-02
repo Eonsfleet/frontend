@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { verifyOtp } from '@/lib/api/auth'
+import { extractApiError } from '@/lib/utils'
 import Link from 'next/link'
 import {
     InputOTP,
@@ -25,7 +26,7 @@ function VerifyOtpContent() {
             router.push(`/reset-password?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`)
         },
         onError: (err: any) => {
-            const msg = err.response?.data?.message ?? 'Invalid OTP code'
+            const msg = extractApiError(err, 'Invalid OTP code')
             toast.error(msg)
         },
     })

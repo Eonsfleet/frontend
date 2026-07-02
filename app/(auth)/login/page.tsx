@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { loginUser } from "@/lib/api/auth";
+import { extractApiError } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
 import Cookies from "js-cookie";
 import Image from "next/image";
@@ -69,7 +70,7 @@ export default function LoginPage() {
       router.push("/dashboard");
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message ?? "Invalid credentials";
+      const msg = extractApiError(err, "Invalid credentials");
       toast.error(msg);
     },
   });

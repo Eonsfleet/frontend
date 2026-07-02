@@ -32,7 +32,7 @@ import { getVehicles } from '@/lib/api/vehicles'
 import { getDrivers } from '@/lib/api/drivers'
 import { createTrip, calculateTripEstimate, generateTripRoute } from '@/lib/api/trips'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
 import { addMinutes, format } from 'date-fns'
 
@@ -176,7 +176,7 @@ export default function NewTripPage() {
             router.push(`/trips`)
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to dispatch trip')
+            toast.error(extractApiError(error, 'Failed to dispatch trip'))
         }
     })
 

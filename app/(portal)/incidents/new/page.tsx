@@ -14,7 +14,7 @@ import { ArrowLeft, Plus, Trash2, Loader2, Search, Car, X } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 const INCIDENT_TYPES = [
     'accident', 'breakdown', 'theft', 'vandalism', 'traffic_violation',
@@ -175,8 +175,8 @@ export default function NewIncidentPage() {
             toast.success('Incident reported successfully')
             router.push(`/incidents/${data.data.id}`)
         },
-        onError: (err: any) => {
-            toast.error(err.response?.data?.message ?? 'Failed to report incident')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to report incident'))
         },
     })
 

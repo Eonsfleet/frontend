@@ -34,6 +34,7 @@ import { PermissionGate } from '@/components/shared/PermissionGate'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateDriver } from '@/lib/api/drivers'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 import {
     Pagination,
@@ -102,7 +103,7 @@ export function DriverTable({
             setDriverToDeactivate(null)
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to deactivate driver')
+            toast.error(extractApiError(error, 'Failed to deactivate driver'))
         }
     })
 

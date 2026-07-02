@@ -27,19 +27,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { deleteWebhook, testWebhook, WebhookEndpoint } from '@/lib/api/webhooks'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { MoreHorizontal, Edit, Trash2, Zap, Loader2, Link2 } from 'lucide-react'
-
-function getApiErrorMessage(error: unknown, fallback: string): string {
-    if (typeof error === 'object' && error !== null && 'response' in error) {
-        const response = (error as { response?: { data?: { message?: string } } }).response
-        if (response?.data?.message) return response.data.message
-    }
-    return fallback
-}
 
 interface WebhookTableProps {
     data: WebhookEndpoint[]
@@ -59,7 +51,7 @@ export function WebhookTable({ data, onEdit }: WebhookTableProps) {
             setDeleteTarget(null)
         },
         onError: (error: unknown) => {
-            toast.error(getApiErrorMessage(error, 'Failed to delete webhook.'))
+            toast.error(extractApiError(error, 'Failed to delete webhook.'))
         },
     })
 
@@ -74,7 +66,7 @@ export function WebhookTable({ data, onEdit }: WebhookTableProps) {
             }
         },
         onError: (error: unknown) => {
-            toast.error(getApiErrorMessage(error, 'Failed to send test delivery.'))
+            toast.error(extractApiError(error, 'Failed to send test delivery.'))
         },
         onSettled: () => setTestingId(null),
     })

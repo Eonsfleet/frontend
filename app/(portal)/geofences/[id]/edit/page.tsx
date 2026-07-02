@@ -15,6 +15,7 @@ import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { getGeofenceById, updateGeofence, getGeofenceVehicles, bulkAssignVehicles } from '@/lib/api/geofencing'
 import { getVehicles } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 interface GeofenceMapProps {
     onChange: (data: { type: 'polygon' | 'circle'; coordinates: any; radius?: number }) => void
@@ -142,8 +143,8 @@ export default function EditGeofencePage() {
             queryClient.invalidateQueries({ queryKey: ['geofence-vehicles', id] })
             router.push(`/geofences/${id}`)
         },
-        onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to update geofence.')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to update geofence.'))
         },
     })
 

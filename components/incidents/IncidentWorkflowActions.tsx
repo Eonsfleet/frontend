@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react'
 import { IncidentStatus } from '@/types'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -32,14 +33,6 @@ interface ActionConfig {
     /** Human-readable label for the note textarea when shown */
     noteLabel?: string
     execute: (id: string, inputs: ActionInputs) => Promise<unknown>
-}
-
-type ApiError = {
-    response?: {
-        data?: {
-            message?: string
-        }
-    }
 }
 
 interface ActionInputs {
@@ -169,8 +162,8 @@ export function IncidentWorkflowActions({ id, currentStatus }: { id: string; cur
             queryClient.invalidateQueries({ queryKey: ['incident-detail', id] })
             queryClient.invalidateQueries({ queryKey: ['incidents'] })
         },
-        onError: (err: ApiError) => {
-            toast.error(err.response?.data?.message || 'Failed to update incident state')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to update incident state'))
         },
     })
 

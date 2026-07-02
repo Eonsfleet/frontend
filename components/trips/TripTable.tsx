@@ -33,6 +33,7 @@ import { TripStatusBadge } from './TripStatusBadge'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateTripStatus } from '@/lib/api/trips'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 import {
     Pagination,
@@ -75,7 +76,7 @@ export function TripTable({
             setCancelTarget(null)
         },
         onError: (error: any) => {
-            toast.error(error?.response?.data?.message || 'Failed to cancel trip.')
+            toast.error(extractApiError(error, 'Failed to cancel trip.'))
         },
     })
     const columns: ColumnDef<Trip>[] = React.useMemo(() => [

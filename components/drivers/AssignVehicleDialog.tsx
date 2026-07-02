@@ -27,7 +27,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getVehicles, assignDriver } from "@/lib/api/vehicles";
 import { toast } from "sonner";
 import { Car, Loader2, Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, extractApiError } from "@/lib/utils";
 
 interface AssignVehicleDialogProps {
   driverId: string | number;
@@ -61,7 +61,7 @@ export function AssignVehicleDialog({
       onClose();
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to assign vehicle");
+      toast.error(extractApiError(error, "Failed to assign vehicle"));
     },
   });
 

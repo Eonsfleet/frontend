@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateUser, updatePassword, uploadFile, UpdateUserPayload, UpdatePasswordPayload } from '@/lib/api/users'
 import { toast } from 'sonner'
 import { UserProfile } from '@/types'
+import { extractApiError } from '@/lib/utils'
 
 export const useUpdateUser = () => {
     const queryClient = useQueryClient()
@@ -17,7 +18,7 @@ export const useUpdateUser = () => {
             return response.data
         },
         onError: (error: any) => {
-            const message = error?.response?.data?.message || 'Failed to update profile'
+            const message = extractApiError(error, 'Failed to update profile')
             toast.error('Update failed', { description: message })
         },
     })
@@ -30,7 +31,7 @@ export const useUpdatePassword = () => {
             toast.success('Password changed securely')
         },
         onError: (error: any) => {
-            const message = error?.response?.data?.message || 'Failed to update password'
+            const message = extractApiError(error, 'Failed to update password')
             toast.error('Password update failed', { description: message })
         },
     })
@@ -41,7 +42,7 @@ export const useUploadFile = () => {
         mutationFn: ({ file, folder }: { file: File; folder?: string }) =>
             uploadFile(file, folder),
         onError: (error: any) => {
-            const message = error?.response?.data?.message || 'Failed to upload file'
+            const message = extractApiError(error, 'Failed to upload file')
             toast.error('Upload failed', { description: message })
         },
     })

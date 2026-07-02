@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPolicies, updatePolicies, type OrgPolicies } from '@/lib/api/settings'
 import { getWorkflowSettings, updateWorkflowSettings, type WorkflowSettings } from '@/lib/api/maintenance'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 import {
     Loader2, Gauge, Timer, Moon, Wrench,
     CalendarClock, AlarmClock, SlidersHorizontal, DollarSign, Users, ShieldCheck,
@@ -125,7 +126,7 @@ function FleetRulesForm({ policies, onClose }: { policies: OrgPolicies; onClose:
             toast.success('Fleet rules saved')
             onClose()
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save'),
+        onError: (err: any) => toast.error(extractApiError(err, 'Failed to save')),
     })
 
     const afterHoursOn = watch('after_hours_enabled')
@@ -229,7 +230,7 @@ function MaintenanceForm({ policies, onClose }: { policies: OrgPolicies; onClose
             toast.success('Maintenance settings saved')
             onClose()
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save'),
+        onError: (err: any) => toast.error(extractApiError(err, 'Failed to save')),
     })
 
     return (
@@ -323,7 +324,7 @@ function WorkflowSettingsForm({ onClose }: { onClose: () => void }) {
             toast.success('Workflow settings saved')
             onClose()
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save'),
+        onError: (err: any) => toast.error(extractApiError(err, 'Failed to save')),
     })
 
     const financeOn = watch('finance_threshold_enabled')

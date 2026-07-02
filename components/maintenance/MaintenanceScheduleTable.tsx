@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, extractApiError } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteSchedule, updateSchedule } from "@/lib/api/maintenance";
 import { toast } from "sonner";
@@ -240,8 +240,8 @@ export function MaintenanceScheduleTable({
       setRescheduleTarget(null);
       setRescheduleDate("");
     },
-    onError: (err: any) =>
-      toast.error(err?.response?.data?.message ?? "Failed to reschedule."),
+    onError: (err: unknown) =>
+      toast.error(extractApiError(err, "Failed to reschedule.")),
   });
 
   if (isLoading) {

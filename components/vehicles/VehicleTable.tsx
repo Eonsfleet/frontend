@@ -40,7 +40,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from '@/components/ui/pagination'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteVehicle } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
@@ -96,7 +96,7 @@ export function VehicleTable({
             setDeleteTarget(null)
         },
         onError: (error: any) => {
-            toast.error(error?.response?.data?.message || 'Failed to delete vehicle.')
+            toast.error(extractApiError(error, 'Failed to delete vehicle.'))
         },
     })
 

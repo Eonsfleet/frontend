@@ -7,13 +7,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function extractApiError(error: unknown): string {
+export function extractApiError(error: unknown, fallback = 'An unexpected error occurred'): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as ApiError | undefined
     if (data?.errors?.[0]?.detail) return data.errors[0].detail
     if (data?.message) return data.message
+    if (data?.error) return data.error
   }
-  return 'An unexpected error occurred'
+  return fallback
 }
 export function normalizeTelemetry(telemetry: any, overrides?: any) {
   if (!telemetry) return null

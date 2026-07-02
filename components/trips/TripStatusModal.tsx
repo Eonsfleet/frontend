@@ -15,6 +15,7 @@ import { Trip } from '@/types'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateTripStatus } from '@/lib/api/trips'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 import { Loader2, AlertCircle, CheckCircle2, PlayCircle, StopCircle, XCircle } from 'lucide-react'
 
 interface TripStatusModalProps {
@@ -49,7 +50,7 @@ export function TripStatusModal({ isOpen, onClose, trip }: TripStatusModalProps)
             onClose()
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to update status')
+            toast.error(extractApiError(error, 'Failed to update status'))
         }
     })
 

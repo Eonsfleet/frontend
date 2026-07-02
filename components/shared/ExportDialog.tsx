@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Download, Loader2 } from 'lucide-react'
 import { exportVehicles, exportDrivers, exportUsers, ExportFormat, EntityType } from '@/lib/api/import-export'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 // -------------------------------------------------------------------------
 // Column definitions per entity
@@ -124,12 +125,7 @@ export function ExportDialog({ open, onOpenChange, entity }: ExportDialogProps) 
             toast.success(`${label} exported successfully.`)
             onOpenChange(false)
         } catch (err: any) {
-            const msg =
-                err?.response?.data?.message ||
-                err?.response?.data?.errors?.[0]?.detail ||
-                err?.message ||
-                'Export failed. Please try again.'
-            toast.error(msg)
+            toast.error(extractApiError(err, 'Export failed. Please try again.'))
         } finally {
             setIsExporting(false)
         }

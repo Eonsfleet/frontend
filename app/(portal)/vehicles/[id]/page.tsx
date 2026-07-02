@@ -10,6 +10,7 @@ import { ChevronLeft, Edit, Trash2, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { VehicleModal } from '@/components/vehicles/VehicleModal'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 export default function VehicleDetailPage() {
     const params = useParams()
@@ -33,7 +34,7 @@ export default function VehicleDetailPage() {
             router.push('/vehicles')
         },
         onError: (error: any) => {
-            toast.error(error?.response?.data?.message || 'Failed to delete vehicle.')
+            toast.error(extractApiError(error, 'Failed to delete vehicle.'))
             setIsDeleteConfirmOpen(false)
         },
     })

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
     AlertTriangle, Car, Calendar, User, Send,
@@ -177,14 +177,6 @@ interface ActionDef {
     execute: (id: string, inputs: { note: string; assignedTo: string; severity: string }) => Promise<unknown>
 }
 
-type ApiError = {
-    response?: {
-        data?: {
-            message?: string
-        }
-    }
-}
-
 type RelationshipStub = {
     data: {
         id: string
@@ -330,8 +322,8 @@ function WorkflowActionsPanel({ id, status }: { id: string; status: IncidentStat
             queryClient.invalidateQueries({ queryKey: ['incidents'] })
             queryClient.invalidateQueries({ queryKey: ['incident-detail', id] })
         },
-        onError: (err: ApiError) => {
-            toast.error(err?.response?.data?.message ?? 'Failed to update incident')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to update incident'))
         },
     })
 
@@ -475,7 +467,7 @@ export function IncidentDrawer({ incidentId, onClose }: Props) {
             queryClient.invalidateQueries({ queryKey: ['incident-detail', incidentId] })
             cancelEdit()
         },
-        onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to save changes'),
+        onError: (err: unknown) => toast.error(extractApiError(err, 'Failed to save changes')),
     })
 
     // ── Queries ──────────────────────────────────────────────────────────────

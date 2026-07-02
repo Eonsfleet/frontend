@@ -49,7 +49,7 @@ import {
 import { getVehicles } from "@/lib/api/vehicles";
 import { getVendors } from "@/lib/api/vendors";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, extractApiError } from "@/lib/utils";
 import { Plus, X } from "lucide-react";
 
 interface CreateMaintenanceScheduleModalProps {
@@ -137,10 +137,8 @@ export function CreateMaintenanceScheduleModal({
       onOpenChange(false);
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to create schedule",
-      );
+    onError: (error: unknown) => {
+      toast.error(extractApiError(error, "Failed to create schedule"));
     },
   });
 
@@ -163,10 +161,8 @@ export function CreateMaintenanceScheduleModal({
         setNewChecklistForm({ name: "", description: "" });
         setChecklistSearch("");
       },
-      onError: (error: any) => {
-        toast.error(
-          error?.response?.data?.message || "Failed to create checklist",
-        );
+      onError: (error: unknown) => {
+        toast.error(extractApiError(error, "Failed to create checklist"));
       },
     });
 

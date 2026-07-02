@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Search, Users, CheckCircle2, ChevronRight, X, Filter, Truck, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as vehicleApi from '@/lib/api/vehicles'
 import * as geofencingApi from '@/lib/api/geofencing'
@@ -46,7 +46,7 @@ export function BulkAssignmentModal({
             onClose()
         },
         onError: (error: any) => {
-            const errorMessage = error?.response?.data?.message || 'Failed to assign vehicles'
+            const errorMessage = extractApiError(error, 'Failed to assign vehicles')
             toast.error(errorMessage)
         }
     })

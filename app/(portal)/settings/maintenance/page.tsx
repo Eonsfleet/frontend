@@ -13,6 +13,7 @@ import * as api from '@/lib/api/settings'
 import { toast } from 'sonner'
 import { Loader2, Wrench, CalendarClock, AlarmClock, Info } from 'lucide-react'
 import { QueryError } from '@/components/shared/QueryError'
+import { extractApiError } from '@/lib/utils'
 
 const maintenanceSchema = z.object({
     maintenance_approaching_km: z.number().int().min(10, 'Minimum 10 km').max(5000, 'Maximum 5000 km'),
@@ -93,8 +94,8 @@ export default function MaintenanceSettingsPage() {
             queryClient.invalidateQueries({ queryKey: ['org-policies'] })
             toast.success('Maintenance settings saved')
         },
-        onError: (err: any) => {
-            toast.error(err?.response?.data?.message ?? 'Failed to save maintenance settings')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to save maintenance settings'))
         },
     })
 

@@ -28,14 +28,7 @@ import { Loader2, Copy, KeyRound } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createWebhook, updateWebhook, WebhookEndpoint } from '@/lib/api/webhooks'
 import { toast } from 'sonner'
-
-function getApiErrorMessage(error: unknown, fallback: string): string {
-    if (typeof error === 'object' && error !== null && 'response' in error) {
-        const response = (error as { response?: { data?: { message?: string } } }).response
-        if (response?.data?.message) return response.data.message
-    }
-    return fallback
-}
+import { extractApiError } from '@/lib/utils'
 
 // Event catalog per docs/webhook_ui_guide.md — the backend doesn't expose a
 // "list available events" endpoint, so this mirrors the documented set rather
@@ -128,7 +121,7 @@ export function WebhookFormDialog({ isOpen, onClose, initialData }: WebhookFormD
             onClose()
         },
         onError: (error: unknown) => {
-            toast.error(getApiErrorMessage(error, 'Failed to save webhook.'))
+            toast.error(extractApiError(error, 'Failed to save webhook.'))
         },
     })
 

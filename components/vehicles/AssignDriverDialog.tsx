@@ -28,7 +28,7 @@ import { getDrivers } from '@/lib/api/drivers'
 import { assignDriver } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { User, Loader2, Check, ChevronsUpDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 interface AssignDriverDialogProps {
     vehicleId: string | number
@@ -70,7 +70,7 @@ export function AssignDriverDialog({ vehicleId, vehicleReg, isOpen, onClose }: A
             onClose()
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.message || 'Failed to assign driver')
+            toast.error(extractApiError(error, 'Failed to assign driver'))
         }
     })
 

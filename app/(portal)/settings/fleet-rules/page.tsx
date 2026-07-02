@@ -14,6 +14,7 @@ import * as api from '@/lib/api/settings'
 import { toast } from 'sonner'
 import { Loader2, Gauge, Timer, Moon, Info } from 'lucide-react'
 import { QueryError } from '@/components/shared/QueryError'
+import { extractApiError } from '@/lib/utils'
 
 const fleetRulesSchema = z.object({
     speed_limit_kmh: z.number().int().min(10, 'Minimum 10 km/h').max(250, 'Maximum 250 km/h'),
@@ -69,8 +70,8 @@ export default function FleetRulesPage() {
             queryClient.invalidateQueries({ queryKey: ['org-policies'] })
             toast.success('Fleet rules saved')
         },
-        onError: (err: any) => {
-            toast.error(err?.response?.data?.message ?? 'Failed to save fleet rules')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to save fleet rules'))
         },
     })
 

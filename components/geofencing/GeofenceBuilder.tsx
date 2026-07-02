@@ -10,6 +10,7 @@ import { getVehicles } from '@/lib/api/vehicles'
 import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
 import { toast } from 'sonner'
+import { extractApiError } from '@/lib/utils'
 
 // Import MapEditor dynamically to avoid SSR issues with Leaflet
 const GeofenceMapEditor = dynamic(() => import('./GeofenceMapEditor'), {
@@ -76,7 +77,7 @@ export function GeofenceBuilder({
             onClose()
         },
         onError: (err: any) => {
-            toast.error(err.message || err.response?.data?.message || 'Failed to create geofence.')
+            toast.error(extractApiError(err, 'Failed to create geofence.'))
         },
     })
 

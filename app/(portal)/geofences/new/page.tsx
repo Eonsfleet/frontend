@@ -15,6 +15,7 @@ import { createGeofence } from '@/lib/api/geofencing'
 import { getVehicles } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { GeofenceMap } from '@/components/geofencing/GeofenceMap'
+import { extractApiError } from '@/lib/utils'
 
 import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
@@ -50,8 +51,8 @@ export default function NewGeofencePage() {
             toast.success('Geofence created successfully!')
             router.push('/geofences')
         },
-        onError: (err: any) => {
-            toast.error(err.response?.data?.message || 'Failed to create geofence.')
+        onError: (err: unknown) => {
+            toast.error(extractApiError(err, 'Failed to create geofence.'))
         }
     })
 

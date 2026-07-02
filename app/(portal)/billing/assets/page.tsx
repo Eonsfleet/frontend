@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from '@/components/ui/skeleton'
 import * as api from '@/lib/api/billing'
 import type { AssetSubscription, AssetSubscriptionStatus } from '@/lib/api/billing'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ function CancelDialog({
             onClose()
         },
         onError: (err: any) => {
-            toast.error(err?.response?.data?.message ?? 'Failed to cancel subscription.')
+            toast.error(extractApiError(err, 'Failed to cancel subscription.'))
         },
     })
 
