@@ -15,25 +15,22 @@ export type StatusFilter =
 
 const FILTERS = [
   { key: "all", label: "All" },
-  { key: "online", label: "Online" },
-  { key: "offline", label: "Offline" },
   { key: "moving", label: "Moving" },
   { key: "idle", label: "Idle" },
   { key: "parked", label: "Parked" },
+  { key: "offline", label: "Offline" },
+  { key: "online", label: "Online" },
   { key: "alarm", label: "Alarm" },
 ] as const;
 
-// "online" and "all" are meta-filters (not part of the 5-way status taxonomy in
-// lib/vehicleStatus.ts), so they keep their own colors; the rest are sourced from
-// the canonical status map so filter chips, markers, and badges never drift apart.
-const ACTIVE_COLOR: Record<StatusFilter, string> = {
-  moving: VEHICLE_STATUS.moving.solid,
-  idle: VEHICLE_STATUS.idle.solid,
-  parked: VEHICLE_STATUS.parked.solid,
-  offline: VEHICLE_STATUS.offline.solid,
-  alarm: VEHICLE_STATUS.alarm.solid,
-  online: "bg-blue-600 border-blue-600 text-white",
-  all: "bg-slate-900 border-slate-900 text-white",
+const ACTIVE_TEXT: Record<StatusFilter, string> = {
+  moving: VEHICLE_STATUS.moving.text,
+  idle: VEHICLE_STATUS.idle.text,
+  parked: VEHICLE_STATUS.parked.text,
+  offline: VEHICLE_STATUS.offline.text,
+  alarm: VEHICLE_STATUS.alarm.text,
+  online: "text-blue-600",
+  all: "text-slate-900",
 };
 
 interface StatusFiltersProps {
@@ -52,7 +49,7 @@ export function StatusFilters({
   onStatusChange,
 }: StatusFiltersProps) {
   return (
-    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+    <div className="flex gap-4 overflow-x-auto no-scrollbar border-b border-slate-100">
       {FILTERS.map(({ key: s, label }) => {
         const count =
           s === "all"
@@ -68,18 +65,20 @@ export function StatusFilters({
                 return false;
               }).length;
 
+        const isActive = statusFilter === s;
+
         return (
           <button
             key={s}
             onClick={() => onStatusChange(s)}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest whitespace-nowrap transition-all border",
-              statusFilter === s
-                ? ACTIVE_COLOR[s]
-                : "bg-white border-slate-100 text-slate-400 hover:border-slate-200",
+              "shrink-0 pb-2 pt-1 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors",
+              isActive
+                ? cn(ACTIVE_TEXT[s], "border-current")
+                : "text-slate-400 border-transparent hover:text-slate-600",
             )}
           >
-            {label} ({count})
+            {label} {count}
           </button>
         );
       })}
