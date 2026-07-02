@@ -16,10 +16,10 @@ interface BottomCardsProps {
 
 function CardShell({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <div className="p-4 rounded-2xl bg-white border border-slate-100 min-w-52 shrink-0">
+    <div className="p-4 rounded-xl bg-white border border-slate-200 min-w-56 shrink-0">
       <div className="flex items-center gap-2 mb-3">
         <Icon className="h-3.5 w-3.5 text-blue-600" />
-        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</span>
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</span>
       </div>
       {children}
     </div>
@@ -29,8 +29,8 @@ function CardShell({ icon: Icon, title, children }: { icon: any; title: string; 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-0.5">
-      <span className="text-[9px] font-bold text-slate-400 uppercase">{label}</span>
-      <span className="text-[10px] font-black text-slate-800">{value ?? "—"}</span>
+      <span className="text-[11px] font-medium text-slate-400">{label}</span>
+      <span className="text-[11px] font-semibold text-slate-800">{value ?? "—"}</span>
     </div>
   );
 }
@@ -49,7 +49,7 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   if (!selectedVehicle) return null;
 
   return (
-    <div className="flex items-stretch gap-3 overflow-x-auto no-scrollbar pointer-events-auto">
+    <div className="flex items-stretch gap-3 overflow-x-auto no-scrollbar">
       <CardShell icon={Route} title="Current Trip">
         {isLoadingTrip ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
