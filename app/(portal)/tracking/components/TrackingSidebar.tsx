@@ -76,7 +76,7 @@ export function TrackingSidebar({
 
   if (isAssetListCollapsed) {
     return (
-      <div className="hidden md:flex h-full flex-col pointer-events-none">
+      <div className="hidden lg:flex h-full flex-col pointer-events-none">
         <button
           onClick={toggleAssetList}
           aria-label="Expand asset list"

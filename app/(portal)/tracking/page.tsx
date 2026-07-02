@@ -27,7 +27,6 @@ import { ClusterFilterModal } from "./components/ClusterFilterModal";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
-import { useTrackingUiStore } from "@/store/trackingUiStore";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -61,7 +60,6 @@ export default function TrackingPage() {
   const { setSidebarCollapsed } = useUIStore();
   const { subscribePrivate } = useEcho();
   const { status: connectionStatus } = useConnectionStatus();
-  const { setActiveTab } = useTrackingUiStore();
 
   const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
     queryKey: ["vehicles-tracking"],
@@ -252,6 +250,19 @@ export default function TrackingPage() {
     }
   }, [locationSearch, vehicles, locations]);
 
+  const handleLiveTrack = useCallback(() => {
+    const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
+    if (loc?.lat && loc?.lng) {
+      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+    }
+  }, [selectedVehicle, locations]);
+
+  const handlePlayback = useCallback(() => {
+    const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
+    setPlaybackType(hasTrip ? "trip" : "history");
+    setIsReplayOpen(true);
+  }, [ongoingTripsData, selectedVehicleId]);
+
   return (
     <UpgradeGate
       module="geofence"
@@ -346,17 +357,8 @@ export default function TrackingPage() {
             selectedVehicle={selectedVehicle}
             locations={locations}
             vehicles={vehicles}
-            onLiveTrack={() => {
-              const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
-              if (loc?.lat && loc?.lng) {
-                (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
-              }
-            }}
-            onPlayback={() => {
-              const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
-              setPlaybackType(hasTrip ? "trip" : "history");
-              setIsReplayOpen(true);
-            }}
+            onLiveTrack={handleLiveTrack}
+            onPlayback={handlePlayback}
           />
         </div>
 
@@ -381,17 +383,8 @@ export default function TrackingPage() {
             selectedVehicle={selectedVehicle}
             locations={locations}
             vehicles={vehicles}
-            onLiveTrack={() => {
-              const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
-              if (loc?.lat && loc?.lng) {
-                (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
-              }
-            }}
-            onPlayback={() => {
-              const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
-              setPlaybackType(hasTrip ? "trip" : "history");
-              setIsReplayOpen(true);
-            }}
+            onLiveTrack={handleLiveTrack}
+            onPlayback={handlePlayback}
           />
         </div>
 
