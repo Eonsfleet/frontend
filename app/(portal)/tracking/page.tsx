@@ -20,8 +20,9 @@ import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, type TrackingMapStyle } from 
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
 import { usePlaybackData } from "./hooks/usePlaybackData";
 import { TrackingSidebar } from "./components/TrackingSidebar";
-import { TrackingControlDeck } from "./components/TrackingControlDeck";
-import { SelectedVehicleBar } from "./components/SelectedVehicleBar";
+import { TrackingTopBar } from "./components/TrackingTopBar";
+import { MapZoomControl } from "./components/MapZoomControl";
+import { MapLegend } from "./components/MapLegend";
 import { ClusterFilterModal } from "./components/ClusterFilterModal";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
@@ -30,15 +31,18 @@ import { useTrackingUiStore } from "@/store/trackingUiStore";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { cn } from "@/lib/utils";
 
 export default function TrackingPage() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationSearch, setLocationSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [isReplayOpen, setIsReplayOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "focused">("all");
   const [mapStyle, setMapStyle] = useState<TrackingMapStyle>("standard");
+  const [showTraffic, setShowTraffic] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [clusterModalOpen, setClusterModalOpen] = useState(false);
@@ -90,7 +94,7 @@ export default function TrackingPage() {
   const clusters = useMemo(() => clustersData?.data?.clusters || [], [clustersData]);
   const geofences = useMemo(() => geofencesData?.data?.geofences || [], [geofencesData]);
 
-  const { locations, interpolator, alarmState } = useVehicleLocations({
+  const { locations, interpolator, alarmState, trails } = useVehicleLocations({
     vehicles,
     token,
     organization,
@@ -102,6 +106,11 @@ export default function TrackingPage() {
     () =>
       vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)) || null,
     [vehicles, selectedVehicleId],
+  );
+
+  const selectedTrail = useMemo(
+    () => (selectedVehicleId ? trails[selectedVehicleId] ?? [] : []),
+    [trails, selectedVehicleId],
   );
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
@@ -217,9 +226,6 @@ export default function TrackingPage() {
     }
   }, []);
 
-  // Resync fleet data once, right after the WS connection comes back — the
-  // single source of truth for reconnect-refetch (drives the same status the
-  // ConnectionBanner reads, so there's no duplicate/competing refetch logic).
   const wasDisconnectedRef = useRef(false);
   useEffect(() => {
     if (connectionStatus === "disconnected" || connectionStatus === "failed") {
@@ -230,14 +236,82 @@ export default function TrackingPage() {
     }
   }, [connectionStatus, queryClient]);
 
+  const handleLocationSearchSubmit = useCallback(() => {
+    const q = locationSearch.trim().toLowerCase();
+    if (!q) return;
+    const match = vehicles.find((v: Vehicle) => {
+      const loc = locations[v.id];
+      return (
+        v.attributes.registration_number?.toLowerCase().includes(q) ||
+        (loc?.address ?? "").toLowerCase().includes(q)
+      );
+    });
+    const loc = match ? locations[match.id] : null;
+    if (loc?.lat && loc?.lng) {
+      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+    }
+  }, [locationSearch, vehicles, locations]);
+
   return (
     <UpgradeGate
       module="geofence"
       featureName="Live Tracking"
       description="Monitor your fleet in real-time with precise telemetry and location data."
     >
-      <div ref={containerRef} className="h-screen w-full flex overflow-hidden bg-slate-100 relative">
-        <div className="absolute inset-0 z-0 h-full w-full">
+      <div
+        ref={containerRef}
+        className={cn(
+          "h-screen w-full grid overflow-hidden bg-white",
+          "grid-rows-[56px_1fr]",
+          selectedVehicle ? "lg:grid-rows-[56px_1fr_auto]" : "lg:grid-rows-[56px_1fr]",
+          "grid-cols-1",
+          selectedVehicle ? "lg:grid-cols-[320px_1fr_380px]" : "lg:grid-cols-[320px_1fr_0px]",
+          "transition-[grid-template-columns] duration-300 ease-in-out",
+        )}
+      >
+        <div className="col-span-full row-start-1">
+          <TrackingTopBar
+            locationSearch={locationSearch}
+            setLocationSearch={setLocationSearch}
+            onLocationSearchSubmit={handleLocationSearchSubmit}
+            mapStyle={mapStyle}
+            setMapStyle={setMapStyle}
+            showTraffic={showTraffic}
+            setShowTraffic={setShowTraffic}
+            showGeofences={showGeofences}
+            setShowGeofences={setShowGeofences}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            selectedClusterIds={selectedClusterIds}
+            onOpenClusterModal={() => setClusterModalOpen(true)}
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+          />
+        </div>
+
+        <div className="hidden lg:block row-start-2 border-r border-slate-200 overflow-hidden">
+          <TrackingSidebar
+            viewMode={viewMode}
+            vehicles={vehicles}
+            filteredVehicles={filteredVehicles}
+            locations={locations}
+            selectedVehicleId={selectedVehicleId}
+            setSelectedVehicleId={setSelectedVehicleId}
+            isLoadingVehicles={isLoadingVehicles}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            ongoingTripsCount={ongoingTrips.length}
+            ongoingTripsData={ongoingTripsData}
+            setIsReplayOpen={setIsReplayOpen}
+            isLoadingTrips={isLoadingTrips}
+            alarmState={alarmState}
+          />
+        </div>
+
+        <div className="relative row-start-2 overflow-hidden">
           <TrackingMap
             filteredVehicles={filteredVehicles}
             locations={locations}
@@ -246,6 +320,8 @@ export default function TrackingPage() {
             vehicles={vehicles}
             TILE_URL={MAP_LAYERS[mapStyle]}
             mapStyle={mapStyle}
+            showTraffic={showTraffic}
+            trail={selectedTrail}
             getMarkerSVG={getMarkerSVG}
             getVehicleIcon={getVehicleIcon}
             statusFilter={statusFilter}
@@ -255,46 +331,37 @@ export default function TrackingPage() {
             interpolator={interpolator}
             alarmState={alarmState}
           />
+          <MapZoomControl />
+          <MapLegend />
           <ConnectionBanner />
         </div>
 
-        <TrackingSidebar
-          viewMode={viewMode}
-          vehicles={vehicles}
-          filteredVehicles={filteredVehicles}
-          locations={locations}
-          selectedVehicleId={selectedVehicleId}
-          setSelectedVehicleId={setSelectedVehicleId}
-          isLoadingVehicles={isLoadingVehicles}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          ongoingTripsCount={ongoingTrips.length}
-          ongoingTripsData={ongoingTripsData}
-          setIsReplayOpen={setIsReplayOpen}
-          isLoadingTrips={isLoadingTrips}
-          alarmState={alarmState}
-        />
+        <div className="hidden lg:block row-start-2 overflow-hidden">
+          <AssetPanel
+            isOpen={!!selectedVehicle}
+            onClose={() => {
+              setSelectedVehicleId(null);
+              resetZoom();
+            }}
+            selectedVehicle={selectedVehicle}
+            locations={locations}
+            vehicles={vehicles}
+            onLiveTrack={() => {
+              const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
+              if (loc?.lat && loc?.lng) {
+                (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+              }
+            }}
+            onPlayback={() => {
+              const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
+              setPlaybackType(hasTrip ? "trip" : "history");
+              setIsReplayOpen(true);
+            }}
+          />
+        </div>
 
-        <TrackingControlDeck
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          mapStyle={mapStyle}
-          setMapStyle={setMapStyle}
-          showGeofences={showGeofences}
-          setShowGeofences={setShowGeofences}
-          selectedClusterIds={selectedClusterIds}
-          onOpenClusterModal={() => setClusterModalOpen(true)}
-          onRefresh={() =>
-            queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })
-          }
-          isFullscreen={isFullscreen}
-          onToggleFullscreen={toggleFullscreen}
-        />
-
-        {selectedVehicle && !isReplayOpen && (
-          <div className="hidden md:flex absolute bottom-6 left-6 right-105 z-30 flex-col items-center gap-3 pointer-events-none">
+        {selectedVehicle && (
+          <div className="hidden lg:flex row-start-3 col-start-2 border-t border-slate-200 p-4 gap-3 overflow-x-auto">
             <BottomCards
               selectedVehicle={selectedVehicle}
               loc={locations[selectedVehicle.id]}
@@ -303,24 +370,30 @@ export default function TrackingPage() {
           </div>
         )}
 
-        {selectedVehicle && !isReplayOpen && (
-          <SelectedVehicleBar
-            selectedVehicle={selectedVehicle}
-            locations={locations}
-            onReplay={() => {
-              const hasTrip = ongoingTripsData.some(
-                (t) => t.vehicleId === selectedVehicleId,
-              );
-              setPlaybackType(hasTrip ? "trip" : "history");
-              setIsReplayOpen(true);
-            }}
-            onTelemetry={() => setActiveTab("details")}
+        {/* Mobile (<lg): vehicle detail panel keeps its existing bottom-sheet presentation */}
+        <div className="lg:hidden">
+          <AssetPanel
+            isOpen={!!selectedVehicle}
             onClose={() => {
               setSelectedVehicleId(null);
               resetZoom();
             }}
+            selectedVehicle={selectedVehicle}
+            locations={locations}
+            vehicles={vehicles}
+            onLiveTrack={() => {
+              const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
+              if (loc?.lat && loc?.lng) {
+                (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+              }
+            }}
+            onPlayback={() => {
+              const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
+              setPlaybackType(hasTrip ? "trip" : "history");
+              setIsReplayOpen(true);
+            }}
           />
-        )}
+        </div>
 
         <MobileAssetSheet
           vehicles={vehicles}
@@ -336,28 +409,6 @@ export default function TrackingPage() {
           setSearchQuery={setSearchQuery}
         />
       </div>
-
-      <AssetPanel
-        isOpen={!!selectedVehicle}
-        onClose={() => {
-          setSelectedVehicleId(null);
-          resetZoom();
-        }}
-        selectedVehicle={selectedVehicle}
-        locations={locations}
-        vehicles={vehicles}
-        onLiveTrack={() => {
-          const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
-          if (loc?.lat && loc?.lng) {
-            (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
-          }
-        }}
-        onPlayback={() => {
-          const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
-          setPlaybackType(hasTrip ? "trip" : "history");
-          setIsReplayOpen(true);
-        }}
-      />
 
       <ClusterFilterModal
         open={clusterModalOpen}
