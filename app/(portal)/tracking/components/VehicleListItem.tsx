@@ -44,95 +44,39 @@ export function VehicleListItem({
         }
       }}
       className={cn(
-        "group flex flex-col p-3 rounded-xl border transition-all cursor-pointer gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-        isSelected
-          ? "bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100 scale-[1.01]"
-          : "bg-white border-slate-50 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50",
+        "group flex items-center gap-3 px-3 py-2.5 border-b border-slate-100 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset",
+        isSelected ? "bg-blue-50" : "hover:bg-slate-50",
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={cn(
-              "h-8 w-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center transition-colors",
-              isSelected
-                ? "bg-white/20"
-                : "bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500",
-            )}
-          >
-            {vehicle.attributes.image ? (
-              <img src={vehicle.attributes.image} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Truck className="h-3.5 w-3.5" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <h4 className="text-[10px] font-black uppercase italic tracking-tight leading-none mb-1 truncate">
-              {vehicle.attributes.registration_number}
-            </h4>
-            <p
-              className={cn(
-                "text-[8px] font-bold uppercase truncate",
-                isSelected ? "text-blue-100" : "text-slate-400",
-              )}
-            >
-              {loc?.address || `${vehicle.attributes.make} ${vehicle.attributes.model}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span
-            className={cn(
-              "text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full",
-              isSelected ? "bg-white/20 text-white" : statusCfg.badge,
-            )}
-          >
-            {statusCfg.label}
-          </span>
-          <div
-            className={cn("h-1.5 w-1.5 rounded-full shadow-[0_0_8px]", statusCfg.dot)}
-            style={!isSelected ? { boxShadow: `0 0 8px ${statusCfg.marker}80` } : undefined}
-          />
-        </div>
+      <div className="h-9 w-9 rounded-md overflow-hidden shrink-0 flex items-center justify-center bg-slate-100 text-slate-400">
+        {vehicle.attributes.image ? (
+          <img src={vehicle.attributes.image} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Truck className="h-4 w-4" />
+        )}
       </div>
-      <div className="flex items-center justify-between pt-2 border-t border-white/10">
-        <span
-          className={cn(
-            "text-[7px] font-black uppercase tracking-widest",
-            isSelected ? "text-blue-200" : "text-slate-400",
-          )}
-        >
-          {lastUpdate}
-        </span>
-        <div className="flex items-center gap-3">
-          {(fuelPct != null || fuelL != null) && (
-            <span
-              className={cn(
-                "text-[7px] font-black uppercase tracking-widest",
-                isSelected
-                  ? "text-blue-200"
-                  : fuelPct != null && fuelPct < 20
-                    ? "text-rose-500"
-                    : "text-slate-400",
-              )}
-            >
-              ⛽{" "}
-              {fuelPct != null && fuelL != null
-                ? `${fuelPct}% · ${Number(fuelL).toFixed(1)}L`
-                : fuelPct != null
-                  ? `${fuelPct}%`
-                  : `${Number(fuelL).toFixed(1)}L`}
-            </span>
-          )}
-          <span
-            className={cn(
-              "text-[7px] font-black uppercase tracking-widest",
-              isSelected ? "text-blue-200" : "text-slate-400",
-            )}
-          >
-            {loc?.speed ?? 0} KPH
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-bold text-slate-900 truncate">
+            {vehicle.attributes.registration_number}
+          </h4>
+          <span className={cn("text-[11px] font-semibold shrink-0", statusCfg.text)}>{statusCfg.label}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <p className="text-[11px] text-slate-400 truncate">
+            {loc?.address || `${vehicle.attributes.make} ${vehicle.attributes.model}`}
+          </p>
+          <span className="text-[11px] text-slate-400 shrink-0">
+            {fuelPct != null
+              ? `${fuelPct}% · `
+              : fuelL != null
+                ? `${Number(fuelL).toFixed(1)}L · `
+                : ""}
+            {loc?.speed ?? 0} km/h
           </span>
         </div>
+        <p className="text-[10px] text-slate-300 mt-0.5">{lastUpdate}</p>
       </div>
     </div>
   );
