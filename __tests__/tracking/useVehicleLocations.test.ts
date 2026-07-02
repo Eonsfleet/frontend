@@ -1,0 +1,57 @@
+import { describe, it, expect, vi } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useVehicleLocations } from '@/app/(portal)/tracking/hooks/useVehicleLocations'
+
+vi.mock('@/store/packetStreamStore', () => ({
+  usePacketStreamStore: {
+    getState: () => ({ push: vi.fn() }),
+  },
+}))
+
+function makeSubscribePrivate() {
+  const handlers = new Map<string, (data: any) => void>()
+  const subscribePrivate = vi.fn((channel: string, event: string, cb: (data: any) => void) => {
+    handlers.set(`${channel}::${event}`, cb)
+    return () => handlers.delete(`${channel}::${event}`)
+  })
+  return { subscribePrivate, handlers }
+}
+
+const baseProps = {
+  vehicles: [],
+  token: 'test-token',
+  organization: { id: 'org-1', attributes: { identifier: 'org-1' } },
+}
+
+describe('useVehicleLocations trail buffer', () => {
+  it('appends live positions to trails only for the selected vehicle', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result, rerender } = renderHook(
+      (props: { selectedVehicleId: string | null }) =>
+        useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: props.selectedVehicleId }),
+      { initialProps: { selectedVehicleId: '42' } },
+    )
+
+    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+
+    act(() => {
+      locationHandler({ vehicle_id: '42', latitude: 6.5, longitude: 3.4, speed: 10, status: 'in_transit' })
+    })
+    act(() => {
+      locationHandler({ vehicle_id: '99', latitude: 1.1, longitude: 2.2, speed: 10, status: 'in_transit' })
+    })
+
+    expect(result.current.trails['42']).toHaveLength(1)
+    expect(result.current.trails['42'][0]).toMatchObject({ lat: 6.5, lng: 3.4 })
+    expect(result.current.trails['99']).toBeUndefined()
+
+    act(() => {
+      locationHandler({ vehicle_id: '42', latitude: 6.51, longitude: 3.41, speed: 12, status: 'in_transit' })
+    })
+    expect(result.current.trails['42']).toHaveLength(2)
+
+    // Changing selection clears the trail buffer
+    rerender({ selectedVehicleId: '99' })
+    expect(result.current.trails['42']).toBeUndefined()
+  })
+})
