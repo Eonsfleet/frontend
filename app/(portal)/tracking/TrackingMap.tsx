@@ -24,6 +24,7 @@ import { getMarkerState, buildMarkerHtml } from "./utils";
 import type { VehicleInterpolator } from "@/lib/vehicleInterpolation";
 import { TrafficOverlay } from "./components/TrafficOverlay";
 import type { TrackingMapStyle } from "./utils";
+import type { TrailPoint } from "@/lib/vehicleTrail";
 
 // Normalization & Helpers (Passed from parent or redefined if pure)
 const normalizeReg = (reg: string) => (reg || "").toUpperCase();
@@ -40,6 +41,8 @@ interface TrackingMapProps {
   vehicles: any[];
   TILE_URL: string;
   mapStyle?: TrackingMapStyle;
+  showTraffic?: boolean;
+  trail?: TrailPoint[];
   getMarkerSVG: (bodyType: string) => string;
   getVehicleIcon: (bodyType: string, status: string) => React.ReactNode;
   playbackData?: any[];
@@ -121,6 +124,8 @@ export default function TrackingMap({
   vehicles,
   TILE_URL,
   mapStyle = "standard",
+  showTraffic = false,
+  trail = [],
   getMarkerSVG,
   getVehicleIcon,
   playbackData = [],
@@ -195,8 +200,17 @@ export default function TrackingMap({
           }}
         />
 
-        {mapStyle === "traffic" && !isReplayMode && (
+        {showTraffic && !isReplayMode && (
           <TrafficOverlay filteredVehicles={filteredVehicles} locations={locations} />
+        )}
+
+        {!isReplayMode && selectedVehicle && trail.length > 1 && (
+          <Polyline
+            positions={trail.map((p) => [p.lat, p.lng])}
+            color="#2563eb"
+            weight={4}
+            opacity={0.85}
+          />
         )}
 
         {isReplayMode && playbackData.length > 0 && (

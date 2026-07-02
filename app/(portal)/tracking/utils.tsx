@@ -8,11 +8,6 @@ export const MAP_LAYERS = {
   satellite:
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   hybrid: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-  // No real traffic-tile provider is wired into this app (no Google/TomTom/HERE key
-  // configured anywhere). "Traffic" reuses the standard tile source; the actual
-  // traffic effect is a separate client-side overlay (see TrafficOverlay.tsx) computed
-  // from live fleet speeds, not third-party traffic data — labelled honestly in the UI.
-  traffic: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 };
 
 export type TrackingMapStyle = keyof typeof MAP_LAYERS;
