@@ -18,6 +18,8 @@ import { AssetPanel } from "./components/AssetPanel";
 import { TripPlaybackTimeline } from "@/components/live/TripPlaybackTimeline";
 import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, type TrackingMapStyle } from "./utils";
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
+import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
+import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
 import { usePlaybackData } from "./hooks/usePlaybackData";
 import { TrackingSidebar } from "./components/TrackingSidebar";
 import { TrackingTopBar } from "./components/TrackingTopBar";
@@ -114,6 +116,22 @@ export default function TrackingPage() {
   const selectedTrail = useMemo(
     () => (selectedVehicleId ? trails[selectedVehicleId] ?? [] : []),
     [trails, selectedVehicleId],
+  );
+
+  // Hoisted here (rather than inside AssetPanel) so it opens exactly one set of
+  // per-vehicle WS channels — AssetPanel renders twice simultaneously (desktop +
+  // mobile variants, toggled with CSS breakpoints, not conditional mounting), and
+  // BottomCards needs the same live-resolved telemetry, so all three consume this
+  // single subscription instead of each opening their own.
+  const selectedLoc = selectedVehicle ? locations[selectedVehicle.id] : null;
+  const selectedVehicleSnapshot = useMemo(
+    () => buildVehicleSnapshot(selectedVehicle, selectedLoc),
+    [selectedVehicle, selectedLoc],
+  );
+  const resolvedTelemetry = useResolvedVehicleTelemetry(
+    selectedVehicle?.id ?? null,
+    selectedVehicleSnapshot,
+    !!selectedVehicle,
   );
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
@@ -368,6 +386,7 @@ export default function TrackingPage() {
             vehicles={vehicles}
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
+            resolved={resolvedTelemetry}
           />
         </div>
 
@@ -376,7 +395,7 @@ export default function TrackingPage() {
             <div className="flex-1 min-w-0 overflow-x-auto">
               <BottomCards
                 selectedVehicle={selectedVehicle}
-                loc={locations[selectedVehicle.id]}
+                resolved={resolvedTelemetry}
                 hasActiveAlarm={alarmState[selectedVehicle.id] === true}
               />
             </div>
@@ -396,6 +415,7 @@ export default function TrackingPage() {
             vehicles={vehicles}
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
+            resolved={resolvedTelemetry}
           />
         </div>
 

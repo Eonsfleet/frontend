@@ -6,20 +6,21 @@ import { format, formatDistanceStrict } from "date-fns";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
 import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
-import { formatVoltage } from "@/lib/resolveVehicleTelemetry";
+import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { reverseGeocode } from "@/lib/gps";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
 
 interface BottomCardsProps {
   selectedVehicle: any;
-  loc: any;
+  /** Live-resolved telemetry (WS + REST-merged), computed once at the page level. */
+  resolved: ResolvedVehicleTelemetry;
   hasActiveAlarm?: boolean;
 }
 
 function CardShell({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 h-full">
+    <div className="bg-white px-4 py-3 h-full">
       <div className="flex items-center gap-2 mb-2.5">
         <Icon className="h-3.5 w-3.5 text-blue-600" />
         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</span>
@@ -53,7 +54,7 @@ function simLabel(status: string | null | undefined): string | null {
   return status;
 }
 
-export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: BottomCardsProps) {
+export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false }: BottomCardsProps) {
   const { data: trip, isLoading: isLoadingTrip } = useQuery({
     queryKey: ["active-trip", selectedVehicle?.id],
     queryFn: () => getActiveTripForVehicle(selectedVehicle!.id),
@@ -67,6 +68,7 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
     queryKey: ["device-info", deviceRecordId],
     queryFn: () => getDeviceById(deviceRecordId),
     enabled: !!deviceRecordId,
+    refetchInterval: 30_000,
   });
 
   // Most devices never send a resolved address string (no reverse-geocoding
@@ -74,14 +76,17 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   // way useResolvedVehicleTelemetry does for the AssetPanel, so Address isn't
   // permanently blank here.
   const { data: geocodedAddress } = useQuery({
-    queryKey: ["reverse-geocode", loc?.lat, loc?.lng],
-    queryFn: () => reverseGeocode(loc.lat, loc.lng),
-    enabled: !loc?.address && !!loc?.lat && !!loc?.lng,
+    queryKey: ["reverse-geocode", resolved.lat, resolved.lng],
+    queryFn: () => reverseGeocode(resolved.lat, resolved.lng),
+    enabled: !resolved.address && !!resolved.lat && !!resolved.lng,
     staleTime: 5 * 60_000,
   });
 
-  const lastUpdateRelative = useRelativeTime(loc?.lastUpdate ?? loc?.lastPacket);
-  const statusKey = resolveStatusKey({ status: loc?.status, is_online: loc?.is_online, speed: loc?.speed }, hasActiveAlarm);
+  const lastUpdateRelative = useRelativeTime(resolved.lastUpdate);
+  const statusKey = resolveStatusKey(
+    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    hasActiveAlarm,
+  );
   const statusCfg = VEHICLE_STATUS[statusKey];
 
   if (!selectedVehicle) return null;
@@ -93,18 +98,16 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   const attrs = deviceInfoData?.data?.attributes ?? {};
   const hardware = deviceInfoData?.data?.relationships?.hardware;
   const device = selectedVehicle.relationships?.device;
-  const signal = gpsSignal(loc?.satellites);
-  const address = loc?.address ?? geocodedAddress ?? null;
+  const signal = gpsSignal(resolved.satellites);
+  const address = resolved.address ?? geocodedAddress ?? null;
 
-  const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
-  const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
   const fuelDisplay =
-    fuelPct != null && fuelL != null
-      ? `${fuelPct}% · ${Number(fuelL).toFixed(1)}L`
-      : fuelPct != null
-        ? `${fuelPct}%`
-        : fuelL != null
-          ? `${Number(fuelL).toFixed(1)}L`
+    resolved.fuel != null && resolved.fuelLiters != null
+      ? `${resolved.fuel}% · ${Number(resolved.fuelLiters).toFixed(1)}L`
+      : resolved.fuel != null
+        ? `${resolved.fuel}%`
+        : resolved.fuelLiters != null
+          ? `${Number(resolved.fuelLiters).toFixed(1)}L`
           : null;
   const sim = simLabel(attrs.status ?? device?.status);
 
@@ -137,9 +140,9 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
 
       <CardShell icon={Navigation} title="Location & Movement">
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
-          <Stat label="Speed" value={`${loc?.speed ?? 0} km/h`} />
-          <Stat label="Heading" value={loc?.heading != null ? `${Math.round(loc.heading)}°` : null} />
-          <Stat label="Ignition" value={loc?.ignition ? "On" : "Off"} />
+          <Stat label="Speed" value={`${resolved.speed ?? 0} km/h`} />
+          <Stat label="Heading" value={resolved.heading != null ? `${Math.round(resolved.heading)}°` : null} />
+          <Stat label="Ignition" value={resolved.ignition ? "On" : "Off"} />
           <Stat
             label="Status"
             value={
@@ -165,9 +168,8 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
               </span>
             }
           />
-          {/* No carrier/network field exists in the backend yet — shown as "—" until added, not faked from country/etc. */}
-          <Stat label="Network" value={null} />
-          <Stat label="Battery" value={formatVoltage(loc?.battery_voltage)} />
+          <Stat label="Network" value={resolved.gsmOperator} />
+          <Stat label="Battery" value={formatVoltage(resolved.batteryV)} />
           <Stat label="Fuel" value={fuelDisplay} />
           <Stat label="Device" value={hardware?.name} />
           <Stat label="SIM" value={sim} />

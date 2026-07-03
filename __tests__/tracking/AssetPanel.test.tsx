@@ -17,9 +17,8 @@ vi.mock('@/lib/api/drivers', () => ({ getDriverById: vi.fn().mockResolvedValue({
 vi.mock('@/lib/api/vehicles', () => ({ getCurrentDriver: vi.fn().mockResolvedValue({ data: null }) }))
 vi.mock('@/lib/api/trips', () => ({ getActiveTripForVehicle: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/api/tracking', () => ({ getDeviceById: vi.fn().mockResolvedValue(null) }))
-vi.mock('@/hooks/useResolvedVehicleTelemetry', () => ({
-  useResolvedVehicleTelemetry: () => ({ fuel: null, batteryV: null, satellites: null, engineHours: null, address: '' }),
-}))
+
+const resolved = { fuel: null, batteryV: null, satellites: null, engineHours: null, address: '' } as any
 
 const vehicle = {
   id: '1',
@@ -44,6 +43,7 @@ describe('AssetPanel', () => {
         vehicles={[vehicle]}
         onLiveTrack={vi.fn()}
         onPlayback={vi.fn()}
+        resolved={resolved}
       />,
       { wrapper: Wrapper },
     )
@@ -63,6 +63,7 @@ describe('AssetPanel', () => {
         vehicles={[vehicle]}
         onLiveTrack={vi.fn()}
         onPlayback={vi.fn()}
+        resolved={resolved}
       />,
       { wrapper: Wrapper },
     )
@@ -80,6 +81,7 @@ describe('AssetPanel', () => {
         vehicles={[vehicleWithPhoto]}
         onLiveTrack={vi.fn()}
         onPlayback={vi.fn()}
+        resolved={resolved}
       />,
       { wrapper: Wrapper },
     )

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,8 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
-import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
-import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
+import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
 import { getDriverById } from "@/lib/api/drivers";
 import { getCurrentDriver } from "@/lib/api/vehicles";
@@ -62,6 +60,13 @@ interface AssetPanelProps {
   vehicles: any[];
   onLiveTrack: () => void;
   onPlayback: () => void;
+  /**
+   * Live-resolved telemetry, computed once at the page level (page.tsx) and
+   * shared with BottomCards — AssetPanel mounts twice simultaneously (desktop +
+   * mobile variants toggled by CSS breakpoint, not conditional rendering), so
+   * computing this here would open a duplicate set of per-vehicle WS channels.
+   */
+  resolved: ResolvedVehicleTelemetry;
 }
 
 export function AssetPanel({
@@ -72,13 +77,11 @@ export function AssetPanel({
   vehicles,
   onLiveTrack,
   onPlayback,
+  resolved,
 }: AssetPanelProps) {
   const router = useRouter();
   const { activeTab, setActiveTab, isAssetPanelCollapsed, toggleAssetPanel } = useTrackingUiStore();
   const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
-
-  const vehicleSnapshot = useMemo(() => buildVehicleSnapshot(selectedVehicle, loc), [selectedVehicle, loc]);
-  const resolved = useResolvedVehicleTelemetry(selectedVehicle?.id ?? null, vehicleSnapshot, isOpen && !!selectedVehicle);
 
   // The vehicle's embedded relationships.current_driver (Vehicle::operator on the
   // backend) picks whoever has the latest assigned_date WITHOUT excluding
@@ -116,6 +119,7 @@ export function AssetPanel({
     queryKey: ["device-info", deviceRecordId],
     queryFn: () => getDeviceById(deviceRecordId),
     enabled: isOpen && !!deviceRecordId && activeTab === "device",
+    refetchInterval: 30_000,
   });
 
   if (!selectedVehicle) return null;

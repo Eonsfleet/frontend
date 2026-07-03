@@ -65,7 +65,7 @@ export function VehicleListItem({
         </div>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className="text-[11px] text-slate-400 truncate">
-            {loc?.address || `${vehicle.attributes.make} ${vehicle.attributes.model}`}
+            {`${vehicle.attributes.make} ${vehicle.attributes.model}`}
           </p>
           <span className="text-[11px] text-slate-400 shrink-0">
             {fuelPct != null

@@ -215,6 +215,10 @@ export function resolveVehicleTelemetry({
     meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? 0;
   const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
   const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
+  // GSM operator code (MCC+MNC) — the closest thing to a "network/carrier" signal
+  // the ingest pipeline actually broadcasts (see EXTENDED_METADATA_KEYS on the
+  // backend); there's no separate carrier-name field, so it's shown as-is.
+  const liveGsmOperator = meta.active_gsm_operator ?? telemetry?.active_gsm_operator ?? raw.active_gsm_operator ?? null;
   const liveMileage = meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
   const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
   const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
@@ -293,6 +297,7 @@ export function resolveVehicleTelemetry({
     engineTemp: liveEngineTemp,
     rssi: liveRssi,
     hdop: liveHdop,
+    gsmOperator: liveGsmOperator,
     mileage: liveMileage,
     tripOdo: liveTripOdo,
     odoSource: liveOdoSource,
