@@ -1,6 +1,8 @@
 "use client";
 
 import { TelemetryRow } from "@/components/shared/TelemetryRow";
+import { useRelativeTime } from "@/hooks/useRelativeTime";
+import { format } from "date-fns";
 import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import type { VehicleDevice } from "@/types";
 
@@ -11,11 +13,12 @@ interface DeviceTabProps {
   deviceInfoData?: any;
 }
 
+function yesNo(value: boolean | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return value ? "Yes" : "No";
+}
+
 /**
- * Expanded technical detail behind the Device Status bottom card — every field
- * here is intentionally NOT shown on that card (model, network, battery voltage,
- * fuel, and SIM status live there instead) to avoid repeating the same data.
- *
  * Firmware version has no backing field anywhere in the backend schema (confirmed
  * against the devices table/Device model/DeviceResource) — shown as "—" until the
  * backend adds it, rather than reading a field that doesn't exist. "SIM Number" is
@@ -24,17 +27,25 @@ interface DeviceTabProps {
  */
 export function DeviceTab({ device, resolved, deviceInfoData }: DeviceTabProps) {
   const attrs = deviceInfoData?.data?.attributes ?? {};
+  const hardware = deviceInfoData?.data?.relationships?.hardware;
+  const lastPacketRelative = useRelativeTime(attrs.last_packet_received_at);
 
   return (
     <div className="space-y-1 p-1">
       <TelemetryRow label="IMEI" value={device?.imei ?? device?.data?.imei ?? attrs.device_id} />
+      <TelemetryRow label="Device Model" value={hardware?.name} />
       <TelemetryRow label="Firmware" value={null} />
       <TelemetryRow label="SIM Number" value={attrs.phone_number ?? device?.phone} />
+      <TelemetryRow label="Country" value={attrs.country} />
+      <TelemetryRow label="Status" value={attrs.status} />
+      <TelemetryRow label="Last Packet Received" value={lastPacketRelative} />
+      <TelemetryRow label="Installed On" value={attrs.created_at ? format(new Date(attrs.created_at), "MMM d, yyyy") : null} />
       <TelemetryRow
         label="Signal Quality"
         value={resolved.rssi != null ? `${resolved.rssi} dBm` : resolved.satellites != null ? `${resolved.satellites} sats` : null}
       />
       <TelemetryRow label="Temperature" value={resolved.engineTemp != null ? `${resolved.engineTemp}°C` : null} />
+      <TelemetryRow label="Has Fuel Sensor" value={yesNo(attrs.has_fuel)} />
       <TelemetryRow label="Device Health" value={resolved.isDeviceOnline ? "Healthy" : "Attention needed"} />
     </div>
   );

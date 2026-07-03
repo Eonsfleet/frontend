@@ -75,10 +75,8 @@ export const getTripRoutes = async (tripId: string | number): Promise<{ data: an
 }
 
 export const getActiveTripForVehicle = async (vehicleId: string | number): Promise<Trip | null> => {
-    const response = await apiClient.get<TripListResponse>('/trips', {
-        params: { status: 'ongoing', vehicle_id: vehicleId }
-    })
-    return response.data.data.trips[0] || null
+    const response = await apiClient.get<{ message: string; data: Trip | null }>(`/vehicles/${vehicleId}/current-trip`)
+    return response.data.data
 }
 
 export const getLastTripForVehicle = async (vehicleId: string | number): Promise<Trip | null> => {
