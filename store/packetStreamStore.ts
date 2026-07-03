@@ -32,6 +32,13 @@ export const usePacketStreamStore = create<PacketStreamState>((set, get) => ({
       return;
     }
     const existing = buffers[entry.vehicleId] ?? [];
+    const [mostRecent] = existing;
+    const isDuplicate =
+      mostRecent != null &&
+      mostRecent.type === entry.type &&
+      entry.receivedAt - mostRecent.receivedAt < 3000 &&
+      JSON.stringify(mostRecent.raw) === JSON.stringify(entry.raw);
+    if (isDuplicate) return;
     set({
       buffers: {
         ...buffers,
