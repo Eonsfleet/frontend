@@ -38,6 +38,7 @@ import { DetailsTab } from "./tabs/DetailsTab";
 import { DriverTab } from "./tabs/DriverTab";
 import { TripTab } from "./tabs/TripTab";
 import { DeviceTab } from "./tabs/DeviceTab";
+import { DiagnosticsTab } from "./tabs/DiagnosticsTab";
 import { PacketStreamTab } from "./tabs/PacketStreamTab";
 
 const TAB_TRIGGER_CLASS =
@@ -274,6 +275,7 @@ export function AssetPanel({
           <TabsTrigger value="driver" className={TAB_TRIGGER_CLASS}>Driver</TabsTrigger>
           <TabsTrigger value="trip" className={TAB_TRIGGER_CLASS}>Trip</TabsTrigger>
           <TabsTrigger value="device" className={TAB_TRIGGER_CLASS}>Device</TabsTrigger>
+          <TabsTrigger value="diagnostics" className={TAB_TRIGGER_CLASS}>Diagnostics</TabsTrigger>
           <TabsTrigger value="packets" className={TAB_TRIGGER_CLASS}>Live IoT</TabsTrigger>
         </TabsList>
 
@@ -293,6 +295,9 @@ export function AssetPanel({
         </TabsContent>
         <TabsContent value="device" className="flex-1 overflow-y-auto p-4 m-0">
           <DeviceTab device={selectedVehicle.relationships?.device} resolved={resolved} deviceStatusData={deviceStatusData} />
+        </TabsContent>
+        <TabsContent value="diagnostics" className="flex-1 overflow-y-auto p-4 m-0">
+          <DiagnosticsTab resolved={resolved} />
         </TabsContent>
         <TabsContent value="packets" className="flex-1 min-h-0 m-0">
           <PacketStreamTab vehicleId={String(selectedVehicle.id)} plate={plate} />

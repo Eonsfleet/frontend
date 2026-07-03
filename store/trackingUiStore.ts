@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type TrackingDetailTab = "details" | "driver" | "trip" | "device" | "packets";
+export type TrackingDetailTab = "details" | "driver" | "trip" | "device" | "diagnostics" | "packets";
 
 export interface TrackingAdvancedFilters {
   clusterIds: string[];
