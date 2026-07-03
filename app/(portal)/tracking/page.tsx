@@ -280,11 +280,11 @@ export default function TrackingPage() {
           "h-screen w-full grid overflow-hidden bg-white",
           selectedVehicle ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]",
           "grid-cols-1",
-          selectedVehicle ? "lg:grid-cols-[320px_1fr_380px]" : "lg:grid-cols-[320px_1fr_0px]",
+          selectedVehicle ? "lg:grid-cols-[320px_1fr_480px]" : "lg:grid-cols-[320px_1fr_0px]",
           "transition-[grid-template-columns] duration-300 ease-in-out",
         )}
       >
-        <div className="hidden lg:block row-start-1 border-r border-slate-200 overflow-hidden">
+        <div className="hidden lg:block row-start-1 row-span-2 border-r border-slate-200 overflow-hidden">
           <TrackingSidebar
             viewMode={viewMode}
             vehicles={vehicles}
@@ -356,7 +356,7 @@ export default function TrackingPage() {
           <ConnectionBanner />
         </div>
 
-        <div className="hidden lg:block row-start-1 overflow-hidden">
+        <div className="hidden lg:block row-start-1 row-span-2 overflow-hidden">
           <AssetPanel
             isOpen={!!selectedVehicle}
             onClose={() => {

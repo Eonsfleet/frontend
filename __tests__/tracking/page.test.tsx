@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('leaflet', () => ({
@@ -76,5 +76,15 @@ describe('TrackingPage grid shell', () => {
     render(<TrackingPage />, { wrapper: Wrapper })
     await screen.findByText('ABC-123-XD')
     expect(screen.queryByText('Velocity')).toBeNull()
+  })
+
+  it('widens the detail panel to 480px and keeps the sidebar/detail panel full height (row-span-2) when a vehicle is selected', async () => {
+    const { container } = render(<TrackingPage />, { wrapper: Wrapper })
+    const row = await screen.findByRole('button', { name: /ABC-123-XD/ })
+    fireEvent.click(row)
+
+    const grid = container.querySelector('.grid') as HTMLElement
+    expect(grid.className).toContain('lg:grid-cols-[320px_1fr_480px]')
+    expect(container.querySelectorAll('.row-start-1.row-span-2')).toHaveLength(2)
   })
 })
