@@ -184,6 +184,8 @@ export interface VehicleTelemetry {
     fuel_level_percent: number
     fuel_level_liters: number
     gps_datetime: string
+    /** Server-side packet ingestion time — prefer this over gps_datetime (device clock, can be wrong before GPS fix) for "last update" displays. */
+    timestamp_utc?: string
     address: string
     /** Can be "on"/"off"/"1"/"0" or boolean depending on device protocol */
     ignition: string | boolean

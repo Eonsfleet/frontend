@@ -176,7 +176,10 @@ export function resolveVehicleTelemetry({
   // Not every device/protocol reports engine hours — surface it only when the
   // device actually sends it rather than fabricating a value from unrelated data.
   const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;
-  const liveLastUpdate = telemetry?.gps_datetime ?? vehicle?.lastUpdate;
+  // timestamp_utc is the server's ingestion time — always fresh. telemetry.gps_datetime
+  // is the device's own clock, which can report a bogus fallback date before the
+  // device acquires a GPS fix, so it's only a fallback, not the primary source.
+  const liveLastUpdate = telemetry?.timestamp_utc ?? telemetry?.gps_datetime ?? vehicle?.lastUpdate;
   const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
   const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
   const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;

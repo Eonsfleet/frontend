@@ -222,12 +222,16 @@ export function useVehicleLocations({
                 statusSinceMs,
                 state: packet.state ?? prevEntry?.state,
                 is_online: true,
+                // timestamp_utc is the server's ingestion time — always fresh. Device-
+                // reported updated_at/gps_datetime can be wrong (GPS cold-start clocks
+                // commonly report a bogus fallback date before acquiring a fix), so
+                // they're only a fallback, not the primary source.
                 lastUpdate:
+                  packet.timestamp_utc ||
                   packet.updated_at ||
-                  packet.gps_datetime ||
-                  packet.timestamp_utc,
+                  packet.gps_datetime,
                 lastPacket:
-                  packet.last_packet_received_at ?? prevEntry?.lastPacket,
+                  packet.last_packet_received_at ?? packet.timestamp_utc ?? prevEntry?.lastPacket,
                 fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
                 fuel_liters:
                   normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
