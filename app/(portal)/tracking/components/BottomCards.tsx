@@ -7,6 +7,7 @@ import { getActiveTripForVehicle } from "@/lib/api/trips";
 import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage } from "@/lib/resolveVehicleTelemetry";
+import { reverseGeocode } from "@/lib/gps";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,17 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
     enabled: !!deviceRecordId,
   });
 
+  // Most devices never send a resolved address string (no reverse-geocoding
+  // happens server-side) — fall back to client-side reverse geocoding the same
+  // way useResolvedVehicleTelemetry does for the AssetPanel, so Address isn't
+  // permanently blank here.
+  const { data: geocodedAddress } = useQuery({
+    queryKey: ["reverse-geocode", loc?.lat, loc?.lng],
+    queryFn: () => reverseGeocode(loc.lat, loc.lng),
+    enabled: !loc?.address && !!loc?.lat && !!loc?.lng,
+    staleTime: 5 * 60_000,
+  });
+
   const lastUpdateRelative = useRelativeTime(loc?.lastUpdate ?? loc?.lastPacket);
   const statusKey = resolveStatusKey({ status: loc?.status, is_online: loc?.is_online, speed: loc?.speed }, hasActiveAlarm);
   const statusCfg = VEHICLE_STATUS[statusKey];
@@ -82,6 +94,18 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   const hardware = deviceInfoData?.data?.relationships?.hardware;
   const device = selectedVehicle.relationships?.device;
   const signal = gpsSignal(loc?.satellites);
+  const address = loc?.address ?? geocodedAddress ?? null;
+
+  const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
+  const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
+  const fuelDisplay =
+    fuelPct != null && fuelL != null
+      ? `${fuelPct}% · ${Number(fuelL).toFixed(1)}L`
+      : fuelPct != null
+        ? `${fuelPct}%`
+        : fuelL != null
+          ? `${Number(fuelL).toFixed(1)}L`
+          : null;
   const sim = simLabel(attrs.status ?? device?.status);
 
   return (
@@ -125,7 +149,7 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
             }
           />
         </div>
-        <Stat label="Address" value={loc?.address} />
+        <Stat label="Address" value={address} />
         <div className="mt-2">
           <Stat label="Last Update" value={lastUpdateRelative} />
         </div>
@@ -144,7 +168,7 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
           {/* No carrier/network field exists in the backend yet — shown as "—" until added, not faked from country/etc. */}
           <Stat label="Network" value={null} />
           <Stat label="Battery" value={formatVoltage(loc?.battery_voltage)} />
-          <Stat label="Fuel" value={(loc?.fuel_liters ?? loc?.fuel_level_liters) != null ? `${loc.fuel_liters ?? loc.fuel_level_liters}L` : null} />
+          <Stat label="Fuel" value={fuelDisplay} />
           <Stat label="Device" value={hardware?.name} />
           <Stat label="SIM" value={sim} />
         </div>

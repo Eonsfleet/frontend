@@ -6,6 +6,7 @@ import { BottomCards } from '@/app/(portal)/tracking/components/BottomCards'
 
 vi.mock('@/lib/api/trips', () => ({ getActiveTripForVehicle: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/api/tracking', () => ({ getDeviceById: vi.fn().mockResolvedValue(null) }))
+vi.mock('@/lib/gps', () => ({ reverseGeocode: vi.fn().mockResolvedValue('Geocoded Address, Lagos') }))
 
 const vehicle = { id: '1', attributes: {}, relationships: {} } as any
 const loc = { speed: 58, heading: 45, ignition: true, address: 'Ikeja, Lagos', is_online: true, satellites: 9 }
@@ -67,7 +68,7 @@ describe('BottomCards', () => {
     expect(await screen.findByText('VT310')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('13.800V')).toBeInTheDocument()
-    expect(screen.getByText('13L')).toBeInTheDocument()
+    expect(screen.getByText('13.0L')).toBeInTheDocument()
     expect(screen.getByText('Strong')).toBeInTheDocument()
   })
 
@@ -76,5 +77,17 @@ describe('BottomCards', () => {
     expect(screen.getByText('Network')).toBeInTheDocument()
     const networkValue = screen.getByText('Network').nextElementSibling
     expect(networkValue?.textContent).toBe('—')
+  })
+
+  it('combines fuel percent and liters into one Fuel value when both are present', () => {
+    const locWithFuel = { ...loc, fuel: 62, fuel_liters: 13 }
+    render(<BottomCards selectedVehicle={vehicle} loc={locWithFuel} />, { wrapper: Wrapper })
+    expect(screen.getByText('62% · 13.0L')).toBeInTheDocument()
+  })
+
+  it('reverse-geocodes the address when the device never sent a resolved address string', async () => {
+    const locNoAddress = { ...loc, address: null, lat: 6.5, lng: 3.4 }
+    render(<BottomCards selectedVehicle={vehicle} loc={locNoAddress} />, { wrapper: Wrapper })
+    expect(await screen.findByText('Geocoded Address, Lagos')).toBeInTheDocument()
   })
 })
