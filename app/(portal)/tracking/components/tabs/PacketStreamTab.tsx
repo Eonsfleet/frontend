@@ -76,6 +76,7 @@ interface PacketStreamTabProps {
 export function PacketStreamTab({ vehicleId, plate }: PacketStreamTabProps) {
   const buffer = usePacketStreamStore((s) => s.buffers[vehicleId]) ?? [];
   const isPaused = usePacketStreamStore((s) => s.isPaused);
+  const maxRows = usePacketStreamStore((s) => s.maxRows);
   const droppedCount = usePacketStreamStore((s) => s.droppedWhilePaused[vehicleId]) ?? 0;
   const setPaused = usePacketStreamStore((s) => s.setPaused);
 
@@ -164,6 +165,12 @@ export function PacketStreamTab({ vehicleId, plate }: PacketStreamTabProps) {
       {isPaused && droppedCount > 0 && (
         <div className="px-3 py-1.5 bg-amber-50 text-amber-700 text-[9px] font-bold text-center">
           Paused — {droppedCount} event{droppedCount === 1 ? "" : "s"} not shown
+        </div>
+      )}
+
+      {buffer.length >= maxRows && (
+        <div className="px-3 py-1.5 bg-slate-50 text-slate-500 text-[9px] font-bold text-center">
+          Showing last {maxRows} events — older events are no longer available.
         </div>
       )}
 
