@@ -37,8 +37,7 @@ export function useVehicleTelemetry(
         if (imei) {
             imeiChannel = echo.private(`location.${imei}`)
             imeiChannel.listen('.current.recent', (packet: VehicleTelemetry) => {
-                // Only apply if no vehicle-level data has arrived yet
-                setTelemetry((prev) => prev ?? packet)
+                setTelemetry(packet)
                 push('.current.recent', packet)
             })
         }

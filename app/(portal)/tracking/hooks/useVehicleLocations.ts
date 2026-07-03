@@ -117,10 +117,20 @@ export function useVehicleLocations({
           raw: loc,
         };
 
+        // Only let a WS-updated prev entry keep priority over this REST snapshot
+        // when it's actually newer — otherwise a poll after WS goes quiet can
+        // never refresh speed/position/lastUpdate, leaving the UI frozen forever
+        // on whatever the last WS packet happened to contain.
+        const prevLastUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+        const restLastUpdateMs = lastUpdateTs ? new Date(lastUpdateTs).getTime() : 0;
+        const restIsFresherOrEqual = restLastUpdateMs >= prevLastUpdateMs;
+        const positionalBase = restIsFresherOrEqual
+          ? { ...prevEntry, ...restData }
+          : { ...restData, ...prevEntry };
+
         if (!lat || !lng) {
           next[v.id] = {
-            ...restData,
-            ...next[v.id],
+            ...positionalBase,
             is_online: isOnline,
             status: derivedStatus,
             statusSinceMs,
@@ -141,10 +151,10 @@ export function useVehicleLocations({
           });
         }
 
-        // WS live data takes priority for positional fields; REST is authoritative for is_online
+        // A WS-updated prev entry only keeps positional priority when it's newer
+        // than this REST snapshot; REST is always authoritative for is_online/status.
         next[v.id] = {
-          ...restData,
-          ...next[v.id],
+          ...positionalBase,
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,

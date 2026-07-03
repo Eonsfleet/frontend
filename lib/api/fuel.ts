@@ -300,12 +300,12 @@ export const getFuelVehicles = async (params?: FuelVehicleListParams): Promise<F
     return response.data
 }
 
-export const getVehicleCurrentFuel = async (vehicleId: number): Promise<{ data: { vehicle: FuelVehicle['attributes'] & { id: number; device_has_fuel: boolean }; fuel_level: FuelVehicle['fuel_level'] } }> => {
+export const getVehicleCurrentFuel = async (vehicleId: string | number): Promise<{ data: { vehicle: FuelVehicle['attributes'] & { id: number; device_has_fuel: boolean }; fuel_level: FuelVehicle['fuel_level'] } }> => {
     const response = await apiClient.get(`/fuel/vehicles/${vehicleId}/current`)
     return response.data
 }
 
-export const getVehicleFuelHistory = async (vehicleId: number, params?: { start_date?: string; end_date?: string }): Promise<{ data: { history: Array<{ timestamp: string; fuel_level_liters: number; fuel_level_percent: number; data_quality_score: number }> } }> => {
+export const getVehicleFuelHistory = async (vehicleId: string | number, params?: { start_date?: string; end_date?: string }): Promise<{ data: { history: Array<{ timestamp: string; fuel_level_liters: number; fuel_level_percent: number; data_quality_score: number }> } }> => {
     const response = await apiClient.get(`/fuel/vehicles/${vehicleId}/history`, { params })
     return response.data
 }

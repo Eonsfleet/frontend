@@ -19,7 +19,7 @@ interface BottomCardsProps {
 
 function CardShell({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 min-w-[240px] shrink-0">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 h-full">
       <div className="flex items-center gap-2 mb-2.5">
         <Icon className="h-3.5 w-3.5 text-blue-600" />
         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</span>
@@ -109,7 +109,7 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   const sim = simLabel(attrs.status ?? device?.status);
 
   return (
-    <div className="flex items-stretch gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
+    <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
       <CardShell icon={Route} title="Current Trip">
         {isLoadingTrip ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />

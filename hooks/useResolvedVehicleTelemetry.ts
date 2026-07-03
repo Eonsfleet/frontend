@@ -28,7 +28,7 @@ export function useResolvedVehicleTelemetry(
 
   const { data: currentFuelData, isLoading: isFuelLoading } = useQuery({
     queryKey: ["vehicle-current-fuel", vehicleId],
-    queryFn: () => getVehicleCurrentFuel(Number(vehicleId)),
+    queryFn: () => getVehicleCurrentFuel(vehicleId!),
     enabled: isActive && !!vehicleId,
     refetchInterval: 30_000,
   });

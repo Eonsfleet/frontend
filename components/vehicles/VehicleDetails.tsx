@@ -96,14 +96,14 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
 
   const { data: fuelResponse, isLoading: isLoadingFuel } = useQuery({
     queryKey: ["vehicle-fuel", vehicle.id],
-    queryFn: () => getVehicleCurrentFuel(Number(vehicle.id)),
+    queryFn: () => getVehicleCurrentFuel(vehicle.id),
     refetchInterval: 30000,
   });
 
   const { data: fuelHistoryResponse, isLoading: isLoadingFuelHistory } =
     useQuery({
       queryKey: ["vehicle-fuel-history", vehicle.id],
-      queryFn: () => getVehicleFuelHistory(Number(vehicle.id)),
+      queryFn: () => getVehicleFuelHistory(vehicle.id),
     });
 
   // Try embedded current_driver array first, fall back to query result
