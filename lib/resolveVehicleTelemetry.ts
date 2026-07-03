@@ -26,6 +26,10 @@ export interface ResolvedVehicleTelemetryInput {
     lat?: number;
     lng?: number;
     lastUpdate?: string;
+    /** vehicle.last_packet_received_at (device-level, server-recorded receipt time) — the
+     * same underlying value the Device tab shows as "Last Packet Received", so "Last Update"
+     * can stay in sync with it instead of drifting from a WS packet's own embedded timestamp. */
+    lastPacketReceivedAt?: string | null;
     address?: string | null;
     heading?: number;
     rpm?: number;
@@ -92,6 +96,11 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
       selectedVehicle.attributes?.last_packet_received_at ??
       rel?.last_packet_received_at ??
       rel?.created_at,
+    lastPacketReceivedAt:
+      selectedVehicle.attributes?.last_packet_received_at ??
+      loc?.lastPacket ??
+      rel?.last_packet_received_at ??
+      null,
     address: loc?.address ?? null,
     heading: loc?.heading ?? 0,
     rpm: loc?.engine_rpm,
@@ -176,10 +185,19 @@ export function resolveVehicleTelemetry({
   // Not every device/protocol reports engine hours — surface it only when the
   // device actually sends it rather than fabricating a value from unrelated data.
   const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;
-  // timestamp_utc is the server's ingestion time — always fresh. telemetry.gps_datetime
-  // is the device's own clock, which can report a bogus fallback date before the
-  // device acquires a GPS fix, so it's only a fallback, not the primary source.
-  const liveLastUpdate = telemetry?.timestamp_utc ?? telemetry?.gps_datetime ?? vehicle?.lastUpdate;
+  // "Last Update" must sync with "last packet received" (shown on the Device
+  // tab from vehicle.last_packet_received_at) rather than drift from it — so
+  // it's the primary source here, not telemetry.gps_datetime (the device's own
+  // clock, which can report a bogus fallback date before acquiring a GPS fix).
+  // A live WS packet's timestamp_utc only wins when it's actually newer than
+  // the last REST-recorded receipt time, so streaming still feels live without
+  // ever showing an earlier moment than what "last packet received" reports.
+  const wsTimestampMs = telemetry?.timestamp_utc ? new Date(telemetry.timestamp_utc).getTime() : 0;
+  const restReceivedMs = vehicle?.lastPacketReceivedAt ? new Date(vehicle.lastPacketReceivedAt).getTime() : 0;
+  const liveLastUpdate =
+    wsTimestampMs > restReceivedMs
+      ? telemetry?.timestamp_utc
+      : (vehicle?.lastPacketReceivedAt ?? telemetry?.timestamp_utc ?? telemetry?.gps_datetime ?? vehicle?.lastUpdate);
   const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
   const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
   const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
