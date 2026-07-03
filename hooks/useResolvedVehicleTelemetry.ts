@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as trackingApi from "@/lib/api/tracking";
 import { getVehicleCurrentFuel } from "@/lib/api/fuel";
-import { reverseGeocode } from "@/lib/gps";
 import { useVehicleTelemetry } from "@/hooks/useVehicleTelemetry";
 import { resolveVehicleTelemetry, type ResolvedVehicleTelemetryInput } from "@/lib/resolveVehicleTelemetry";
 import type { VehicleTelemetry } from "@/types";
@@ -40,17 +39,6 @@ export function useResolvedVehicleTelemetry(
     (vehicle as Record<string, unknown> | null)?.imei as string | undefined,
   );
 
-  const liveAddress = telemetry?.address ?? vehicle?.address;
-  const lat = telemetry?.latitude ?? vehicle?.lat;
-  const lng = telemetry?.longitude ?? vehicle?.lng;
-  const { data: geocodedAddress, isFetching: isGeocoding } = useQuery({
-    queryKey: ["reverse-geocode", lat, lng],
-    queryFn: () => reverseGeocode(lat!, lng!),
-    enabled: isActive && !liveAddress && !!lat && !!lng,
-    staleTime: 5 * 60_000,
-  });
-  const address = liveAddress ?? geocodedAddress ?? (isGeocoding ? "Geocoding..." : "Unknown location");
-
   const apiFuel = currentFuelData?.data?.fuel_level;
   const meta = (telemetry as VehicleTelemetry & { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
   const currentBatteryV = (meta.battery_voltage as number | string | undefined) ?? telemetry?.battery_voltage ?? vehicle?.voltage;
@@ -81,7 +69,6 @@ export function useResolvedVehicleTelemetry(
 
   return {
     ...resolved,
-    address,
     isLoadingSensors,
     isFuelLoading,
   };
