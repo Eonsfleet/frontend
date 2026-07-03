@@ -7,23 +7,29 @@ import type { VehicleDevice } from "@/types";
 interface DeviceTabProps {
   device: VehicleDevice | null | undefined;
   resolved: ResolvedVehicleTelemetry;
-  /** Raw response from getDeviceStatus(imei) — shape varies by device/protocol, read defensively */
-  deviceStatusData?: any;
+  /** Response from getDeviceById(id) — GET /devices/{id}, the DeviceResource shape (attributes + relationships.hardware) */
+  deviceInfoData?: any;
 }
 
 /**
  * Expanded technical detail behind the Device Status bottom card — every field
  * here is intentionally NOT shown on that card (model, network, battery voltage,
  * fuel, and SIM status live there instead) to avoid repeating the same data.
+ *
+ * Firmware version has no backing field anywhere in the backend schema (confirmed
+ * against the devices table/Device model/DeviceResource) — shown as "—" until the
+ * backend adds it, rather than reading a field that doesn't exist. "SIM Number" is
+ * approximated from the device's registered phone number, since there's no
+ * separate ICCID/SIM field either.
  */
-export function DeviceTab({ device, resolved, deviceStatusData }: DeviceTabProps) {
-  const d = deviceStatusData?.data ?? {};
+export function DeviceTab({ device, resolved, deviceInfoData }: DeviceTabProps) {
+  const attrs = deviceInfoData?.data?.attributes ?? {};
 
   return (
     <div className="space-y-1 p-1">
-      <TelemetryRow label="IMEI" value={device?.imei ?? device?.data?.imei} />
-      <TelemetryRow label="Firmware" value={d.firmware_version ?? d.firmware} />
-      <TelemetryRow label="SIM Number" value={d.sim_number ?? d.phone ?? device?.phone} />
+      <TelemetryRow label="IMEI" value={device?.imei ?? device?.data?.imei ?? attrs.device_id} />
+      <TelemetryRow label="Firmware" value={null} />
+      <TelemetryRow label="SIM Number" value={attrs.phone_number ?? device?.phone} />
       <TelemetryRow
         label="Signal Quality"
         value={resolved.rssi != null ? `${resolved.rssi} dBm` : resolved.satellites != null ? `${resolved.satellites} sats` : null}

@@ -32,8 +32,9 @@ import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
 import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
 import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
 import { getDriverById } from "@/lib/api/drivers";
+import { getCurrentDriver } from "@/lib/api/vehicles";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
-import { getDeviceStatus } from "@/lib/api/tracking";
+import { getDeviceById } from "@/lib/api/tracking";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { DriverTab } from "./tabs/DriverTab";
 import { TripTab } from "./tabs/TripTab";
@@ -79,16 +80,26 @@ export function AssetPanel({
   const vehicleSnapshot = useMemo(() => buildVehicleSnapshot(selectedVehicle, loc), [selectedVehicle, loc]);
   const resolved = useResolvedVehicleTelemetry(selectedVehicle?.id ?? null, vehicleSnapshot, isOpen && !!selectedVehicle);
 
-  const currentDriverRaw = selectedVehicle?.relationships?.current_driver;
-  const driverRef = Array.isArray(currentDriverRaw) ? currentDriverRaw[0] : currentDriverRaw;
-  const driverId = driverRef?.id ?? null;
-  const assignedDate = !Array.isArray(currentDriverRaw) ? currentDriverRaw?.assigned_date : undefined;
+  // The vehicle's embedded relationships.current_driver (Vehicle::operator on the
+  // backend) picks whoever has the latest assigned_date WITHOUT excluding
+  // deassigned drivers, so it can show a stale/former driver. GET
+  // /vehicles/{id}/current-driver correctly filters to deassigned_date IS NULL —
+  // use it as the source of truth for which driver is current, then still fetch
+  // the full profile by id for the Driver tab's fields.
+  const { data: currentDriverData, isLoading: isLoadingCurrentDriver } = useQuery({
+    queryKey: ["current-driver", selectedVehicle?.id],
+    queryFn: () => getCurrentDriver(selectedVehicle!.id),
+    enabled: isOpen && !!selectedVehicle && activeTab === "driver",
+  });
+  const driverId = currentDriverData?.data?.relationships?.driver?.id ?? null;
+  const assignedDate = currentDriverData?.data?.attributes?.assigned_date ?? null;
 
-  const { data: driverData, isLoading: isLoadingDriver } = useQuery({
+  const { data: driverData, isLoading: isLoadingDriverProfile } = useQuery({
     queryKey: ["driver", driverId],
     queryFn: () => getDriverById(driverId!),
     enabled: isOpen && !!driverId && activeTab === "driver",
   });
+  const isLoadingDriver = isLoadingCurrentDriver || isLoadingDriverProfile;
 
   const { data: tripData, isLoading: isLoadingTrip } = useQuery({
     queryKey: ["active-trip", selectedVehicle?.id],
@@ -96,11 +107,15 @@ export function AssetPanel({
     enabled: isOpen && !!selectedVehicle && activeTab === "trip",
   });
 
-  const imei = selectedVehicle?.relationships?.device?.imei ?? selectedVehicle?.relationships?.device?.data?.imei;
-  const { data: deviceStatusData } = useQuery({
-    queryKey: ["device-status", imei],
-    queryFn: () => getDeviceStatus(imei),
-    enabled: isOpen && !!imei && activeTab === "device",
+  // /devices/{id} returns the device HARDWARE record (imei, phone number,
+  // online status, linked hardware model) — distinct from /tracker/{imei}
+  // (getDeviceStatus), which only returns GPS telemetry and never included
+  // firmware/sim/model fields the Device tab was reading from it.
+  const deviceRecordId = selectedVehicle?.relationships?.device?.id ?? selectedVehicle?.relationships?.device?.data?.id;
+  const { data: deviceInfoData } = useQuery({
+    queryKey: ["device-info", deviceRecordId],
+    queryFn: () => getDeviceById(deviceRecordId),
+    enabled: isOpen && !!deviceRecordId && activeTab === "device",
   });
 
   if (!selectedVehicle) return null;
@@ -290,7 +305,7 @@ export function AssetPanel({
           <TripTab trip={tripData} isLoading={isLoadingTrip} />
         </TabsContent>
         <TabsContent value="device" className="flex-1 overflow-y-auto p-4 m-0">
-          <DeviceTab device={selectedVehicle.relationships?.device} resolved={resolved} deviceStatusData={deviceStatusData} />
+          <DeviceTab device={selectedVehicle.relationships?.device} resolved={resolved} deviceInfoData={deviceInfoData} />
         </TabsContent>
         <TabsContent value="packets" className="flex-1 min-h-0 m-0">
           <PacketStreamTab vehicleId={String(selectedVehicle.id)} plate={plate} />

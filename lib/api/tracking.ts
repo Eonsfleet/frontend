@@ -39,6 +39,17 @@ export const getDevices = async (params?: any): Promise<{ data: { devices: any[]
     return res.data
 }
 
+/**
+ * Device hardware record (IMEI, phone number, online status, linked hardware
+ * model) — distinct from getDeviceStatus, which hits /tracker/{imei} and only
+ * returns GPS telemetry, not device attributes. `id` is the device's own DB
+ * id/uuid (relationships.device.id on a vehicle), not its IMEI.
+ */
+export const getDeviceById = async (id: string | number) => {
+    const res = await apiClient.get(`/devices/${id}`)
+    return res.data
+}
+
 export const getTripPlayback = async (vehicleId: string | number, tripId: string | number, params?: {
     include_gps_points?: boolean
     include_events?: boolean

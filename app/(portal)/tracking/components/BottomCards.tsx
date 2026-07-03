@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Route, Navigation, Cpu, Loader2, SignalHigh, SignalMedium, SignalLow, SignalZero } from "lucide-react";
 import { format, formatDistanceStrict } from "date-fns";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
-import { getDeviceStatus } from "@/lib/api/tracking";
+import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage } from "@/lib/resolveVehicleTelemetry";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
@@ -59,11 +59,13 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
     enabled: !!selectedVehicle,
   });
 
-  const imei = selectedVehicle?.relationships?.device?.imei ?? selectedVehicle?.relationships?.device?.data?.imei;
-  const { data: deviceStatusData } = useQuery({
-    queryKey: ["device-status", imei],
-    queryFn: () => getDeviceStatus(imei),
-    enabled: !!imei,
+  // /devices/{id} (device HARDWARE record) — not /tracker/{imei}, which only
+  // returns GPS telemetry and never included model/network/SIM fields.
+  const deviceRecordId = selectedVehicle?.relationships?.device?.id ?? selectedVehicle?.relationships?.device?.data?.id;
+  const { data: deviceInfoData } = useQuery({
+    queryKey: ["device-info", deviceRecordId],
+    queryFn: () => getDeviceById(deviceRecordId),
+    enabled: !!deviceRecordId,
   });
 
   const lastUpdateRelative = useRelativeTime(loc?.lastUpdate ?? loc?.lastPacket);
@@ -76,10 +78,11 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
   const tripDuration = tripStart ? formatDistanceStrict(new Date(tripStart), new Date()) : null;
   const tripStops = trip?.attributes?.routes?.filter((r: any) => r.is_stop_point).length ?? null;
 
-  const d = deviceStatusData?.data ?? {};
+  const attrs = deviceInfoData?.data?.attributes ?? {};
+  const hardware = deviceInfoData?.data?.relationships?.hardware;
   const device = selectedVehicle.relationships?.device;
   const signal = gpsSignal(loc?.satellites);
-  const sim = simLabel(d.sim_status ?? device?.status);
+  const sim = simLabel(attrs.status ?? device?.status);
 
   return (
     <div className="flex items-stretch gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
@@ -138,10 +141,11 @@ export function BottomCards({ selectedVehicle, loc, hasActiveAlarm = false }: Bo
               </span>
             }
           />
-          <Stat label="Network" value={d.network ?? d.network_type ?? device?.country} />
+          {/* No carrier/network field exists in the backend yet — shown as "—" until added, not faked from country/etc. */}
+          <Stat label="Network" value={null} />
           <Stat label="Battery" value={formatVoltage(loc?.battery_voltage)} />
           <Stat label="Fuel" value={(loc?.fuel_liters ?? loc?.fuel_level_liters) != null ? `${loc.fuel_liters ?? loc.fuel_level_liters}L` : null} />
-          <Stat label="Device" value={d.model ?? d.device_model} />
+          <Stat label="Device" value={hardware?.name} />
           <Stat label="SIM" value={sim} />
         </div>
       </CardShell>
