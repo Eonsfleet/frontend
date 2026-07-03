@@ -57,4 +57,9 @@ describe('DiagnosticsTab', () => {
     const dashes = screen.getAllByText('—')
     expect(dashes.length).toBeGreaterThan(10)
   })
+
+  it('falls back to raw string display instead of a placeholder when a numeric-suffixed field arrives as a non-numeric value', () => {
+    render(<DiagnosticsTab resolved={{ ...baseResolved, oilLevel: 'normal' }} />)
+    expect(screen.getByText('normal')).toBeInTheDocument()
+  })
 })

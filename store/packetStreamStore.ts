@@ -8,6 +8,8 @@ interface PacketStreamState {
   isPaused: boolean;
   /** Count of packets dropped while paused, per vehicle — shown as "Paused — N events not shown" */
   droppedWhilePaused: Record<string, number>;
+  /** Last entry seen per vehicle (paused or not), used for dedup independent of the visible buffer */
+  lastSeen: Record<string, PacketStreamEntry>;
   push: (entry: PacketStreamEntry) => void;
   setPaused: (paused: boolean) => void;
   setMaxRows: (n: number) => void;
@@ -19,11 +21,21 @@ export const usePacketStreamStore = create<PacketStreamState>((set, get) => ({
   maxRows: PACKET_STREAM_MAX_ROWS_DEFAULT,
   isPaused: false,
   droppedWhilePaused: {},
+  lastSeen: {},
 
   push: (entry) => {
-    const { isPaused, maxRows, buffers, droppedWhilePaused } = get();
+    const { isPaused, maxRows, buffers, droppedWhilePaused, lastSeen } = get();
+    const mostRecent = lastSeen[entry.vehicleId];
+    const isDuplicate =
+      mostRecent != null &&
+      mostRecent.type === entry.type &&
+      entry.receivedAt - mostRecent.receivedAt < 3000 &&
+      JSON.stringify(mostRecent.raw) === JSON.stringify(entry.raw);
+    if (isDuplicate) return;
+
     if (isPaused) {
       set({
+        lastSeen: { ...lastSeen, [entry.vehicleId]: entry },
         droppedWhilePaused: {
           ...droppedWhilePaused,
           [entry.vehicleId]: (droppedWhilePaused[entry.vehicleId] ?? 0) + 1,
@@ -31,15 +43,10 @@ export const usePacketStreamStore = create<PacketStreamState>((set, get) => ({
       });
       return;
     }
+
     const existing = buffers[entry.vehicleId] ?? [];
-    const [mostRecent] = existing;
-    const isDuplicate =
-      mostRecent != null &&
-      mostRecent.type === entry.type &&
-      entry.receivedAt - mostRecent.receivedAt < 3000 &&
-      JSON.stringify(mostRecent.raw) === JSON.stringify(entry.raw);
-    if (isDuplicate) return;
     set({
+      lastSeen: { ...lastSeen, [entry.vehicleId]: entry },
       buffers: {
         ...buffers,
         [entry.vehicleId]: [entry, ...existing].slice(0, maxRows),
@@ -60,9 +67,10 @@ export const usePacketStreamStore = create<PacketStreamState>((set, get) => ({
 
   clear: (vehicleId) =>
     set((state) => {
-      if (!vehicleId) return { buffers: {}, droppedWhilePaused: {} };
+      if (!vehicleId) return { buffers: {}, droppedWhilePaused: {}, lastSeen: {} };
       const { [vehicleId]: _omit, ...restBuffers } = state.buffers;
       const { [vehicleId]: _omitDrop, ...restDropped } = state.droppedWhilePaused;
-      return { buffers: restBuffers, droppedWhilePaused: restDropped };
+      const { [vehicleId]: _omitSeen, ...restSeen } = state.lastSeen;
+      return { buffers: restBuffers, droppedWhilePaused: restDropped, lastSeen: restSeen };
     }),
 }));

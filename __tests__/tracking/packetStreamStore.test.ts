@@ -16,7 +16,7 @@ function entry(overrides: Partial<PacketStreamEntry>): PacketStreamEntry {
 
 describe('packetStreamStore dedup', () => {
   beforeEach(() => {
-    usePacketStreamStore.setState({ buffers: {}, droppedWhilePaused: {}, isPaused: false, maxRows: 200 })
+    usePacketStreamStore.setState({ buffers: {}, droppedWhilePaused: {}, isPaused: false, maxRows: 200, lastSeen: {} })
   })
 
   it('drops a duplicate payload delivered on a second channel within the dedup window', () => {
@@ -47,5 +47,13 @@ describe('packetStreamStore dedup', () => {
     push(entry({ id: 'b', receivedAt: 5000, raw: { speed: 2 } }))
     push(entry({ id: 'c', receivedAt: 9000, raw: { speed: 3 } }))
     expect(usePacketStreamStore.getState().buffers['1']).toHaveLength(2)
+  })
+
+  it('does not double-count a duplicate delivery in droppedWhilePaused', () => {
+    usePacketStreamStore.setState({ isPaused: true })
+    const { push } = usePacketStreamStore.getState()
+    push(entry({ id: 'a', receivedAt: 1000, raw: { speed: 10 } }))
+    push(entry({ id: 'b', receivedAt: 1500, raw: { speed: 10 } }))
+    expect(usePacketStreamStore.getState().droppedWhilePaused['1']).toBe(1)
   })
 })

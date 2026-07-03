@@ -14,7 +14,7 @@ interface DiagnosticsTabProps {
 function fmt(value: number | string | null | undefined, suffix = ""): string | null {
   if (value === null || value === undefined || value === "") return null;
   const num = typeof value === "string" ? parseFloat(value) : value;
-  if (typeof num !== "number" || isNaN(num)) return null;
+  if (typeof num !== "number" || isNaN(num)) return String(value);
   return `${num}${suffix}`;
 }
 
