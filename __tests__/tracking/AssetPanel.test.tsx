@@ -84,20 +84,4 @@ describe('AssetPanel', () => {
     )
     expect(screen.getByAltText('Toyota Hilux')).toHaveAttribute('src', '/photo.jpg')
   })
-
-  it('includes a Diagnostics tab trigger', () => {
-    render(
-      <AssetPanel
-        isOpen
-        onClose={vi.fn()}
-        selectedVehicle={vehicle}
-        locations={{}}
-        vehicles={[vehicle]}
-        onLiveTrack={vi.fn()}
-        onPlayback={vi.fn()}
-      />,
-      { wrapper: Wrapper },
-    )
-    expect(screen.getByRole('tab', { name: 'Diagnostics' })).toBeInTheDocument()
-  })
 })

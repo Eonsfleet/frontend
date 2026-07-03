@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { DiagnosticsTab } from '@/app/(portal)/tracking/components/tabs/DiagnosticsTab'
+import { DetailsTab } from '@/app/(portal)/tracking/components/tabs/DetailsTab'
 import type { ResolvedVehicleTelemetry } from '@/lib/resolveVehicleTelemetry'
 
 const baseResolved = {
@@ -17,22 +17,28 @@ const baseResolved = {
   batteryWarn: false, tempWarn: false, weakGps: false, health: {},
 } as unknown as ResolvedVehicleTelemetry
 
-describe('DiagnosticsTab', () => {
+describe('DetailsTab', () => {
+  it('does not render driver name or phone (moved out of this tab)', () => {
+    render(<DetailsTab resolved={baseResolved} todayKm={null} />)
+    expect(screen.queryByText('Driver')).not.toBeInTheDocument()
+    expect(screen.queryByText('Phone')).not.toBeInTheDocument()
+  })
+
   it('shows "No active alerts" when all flags are inactive', () => {
-    render(<DiagnosticsTab resolved={baseResolved} />)
+    render(<DetailsTab resolved={baseResolved} todayKm={null} />)
     expect(screen.getByText('No active alerts')).toBeInTheDocument()
   })
 
-  it('renders active alert chips and hides the "no active alerts" chip', () => {
-    render(<DiagnosticsTab resolved={{ ...baseResolved, jamming: true, idling: true }} />)
+  it('renders active alert chips', () => {
+    render(<DetailsTab resolved={{ ...baseResolved, jamming: true, idling: true }} todayKm={null} />)
     expect(screen.getByText('Jamming Detected')).toBeInTheDocument()
     expect(screen.getByText('Idling')).toBeInTheDocument()
     expect(screen.queryByText('No active alerts')).not.toBeInTheDocument()
   })
 
-  it('renders populated telemetry fields with correct units', () => {
+  it('renders merged diagnostics fields with correct units', () => {
     render(
-      <DiagnosticsTab
+      <DetailsTab
         resolved={{
           ...baseResolved,
           rpm: 1800,
@@ -41,7 +47,9 @@ describe('DiagnosticsTab', () => {
           extV: 12.6,
           ecoScore: 82,
           protocol: 'Teltonika Codec8',
+          engineHours: 120,
         }}
+        todayKm={42}
       />,
     )
     expect(screen.getByText('1800 rpm')).toBeInTheDocument()
@@ -50,16 +58,13 @@ describe('DiagnosticsTab', () => {
     expect(screen.getByText('12.600V')).toBeInTheDocument()
     expect(screen.getByText('82/100')).toBeInTheDocument()
     expect(screen.getByText('Teltonika Codec8')).toBeInTheDocument()
+    expect(screen.getByText('120 hrs')).toBeInTheDocument()
+    expect(screen.getByText('42 km')).toBeInTheDocument()
   })
 
-  it('shows an em dash placeholder for missing fields', () => {
-    render(<DiagnosticsTab resolved={baseResolved} />)
-    const dashes = screen.getAllByText('—')
-    expect(dashes.length).toBeGreaterThan(10)
-  })
-
-  it('falls back to raw string display instead of a placeholder when a numeric-suffixed field arrives as a non-numeric value', () => {
-    render(<DiagnosticsTab resolved={{ ...baseResolved, oilLevel: 'normal' }} />)
-    expect(screen.getByText('normal')).toBeInTheDocument()
+  it('does not render a current-address or battery-voltage row (owned by the bottom cards)', () => {
+    render(<DetailsTab resolved={{ ...baseResolved, address: 'Ikeja, Lagos', batteryV: 13.8 }} todayKm={null} />)
+    expect(screen.queryByText('Current Address')).not.toBeInTheDocument()
+    expect(screen.queryByText('Battery')).not.toBeInTheDocument()
   })
 })

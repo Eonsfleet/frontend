@@ -280,7 +280,7 @@ export default function TrackingPage() {
           "h-screen w-full grid overflow-hidden bg-white",
           selectedVehicle ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]",
           "grid-cols-1",
-          selectedVehicle ? "lg:grid-cols-[320px_1fr_480px]" : "lg:grid-cols-[320px_1fr_0px]",
+          selectedVehicle ? "lg:grid-cols-[320px_1fr_400px]" : "lg:grid-cols-[320px_1fr_0px]",
           "transition-[grid-template-columns] duration-300 ease-in-out",
         )}
       >

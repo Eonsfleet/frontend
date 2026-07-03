@@ -78,13 +78,13 @@ describe('TrackingPage grid shell', () => {
     expect(screen.queryByText('Velocity')).toBeNull()
   })
 
-  it('widens the detail panel to 480px and keeps the sidebar/detail panel full height (row-span-2) when a vehicle is selected', async () => {
+  it('sets the detail panel to 400px and keeps the sidebar/detail panel full height (row-span-2) when a vehicle is selected', async () => {
     const { container } = render(<TrackingPage />, { wrapper: Wrapper })
     const row = await screen.findByRole('button', { name: /ABC-123-XD/ })
     fireEvent.click(row)
 
     const grid = container.querySelector('.grid') as HTMLElement
-    expect(grid.className).toContain('lg:grid-cols-[320px_1fr_480px]')
+    expect(grid.className).toContain('lg:grid-cols-[320px_1fr_400px]')
     expect(container.querySelectorAll('.row-start-1.row-span-2')).toHaveLength(2)
   })
 })
