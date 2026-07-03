@@ -9,6 +9,7 @@ import {
   Layers,
   Radio,
   Menu,
+  Diamond,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import type { TrackingMapStyle } from "../utils";
 
 const MAP_STYLE_LABEL: Record<TrackingMapStyle, string> = {
@@ -33,6 +35,20 @@ const MAP_STYLE_ICON: Record<TrackingMapStyle, typeof MapIcon> = {
   standard: MapIcon,
   satellite: Satellite,
   hybrid: Layers,
+};
+
+const CONNECTION_STATUS_LABEL: Record<string, string> = {
+  connected: "Live connection active",
+  connecting: "Reconnecting…",
+  disconnected: "Connection lost",
+  failed: "Connection failed",
+};
+
+const CONNECTION_STATUS_COLOR: Record<string, string> = {
+  connected: "text-blue-600 fill-blue-600",
+  connecting: "text-amber-500 fill-amber-500",
+  disconnected: "text-rose-600 fill-rose-600",
+  failed: "text-rose-600 fill-rose-600",
 };
 
 interface TrackingTopBarProps {
@@ -65,14 +81,16 @@ export function TrackingTopBar({
 }: TrackingTopBarProps) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const CurrentStyleIcon = MAP_STYLE_ICON[mapStyle];
+  const { status: connectionStatus } = useConnectionStatus();
 
   const iconButtonClass =
     "h-9 w-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors";
   const activeIconButtonClass = "bg-blue-50 text-blue-600 hover:bg-blue-100";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-slate-200 bg-white shadow-lg">
-      <div className="relative flex-1 max-w-md">
+    <div className="flex items-start justify-between gap-3">
+      {/* Search — its own floating pill, independent from the controls pill */}
+      <div className="relative flex-1 max-w-md rounded-2xl border border-slate-200 bg-white shadow-lg">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
           type="text"
@@ -82,12 +100,12 @@ export function TrackingTopBar({
             if (e.key === "Enter") onLocationSearchSubmit();
           }}
           placeholder="Search location / address"
-          className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+          className="w-full h-10 pl-10 pr-4 rounded-2xl bg-transparent text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
         />
       </div>
 
-      {/* Desktop controls */}
-      <div className="hidden lg:flex items-center gap-2 ml-auto">
+      {/* Desktop controls — a separate floating pill, with a gap of map visible between it and search */}
+      <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-200 bg-white shadow-lg">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-10 px-3 rounded-xl border border-slate-200 flex items-center gap-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
@@ -130,13 +148,24 @@ export function TrackingTopBar({
         >
           <Layers className="h-4 w-4" />
         </button>
+
+        <div className="w-px h-5 bg-slate-200" />
+
+        <div
+          className="h-9 w-9 flex items-center justify-center"
+          role="status"
+          aria-label={CONNECTION_STATUS_LABEL[connectionStatus]}
+          title={CONNECTION_STATUS_LABEL[connectionStatus]}
+        >
+          <Diamond className={cn("h-4 w-4", CONNECTION_STATUS_COLOR[connectionStatus])} />
+        </div>
       </div>
 
-      {/* Mobile/tablet: collapse everything but search into one filters sheet */}
+      {/* Mobile/tablet: collapse everything but search into its own filters-sheet pill */}
       <button
         onClick={() => setMobileFiltersOpen(true)}
         aria-label="Map filters"
-        className="lg:hidden h-10 w-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600"
+        className="lg:hidden h-10 w-10 rounded-2xl border border-slate-200 bg-white shadow-lg flex items-center justify-center text-slate-600"
       >
         <Menu className="h-4 w-4" />
       </button>

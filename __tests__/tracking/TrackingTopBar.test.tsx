@@ -43,4 +43,18 @@ describe('TrackingTopBar', () => {
     expect(screen.queryByLabelText('Re-sync fleet data')).toBeNull()
     expect(screen.queryByLabelText('Fullscreen')).toBeNull()
   })
+
+  it('renders the search box and the desktop controls as two separate floating pills', () => {
+    const { container } = render(<TrackingTopBar {...baseProps} />)
+    const root = container.firstChild as HTMLElement
+    expect(root.className).toContain('justify-between')
+    const searchPill = screen.getByPlaceholderText('Search location / address').closest('div')
+    expect(searchPill?.className).toContain('rounded-2xl')
+    expect(searchPill?.className).toContain('shadow-lg')
+  })
+
+  it('renders a persistent connection status indicator', () => {
+    render(<TrackingTopBar {...baseProps} />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+  })
 })
