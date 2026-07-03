@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { normalizeTelemetry } from "@/lib/utils";
 import { Vehicle } from "@/types";
 import { isStaleOffline } from "../utils";
@@ -6,6 +7,7 @@ import { VehicleInterpolator } from "@/lib/vehicleInterpolation";
 import { buildPacketEntry } from "@/lib/packetStream";
 import { usePacketStreamStore } from "@/store/packetStreamStore";
 import { appendTrailPoint, type TrailPoint } from "@/lib/vehicleTrail";
+import { getVehicleLocation } from "@/lib/api/vehicles";
 
 interface UseVehicleLocationsProps {
   vehicles: Vehicle[];
@@ -52,6 +54,60 @@ export function useVehicleLocations({
   useEffect(() => {
     setTrails({});
   }, [selectedVehicleId]);
+
+  // Fresh, uncached single-vehicle snapshot fired the instant a vehicle is
+  // selected — GET /vehicles/{id}/location returns the same flat shape as the
+  // WS `.current.recent` packet (both built from
+  // TelemetryFormatHelper::fromVehicleLocation on the backend), so it can be
+  // normalized identically. This fills in fields the bulk /vehicles list never
+  // carries (satellites, battery voltage, GSM operator, engine metadata, ...)
+  // instead of leaving them blank until the fleet-wide 30s poll or the first
+  // WS packet for this specific vehicle arrives.
+  const { data: selectedVehicleSnapshot } = useQuery({
+    queryKey: ["vehicle-location-snapshot", selectedVehicleId],
+    queryFn: () => getVehicleLocation(selectedVehicleId!),
+    enabled: !!selectedVehicleId,
+    staleTime: 0,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!selectedVehicleSnapshot || !selectedVehicleId) return;
+    const normalized = normalizeTelemetry(selectedVehicleSnapshot);
+    if (!normalized) return;
+
+    setLocations((prev) => {
+      const prevEntry = prev[selectedVehicleId];
+      const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+      const snapshotTs = normalized.timestamp_utc || normalized.gps_datetime;
+      const snapshotUpdateMs = snapshotTs ? new Date(snapshotTs).getTime() : 0;
+      // A WS packet (or the bulk-list seed) may have already landed and be
+      // newer than this one-off snapshot — never let it clobber fresher data.
+      if (prevEntry && prevUpdateMs > snapshotUpdateMs) return prev;
+
+      return {
+        ...prev,
+        [selectedVehicleId]: {
+          ...prevEntry,
+          ...normalized,
+          // This snapshot is "last stored location," not "online right now" —
+          // leave connectivity state to the bulk-list seed / WS status stream
+          // rather than asserting online/offline from a single REST read.
+          status: prevEntry?.status ?? normalized.status,
+          statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
+          is_online: prevEntry?.is_online ?? true,
+          lastUpdate: snapshotTs ?? prevEntry?.lastUpdate,
+          fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
+          fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+          ignition:
+            normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
+              ? true
+              : (prevEntry?.ignition ?? false),
+          raw: normalized,
+        },
+      };
+    });
+  }, [selectedVehicleSnapshot, selectedVehicleId]);
 
   const pushIfSelected = (idKey: string, event: string, payload: any) => {
     if (selectedIdRef.current != null && String(selectedIdRef.current) === idKey) {

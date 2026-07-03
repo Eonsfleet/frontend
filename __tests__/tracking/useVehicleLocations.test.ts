@@ -1,11 +1,17 @@
+import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useVehicleLocations } from '@/app/(portal)/tracking/hooks/useVehicleLocations'
 
 vi.mock('@/store/packetStreamStore', () => ({
   usePacketStreamStore: {
     getState: () => ({ push: vi.fn() }),
   },
+}))
+
+vi.mock('@/lib/api/vehicles', () => ({
+  getVehicleLocation: vi.fn().mockResolvedValue(null),
 }))
 
 function makeSubscribePrivate() {
@@ -16,6 +22,13 @@ function makeSubscribePrivate() {
   })
   return { subscribePrivate, handlers }
 }
+
+const Wrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(
+    QueryClientProvider,
+    { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+    children,
+  )
 
 const baseProps = {
   vehicles: [],
@@ -29,7 +42,7 @@ describe('useVehicleLocations trail buffer', () => {
     const { result, rerender } = renderHook(
       (props: { selectedVehicleId: string | null }) =>
         useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: props.selectedVehicleId }),
-      { initialProps: { selectedVehicleId: '42' } },
+      { initialProps: { selectedVehicleId: '42' }, wrapper: Wrapper },
     )
 
     const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
@@ -59,8 +72,9 @@ describe('useVehicleLocations trail buffer', () => {
 describe('useVehicleLocations lastUpdate/lastPacket timestamp priority', () => {
   it('prefers timestamp_utc (server ingestion time) over device-reported updated_at/gps_datetime', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()
-    const { result } = renderHook(() =>
-      useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
     )
     const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
 
@@ -84,8 +98,9 @@ describe('useVehicleLocations lastUpdate/lastPacket timestamp priority', () => {
 
   it('falls back lastPacket to timestamp_utc when last_packet_received_at is absent from the live packet', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()
-    const { result } = renderHook(() =>
-      useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
     )
     const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
 
@@ -101,5 +116,67 @@ describe('useVehicleLocations lastUpdate/lastPacket timestamp priority', () => {
     })
 
     expect(result.current.locations['42'].lastPacket).toBe('2026-07-03T12:00:00Z')
+  })
+})
+
+describe('useVehicleLocations selection-triggered snapshot seed', () => {
+  it('seeds satellites/battery/GSM fields from GET /vehicles/{id}/location the instant a vehicle is selected, ahead of any WS packet', async () => {
+    const { getVehicleLocation } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleLocation).mockResolvedValueOnce({
+      vehicle_id: '42',
+      latitude: 6.5,
+      longitude: 3.4,
+      speed: 0,
+      satellites: 6,
+      timestamp_utc: '2026-07-03T12:00:00Z',
+      metadata: { battery_voltage: '4.15v', active_gsm_operator: 62179 },
+    })
+
+    const { subscribePrivate } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: '42' }),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.locations['42']?.satellites).toBe(6))
+    expect(result.current.locations['42'].battery_voltage).toBe(4.15)
+    expect(result.current.locations['42'].active_gsm_operator).toBe(62179)
+  })
+
+  it('never lets the one-off snapshot overwrite a newer WS packet that already arrived', async () => {
+    const { getVehicleLocation } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleLocation).mockResolvedValueOnce({
+      vehicle_id: '42',
+      latitude: 6.5,
+      longitude: 3.4,
+      speed: 0,
+      satellites: 2,
+      timestamp_utc: '2026-07-03T11:00:00Z',
+    })
+
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: '42' }),
+      { wrapper: Wrapper },
+    )
+
+    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    act(() => {
+      locationHandler({
+        vehicle_id: '42',
+        latitude: 6.51,
+        longitude: 3.41,
+        speed: 40,
+        satellites: 9,
+        status: 'in_transit',
+        timestamp_utc: '2026-07-03T12:00:00Z',
+      })
+    })
+
+    // Let the snapshot's (already in-flight) promise resolve and its effect run.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(result.current.locations['42'].satellites).toBe(9)
+    expect(result.current.locations['42'].speed).toBe(40)
   })
 })

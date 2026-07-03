@@ -40,6 +40,19 @@ export const getVehicleById = async (id: string | number): Promise<VehicleDetail
     return response.data
 }
 
+/**
+ * Fresh, uncached single-vehicle location snapshot — GET /vehicles/{id}/location.
+ * Returns the same flat shape as the WS `.current.recent` broadcast (both are
+ * built from TelemetryFormatHelper::fromVehicleLocation on the backend), so the
+ * response can be fed straight through normalizeTelemetry(). Meant to seed a
+ * just-selected vehicle instantly, ahead of the fleet list's 30s poll cycle and
+ * before the first WS packet for that vehicle arrives.
+ */
+export const getVehicleLocation = async (id: string | number): Promise<any> => {
+    const response = await apiClient.get(`/vehicles/${id}/location`)
+    return response.data?.data ?? null
+}
+
 export const createVehicle = async (data: VehiclePayload): Promise<{ data: Vehicle }> => {
     const response = await apiClient.post<{ data: Vehicle }>('/vehicles', data)
     return response.data
