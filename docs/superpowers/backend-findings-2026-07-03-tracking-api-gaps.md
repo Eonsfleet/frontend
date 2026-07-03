@@ -190,3 +190,36 @@ to call the dedicated endpoint instead (see companion commit). No backend
 change requested here, just flagging that `Vehicle::operator` has this
 staleness footgun in case anything else in the codebase still relies on it
 for "who's the current driver" logic.
+
+## 7. Feature request — move reverse geocoding server-side
+
+`address` is a real field on the `LocationUpdated`/`NormalizedTelemetry`
+payload (`NormalizedTelemetry.php:62`), but per `AbstractDeviceProcessor.php:80`
+it's only ever populated from `$raw['address'] ?? null` — none of the three
+processors (Teltonika/CNOTE/Generic) ever set it themselves, and raw GPS
+trackers don't send a resolved address string. In practice this field is
+null for the overwhelming majority of packets.
+
+We've added a client-side stopgap in the frontend (reverse-geocoding via
+OpenStreetMap's Nominatim API, cached 5 minutes per coordinate pair) so the
+UI isn't permanently blank, but this is the wrong long-term place for it:
+
+- **No shared caching.** Every browser session that views a vehicle
+  re-geocodes the same coordinates independently. Multiple dispatchers
+  looking at the same vehicle each fire their own external API call.
+- **Nominatim's usage policy** caps free-tier usage at ~1 request/second and
+  explicitly discourages uncontrolled client-side/browser usage at volume —
+  server-side with caching is what they recommend.
+- **Zero frontend work if fixed server-side.** `address` is already part of
+  the broadcast payload and already read everywhere the frontend needs it
+  (asset list, bottom cards, map). If the backend populates it once at
+  ingestion (or lazily on first read, cached), every consumer starts working
+  with no frontend changes at all.
+
+Suggested approach: reverse-geocode once per unique (rounded) lat/lng pair —
+e.g. in `NormalizeGpsPacketAction` or `StoreVehicleLocationAction` — cache
+the result (Redis keyed by rounded coordinates, or a small `geocode_cache`
+table) so repeat lookups near the same location are free, and backfill
+`NormalizedTelemetry::address` before broadcasting. This is a nice-to-have,
+not a bug — the frontend's client-side fallback keeps things functional in
+the meantime.
