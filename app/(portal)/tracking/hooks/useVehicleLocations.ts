@@ -159,6 +159,11 @@ export function useVehicleLocations({
             ? (prevEntry?.statusSinceMs ?? Date.now())
             : Date.now();
 
+        const locAny = loc as any;
+        const attrAny = v.attributes as any;
+        const fuelPct = locAny?.fuel_level_percent ?? locAny?.fuel ?? attrAny?.fuel_level_percent ?? attrAny?.fuel ?? null;
+        const fuelL = locAny?.fuel_level_liters ?? locAny?.fuel_liters ?? attrAny?.fuel_level_liters ?? attrAny?.fuel_liters ?? null;
+
         const restData = {
           lat: lat ?? 0,
           lng: lng ?? 0,
@@ -170,6 +175,8 @@ export function useVehicleLocations({
           odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
+          fuel: fuelPct != null ? Number(fuelPct) : (prevEntry?.fuel ?? null),
+          fuel_liters: fuelL != null ? Number(fuelL) : (prevEntry?.fuel_liters ?? null),
           raw: prevEntry?.raw ?? loc,
         };
 

@@ -491,7 +491,7 @@ export default function TrackingPage() {
   const handleLiveTrack = useCallback(() => {
     const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
     if (loc?.lat && loc?.lng) {
-      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 18);
     }
   }, [selectedVehicle, locations]);
 
