@@ -68,15 +68,31 @@ export function VehicleListItem({
             {`${vehicle.attributes.make} ${vehicle.attributes.model}`}
           </p>
           <span className="text-[11px] text-slate-400 shrink-0">
-            {fuelPct != null
-              ? `${fuelPct}% · `
-              : fuelL != null
-                ? `${Number(fuelL).toFixed(1)}L · `
-                : ""}
             {loc?.speed ?? 0} km/h
           </span>
         </div>
-        <p className="text-[10px] text-slate-300 mt-0.5">{lastUpdate}</p>
+
+        {fuelPct != null ? (
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300",
+                    fuelPct < 20 ? "bg-rose-500" : fuelPct < 40 ? "bg-amber-500" : "bg-emerald-500",
+                  )}
+                  style={{ width: `${fuelPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-slate-500">
+                {fuelL != null ? `${Number(fuelL).toFixed(1)}L` : `${fuelPct}%`}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-300">{lastUpdate}</p>
+          </div>
+        ) : (
+          <p className="text-[10px] text-slate-300 mt-0.5">{lastUpdate}</p>
+        )}
       </div>
     </div>
   );

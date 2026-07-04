@@ -538,6 +538,8 @@ export default function TrackingPage() {
             isFilterActive={isFilterActive}
             onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
+            viewType={filters.viewType}
+            clusters={clusters}
           />
         </div>
 
@@ -602,6 +604,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
           />
         </div>
 
@@ -631,6 +634,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
           />
         </div>
 
@@ -648,6 +652,8 @@ export default function TrackingPage() {
           setSearchQuery={setSearchQuery}
           isFilterActive={isFilterActive}
           onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
+          viewType={filters.viewType}
+          clusters={clusters}
         />
       </div>
 

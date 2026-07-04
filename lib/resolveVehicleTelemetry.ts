@@ -82,10 +82,15 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     speed: loc?.speed ?? rel?.speed ?? 0,
     fuel: loc?.fuel ?? loc?.fuel_level_percent ?? 0,
     fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters,
+    fuel_consumed: loc?.fuel_consumed ?? (loc?.metadata as any)?.fuel_consumed ?? null,
+    fuel_used_gps: loc?.fuel_used_gps ?? (loc?.metadata as any)?.fuel_used_gps ?? null,
+    fuel_level_obd: loc?.fuel_level_obd ?? (loc?.metadata as any)?.fuel_level_obd ?? null,
+    fuel_source: loc?.fuel_source ?? (loc?.metadata as any)?.fuel_source ?? null,
     temp: loc?.engine_temperature ?? 0,
     status: loc?.status,
     voltage: loc?.battery_voltage,
     ext_voltage: loc?.external_voltage,
+    satellites: loc?.satellites ?? null,
     signal: loc?.satellites != null ? `${loc.satellites} Sats` : "---",
     ignition: loc?.ignition ?? false,
     odometer: loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
@@ -110,7 +115,7 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     jamming: loc?.jamming ?? false,
     immobilizer: loc?.immobilizer ?? false,
     driving_state: loc?.driving_state,
-    raw: loc?.raw ?? rel,
+    raw: loc?.raw ?? loc ?? rel,
   };
 }
 
@@ -174,7 +179,7 @@ export function resolveVehicleTelemetry({
   const liveHeading = telemetry?.heading ?? vehicle?.heading ?? 0;
   const liveIgnition = telemetry
     ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
-    : vehicle?.ignition;
+    : (vehicle?.ignition as any) === "on" || (vehicle?.ignition as any) === "1" || vehicle?.ignition === true;
   const liveMovement = telemetry?.movement ?? vehicle?.movement;
   const liveStatus = telemetry?.status ?? vehicle?.status;
   const liveLat = telemetry?.latitude ?? vehicle?.lat;
@@ -202,11 +207,68 @@ export function resolveVehicleTelemetry({
   const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
   const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
   const liveFuelRate =
-    meta.fuel_rate_gps ?? meta.fuel_rate ?? telemetry?.fuel_rate ?? raw.fuel_rate ?? vehicle?.fuel_rate;
-  const liveFuelConsumed = meta.fuel_consumed ?? telemetry?.fuel_consumed ?? raw.fuel_consumed;
-  const liveFuelUsedGps = meta.fuel_used_gps ?? telemetry?.fuel_used_gps ?? raw.fuel_used_gps;
-  const liveFuelLevelObd = meta.fuel_level_obd ?? telemetry?.fuel_level_obd ?? raw.fuel_level_obd;
-  const liveFuelSource = meta.fuel_source ?? telemetry?.fuel_source ?? raw.fuel_source;
+    meta.fuel_rate_gps ??
+    meta.fuelRateGps ??
+    meta.fuel_rate ??
+    meta.fuelRate ??
+    telemetry?.fuel_rate ??
+    telemetry?.fuelRate ??
+    raw.fuel_rate ??
+    raw.fuelRate ??
+    (raw.metadata as any)?.fuel_rate ??
+    (raw.metadata as any)?.fuelRate ??
+    (vehicle as any)?.fuel_rate ??
+    (vehicle as any)?.fuelRate ??
+    (vehicle as any)?.fuel_rate_gps ??
+    null;
+  const liveFuelConsumed =
+    meta.fuel_consumed ??
+    meta.fuelConsumed ??
+    telemetry?.fuel_consumed ??
+    telemetry?.fuelConsumed ??
+    raw.fuel_consumed ??
+    raw.fuelConsumed ??
+    (raw.metadata as any)?.fuel_consumed ??
+    (raw.metadata as any)?.fuelConsumed ??
+    (vehicle as any)?.fuel_consumed ??
+    (vehicle as any)?.fuelConsumed ??
+    null;
+  const liveFuelUsedGps =
+    meta.fuel_used_gps ??
+    meta.fuelUsedGps ??
+    telemetry?.fuel_used_gps ??
+    telemetry?.fuelUsedGps ??
+    raw.fuel_used_gps ??
+    raw.fuelUsedGps ??
+    (raw.metadata as any)?.fuel_used_gps ??
+    (raw.metadata as any)?.fuelUsedGps ??
+    (vehicle as any)?.fuel_used_gps ??
+    (vehicle as any)?.fuelUsedGps ??
+    null;
+  const liveFuelLevelObd =
+    meta.fuel_level_obd ??
+    meta.fuelLevelObd ??
+    telemetry?.fuel_level_obd ??
+    telemetry?.fuelLevelObd ??
+    raw.fuel_level_obd ??
+    raw.fuelLevelObd ??
+    (raw.metadata as any)?.fuel_level_obd ??
+    (raw.metadata as any)?.fuelLevelObd ??
+    (vehicle as any)?.fuel_level_obd ??
+    (vehicle as any)?.fuelLevelObd ??
+    null;
+  const liveFuelSource =
+    meta.fuel_source ??
+    meta.fuelSource ??
+    telemetry?.fuel_source ??
+    telemetry?.fuelSource ??
+    raw.fuel_source ??
+    raw.fuelSource ??
+    (raw.metadata as any)?.fuel_source ??
+    (raw.metadata as any)?.fuelSource ??
+    (vehicle as any)?.fuel_source ??
+    (vehicle as any)?.fuelSource ??
+    null;
   const liveEcoScore = meta.eco_score ?? telemetry?.eco_score ?? raw.eco_score ?? vehicle?.eco_score;
   const liveIdling = meta.idling ?? telemetry?.idling ?? raw.idling ?? vehicle?.idling ?? false;
   const liveJamming = meta.jamming ?? telemetry?.jamming ?? raw.jamming ?? vehicle?.jamming ?? false;

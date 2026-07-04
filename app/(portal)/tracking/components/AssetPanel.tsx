@@ -67,6 +67,7 @@ interface AssetPanelProps {
    * computing this here would open a duplicate set of per-vehicle WS channels.
    */
   resolved: ResolvedVehicleTelemetry;
+  hasActiveAlarm?: boolean;
 }
 
 export function AssetPanel({
@@ -78,6 +79,7 @@ export function AssetPanel({
   onLiveTrack,
   onPlayback,
   resolved,
+  hasActiveAlarm = false,
 }: AssetPanelProps) {
   const router = useRouter();
   const { activeTab, setActiveTab, isAssetPanelCollapsed, toggleAssetPanel } = useTrackingUiStore();
@@ -124,7 +126,10 @@ export function AssetPanel({
 
   if (!selectedVehicle) return null;
 
-  const statusKey = resolveStatusKey({ status: loc?.status, is_online: loc?.is_online, speed: loc?.speed }, loc?.hasActiveAlarm);
+  const statusKey = resolveStatusKey(
+    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    hasActiveAlarm,
+  );
   const statusCfg = VEHICLE_STATUS[statusKey];
   const plate = selectedVehicle.attributes.registration_number;
 

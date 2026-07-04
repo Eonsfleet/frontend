@@ -23,6 +23,7 @@ export interface FilterState {
   speedRange: [number, number];
   engineStatus: "all" | "on" | "off";
   fuelLevel: "all" | "low" | "medium" | "high";
+  viewType: "listing" | "cluster";
 }
 
 export const initialFilterState: FilterState = {
@@ -41,6 +42,7 @@ export const initialFilterState: FilterState = {
   speedRange: [0, 120],
   engineStatus: "all",
   fuelLevel: "all",
+  viewType: "listing",
 };
 
 interface FilterPanelDrawerProps {
@@ -277,6 +279,36 @@ export function FilterPanelDrawer({
               </div>
             </div>
           )}
+
+          {/* View Mode Section */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-widest border-b border-slate-100 pb-1.5">
+              View
+            </h4>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="viewType"
+                  checked={tempFilters.viewType === "listing"}
+                  onChange={() => updateTempFilter("viewType", "listing")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-slate-700">By listing</span>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="viewType"
+                  checked={tempFilters.viewType === "cluster"}
+                  onChange={() => updateTempFilter("viewType", "cluster")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-slate-700">By group (i.e. cluster)</span>
+              </label>
+            </div>
+          </div>
 
           {/* General Section */}
           <div className="space-y-4">

@@ -95,7 +95,7 @@ const MapController = ({ selected, locs, allVehicles }: any) => {
     if (selected && locs[selected.id] && !allVehicles.isReplayMode) {
       const l = locs[selected.id];
       if (l.lat && l.lng) {
-        map.flyTo([l.lat, l.lng], 16);
+        map.flyTo([l.lat, l.lng], 18);
       }
     }
   }, [selected?.id, map]); // Optimized dependencies

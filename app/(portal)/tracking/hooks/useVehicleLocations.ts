@@ -170,7 +170,7 @@ export function useVehicleLocations({
           odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
-          raw: loc,
+          raw: prevEntry?.raw ?? loc,
         };
 
         // Only let a WS-updated prev entry keep priority over this REST snapshot
@@ -190,7 +190,7 @@ export function useVehicleLocations({
             is_online: isOnline,
             status: derivedStatus,
             statusSinceMs,
-            raw: loc,
+            raw: prevEntry?.raw ?? loc,
             lastPacket: lastPacketTs,
           };
           return;
@@ -214,7 +214,7 @@ export function useVehicleLocations({
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,
-          raw: loc,
+          raw: prevEntry?.raw ?? loc,
           lastPacket: lastPacketTs,
         };
       });
