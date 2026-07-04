@@ -7,16 +7,6 @@ export interface TrackingMetric {
     offline_assets: number
 }
 
-export interface PlaybackMovement {
-    id: number
-    vehicle_id: number
-    lat: number
-    lng: number
-    speed: number
-    heading: number
-    timestamp: string
-}
-
 export const getTrackingMetrics = async () => {
     const res = await apiClient.get('/tracker/metrics')
     return res.data

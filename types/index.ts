@@ -8,5 +8,6 @@ export * from './geofence'
 export * from './incident'
 export * from './fuel'
 export * from './communication'
+export * from './tracking'
 
 
