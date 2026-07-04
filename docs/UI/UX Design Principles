@@ -1,0 +1,382 @@
+# Global UI/UX Design Principles & Prompt Guidelines (Applies to Every Screen)
+
+These principles are mandatory for every UI/UX design and implementation prompt throughout the application.
+
+## 1. Design Philosophy
+
+The application should communicate professionalism, trust, speed, and operational excellence.
+
+Every screen should feel like an enterprise SaaS platform used daily by logistics companies, fleet operators, security organizations, transportation companies, construction firms, oil & gas companies, government agencies, and businesses managing large fleets.
+
+The interface should look premium without appearing flashy.
+
+---
+
+# 2. Clarity First
+
+Users should understand the purpose of a screen within 3–5 seconds.
+
+Avoid unnecessary decorations.
+
+Every element should answer at least one of these questions:
+
+* What is happening?
+* What requires my attention?
+* What can I do next?
+
+If an element does not provide value, it should not exist.
+
+---
+
+# 3. Information Hierarchy
+
+Information should be arranged by importance.
+
+Primary information should naturally attract attention.
+
+Secondary information should support decisions.
+
+Avoid making everything visually prominent.
+
+Use spacing, typography, color, and sizing to establish hierarchy instead of excessive borders or bright colors.
+
+---
+
+# 4. Minimal but Informative
+
+The UI should be clean and elegant without becoming empty.
+
+Avoid excessive whitespace that hides useful information.
+
+Likewise, avoid overcrowding.
+
+Each screen should provide sufficient operational context at a glance while remaining easy to scan.
+
+---
+
+# 5. Progressive Disclosure
+
+Show users only what they need initially.
+
+Provide additional details only when requested.
+
+Examples:
+
+* expandable cards
+* side panels
+* tabs
+* drawers
+* tooltips
+* contextual menus
+
+Do not overwhelm users with advanced options by default.
+
+---
+
+# 6. Consistency
+
+Every page should use the same:
+
+* spacing
+* typography
+* card styles
+* iconography
+* colors
+* button styles
+* form controls
+* table styles
+* animations
+* empty states
+* loading states
+* interaction patterns
+
+Users should never have to relearn how to use another page.
+
+---
+
+# 7. Real-Time Feedback
+
+The interface should always communicate system activity.
+
+Examples include:
+
+* loading indicators
+* live badges
+* updating timestamps
+* progress indicators
+* subtle animations
+* success confirmations
+* error notifications
+
+Users should never wonder whether something is happening.
+
+---
+
+# 8. Motion with Purpose
+
+Animations should enhance understanding.
+
+Use motion to communicate:
+
+* loading
+* selection
+* navigation
+* updates
+* expansion
+* collapse
+* success
+* errors
+
+Avoid decorative animations.
+
+Motion should be smooth, subtle, and performant.
+
+---
+
+# 9. Action-Oriented Design
+
+Primary actions should always be easy to find.
+
+Dangerous actions should require confirmation.
+
+Related actions should be grouped together.
+
+Frequently used actions should be easier to access than rarely used ones.
+
+---
+
+# 10. Intelligent Empty States
+
+Every empty state should educate the user.
+
+Instead of saying:
+
+"No Data"
+
+Provide helpful context and guidance.
+
+Examples:
+
+* No vehicles have been added yet.
+* Create your first geofence.
+* Assign a tracking device to begin monitoring.
+
+Whenever appropriate, include a clear call-to-action.
+
+---
+
+# 11. Excellent Loading Experience
+
+Never show blank pages while waiting for data.
+
+Always use skeleton loaders that resemble the final layout.
+
+Users should immediately understand what information is being loaded.
+
+---
+
+# 12. Friendly Error Handling
+
+Errors should be:
+
+* specific
+* actionable
+* non-technical
+
+Example:
+
+Unable to load live vehicle locations.
+
+Check your internet connection or try again.
+
+Avoid exposing raw exception messages.
+
+---
+
+# 13. High Data Density Without Clutter
+
+Enterprise users often work with large amounts of information.
+
+Display rich operational data without making the interface feel busy.
+
+Use:
+
+* cards
+* grouping
+* spacing
+* dividers
+* typography
+* collapsible sections
+
+instead of excessive borders.
+
+---
+
+# 14. Smart Defaults
+
+Wherever possible:
+
+* preselect common filters
+* remember user preferences
+* preserve sorting
+* restore previous layouts
+* remember collapsed panels
+* remember map settings
+
+Reduce repetitive work.
+
+---
+
+# 15. Accessibility
+
+Every interface must support:
+
+* keyboard navigation
+* visible focus states
+* sufficient color contrast
+* screen readers
+* scalable typography
+* clear labels
+* descriptive icons
+
+Accessibility is a requirement, not an enhancement.
+
+---
+
+# 16. Responsive by Design
+
+Every screen should work seamlessly on:
+
+* Desktop
+* Laptop
+* Tablet
+* Mobile
+
+Content should adapt gracefully without losing functionality.
+
+---
+
+# 17. Performance First
+
+Design with implementation performance in mind.
+
+Prefer:
+
+* virtual scrolling
+* lazy loading
+* marker clustering
+* pagination only when necessary
+* deferred rendering
+* request cancellation
+* optimistic updates where appropriate
+
+The interface should remain responsive even with thousands of records.
+
+---
+
+# 18. Context Awareness
+
+The interface should adapt to the user's current context.
+
+Examples:
+
+* Hide actions users cannot perform.
+* Show role-specific features.
+* Display relevant shortcuts.
+* Surface important alerts before routine information.
+
+---
+
+# 19. Visual Language
+
+Maintain a consistent visual identity.
+
+Use:
+
+* generous spacing
+* rounded corners
+* subtle shadows
+* soft dividers
+* restrained color palette
+* meaningful iconography
+* clean typography
+
+Avoid visual noise such as heavy borders, excessive gradients, and unnecessary decorative elements.
+
+---
+
+# 20. Trust Through Transparency
+
+Always communicate the current state of data.
+
+Examples:
+
+* Last updated time.
+* Live connection status.
+* Sync progress.
+* Offline mode.
+* Device health.
+* Data source where relevant.
+
+Users should always know whether the information they are seeing is current.
+
+---
+
+# 21. Scalability
+
+Every screen should be designed with future growth in mind.
+
+Layouts should accommodate additional metrics, filters, actions, or modules without requiring a complete redesign.
+
+---
+
+# 22. Reusable Components
+
+Favor reusable design patterns and components.
+
+Cards, tables, filters, search bars, status badges, charts, dialogs, and side panels should be standardized to reduce cognitive load and simplify maintenance.
+
+---
+
+# 23. Delight Through Small Details
+
+Small interactions create a premium experience.
+
+Examples include:
+
+* Smooth hover effects.
+* Intelligent tooltips.
+* Relative timestamps (e.g., "10 seconds ago").
+* Helpful microcopy.
+* Empty state illustrations.
+* Meaningful icons.
+* Smooth transitions between states.
+
+These details should enhance usability without distracting from the user's work.
+
+---
+
+# 24. Implementation Prompt Requirements
+
+Every implementation prompt must comprehensively define:
+
+* The purpose of the screen.
+* The overall layout.
+* Before-load experience.
+* Loading states.
+* Empty states.
+* Error states.
+* Success states.
+* Default state.
+* User interactions.
+* Primary and secondary actions.
+* Keyboard interactions where relevant.
+* Animations and transitions.
+* Responsive behavior.
+* Performance considerations.
+* Accessibility requirements.
+* Edge cases and exception handling.
+* Real-time update behavior, where applicable.
+* Integration with the existing design system.
+
+No implementation prompt should assume developer interpretation for critical interactions. All expected behaviors, states, and edge cases should be explicitly described to ensure consistency across the application.

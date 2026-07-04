@@ -228,19 +228,17 @@ export default function TrackingMap({
                 icon={L.divIcon({
                   className: "custom-marker-wrapper",
                   html: buildMarkerHtml({
-                    bodySvg:
-                      '<path d="M12 19V5M5 12l7-7 7 7"/>',
                     heading: currentPlayback.heading || 0,
                     state: {
-                      statusKey: "parked",
+                      statusKey: "moving",
                       pulse: true,
                       greyed: false,
                       scale: 1,
                       zIndexOffset: 0,
                     },
                   }),
-                  iconSize: [40, 40],
-                  iconAnchor: [20, 20],
+                  iconSize: [36, 36],
+                  iconAnchor: [18, 18],
                 })}
               />
             )}
@@ -374,12 +372,19 @@ export default function TrackingMap({
                   icon={L.divIcon({
                     className: "custom-marker-wrapper",
                     html: buildMarkerHtml({
-                      bodySvg: getMarkerSVG(v.attributes.body_type),
+                      registrationNumber: normalizeReg(v.attributes.registration_number),
+                      speedOrStatus:
+                        markerState.statusKey === "moving" && loc.speed != null
+                          ? `${Math.round(loc.speed)} km/h`
+                          : VEHICLE_STATUS[markerState.statusKey].label,
+                      isSelected,
                       heading,
                       state: markerState,
                     }),
-                    iconSize: [size, size],
-                    iconAnchor: [size / 2, size / 2],
+                    // Width=220 (full label card), height=45. Pin tip is at left edge (x=14 ≈ half pin width)
+                    // vertically centred on the pin circle top half, tip is at ~34px from top
+                    iconSize: [220, 45],
+                    iconAnchor: [14, 34],
                   })}
                   eventHandlers={{
                     click: () => {
@@ -460,13 +465,21 @@ export default function TrackingMap({
 
       <style jsx global>{`
         .leaflet-marker-icon {
-          transition: transform 0.2s linear;
+          transition: transform 0.15s linear;
         }
 
+        /* Custom pin+label card marker */
+        .custom-tracking-marker {
+          display: flex;
+          align-items: center;
+          overflow: visible;
+        }
+
+        /* Fallback circle marker */
         .marker-container {
           position: relative;
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -475,47 +488,6 @@ export default function TrackingMap({
         .marker-base {
           position: relative;
           z-index: 2;
-          width: 32px;
-          height: 32px;
-          border: 2px solid white;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .marker-container.is-greyed .marker-base {
-          opacity: 0.55;
-          filter: grayscale(0.4);
-        }
-
-        .marker-pulse {
-          position: absolute;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          transform: scale(0);
-          opacity: 0;
-          z-index: 1;
-        }
-
-        .marker-container.is-pulsing .marker-pulse {
-          animation: marker-pulse 2s infinite;
-        }
-
-        @keyframes marker-pulse {
-          0% {
-            transform: scale(0.5);
-            opacity: 0.8;
-          }
-          100% {
-            transform: scale(1.5);
-            opacity: 0;
-          }
-        }
-
-        .marker-icon-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;

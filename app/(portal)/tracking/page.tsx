@@ -26,7 +26,7 @@ import { TrackingTopBar } from "./components/TrackingTopBar";
 import { MapZoomControl } from "./components/MapZoomControl";
 import { MapExtraControls } from "./components/MapExtraControls";
 import { MapLegend } from "./components/MapLegend";
-import { ClusterFilterModal } from "./components/ClusterFilterModal";
+import { FilterPanelDrawer, FilterState, initialFilterState } from "./components/FilterPanelDrawer";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
@@ -51,8 +51,8 @@ export default function TrackingPage() {
   const [showTraffic, setShowTraffic] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [clusterModalOpen, setClusterModalOpen] = useState(false);
-  const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(initialFilterState);
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
   const [playbackType, setPlaybackType] = useState<"trip" | "history">("trip");
@@ -91,7 +91,7 @@ export default function TrackingPage() {
   const { data: geofencesData } = useQuery({
     queryKey: ["geofences-tracking"],
     queryFn: () => getGeofences({ per_page: 100 }),
-    enabled: !!token && showGeofences,
+    enabled: !!token,
   });
 
   const vehicles = useMemo(() => vehicleData ?? [], [vehicleData]);
@@ -136,16 +136,129 @@ export default function TrackingPage() {
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
 
+  // Sync sidebar search query with drawer search
+  useEffect(() => {
+    if (searchQuery !== filters.search) {
+      setFilters((prev) => ({ ...prev, search: searchQuery }));
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (filters.search !== searchQuery) {
+      setSearchQuery(filters.search);
+    }
+  }, [filters.search]);
+
+  // Sync sidebar statusFilter with drawer status checkboxes
+  const handleStatusFilterChange = useCallback((newStatus: StatusFilter) => {
+    setStatusFilter(newStatus);
+    setFilters((prev) => {
+      if (newStatus === "all") {
+        return { ...prev, statuses: ["moving", "idle", "stopped", "offline"] };
+      } else if (newStatus === "moving") {
+        return { ...prev, statuses: ["moving"] };
+      } else if (newStatus === "idle") {
+        return { ...prev, statuses: ["idle"] };
+      } else if (newStatus === "parked") {
+        return { ...prev, statuses: ["stopped"] };
+      } else if (newStatus === "offline") {
+        return { ...prev, statuses: ["offline"] };
+      }
+      return prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    const s = filters.statuses;
+    if (s.length === 4) {
+      setStatusFilter("all");
+    } else if (s.length === 1) {
+      if (s[0] === "moving") setStatusFilter("moving");
+      else if (s[0] === "idle") setStatusFilter("idle");
+      else if (s[0] === "stopped") setStatusFilter("parked");
+      else if (s[0] === "offline") setStatusFilter("offline");
+    } else {
+      setStatusFilter("all");
+    }
+  }, [filters.statuses]);
+
+  const isFilterActive = useMemo(() => {
+    return (
+      filters.search !== "" ||
+      filters.group !== "all" ||
+      filters.statuses.length < 4 ||
+      filters.locationType === "radius" ||
+      filters.geofenceId !== "all" ||
+      filters.vehicleType !== "all" ||
+      filters.vehicleMake !== "all" ||
+      filters.vehicleModel !== "all" ||
+      filters.vehicleYearFrom !== "" ||
+      filters.speedRange[0] > 0 ||
+      filters.speedRange[1] < 120 ||
+      filters.engineStatus !== "all" ||
+      filters.fuelLevel !== "all"
+    );
+  }, [filters]);
+
+  // Geographical Distance Calculator (Haversine Formula)
+  const getDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // distance in km
+  }, []);
+
+  // Geofence Inclusion Check
+  const isVehicleInGeofence = useCallback((lat: number, lng: number, geofence: any) => {
+    const { type, coordinates, radius } = geofence.attributes || {};
+    if (!coordinates) return false;
+
+    if (type === "circle") {
+      const centerLat = coordinates.lat ?? coordinates.latitude;
+      const centerLng = coordinates.lng ?? coordinates.longitude;
+      if (centerLat == null || centerLng == null) return false;
+      const dist = getDistance(lat, lng, centerLat, centerLng) * 1000; // to meters
+      return dist <= (radius ?? 500);
+    } else if (type === "polygon") {
+      let vertices: [number, number][] = [];
+      if (coordinates.type === "Polygon" && Array.isArray(coordinates.coordinates)) {
+        vertices = coordinates.coordinates[0].map(([lg, lt]: [number, number]) => [lt, lg]);
+      } else if (Array.isArray(coordinates)) {
+        vertices = coordinates.map((p: any) => {
+          if (Array.isArray(p)) {
+            return [p[1], p[0]] as [number, number];
+          }
+          return [p.lat ?? p.latitude, p.lng ?? p.longitude] as [number, number];
+        });
+      }
+
+      if (vertices.length === 0) return false;
+
+      let inside = false;
+      for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+        const xi = vertices[i][0], yi = vertices[i][1];
+        const xj = vertices[j][0], yj = vertices[j][1];
+        const intersect = yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+    return false;
+  }, [getDistance]);
+
   const filteredVehicles = useMemo(() => {
     let result = vehicles;
-    if (selectedClusterIds.length > 0) {
-      result = result.filter((v: Vehicle) => {
-        const clusterId = String(v.relationships?.cluster?.id || "");
-        return selectedClusterIds.includes(clusterId);
-      });
-    }
-    if (debouncedSearchQuery) {
-      const q = debouncedSearchQuery.toLowerCase();
+
+    // 1. Search Query
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
       result = result.filter((v: Vehicle) => {
         const currentDriver = v.relationships?.current_driver;
         const driverName = Array.isArray(currentDriver) ? undefined : currentDriver?.name;
@@ -165,20 +278,122 @@ export default function TrackingPage() {
         return haystack.includes(q);
       });
     }
-    if (statusFilter !== "all") {
+
+    // 2. Group/Cluster filter
+    if (filters.group !== "all") {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
-        if (statusFilter === "moving") return loc?.status === "in_transit";
-        if (statusFilter === "idle") return loc?.status === "idle";
-        if (statusFilter === "parked") return loc?.status === "parked";
-        if (statusFilter === "online") return loc?.is_online === true;
-        if (statusFilter === "offline") return loc?.is_online === false || !loc;
-        if (statusFilter === "alarm") return alarmState[v.id] === true;
-        return false;
+        const clusterId = String(v.relationships?.cluster?.id || "");
+        return String(filters.group) === clusterId;
       });
     }
+
+    // 3. Status filter
+    if (filters.statuses.length < 4) {
+      result = result.filter((v: Vehicle) => {
+        const loc = locations[v.id];
+        const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
+
+        let match = false;
+        if (filters.statuses.includes("moving") && loc?.status === "in_transit") match = true;
+        if (filters.statuses.includes("idle") && loc?.status === "idle") match = true;
+        if (filters.statuses.includes("stopped") && loc?.status === "parked") match = true;
+        if (filters.statuses.includes("offline") && (!isOnline || !loc)) match = true;
+        return match;
+      });
+    }
+
+    // 4. Location & Radius filter
+    if (filters.locationType === "radius" && filters.locationCoords) {
+      const { latitude: centerLat, longitude: centerLng } = filters.locationCoords;
+      result = result.filter((v: Vehicle) => {
+        const loc = locations[v.id];
+        if (!loc?.lat || !loc?.lng) return false;
+        const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
+        return dist <= filters.radiusKm;
+      });
+    }
+
+    // 5. Geofence filter
+    if (filters.geofenceId !== "all") {
+      const selectedGeofence = geofences.find((g) => String(g.id) === filters.geofenceId);
+      if (selectedGeofence) {
+        result = result.filter((v: Vehicle) => {
+          const loc = locations[v.id];
+          if (!loc?.lat || !loc?.lng) return false;
+          return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
+        });
+      }
+    }
+
+    // 6. Vehicle Type
+    if (filters.vehicleType !== "all") {
+      result = result.filter((v: Vehicle) => {
+        const t = (v.attributes.body_type || v.attributes.type || "").toLowerCase();
+        return t === filters.vehicleType.toLowerCase();
+      });
+    }
+
+    // 7. Vehicle Make
+    if (filters.vehicleMake !== "all") {
+      result = result.filter((v: Vehicle) => {
+        const m = (v.attributes.make || "").toLowerCase();
+        return m === filters.vehicleMake.toLowerCase();
+      });
+    }
+
+    // 8. Vehicle Model
+    if (filters.vehicleModel !== "all") {
+      result = result.filter((v: Vehicle) => {
+        const md = (v.attributes.model || "").toLowerCase();
+        return md === filters.vehicleModel.toLowerCase();
+      });
+    }
+
+    // 9. Vehicle Year From
+    if (filters.vehicleYearFrom) {
+      const yearLimit = parseInt(filters.vehicleYearFrom, 10);
+      if (!isNaN(yearLimit)) {
+        result = result.filter((v: Vehicle) => {
+          const y = parseInt(String(v.attributes.year), 10);
+          return !isNaN(y) && y >= yearLimit;
+        });
+      }
+    }
+
+    // 10. Speed Range
+    if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
+      result = result.filter((v: Vehicle) => {
+        const loc = locations[v.id];
+        const speed = loc?.speed ?? 0;
+        return speed >= filters.speedRange[0] && speed <= filters.speedRange[1];
+      });
+    }
+
+    // 11. Engine Status
+    if (filters.engineStatus !== "all") {
+      result = result.filter((v: Vehicle) => {
+        const loc = locations[v.id];
+        const isIgnitionOn = loc?.ignition === "on" || loc?.ignition === "1" || loc?.ignition === true;
+        if (filters.engineStatus === "on") return isIgnitionOn;
+        if (filters.engineStatus === "off") return !isIgnitionOn;
+        return true;
+      });
+    }
+
+    // 12. Fuel Level
+    if (filters.fuelLevel !== "all") {
+      result = result.filter((v: Vehicle) => {
+        const loc = locations[v.id];
+        const fuel = loc?.fuel_level_percent ?? 0;
+        if (filters.fuelLevel === "low") return fuel < 20;
+        if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
+        if (filters.fuelLevel === "high") return fuel > 70;
+        return true;
+      });
+    }
+
     return result;
-  }, [vehicles, debouncedSearchQuery, statusFilter, locations, selectedClusterIds, alarmState]);
+  }, [vehicles, filters, locations, geofences, getDistance, isVehicleInGeofence]);
 
   // Clear selection if the selected vehicle is not in the filtered results
   useEffect(() => {
@@ -312,7 +527,7 @@ export default function TrackingPage() {
             setSelectedVehicleId={setSelectedVehicleId}
             isLoadingVehicles={isLoadingVehicles}
             statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
+            setStatusFilter={handleStatusFilterChange}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             ongoingTripsCount={ongoingTrips.length}
@@ -320,8 +535,8 @@ export default function TrackingPage() {
             setIsReplayOpen={setIsReplayOpen}
             isLoadingTrips={isLoadingTrips}
             alarmState={alarmState}
-            selectedClusterIds={selectedClusterIds}
-            onOpenClusterModal={() => setClusterModalOpen(true)}
+            isFilterActive={isFilterActive}
+            onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
           />
         </div>
@@ -428,18 +643,23 @@ export default function TrackingPage() {
           setSelectedVehicleId={setSelectedVehicleId}
           isLoadingVehicles={isLoadingVehicles}
           statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
+          setStatusFilter={handleStatusFilterChange}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          isFilterActive={isFilterActive}
+          onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
         />
       </div>
 
-      <ClusterFilterModal
-        open={clusterModalOpen}
-        onOpenChange={setClusterModalOpen}
+      <FilterPanelDrawer
+        open={filterDrawerOpen}
+        onOpenChange={setFilterDrawerOpen}
+        vehicles={vehicles}
         clusters={clusters}
-        selectedClusterIds={selectedClusterIds}
-        setSelectedClusterIds={setSelectedClusterIds}
+        geofences={geofences}
+        filters={filters}
+        onApplyFilters={setFilters}
+        onResetFilters={() => setFilters(initialFilterState)}
       />
 
       <TripPlaybackTimeline

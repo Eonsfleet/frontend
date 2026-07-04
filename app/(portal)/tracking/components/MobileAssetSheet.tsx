@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { List, Search, Navigation } from "lucide-react";
+import { List, Search, Navigation, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Vehicle } from "@/types";
 import { StatusFilters, StatusFilter } from "./StatusFilters";
 import { VehicleListItem } from "./VehicleListItem";
 import { AssetCardSkeleton } from "./AssetCardSkeleton";
+import { cn } from "@/lib/utils";
 
 interface MobileAssetSheetProps {
   vehicles: Vehicle[];
@@ -20,6 +21,8 @@ interface MobileAssetSheetProps {
   setStatusFilter: (filter: StatusFilter) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  isFilterActive: boolean;
+  onOpenFilterDrawer: () => void;
 }
 
 /**
@@ -40,6 +43,8 @@ export function MobileAssetSheet({
   setStatusFilter,
   searchQuery,
   setSearchQuery,
+  isFilterActive,
+  onOpenFilterDrawer,
 }: MobileAssetSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -55,8 +60,18 @@ export function MobileAssetSheet({
 
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent side="bottom" className="h-[75vh] rounded-t-3xl lg:hidden">
-          <SheetHeader>
+          <SheetHeader className="flex flex-row items-center justify-between pr-8 shrink-0">
             <SheetTitle>Fleet Assets</SheetTitle>
+            <button
+              onClick={onOpenFilterDrawer}
+              aria-label="Filter assets"
+              className={cn(
+                "h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors",
+                isFilterActive && "bg-blue-50 text-blue-600 hover:bg-blue-100",
+              )}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
           </SheetHeader>
           <div className="px-4 pb-2 space-y-3 flex-1 flex flex-col min-h-0">
             <div className="relative shrink-0">

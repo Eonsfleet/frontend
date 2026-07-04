@@ -29,8 +29,8 @@ interface TrackingSidebarProps {
   setIsReplayOpen: (open: boolean) => void;
   isLoadingTrips: boolean;
   alarmState?: Record<string, boolean>;
-  selectedClusterIds: string[];
-  onOpenClusterModal: () => void;
+  isFilterActive: boolean;
+  onOpenFilterDrawer: () => void;
   onRefresh: () => void;
 }
 
@@ -51,8 +51,8 @@ export function TrackingSidebar({
   setIsReplayOpen,
   isLoadingTrips,
   alarmState = {},
-  selectedClusterIds,
-  onOpenClusterModal,
+  isFilterActive,
+  onOpenFilterDrawer,
   onRefresh,
 }: TrackingSidebarProps) {
   const listParentRef = useRef<HTMLDivElement>(null);
@@ -109,11 +109,11 @@ export function TrackingSidebar({
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={onOpenClusterModal}
-              aria-label="Filter by cluster"
+              onClick={onOpenFilterDrawer}
+              aria-label="Filter assets"
               className={cn(
                 "h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors",
-                selectedClusterIds.length > 0 && "bg-blue-50 text-blue-600 hover:bg-blue-100",
+                isFilterActive && "bg-blue-50 text-blue-600 hover:bg-blue-100",
               )}
             >
               <SlidersHorizontal className="h-4 w-4" />
