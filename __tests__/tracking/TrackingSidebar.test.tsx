@@ -26,7 +26,7 @@ const baseProps = {
   setSearchQuery: vi.fn(),
   ongoingTripsCount: 0,
   ongoingTripsData: [],
-  setIsReplayOpen: vi.fn(),
+  onReplayVehicle: vi.fn(),
   isLoadingTrips: false,
   selectedClusterIds: [],
   onOpenClusterModal: vi.fn(),

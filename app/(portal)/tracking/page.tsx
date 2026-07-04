@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { subDays } from "date-fns";
-import { DateRange } from "react-day-picker";
+import { useRouter } from "next/navigation";
+import { subHours } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Vehicle, Trip } from "@/types";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
@@ -15,12 +15,10 @@ import { getClusters } from "@/lib/api/settings";
 import { getGeofences } from "@/lib/api/geofencing";
 import TrackingMap from "./TrackingMap";
 import { AssetPanel } from "./components/AssetPanel";
-import { TripPlaybackTimeline } from "@/components/live/TripPlaybackTimeline";
 import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, type TrackingMapStyle } from "./utils";
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
 import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
 import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
-import { usePlaybackData } from "./hooks/usePlaybackData";
 import { TrackingSidebar } from "./components/TrackingSidebar";
 import { TrackingTopBar } from "./components/TrackingTopBar";
 import { MapZoomControl } from "./components/MapZoomControl";
@@ -41,7 +39,6 @@ export default function TrackingPage() {
   const [locationSearch, setLocationSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [isReplayOpen, setIsReplayOpen] = useState(false);
   // The view-mode toggle UI (All Assets / Active Trips) was removed from the map
   // toolbar per design feedback; "focused" is currently unreachable, but the
   // underlying Active Trips code path in TrackingSidebar is left intact in case
@@ -55,14 +52,10 @@ export default function TrackingPage() {
   const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
-  const [playbackType, setPlaybackType] = useState<"trip" | "history">("trip");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 1),
-    to: new Date(),
-  });
 
   const resetZoom = () => setZoomResetKey((prev) => prev + 1);
 
+  const router = useRouter();
   const { token, organization } = useAuthStore();
   const { setSidebarCollapsed } = useUIStore();
   const { subscribePrivate } = useEcho();
@@ -213,21 +206,6 @@ export default function TrackingPage() {
     });
   }, [ongoingTrips, vehicles]);
 
-  const {
-    playbackData,
-    playbackIndex,
-    setPlaybackIndex,
-    isPlayingPlayback,
-    setIsPlayingPlayback,
-    isLoadingPlayback,
-  } = usePlaybackData({
-    isReplayOpen,
-    selectedVehicleId,
-    playbackType,
-    ongoingTripsData,
-    dateRange,
-  });
-
   useEffect(() => {
     setSidebarCollapsed(true);
     return () => setSidebarCollapsed(false);
@@ -280,11 +258,27 @@ export default function TrackingPage() {
     }
   }, [selectedVehicle, locations]);
 
+  const navigateToPlayback = useCallback(
+    (vehicleId: string, tripId?: string | null) => {
+      const params = new URLSearchParams({ vehicleId });
+      if (tripId) {
+        params.set("tripId", tripId);
+      } else {
+        const end = new Date();
+        const start = subHours(end, 6);
+        params.set("start", start.toISOString());
+        params.set("end", end.toISOString());
+      }
+      router.push(`/tracking/playback?${params.toString()}`);
+    },
+    [router],
+  );
+
   const handlePlayback = useCallback(() => {
-    const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
-    setPlaybackType(hasTrip ? "trip" : "history");
-    setIsReplayOpen(true);
-  }, [ongoingTripsData, selectedVehicleId]);
+    if (!selectedVehicleId) return;
+    const trip = ongoingTripsData.find((t) => t.vehicleId === selectedVehicleId);
+    navigateToPlayback(selectedVehicleId, trip?.id ?? null);
+  }, [ongoingTripsData, selectedVehicleId, navigateToPlayback]);
 
   return (
     <UpgradeGate
@@ -317,7 +311,7 @@ export default function TrackingPage() {
             setSearchQuery={setSearchQuery}
             ongoingTripsCount={ongoingTrips.length}
             ongoingTripsData={ongoingTripsData}
-            setIsReplayOpen={setIsReplayOpen}
+            onReplayVehicle={navigateToPlayback}
             isLoadingTrips={isLoadingTrips}
             alarmState={alarmState}
             selectedClusterIds={selectedClusterIds}
@@ -440,20 +434,6 @@ export default function TrackingPage() {
         clusters={clusters}
         selectedClusterIds={selectedClusterIds}
         setSelectedClusterIds={setSelectedClusterIds}
-      />
-
-      <TripPlaybackTimeline
-        isOpen={isReplayOpen}
-        onClose={() => setIsReplayOpen(false)}
-        data={playbackData}
-        currentIndex={playbackIndex}
-        onIndexChange={setPlaybackIndex}
-        isPlaying={isPlayingPlayback}
-        setIsPlaying={setIsPlayingPlayback}
-        isLoading={isLoadingPlayback}
-        title={playbackType === "trip" ? "TRIP REPLAY" : "HISTORY REPLAY"}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
       />
 
       <style jsx global>{`
