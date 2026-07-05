@@ -78,7 +78,7 @@ const NAV_ITEMS = [
     trialAllowed: false,
   },
   {
-    href: "/notifications",
+    href: "/alerts",
     label: "Alerts",
     icon: Bell,
     permission: null,
@@ -314,7 +314,7 @@ export default function Sidebar() {
               const isActive =
                 !isLocked &&
                 (pathname === href || pathname.startsWith(href + "/"));
-              const badgeCount = href === "/notifications" ? unreadAlertsCount : 0;
+              const badgeCount = href === "/alerts" ? unreadAlertsCount : 0;
               const itemContent = (
                 <Link
                   href={isLocked ? "/billing" : href}
