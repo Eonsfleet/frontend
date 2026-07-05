@@ -44,29 +44,55 @@ export function getMarkerState(
 /**
  * Builds the inline HTML for a vehicle's Leaflet divIcon. Centralized here so marker
  * appearance stays consistent with lib/vehicleStatus.ts across the fleet map and the
- * playback/replay marker (previously two independently hand-rolled template strings).
+ * playback/replay marker.
  */
 export function buildMarkerHtml(params: {
-  bodySvg: string;
-  heading: number;
+  registrationNumber?: string;
+  speedOrStatus?: string;
+  isSelected?: boolean;
+  heading?: number;
   state: MarkerState;
 }): string {
-  const { bodySvg, heading, state } = params;
+  const { registrationNumber, speedOrStatus, isSelected = false, heading = 0, state } = params;
   const cfg = VEHICLE_STATUS[state.statusKey];
-  const size = Math.round(40 * state.scale);
-  return `
-    <div class="marker-container ${state.pulse ? "is-pulsing" : ""} ${state.greyed ? "is-greyed" : ""}" style="width:${size}px;height:${size}px;">
-      <div class="marker-pulse" style="background:${cfg.marker}33;"></div>
-      <div class="marker-base" style="transform: rotate(${heading || 0}deg); background:${cfg.marker}; border-color:${cfg.ring};">
-        <div class="marker-icon-wrapper">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-            ${bodySvg}
-          </svg>
+
+  if (registrationNumber) {
+    const pinSvg = `
+      <svg width="28" height="34" viewBox="0 0 28 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 34L8 22H20L14 34Z" fill="${cfg.marker}" />
+        <circle cx="14" cy="14" r="14" fill="${cfg.marker}" />
+        <circle cx="14" cy="14" r="8" fill="white" />
+        <circle cx="14" cy="14" r="4.5" fill="${cfg.marker}" />
+      </svg>
+    `;
+
+    const borderClass = isSelected ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-100/80";
+
+    return `
+      <div class="custom-tracking-marker flex items-center" style="width: 220px; height: 45px; pointer-events: none; transform: translate3d(0,0,0);">
+        <div class="flex-shrink-0" style="width: 28px; height: 34px;">
+          ${pinSvg}
         </div>
+        <div class="ml-2 bg-white rounded-xl shadow-lg border ${borderClass} px-3 py-1.5 flex flex-col justify-center pointer-events-auto" style="min-width: 95px; line-height: 1.25;">
+          <div class="text-[11px] font-extrabold text-slate-900 whitespace-nowrap">${registrationNumber}</div>
+          <div class="text-[9px] font-bold text-slate-500 whitespace-nowrap mt-0.5 capitalize">${speedOrStatus}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Fallback for playback marker or legacy calls without registrationNumber
+  return `
+    <div class="marker-container flex items-center justify-center" style="width:36px;height:36px;">
+      <div class="marker-base" style="transform: rotate(${heading || 0}deg); background:${cfg.marker}; border-color:${cfg.ring}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; border: 2px solid white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
+          <path d="M12 19V5M5 12l7-7 7 7"/>
+        </svg>
       </div>
     </div>
   `;
 }
+
 
 export const getMarkerSVG = (bodyType: string) => {
   switch (bodyType?.toLowerCase()) {

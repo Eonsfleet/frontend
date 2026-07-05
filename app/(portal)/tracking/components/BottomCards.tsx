@@ -7,7 +7,6 @@ import { getActiveTripForVehicle } from "@/lib/api/trips";
 import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
-import { reverseGeocode } from "@/lib/gps";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
 
@@ -33,8 +32,8 @@ function CardShell({ icon: Icon, title, children }: { icon: any; title: string; 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{label}</p>
-      <p className="text-xs font-bold text-slate-800 mt-0.5">{value ?? "—"}</p>
+      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{label}</div>
+      <div className="text-xs font-bold text-slate-800 mt-0.5">{value ?? "—"}</div>
     </div>
   );
 }
@@ -71,17 +70,6 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
     refetchInterval: 30_000,
   });
 
-  // Most devices never send a resolved address string (no reverse-geocoding
-  // happens server-side) — fall back to client-side reverse geocoding the same
-  // way useResolvedVehicleTelemetry does for the AssetPanel, so Address isn't
-  // permanently blank here.
-  const { data: geocodedAddress } = useQuery({
-    queryKey: ["reverse-geocode", resolved.lat, resolved.lng],
-    queryFn: () => reverseGeocode(resolved.lat, resolved.lng),
-    enabled: !resolved.address && !!resolved.lat && !!resolved.lng,
-    staleTime: 5 * 60_000,
-  });
-
   const lastUpdateRelative = useRelativeTime(resolved.lastUpdate);
   const statusKey = resolveStatusKey(
     { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
@@ -99,7 +87,7 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
   const hardware = deviceInfoData?.data?.relationships?.hardware;
   const device = selectedVehicle.relationships?.device;
   const signal = gpsSignal(resolved.satellites);
-  const address = resolved.address ?? geocodedAddress ?? null;
+  const address = resolved.address ?? null;
 
   const fuelDisplay =
     resolved.fuel != null && resolved.fuelLiters != null
@@ -113,7 +101,7 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
 
   return (
     <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
-      <CardShell icon={Route} title="Current Trip">
+      <CardShell icon={Route} title="Summary">
         {isLoadingTrip ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
         ) : trip ? (
@@ -170,9 +158,31 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
           />
           <Stat label="Network" value={resolved.gsmOperator} />
           <Stat label="Battery" value={formatVoltage(resolved.batteryV)} />
-          <Stat label="Fuel" value={fuelDisplay} />
+          <Stat
+            label="Fuel"
+            value={
+              resolved.fuel != null ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-300",
+                        resolved.fuel < 20 ? "bg-rose-500" : resolved.fuel < 40 ? "bg-amber-500" : "bg-emerald-500",
+                      )}
+                      style={{ width: `${resolved.fuel}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                    {resolved.fuelLiters != null ? `${Number(resolved.fuelLiters).toFixed(1)}L` : `${resolved.fuel}%`}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-slate-300 font-normal italic">—</span>
+              )
+            }
+          />
           <Stat label="Device" value={hardware?.name} />
-          <Stat label="SIM" value={sim} />
+          <Stat label="Status" value={sim} />
         </div>
       </CardShell>
     </div>

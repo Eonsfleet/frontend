@@ -159,6 +159,11 @@ export function useVehicleLocations({
             ? (prevEntry?.statusSinceMs ?? Date.now())
             : Date.now();
 
+        const locAny = loc as any;
+        const attrAny = v.attributes as any;
+        const fuelPct = locAny?.fuel_level_percent ?? locAny?.fuel ?? attrAny?.fuel_level_percent ?? attrAny?.fuel ?? null;
+        const fuelL = locAny?.fuel_level_liters ?? locAny?.fuel_liters ?? attrAny?.fuel_level_liters ?? attrAny?.fuel_liters ?? null;
+
         const restData = {
           lat: lat ?? 0,
           lng: lng ?? 0,
@@ -170,7 +175,9 @@ export function useVehicleLocations({
           odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
-          raw: loc,
+          fuel: fuelPct != null ? Number(fuelPct) : (prevEntry?.fuel ?? null),
+          fuel_liters: fuelL != null ? Number(fuelL) : (prevEntry?.fuel_liters ?? null),
+          raw: prevEntry?.raw ?? loc,
         };
 
         // Only let a WS-updated prev entry keep priority over this REST snapshot
@@ -190,7 +197,7 @@ export function useVehicleLocations({
             is_online: isOnline,
             status: derivedStatus,
             statusSinceMs,
-            raw: loc,
+            raw: prevEntry?.raw ?? loc,
             lastPacket: lastPacketTs,
           };
           return;
@@ -214,7 +221,7 @@ export function useVehicleLocations({
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,
-          raw: loc,
+          raw: prevEntry?.raw ?? loc,
           lastPacket: lastPacketTs,
         };
       });

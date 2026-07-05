@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw } from "lucide-react";
+import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw, ChevronDown } from "lucide-react";
 import { Vehicle } from "@/types";
 import { cn } from "@/lib/utils";
 import { StatusFilters, StatusFilter } from "./StatusFilters";
@@ -29,9 +29,11 @@ interface TrackingSidebarProps {
   onReplayVehicle: (vehicleId: string, tripId: string | null) => void;
   isLoadingTrips: boolean;
   alarmState?: Record<string, boolean>;
-  selectedClusterIds: string[];
-  onOpenClusterModal: () => void;
+  isFilterActive: boolean;
+  onOpenFilterDrawer: () => void;
   onRefresh: () => void;
+  viewType: "listing" | "cluster";
+  clusters: any[];
 }
 
 export function TrackingSidebar({
@@ -51,12 +53,15 @@ export function TrackingSidebar({
   onReplayVehicle,
   isLoadingTrips,
   alarmState = {},
-  selectedClusterIds,
-  onOpenClusterModal,
+  isFilterActive,
+  onOpenFilterDrawer,
   onRefresh,
+  viewType,
+  clusters,
 }: TrackingSidebarProps) {
+  const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
   const listParentRef = useRef<HTMLDivElement>(null);
-  const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD;
+  const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD && viewType !== "cluster";
   const { isAssetListCollapsed, toggleAssetList } = useTrackingUiStore();
 
   const virtualizer = useVirtualizer({
@@ -80,6 +85,37 @@ export function TrackingSidebar({
       }}
     />
   );
+
+  const toggleCluster = (clusterId: string) => {
+    setExpandedClusters((prev) => ({
+      ...prev,
+      [clusterId]: prev[clusterId] === false,
+    }));
+  };
+
+  const groupedClusters = useMemo(() => {
+    if (viewType !== "cluster") return [];
+
+    const map: Record<string, Vehicle[]> = {};
+    const clusterMap = new Map<string, string>();
+    clusters.forEach((c) => {
+      clusterMap.set(String(c.id), c.attributes?.name || c.name || `Cluster ${c.id}`);
+    });
+
+    filteredVehicles.forEach((v) => {
+      const cId = v.relationships?.cluster?.id ? String(v.relationships?.cluster.id) : "unassigned";
+      if (!map[cId]) {
+        map[cId] = [];
+      }
+      map[cId].push(v);
+    });
+
+    return Object.keys(map).map((cId) => ({
+      id: cId,
+      name: cId === "unassigned" ? "Unassigned" : (clusterMap.get(cId) || `Cluster ${cId}`),
+      vehicles: map[cId],
+    }));
+  }, [filteredVehicles, clusters, viewType]);
 
   if (isAssetListCollapsed) {
     return (
@@ -109,11 +145,11 @@ export function TrackingSidebar({
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={onOpenClusterModal}
-              aria-label="Filter by cluster"
+              onClick={onOpenFilterDrawer}
+              aria-label="Filter assets"
               className={cn(
                 "h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors",
-                selectedClusterIds.length > 0 && "bg-blue-50 text-blue-600 hover:bg-blue-100",
+                isFilterActive && "bg-blue-50 text-blue-600 hover:bg-blue-100",
               )}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -174,6 +210,43 @@ export function TrackingSidebar({
                     {vehicles.length === 0 ? "No assets yet" : "No assets match your filters"}
                   </p>
                 </div>
+              </div>
+            ) : viewType === "cluster" ? (
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                {groupedClusters.map((cluster) => {
+                  const isExpanded = expandedClusters[cluster.id] !== false;
+                  return (
+                    <div key={cluster.id} className="border-b border-slate-100 last:border-0">
+                      {/* Cluster Header */}
+                      <button
+                        onClick={() => toggleCluster(cluster.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800">
+                            {cluster.name}
+                          </span>
+                          <span className="text-[10px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">
+                            {cluster.vehicles.length}
+                          </span>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 text-slate-400 transition-transform duration-200",
+                            isExpanded ? "transform rotate-0" : "transform -rotate-90"
+                          )}
+                        />
+                      </button>
+
+                      {/* Nested Vehicles */}
+                      {isExpanded && (
+                        <div className="bg-white">
+                          {cluster.vehicles.map((v) => renderCard(v))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : shouldVirtualize ? (
               <div ref={listParentRef} className="flex-1 overflow-y-auto no-scrollbar">
