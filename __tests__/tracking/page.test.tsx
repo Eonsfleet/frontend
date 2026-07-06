@@ -95,4 +95,15 @@ describe('TrackingPage grid shell', () => {
     expect(grid.className).toContain('lg:grid-cols-[320px_1fr_400px]')
     expect(container.querySelectorAll('.row-start-1.row-span-2')).toHaveLength(2)
   })
+
+  it('navigates to the playback page with the selected vehicle when Playback is clicked', async () => {
+    const push = vi.fn()
+    ;(vi.mocked(await import('next/navigation')) as any).useRouter = () => ({ push })
+    render(<TrackingPage />, { wrapper: Wrapper })
+    const row = await screen.findByRole('button', { name: /ABC-123-XD/ })
+    fireEvent.click(row)
+    const [playbackButton] = await screen.findAllByRole('button', { name: /playback/i })
+    fireEvent.click(playbackButton)
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/tracking\/playback\?vehicleId=1&start=.+&end=.+$/))
+  })
 })

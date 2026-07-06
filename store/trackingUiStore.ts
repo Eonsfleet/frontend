@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type TrackingDetailTab = "details" | "driver" | "trip" | "device" | "packets";
+export type TrackingDetailTab = "details" | "driver" | "trip" | "device" | "packets" | "history";
 
 export interface TrackingAdvancedFilters {
   clusterIds: string[];
@@ -45,6 +45,9 @@ interface TrackingUiState {
 
   isAdvancedFiltersOpen: boolean;
   setAdvancedFiltersOpen: (open: boolean) => void;
+
+  isMapFollowEnabled: boolean;
+  setMapFollowEnabled: (enabled: boolean) => void;
 }
 
 export const useTrackingUiStore = create<TrackingUiState>((set) => ({
@@ -66,4 +69,7 @@ export const useTrackingUiStore = create<TrackingUiState>((set) => ({
 
   isAdvancedFiltersOpen: false,
   setAdvancedFiltersOpen: (open) => set({ isAdvancedFiltersOpen: open }),
+
+  isMapFollowEnabled: true,
+  setMapFollowEnabled: (enabled) => set({ isMapFollowEnabled: enabled }),
 }));

@@ -15,6 +15,8 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { cn } from "@/lib/utils";
+import { useTrackingUiStore } from "@/store/trackingUiStore";
+import { Badge } from "@/components/ui/badge";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
@@ -82,15 +84,44 @@ const MapController = ({ selected, locs, allVehicles }: any) => {
     }
   }, [allVehicles.zoomResetKey, fitFleet]);
 
+  const { isMapFollowEnabled, setMapFollowEnabled } = useTrackingUiStore();
+
+  // Listen to manual map drags/pans to disable auto-follow
+  useEffect(() => {
+    const disableFollow = () => {
+      setMapFollowEnabled(false);
+    };
+    map.on("dragstart", disableFollow);
+    map.on("zoomstart", disableFollow);
+    return () => {
+      map.off("dragstart", disableFollow);
+      map.off("zoomstart", disableFollow);
+    };
+  }, [map, setMapFollowEnabled]);
+
+  // Set map follow to true on selected ID change
+  useEffect(() => {
+    if (selected) {
+      setMapFollowEnabled(true);
+    }
+  }, [selected?.id, setMapFollowEnabled]);
+
   // Selection Follow
   useEffect(() => {
-    if (selected && locs[selected.id] && !allVehicles.isReplayMode) {
+    if (selected && locs[selected.id] && isMapFollowEnabled && !allVehicles.isReplayMode) {
       const l = locs[selected.id];
       if (l.lat && l.lng) {
         map.flyTo([l.lat, l.lng], 18);
       }
     }
-  }, [selected?.id, map]); // Optimized dependencies
+  }, [
+    selected?.id,
+    locs[selected?.id]?.lat,
+    locs[selected?.id]?.lng,
+    isMapFollowEnabled,
+    map,
+    allVehicles.isReplayMode
+  ]);
 
   // Replay Follow
   useEffect(() => {

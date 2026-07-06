@@ -110,7 +110,7 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
 
   return (
     <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
-      <CardShell icon={Route} title="Current Trip">
+      <CardShell icon={Route} title="Summary">
         {isLoadingTrip ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
         ) : trip ? (

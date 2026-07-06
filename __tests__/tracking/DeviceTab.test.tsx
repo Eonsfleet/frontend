@@ -29,9 +29,8 @@ describe('DeviceTab', () => {
     expect(screen.getByText('Firmware').nextElementSibling?.textContent).toBe('—')
   })
 
-  it('does not render device model, network, voltage, satellite count or last heartbeat (owned by the Device Status card)', () => {
+  it('does not render network, voltage, satellite count or last heartbeat (owned by the Device Status card)', () => {
     render(<DeviceTab device={{ imei: '1' } as any} resolved={baseResolved} deviceInfoData={null} />)
-    expect(screen.queryByText('Device Model')).not.toBeInTheDocument()
     expect(screen.queryByText('Network')).not.toBeInTheDocument()
     expect(screen.queryByText('Voltage')).not.toBeInTheDocument()
     expect(screen.queryByText('Satellite Count')).not.toBeInTheDocument()

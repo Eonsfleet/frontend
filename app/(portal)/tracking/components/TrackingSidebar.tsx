@@ -26,7 +26,7 @@ interface TrackingSidebarProps {
   setSearchQuery: (query: string) => void;
   ongoingTripsCount: number;
   ongoingTripsData: any[];
-  setIsReplayOpen: (open: boolean) => void;
+  onReplayVehicle: (vehicleId: string, tripId: string | null) => void;
   isLoadingTrips: boolean;
   alarmState?: Record<string, boolean>;
   isFilterActive: boolean;
@@ -50,7 +50,7 @@ export function TrackingSidebar({
   setSearchQuery,
   ongoingTripsCount,
   ongoingTripsData,
-  setIsReplayOpen,
+  onReplayVehicle,
   isLoadingTrips,
   alarmState = {},
   isFilterActive,
@@ -292,7 +292,7 @@ export function TrackingSidebar({
                   onSelect={() => {
                     if (trip.vehicleId) {
                       setSelectedVehicleId(trip.vehicleId);
-                      setIsReplayOpen(true);
+                      onReplayVehicle(trip.vehicleId, trip.id ?? null);
                     }
                   }}
                 />
