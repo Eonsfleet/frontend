@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X,
-  Truck,
   Navigation,
   History,
   Route as RouteIcon,
@@ -39,6 +38,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
+import { getVehicleTypeIcon } from "../utils";
 import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
 import { getDriverById } from "@/lib/api/drivers";
@@ -146,8 +146,19 @@ export function AssetPanel({
 
   if (!selectedVehicle) return null;
 
+  const TypeIcon = getVehicleTypeIcon(selectedVehicle.attributes.body_type);
+
+  // Decide the top-line status from the SAME fleet-stream snapshot (locations[id])
+  // the sidebar card reads, so the panel and the sidebar can't disagree (e.g. panel
+  // "Stopped" while the list still says "Moving"). The per-vehicle telemetry channel
+  // in `resolved` still enriches every detail field below — it just doesn't get to
+  // drive the headline status on its own timeline, which is what caused the desync.
   const statusKey = resolveStatusKey(
-    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    {
+      status: loc?.status ?? resolved.status,
+      is_online: loc?.is_online ?? resolved.isDeviceOnline,
+      speed: loc?.speed ?? resolved.speed,
+    },
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
@@ -263,17 +274,9 @@ export function AssetPanel({
         </div>
 
         <div className="h-32 flex items-center justify-center bg-white">
-          {selectedVehicle.attributes.image ? (
-            <img
-              src={selectedVehicle.attributes.image}
-              alt={`${selectedVehicle.attributes.make} ${selectedVehicle.attributes.model}`}
-              className="h-full object-contain"
-            />
-          ) : (
-            <div data-testid="asset-panel-photo-fallback" className="h-20 w-20 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
-              <Truck className="h-8 w-8" />
-            </div>
-          )}
+          <div data-testid="asset-panel-photo-fallback" className="h-20 w-20 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+            <TypeIcon className="h-8 w-8" />
+          </div>
         </div>
 
         <div className="px-6 pb-4">

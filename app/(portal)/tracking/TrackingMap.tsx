@@ -5,7 +5,6 @@ import {
   MapContainer,
   TileLayer,
   Marker,
-  Popup,
   useMap,
   Polyline,
   Polygon,
@@ -24,15 +23,9 @@ import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
 import { getMarkerState, buildMarkerHtml } from "./utils";
 import type { VehicleInterpolator } from "@/lib/vehicleInterpolation";
 import { TrafficOverlay } from "./components/TrafficOverlay";
+import { VehicleMarker } from "./components/VehicleMarker";
 import type { TrackingMapStyle } from "./utils";
 import type { TrailPoint } from "@/lib/vehicleTrail";
-
-// Normalization & Helpers (Passed from parent or redefined if pure)
-const normalizeReg = (reg: string) => (reg || "").toUpperCase();
-const capitalize = (str: string) => {
-  if (!str) return "N/A";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-};
 
 interface TrackingMapProps {
   filteredVehicles: any[];
@@ -169,6 +162,18 @@ export default function TrackingMap({
   alarmState = {},
 }: TrackingMapProps) {
   const markerRefs = useRef<Map<string, L.Marker>>(new Map());
+  // Last position/heading actually written to each marker, so the rAF loop can
+  // skip redundant Leaflet writes when the interpolated value hasn't changed
+  // (e.g. a stationary vehicle the interpolator keeps returning the same point
+  // for). Re-writing an unchanged position 60×/s reflows the marker — and any
+  // popup bound to it — every frame, which is what caused the popup flicker.
+  const appliedRef = useRef<Map<string, { lat: number; lng: number; heading: number }>>(new Map());
+  // Current selection, read inside the rAF loop without restarting it. The marker
+  // whose popup is open must NOT be nudged every frame or the popup jitters; the
+  // map already follows it via MapController's flyTo, so freezing its imperative
+  // position for the popup's lifetime keeps the popup rock-steady.
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedVehicle ? String(selectedVehicle.id) : null;
 
   const createClusterCustomIcon = (cluster: any) => {
     return L.divIcon({
@@ -188,9 +193,24 @@ export default function TrackingMap({
 
     const tick = () => {
       const now = performance.now();
+      const openPopupId = selectedIdRef.current;
       markerRefs.current.forEach((marker, id) => {
+        // The marker with an open popup stays put — see selectedIdRef note above.
+        if (id === openPopupId && marker.getPopup()?.isOpen()) return;
+
         const interp = interpolator.getInterpolated(id, now);
         if (!interp) return;
+
+        // Skip no-op writes: only touch Leaflet when the value actually moved.
+        const last = appliedRef.current.get(id);
+        const moved =
+          !last ||
+          last.lat !== interp.lat ||
+          last.lng !== interp.lng ||
+          last.heading !== (interp.heading || 0);
+        if (!moved) return;
+
+        appliedRef.current.set(id, { lat: interp.lat, lng: interp.lng, heading: interp.heading || 0 });
         marker.setLatLng([interp.lat, interp.lng]);
         const el = marker.getElement();
         const base = el?.querySelector<HTMLElement>(".marker-base");
@@ -354,6 +374,14 @@ export default function TrackingMap({
         <MarkerClusterGroup
           chunkedLoading
           iconCreateFunction={createClusterCustomIcon}
+          // Once zoomed in to tracking range, stop clustering and add each marker
+          // to the map as a plain layer. leaflet.markercluster proxies clustered
+          // markers, so an imperative setLatLng() on a proxied marker doesn't move
+          // its on-screen icon — that's why live motion looked frozen. As direct
+          // map layers the rAF loop's setLatLng animates them smoothly again.
+          disableClusteringAtZoom={16}
+          spiderfyOnMaxZoom={false}
+          removeOutsideVisibleBounds
         >
           {filteredVehicles
             .filter((v) => {
@@ -376,118 +404,29 @@ export default function TrackingMap({
                 isSelected,
                 hasAlarm,
               );
-              const statusCfg = VEHICLE_STATUS[markerState.statusKey];
 
-              // Bind the declarative position/heading to the raw target — this is
-              // only what places a freshly-mounted marker or reconciles the prop;
-              // the rAF loop below owns the actual frame-by-frame smooth motion via
-              // direct Leaflet calls, correcting any prop-triggered snap within a
-              // single frame (~16ms, imperceptible). Reading the interpolator's
-              // time-varying position here (at render time) would be an impure
-              // render, so that read only happens inside the rAF callback.
-              const lat = loc.lat;
-              const lng = loc.lng;
-              const heading = loc.heading ?? 0;
-              const size = Math.round(40 * markerState.scale);
-
+              // Position/heading are the target the rAF loop below animates toward
+              // via direct Leaflet calls — reading the interpolator here (render
+              // time) would be an impure render, so it only happens in the rAF tick.
               return (
-                <Marker
+                <VehicleMarker
                   key={v.id}
-                  ref={(instance) => {
+                  vehicle={v}
+                  lat={loc.lat}
+                  lng={loc.lng}
+                  heading={loc.heading ?? 0}
+                  speed={loc.speed}
+                  markerState={markerState}
+                  isSelected={isSelected}
+                  onSelect={() =>
+                    setSelectedVehicle(selectedVehicle?.id === v.id ? null : v)
+                  }
+                  registerRef={(instance) => {
                     if (instance) markerRefs.current.set(idKey, instance);
                     else markerRefs.current.delete(idKey);
                   }}
-                  position={[lat, lng]}
-                  zIndexOffset={markerState.zIndexOffset}
-                  icon={L.divIcon({
-                    className: "custom-marker-wrapper",
-                    html: buildMarkerHtml({
-                      registrationNumber: normalizeReg(v.attributes.registration_number),
-                      speedOrStatus:
-                        markerState.statusKey === "moving" && loc.speed != null
-                          ? `${Math.round(loc.speed)} km/h`
-                          : VEHICLE_STATUS[markerState.statusKey].label,
-                      isSelected,
-                      heading,
-                      state: markerState,
-                    }),
-                    // Width=220 (full label card), height=45. Pin tip is at left edge (x=14 ≈ half pin width)
-                    // vertically centred on the pin circle top half, tip is at ~34px from top
-                    iconSize: [220, 45],
-                    iconAnchor: [14, 34],
-                  })}
-                  eventHandlers={{
-                    click: () => {
-                      const isAlreadySelected = selectedVehicle?.id === v.id;
-                      setSelectedVehicle(isAlreadySelected ? null : v);
-                    },
-                    keydown: (e: any) => {
-                      if (e.originalEvent?.key === "Enter" || e.originalEvent?.key === " ") {
-                        const isAlreadySelected = selectedVehicle?.id === v.id;
-                        setSelectedVehicle(isAlreadySelected ? null : v);
-                      }
-                    },
-                  }}
-                >
-                  <Popup className="custom-popup" closeButton={false}>
-                    <div className="p-3 min-w-50 bg-white rounded-2xl shadow-2xl border border-slate-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge
-                          className={cn(
-                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none text-white",
-                          )}
-                          style={{ backgroundColor: statusCfg.marker }}
-                        >
-                          {statusCfg.label}
-                        </Badge>
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              markerState.statusKey !== "offline"
-                                ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                                : "bg-slate-300",
-                            )}
-                          />
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {normalizeReg(v.attributes.registration_number)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
-                        <div className="p-2 bg-white rounded-lg shadow-sm">
-                          {getVehicleIcon(v.attributes.body_type, markerState.statusKey)}
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-slate-900 leading-none">
-                            {capitalize(v.attributes.make || "Vehicle")}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                            {capitalize(v.attributes.model || "Unknown")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            Velocity
-                          </span>
-                          <span className="text-sm font-black text-blue-600 italic">
-                            {loc.speed} <span className="text-[9px]">KPH</span>
-                          </span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            Heading
-                          </span>
-                          <span className="text-sm font-black text-slate-900 italic">
-                            {Math.round(heading)}°
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
+                  getVehicleIcon={getVehicleIcon}
+                />
               );
             })}
         </MarkerClusterGroup>

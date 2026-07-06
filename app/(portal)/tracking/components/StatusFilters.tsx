@@ -2,7 +2,7 @@
 
 import { Vehicle } from "@/types";
 import { cn } from "@/lib/utils";
-import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
+import { VEHICLE_STATUS, matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
 export type StatusFilter =
   | "all"
@@ -56,13 +56,11 @@ export function StatusFilters({
             ? vehicles.length
             : vehicles.filter((v: Vehicle) => {
                 const loc = locations[v.id];
-                if (s === "moving") return loc?.status === "in_transit";
-                if (s === "idle") return loc?.status === "idle";
-                if (s === "parked") return loc?.status === "parked";
-                if (s === "online") return loc?.is_online === true;
-                if (s === "offline") return loc?.is_online === false || !loc;
-                if (s === "alarm") return alarmState[v.id] === true;
-                return false;
+                return matchesStatusBucket(
+                  s as StatusBucket,
+                  { status: loc?.status, is_online: loc?.is_online, speed: loc?.speed },
+                  alarmState[v.id] === true,
+                );
               }).length;
 
         const isActive = statusFilter === s;
