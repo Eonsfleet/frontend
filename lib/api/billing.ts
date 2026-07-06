@@ -46,10 +46,13 @@ export interface SubscriptionApiResponse {
     }
 }
 
-export const getOrganizationSubscription = async (): Promise<OrganizationSubscription> => {
+export const getOrganizationSubscription = async (): Promise<OrganizationSubscription | null> => {
     const response = await apiClient.get<SubscriptionApiResponse>('/subscriptions/organization/current')
 
     const rawData = response.data.data
+    if (!rawData) {
+        return null
+    }
     const planName = rawData.relationships.plan.name
 
     const lName = planName.toLowerCase()
@@ -280,4 +283,26 @@ export const getAssetSubscription = async (id: number): Promise<AssetSubscriptio
 export const cancelAssetSubscription = async (id: number): Promise<AssetSubscription> => {
     const response = await apiClient.post<{ data: AssetSubscription }>(`/subscriptions/assets/${id}/cancel`)
     return response.data.data
+}
+
+export interface InitializeSubscriptionPayload {
+    organization_id: number | string
+    plan_id: number
+    billing_cycle: 'monthly' | 'yearly'
+    redirect_url: string
+    addon_id?: number[]
+}
+
+export interface InitializeSubscriptionResponse {
+    message: string
+    data: {
+        authorization_url: string
+        reference: string
+        public_key: string
+    }
+}
+
+export const initializeSubscription = async (data: InitializeSubscriptionPayload): Promise<InitializeSubscriptionResponse> => {
+    const response = await apiClient.post<InitializeSubscriptionResponse>('/subscriptions/payments/initialize', data)
+    return response.data
 }

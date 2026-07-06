@@ -141,7 +141,7 @@ export default function BillingOverviewPage() {
         )
     }
 
-    if (isSubError || !subscription) {
+    if (isSubError) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
                 <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
@@ -158,9 +158,9 @@ export default function BillingOverviewPage() {
         )
     }
 
-    const isUnlimited = subscription.vehicle_limit === null
-    const usagePercentage = isUnlimited ? 0 : Math.round((subscription.vehicle_count / (subscription.vehicle_limit as number)) * 100) || 0
-    const isNearLimit = !isUnlimited && usagePercentage >= 80
+    const isUnlimited = subscription ? subscription.vehicle_limit === null : false
+    const usagePercentage = subscription && !isUnlimited ? Math.round((subscription.vehicle_count / (subscription.vehicle_limit as number)) * 100) || 0 : 0
+    const isNearLimit = subscription ? (!isUnlimited && usagePercentage >= 80) : false
     const recentInvoices = invoicesData?.data?.data?.slice(0, 3) || []
     const hasDunning = assetSummary && assetSummary.past_due > 0
 
@@ -176,76 +176,120 @@ export default function BillingOverviewPage() {
 
             {/* Plan Card + Billing Cycle */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden">
-                    <CardHeader className="pb-0 pt-5 px-6">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Current Plan</CardTitle>
-                            <StatusPill status={subscription.status} />
-                        </div>
-                    </CardHeader>
-                    <CardContent className="px-6 pt-4 pb-6 space-y-5">
-                        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                            <div>
-                                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{subscription.plan.name}</h2>
-                                <p className="text-slate-400 text-sm mt-1 capitalize">{subscription.billing_cycle} billing</p>
+                {subscription ? (
+                    <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden">
+                        <CardHeader className="pb-0 pt-5 px-6">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Current Plan</CardTitle>
+                                <StatusPill status={subscription.status} />
                             </div>
-                            <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0" asChild>
-                                <Link href="/billing/upgrade">
-                                    <Zap className="mr-2 h-3.5 w-3.5" /> Upgrade Plan
-                                </Link>
-                            </Button>
-                        </div>
-
-                        <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            {/* Renewal */}
-                            <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                                    <CalendarDays className="w-4 h-4 text-indigo-500" />
-                                </div>
+                        </CardHeader>
+                        <CardContent className="px-6 pt-4 pb-6 space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                                 <div>
-                                    <p className="text-xs font-medium text-slate-400">Renewal Date</p>
-                                    <p className="text-sm font-bold text-slate-900 mt-0.5">
-                                        {subscription.ends_at
-                                            ? format(new Date(subscription.ends_at), 'MMM d, yyyy')
-                                            : 'No expiry set'}
-                                    </p>
-                                    <p className="text-[11px] text-slate-400 mt-0.5">
-                                        Started {format(new Date(subscription.starts_at), 'MMM d, yyyy')}
-                                    </p>
+                                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{subscription.plan.name}</h2>
+                                    <p className="text-slate-400 text-sm mt-1 capitalize">{subscription.billing_cycle} billing</p>
                                 </div>
+                                <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0" asChild>
+                                    <Link href="/billing/upgrade">
+                                        <Zap className="mr-2 h-3.5 w-3.5" /> Upgrade Plan
+                                    </Link>
+                                </Button>
                             </div>
 
-                            {/* Vehicle Usage */}
-                            <div>
-                                <div className="flex justify-between text-xs mb-2">
-                                    <span className="font-medium text-slate-500 flex items-center gap-1.5">
-                                        <Car className="w-3.5 h-3.5 text-slate-400" /> Vehicle Limit
-                                    </span>
-                                    <span className={cn('font-bold', isNearLimit ? 'text-amber-600' : 'text-indigo-600')}>
-                                        {subscription.vehicle_count} / {isUnlimited ? 'Unlimited' : subscription.vehicle_limit}
-                                    </span>
-                                </div>
-                                {!isUnlimited && (
-                                    <>
-                                        <Progress
-                                            value={usagePercentage}
-                                            className={cn('h-2 bg-slate-100', isNearLimit ? '[&>div]:bg-amber-500' : '[&>div]:bg-indigo-500')}
-                                        />
-                                        <p className={cn('text-[11px] mt-1.5', isNearLimit ? 'text-amber-600 font-medium' : 'text-slate-400')}>
-                                            {isNearLimit
-                                                ? `${100 - usagePercentage}% of capacity remaining — consider upgrading.`
-                                                : `${usagePercentage}% of vehicle quota used.`
-                                            }
+                            <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                {/* Renewal */}
+                                <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                                        <CalendarDays className="w-4 h-4 text-indigo-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-slate-400">Renewal Date</p>
+                                        <p className="text-sm font-bold text-slate-900 mt-0.5">
+                                            {subscription.ends_at
+                                                ? format(new Date(subscription.ends_at), 'MMM d, yyyy')
+                                                : 'No expiry set'}
                                         </p>
-                                    </>
-                                )}
-                                {isUnlimited && (
-                                    <p className="text-[11px] text-slate-400 mt-1">No vehicle limit on your current plan.</p>
-                                )}
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            Started {format(new Date(subscription.starts_at), 'MMM d, yyyy')}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Vehicle Usage */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-medium text-slate-500 flex items-center gap-1.5">
+                                            <Car className="w-3.5 h-3.5 text-slate-400" /> Vehicle Limit
+                                        </span>
+                                        <span className={cn('font-bold', isNearLimit ? 'text-amber-600' : 'text-indigo-600')}>
+                                            {subscription.vehicle_count} / {isUnlimited ? 'Unlimited' : subscription.vehicle_limit}
+                                        </span>
+                                    </div>
+                                    {!isUnlimited && (
+                                        <>
+                                            <Progress
+                                                value={usagePercentage}
+                                                className={cn('h-2 bg-slate-100', isNearLimit ? '[&>div]:bg-amber-500' : '[&>div]:bg-indigo-500')}
+                                            />
+                                            <p className={cn('text-[11px] mt-1.5', isNearLimit ? 'text-amber-600 font-medium' : 'text-slate-400')}>
+                                                {isNearLimit
+                                                    ? `${100 - usagePercentage}% of capacity remaining — consider upgrading.`
+                                                    : `${usagePercentage}% of vehicle quota used.`
+                                                }
+                                            </p>
+                                        </>
+                                    )}
+                                    {isUnlimited && (
+                                        <p className="text-[11px] text-slate-400 mt-1">No vehicle limit on your current plan.</p>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden bg-white">
+                        <CardHeader className="pb-0 pt-5 px-6">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Plan Status</CardTitle>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
+                                    No Active Plan
+                                </span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="px-6 pt-4 pb-6 space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Select a Subscription Plan</h2>
+                                    <p className="text-slate-500 text-sm mt-2 max-w-md">
+                                        Your organization does not have an active subscription. Choose a plan to add vehicles, track your fleet, and monitor driver behavior.
+                                    </p>
+                                </div>
+                                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-sm" asChild>
+                                    <Link href="/billing/upgrade">
+                                        <Zap className="mr-2 h-3.5 w-3.5" /> View Plans
+                                    </Link>
+                                </Button>
+                            </div>
+                            <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-slate-600">
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                    <div className="text-xs">
+                                        <p className="font-semibold text-slate-800">Real-Time GPS Tracking</p>
+                                        <p className="text-slate-400 mt-0.5">Live tracking with instant alerts.</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                    <div className="text-xs">
+                                        <p className="font-semibold text-slate-800">Smart Fuel & Maintenance</p>
+                                        <p className="text-slate-400 mt-0.5">Monitor fuel usage and schedule servicing.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Payment Method */}
                 <Card className="border-slate-200 shadow-sm bg-slate-900 text-slate-50 relative overflow-hidden flex flex-col justify-between">
@@ -256,25 +300,35 @@ export default function BillingOverviewPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="relative z-10 flex-1 flex flex-col justify-center px-5 py-6">
-                        <div className="flex items-center gap-3">
-                            <div className="w-14 h-9 bg-slate-100/10 rounded-md flex items-center justify-center border border-slate-700">
-                                <div className="relative w-8 h-5">
-                                    <div className="absolute left-0 w-5 h-5 rounded-full bg-red-500/80" />
-                                    <div className="absolute right-0 w-5 h-5 rounded-full bg-amber-400/80" />
+                        {subscription ? (
+                            <div className="flex items-center gap-3">
+                                <div className="w-14 h-9 bg-slate-100/10 rounded-md flex items-center justify-center border border-slate-700">
+                                    <div className="relative w-8 h-5">
+                                        <div className="absolute left-0 w-5 h-5 rounded-full bg-red-500/80" />
+                                        <div className="absolute right-0 w-5 h-5 rounded-full bg-amber-400/80" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="font-mono text-base font-medium tracking-widest text-slate-200">•••• 4242</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Expires 12/28</p>
                                 </div>
                             </div>
-                            <div>
-                                <p className="font-mono text-base font-medium tracking-widest text-slate-200">•••• 4242</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Expires 12/28</p>
+                        ) : (
+                            <div className="text-center">
+                                <div className="mx-auto w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+                                    <CreditCard className="w-5 h-5 text-slate-400" />
+                                </div>
+                                <p className="text-xs text-slate-400">No payment method on file</p>
+                                <p className="text-[10px] text-slate-500 mt-1">Stored securely during plan selection</p>
                             </div>
-                        </div>
-                        <p className="text-[10px] text-slate-600 mt-5 italic">Payment method management coming soon.</p>
+                        )}
+                        {subscription && <p className="text-[10px] text-slate-600 mt-5 italic">Payment method management coming soon.</p>}
                     </CardContent>
                 </Card>
             </div>
 
             {/* Asset Subscription Summary */}
-            {assetSummary && <AssetSummaryStrip summary={assetSummary} />}
+            {subscription && assetSummary && <AssetSummaryStrip summary={assetSummary} />}
 
             {/* Recent Transactions */}
             <Card className="border-slate-200 shadow-sm overflow-hidden">

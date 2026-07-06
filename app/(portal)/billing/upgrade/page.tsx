@@ -9,6 +9,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import * as api from '@/lib/api/billing'
 import { cn, extractApiError } from '@/lib/utils'
+import { useAuthStore } from '@/store/authStore'
 
 function formatNaira(amount: number) {
     return `₦${amount.toLocaleString('en-NG')}`
@@ -22,6 +23,7 @@ function formatKobo(kobo?: number) {
 export default function PlanUpgradePage() {
     const [isCheckoutLoading, setIsCheckoutLoading] = useState<number | null>(null)
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
+    const { organization } = useAuthStore()
 
     const { data: subscription, isLoading: isSubLoading } = useQuery({
         queryKey: ['subscription-current'],
@@ -45,15 +47,41 @@ export default function PlanUpgradePage() {
         },
     })
 
+    const initializeSubscriptionMutation = useMutation({
+        mutationFn: api.initializeSubscription,
+        onSuccess: (res) => {
+            toast.success('Redirecting to secure payment checkout…')
+            if (res.data.authorization_url) window.location.href = res.data.authorization_url
+        },
+        onError: (err: any) => {
+            setIsCheckoutLoading(null)
+            toast.error(extractApiError(err, 'Failed to initialise subscription.'))
+        },
+    })
+
     const handleUpgrade = (planId: number) => {
-        if (!subscription) return
         setIsCheckoutLoading(planId)
-        changePlanMutation.mutate({
-            subscription_id: subscription.id,
-            plan_id: planId,
-            billing_cycle: billingCycle,
-            redirect_url: `${window.location.origin}/billing/callback`,
-        })
+        if (subscription) {
+            changePlanMutation.mutate({
+                subscription_id: subscription.id,
+                plan_id: planId,
+                billing_cycle: billingCycle,
+                redirect_url: `${window.location.origin}/billing/callback`,
+            })
+        } else {
+            const orgIdentifier = organization?.attributes?.identifier || organization?.id
+            if (!orgIdentifier) {
+                setIsCheckoutLoading(null)
+                toast.error('Organization details not found. Please log in again.')
+                return
+            }
+            initializeSubscriptionMutation.mutate({
+                organization_id: orgIdentifier,
+                plan_id: planId,
+                billing_cycle: billingCycle,
+                redirect_url: `${window.location.origin}/billing/callback`,
+            })
+        }
     }
 
     if (isSubLoading || isPlansLoading) {
@@ -64,7 +92,7 @@ export default function PlanUpgradePage() {
         )
     }
 
-    if (isError || !plansData || !subscription) {
+    if (isError || !plansData) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
                 <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
@@ -79,7 +107,7 @@ export default function PlanUpgradePage() {
         )
     }
 
-    const currentPlanId = subscription.plan.id
+    const currentPlanId = subscription?.plan?.id ?? null
 
     return (
         <div className="space-y-8 max-w-5xl">
@@ -277,7 +305,7 @@ export default function PlanUpgradePage() {
                                     ) : (
                                         <ArrowUpCircle className="w-4 h-4 mr-2" />
                                     )}
-                                    {isCurrent ? 'Current Plan' : (plan.id > currentPlanId ? 'Upgrade' : 'Switch Plan')}
+                                    {isCurrent ? 'Current Plan' : (subscription ? (plan.id > (currentPlanId ?? 0) ? 'Upgrade' : 'Switch Plan') : 'Subscribe')}
                                 </Button>
                             </CardFooter>
                         </Card>
