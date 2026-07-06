@@ -14,6 +14,9 @@ interface BottomCardsProps {
   selectedVehicle: any;
   /** Live-resolved telemetry (WS + REST-merged), computed once at the page level. */
   resolved: ResolvedVehicleTelemetry;
+  /** The fleet-stream snapshot (locations[id]) the sidebar reads — used so the
+   * headline status here matches the sidebar/list exactly. */
+  loc?: any;
   hasActiveAlarm?: boolean;
 }
 
@@ -53,7 +56,7 @@ function simLabel(status: string | null | undefined): string | null {
   return status;
 }
 
-export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false }: BottomCardsProps) {
+export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = false }: BottomCardsProps) {
   const { data: trip, isLoading: isLoadingTrip } = useQuery({
     queryKey: ["active-trip", selectedVehicle?.id],
     queryFn: () => getActiveTripForVehicle(selectedVehicle!.id),
@@ -71,8 +74,14 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
   });
 
   const lastUpdateRelative = useRelativeTime(resolved.lastUpdate);
+  // Headline status comes from the same fleet-stream snapshot the sidebar uses, so
+  // the lower sheet can't show "Stopped" while the list still says "Moving".
   const statusKey = resolveStatusKey(
-    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    {
+      status: loc?.status ?? resolved.status,
+      is_online: loc?.is_online ?? resolved.isDeviceOnline,
+      speed: loc?.speed ?? resolved.speed,
+    },
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
@@ -128,7 +137,7 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
 
       <CardShell icon={Navigation} title="Location & Movement">
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
-          <Stat label="Speed" value={`${resolved.speed ?? 0} km/h`} />
+          <Stat label="Speed" value={`${loc?.speed ?? resolved.speed ?? 0} km/h`} />
           <Stat label="Heading" value={resolved.heading != null ? `${Math.round(resolved.heading)}°` : null} />
           <Stat label="Ignition" value={resolved.ignition ? "On" : "Off"} />
           <Stat

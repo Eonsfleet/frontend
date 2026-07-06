@@ -52,9 +52,17 @@ export class VehicleInterpolator {
     // even if it arrives before the previous animation finished.
     const visualNow = this.getInterpolated(id, sample.timestamp) ?? existing.next;
 
+    // Animate FORWARD from now toward the new fix over roughly the time we expect
+    // the *next* packet to take (the gap we just observed between the last two
+    // packets). Previously both prev and next were stamped with the same time, so
+    // the interval was zero and getInterpolated returned the endpoint instantly —
+    // the marker snapped to each packet with no in-between frames and looked static.
+    const observedGap = sample.timestamp - existing.next.timestamp;
+    const projected = observedGap > 0 ? observedGap : MIN_INTERVAL_MS;
+
     this.states.set(id, {
       prev: { ...visualNow, timestamp: sample.timestamp },
-      next: sample,
+      next: { ...sample, timestamp: sample.timestamp + projected },
     });
   }
 

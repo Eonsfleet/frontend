@@ -38,16 +38,24 @@ vi.mock('@/store/authStore', () => ({ useAuthStore: () => ({ token: 'tok', organ
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ setSidebarCollapsed: vi.fn() }) }))
 vi.mock('@/hooks/useEcho', () => ({ useEcho: () => ({ subscribePrivate: vi.fn() }) }))
 vi.mock('@/hooks/useConnectionStatus', () => ({ useConnectionStatus: () => ({ status: 'connected' }) }))
-vi.mock('@/store/trackingUiStore', () => ({
-  useTrackingUiStore: () => ({
+// page.tsx consumes this store both as a whole-object call (AssetPanel) and with a
+// selector (page.tsx reads isAssetListCollapsed via `(s) => s.isAssetListCollapsed`),
+// so the mock must honor the selector argument — returning the whole object
+// unconditionally would make a boolean selector resolve to a truthy object.
+vi.mock('@/store/trackingUiStore', () => {
+  const state = {
     setActiveTab: vi.fn(),
     activeTab: 'details',
     isAssetPanelCollapsed: false,
     toggleAssetPanel: vi.fn(),
     isAssetListCollapsed: false,
     toggleAssetList: vi.fn(),
-  }),
-}))
+  }
+  return {
+    useTrackingUiStore: (selector?: (s: typeof state) => unknown) =>
+      selector ? selector(state) : state,
+  }
+})
 // UpgradeGate (pre-existing, unrelated to this task) blocks rendering unless the
 // "geofence" capability is present — bypass it the same way __tests__/geofencing/
 // flows.test.tsx does for the same gate, so the grid shell underneath is testable.

@@ -8,6 +8,7 @@ import { Vehicle, Trip } from "@/types";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
+import { useTrackingUiStore } from "@/store/trackingUiStore";
 import { useEcho } from "@/hooks/useEcho";
 import * as api from "@/lib/api/vehicles";
 import * as tripApi from "@/lib/api/trips";
@@ -33,10 +34,12 @@ import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { cn } from "@/lib/utils";
+import { cn, normalizeTelemetry } from "@/lib/utils";
+import { matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
 export default function TrackingPage() {
   const queryClient = useQueryClient();
+  const isAssetListCollapsed = useTrackingUiStore((s) => s.isAssetListCollapsed);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationSearch, setLocationSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -99,7 +102,7 @@ export default function TrackingPage() {
   const clusters = useMemo(() => clustersData?.data?.clusters || [], [clustersData]);
   const geofences = useMemo(() => geofencesData?.data?.geofences || [], [geofencesData]);
 
-  const { locations, interpolator, alarmState, trails } = useVehicleLocations({
+  const { locations, setLocations, interpolator, alarmState, trails } = useVehicleLocations({
     vehicles,
     token,
     organization,
@@ -134,6 +137,41 @@ export default function TrackingPage() {
     !!selectedVehicle,
   );
 
+  // The selected vehicle has an extra, faster per-vehicle WS channel open
+  // (location.vehicle.{id}) that the bottom sheet reads directly — so its speed
+  // updated ahead of the sidebar list and map badge, which read the shared
+  // locations[] map fed by the slower fleet channel. Fold each per-vehicle packet
+  // back into locations[id] so all three surfaces update from the same value at
+  // the same (fast) cadence. Guarded so it only writes when the packet is actually
+  // newer, and only for the currently-selected vehicle.
+  const rawTelemetry = resolvedTelemetry.rawTelemetry;
+  useEffect(() => {
+    if (!selectedVehicleId || !rawTelemetry) return;
+    const normalized = normalizeTelemetry(rawTelemetry);
+    if (!normalized) return;
+    setLocations((prev) => {
+      const prevEntry = prev[selectedVehicleId];
+      const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+      const pktTs = normalized.timestamp_utc || normalized.gps_datetime;
+      const pktUpdateMs = pktTs ? new Date(pktTs).getTime() : Date.now();
+      // Never let an older per-vehicle packet clobber a fresher fleet-channel one.
+      if (prevEntry && prevUpdateMs > pktUpdateMs) return prev;
+      return {
+        ...prev,
+        [selectedVehicleId]: {
+          ...prevEntry,
+          ...normalized,
+          statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
+          lastUpdate: pktTs ?? prevEntry?.lastUpdate,
+          lastPacket: normalized.last_packet_received_at ?? pktTs ?? prevEntry?.lastPacket,
+          fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
+          fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+          raw: normalized,
+        },
+      };
+    });
+  }, [rawTelemetry, selectedVehicleId, setLocations]);
+
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
 
   // Sync sidebar search query with drawer search
@@ -163,6 +201,13 @@ export default function TrackingPage() {
         return { ...prev, statuses: ["stopped"] };
       } else if (newStatus === "offline") {
         return { ...prev, statuses: ["offline"] };
+      } else if (newStatus === "online") {
+        // "Online" = every live vehicle (moving + idle + parked), the complement
+        // of offline. Previously this case was missing, so clicking Online left
+        // the previous filter in place — the list kept showing offline assets.
+        return { ...prev, statuses: ["online"] };
+      } else if (newStatus === "alarm") {
+        return { ...prev, statuses: ["alarm"] };
       }
       return prev;
     });
@@ -177,6 +222,8 @@ export default function TrackingPage() {
       else if (s[0] === "idle") setStatusFilter("idle");
       else if (s[0] === "stopped") setStatusFilter("parked");
       else if (s[0] === "offline") setStatusFilter("offline");
+      else if (s[0] === "online") setStatusFilter("online");
+      else if (s[0] === "alarm") setStatusFilter("alarm");
     } else {
       setStatusFilter("all");
     }
@@ -287,18 +334,24 @@ export default function TrackingPage() {
       });
     }
 
-    // 3. Status filter
-    if (filters.statuses.length < 4) {
+    // 3. Status filter — resolve each vehicle through the SAME canonical status
+    // logic the sidebar cards / panels / markers use (matchesStatusBucket →
+    // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
+    // label disagrees with the status shown on its card. "all" is the full set of
+    // buckets, so only actually-narrowed filters run this pass.
+    const ALL_STATUS_BUCKETS = ["moving", "idle", "stopped", "offline"];
+    const isNarrowed =
+      filters.statuses.length > 0 &&
+      !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
+    if (isNarrowed) {
       result = result.filter((v: Vehicle) => {
         const loc = locations[v.id];
         const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
-
-        let match = false;
-        if (filters.statuses.includes("moving") && loc?.status === "in_transit") match = true;
-        if (filters.statuses.includes("idle") && loc?.status === "idle") match = true;
-        if (filters.statuses.includes("stopped") && loc?.status === "parked") match = true;
-        if (filters.statuses.includes("offline") && (!isOnline || !loc)) match = true;
-        return match;
+        const input = { status: loc?.status, is_online: isOnline, speed: loc?.speed };
+        const hasAlarm = alarmState[v.id] === true;
+        return filters.statuses.some((bucket) =>
+          matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
+        );
       });
     }
 
@@ -393,7 +446,7 @@ export default function TrackingPage() {
     }
 
     return result;
-  }, [vehicles, filters, locations, geofences, getDistance, isVehicleInGeofence]);
+  }, [vehicles, filters, locations, alarmState, geofences, getDistance, isVehicleInGeofence]);
 
   // Clear selection if the selected vehicle is not in the filtered results
   useEffect(() => {
@@ -513,11 +566,22 @@ export default function TrackingPage() {
           "h-screen w-full grid overflow-hidden bg-white",
           selectedVehicle ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]",
           "grid-cols-1",
-          selectedVehicle ? "lg:grid-cols-[320px_1fr_400px]" : "lg:grid-cols-[320px_1fr_0px]",
+          isAssetListCollapsed
+            ? selectedVehicle
+              ? "lg:grid-cols-[0px_1fr_400px]"
+              : "lg:grid-cols-[0px_1fr_0px]"
+            : selectedVehicle
+              ? "lg:grid-cols-[320px_1fr_400px]"
+              : "lg:grid-cols-[320px_1fr_0px]",
           "transition-[grid-template-columns] duration-300 ease-in-out",
         )}
       >
-        <div className="hidden lg:block row-start-1 row-span-2 border-r border-slate-200 overflow-hidden">
+        <div
+          className={cn(
+            "hidden lg:block row-start-1 row-span-2",
+            isAssetListCollapsed ? "overflow-visible" : "border-r border-slate-200 overflow-hidden",
+          )}
+        >
           <TrackingSidebar
             viewMode={viewMode}
             vehicles={vehicles}
@@ -564,7 +628,12 @@ export default function TrackingPage() {
             alarmState={alarmState}
           />
 
-          <div className="absolute top-4 left-4 right-4 z-30">
+          <div
+            className={cn(
+              "absolute top-4 right-4 z-30 transition-[left] duration-300 ease-in-out",
+              isAssetListCollapsed ? "left-14" : "left-4",
+            )}
+          >
             <TrackingTopBar
               locationSearch={locationSearch}
               setLocationSearch={setLocationSearch}
@@ -614,6 +683,7 @@ export default function TrackingPage() {
               <BottomCards
                 selectedVehicle={selectedVehicle}
                 resolved={resolvedTelemetry}
+                loc={selectedLoc}
                 hasActiveAlarm={alarmState[selectedVehicle.id] === true}
               />
             </div>

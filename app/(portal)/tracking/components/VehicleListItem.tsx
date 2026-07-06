@@ -1,9 +1,9 @@
 "use client";
 
-import { Truck } from "lucide-react";
 import { Vehicle } from "@/types";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
+import { getVehicleTypeIcon } from "../utils";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 
 interface VehicleListItemProps {
@@ -26,6 +26,7 @@ export function VehicleListItem({
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
+  const TypeIcon = getVehicleTypeIcon(vehicle.attributes.body_type);
   const lastUpdate = useRelativeTime(loc?.lastPacket || loc?.lastUpdate);
   const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
   const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
@@ -48,12 +49,8 @@ export function VehicleListItem({
         isSelected ? "bg-blue-50" : "hover:bg-slate-50",
       )}
     >
-      <div className="h-9 w-9 rounded-md overflow-hidden shrink-0 flex items-center justify-center bg-slate-100 text-slate-400">
-        {vehicle.attributes.image ? (
-          <img src={vehicle.attributes.image} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <Truck className="h-4 w-4" />
-        )}
+      <div className="h-9 w-9 rounded-md shrink-0 flex items-center justify-center bg-slate-100 text-slate-400">
+        <TypeIcon className="h-4 w-4" />
       </div>
 
       <div className="min-w-0 flex-1">
