@@ -119,11 +119,11 @@ export function TrackingSidebar({
 
   if (isAssetListCollapsed) {
     return (
-      <div className="hidden lg:flex h-full flex-col pointer-events-none">
+      <div className="hidden lg:block relative h-full pointer-events-none">
         <button
           onClick={toggleAssetList}
           aria-label="Expand asset list"
-          className="pointer-events-auto self-start mt-2 h-12 w-8 rounded-r-2xl bg-white border border-slate-200 shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
+          className="pointer-events-auto absolute left-0 top-2 z-500 h-12 w-8 rounded-r-2xl bg-white border border-slate-200 shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

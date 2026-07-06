@@ -88,5 +88,10 @@ export function useResolvedVehicleTelemetry(
     address: resolved.address ?? geocodedAddress ?? null,
     isLoadingSensors,
     isFuelLoading,
+    // The raw per-vehicle WS packet (location.vehicle.{id}) that produced this
+    // resolution. Exposed so the page can fold it back into the shared locations[]
+    // map, keeping the sidebar list + map badge (which read locations[id]) in sync
+    // with the bottom sheet at the same fast per-vehicle cadence.
+    rawTelemetry: telemetry,
   };
 }

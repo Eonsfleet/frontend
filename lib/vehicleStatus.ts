@@ -121,3 +121,40 @@ export function resolveStatusKey(
 export function getStatusConfig(key: VehicleStatusKey): VehicleStatusConfig {
   return VEHICLE_STATUS[key];
 }
+
+/**
+ * The filter chips / drawer use a slightly wider vocabulary than the 5-way marker
+ * taxonomy: "stopped" is the drawer's name for "parked", and "online" is a
+ * cross-cutting bucket (any device that's online, regardless of motion). This is
+ * the ONE place that decides whether a vehicle belongs to a given filter bucket,
+ * so the sidebar cards, the filter tab counts, and the filtered list can never
+ * disagree — they all resolve status through resolveStatusKey first.
+ */
+export type StatusBucket = "moving" | "idle" | "parked" | "stopped" | "offline" | "online" | "alarm";
+
+export function matchesStatusBucket(
+  bucket: StatusBucket,
+  input: NormalizedStatusInput | null | undefined,
+  hasActiveAlarm = false,
+): boolean {
+  const key = resolveStatusKey(input, hasActiveAlarm);
+  switch (bucket) {
+    case "moving":
+      return key === "moving";
+    case "idle":
+      return key === "idle";
+    case "parked":
+    case "stopped":
+      return key === "parked";
+    case "offline":
+      return key === "offline";
+    case "alarm":
+      return key === "alarm";
+    case "online":
+      // "Online" = the device is reachable and not in an alarm state — i.e. any
+      // live vehicle (moving / idle / parked), the complement of offline.
+      return key !== "offline" && key !== "alarm";
+    default:
+      return false;
+  }
+}
