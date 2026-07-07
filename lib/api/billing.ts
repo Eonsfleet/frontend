@@ -14,6 +14,7 @@ export interface OrganizationSubscription {
     vehicle_count: number
     starts_at: string
     ends_at: string | null
+    currency: string
 }
 
 const FEATURE_OVERRIDES: Record<number, Capability[]> = {
@@ -91,6 +92,7 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         capabilities = Array.from(new Set([...capabilities, ...overrides]))
     }
 
+    const currency = (rawData as any).attributes.currency || (rawData as any).relationships?.plan?.currency || 'NGN'
     return {
         id: rawData.id,
         status: rawData.attributes.status,
@@ -108,7 +110,8 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         admin_limit: rawData.relationships.plan.admin_limit ?? null,
         vehicle_count: 0,
         starts_at: rawData.attributes.started_at,
-        ends_at: rawData.attributes.ended_at
+        ends_at: rawData.attributes.ended_at,
+        currency,
     }
 }
 
@@ -281,3 +284,127 @@ export const cancelAssetSubscription = async (id: number): Promise<AssetSubscrip
     const response = await apiClient.post<{ data: AssetSubscription }>(`/subscriptions/assets/${id}/cancel`)
     return response.data.data
 }
+
+// ─── Payment Methods Mocking ──────────────────────────────────────────────────
+
+export interface PaymentMethod {
+    id: string
+    brand: string
+    last4: string
+    exp_month: number
+    exp_year: number
+    is_default: boolean
+}
+
+// In-memory mock storage for payment methods, initialised with a default Visa card
+let mockCards: PaymentMethod[] = [
+    { id: 'pm_1', brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2028, is_default: true }
+]
+
+export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve([...mockCards])
+        }, 300)
+    })
+}
+
+export const addPaymentMethod = async (data: { brand: string; last4: string; exp_month: number; exp_year: number }): Promise<PaymentMethod> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const newCard: PaymentMethod = {
+                id: `pm_${Date.now()}`,
+                brand: data.brand.toLowerCase(),
+                last4: data.last4,
+                exp_month: data.exp_month,
+                exp_year: data.exp_year,
+                is_default: mockCards.length === 0,
+            }
+            mockCards.push(newCard)
+            resolve(newCard)
+        }, 500)
+    })
+}
+
+export const removePaymentMethod = async (id: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            const index = mockCards.findIndex(c => c.id === id)
+            if (index === -1) {
+                reject(new Error('Card not found.'))
+                return
+            }
+            mockCards.splice(index, 1)
+            resolve()
+        }, 500)
+    })
+}
+
+// ─── B2B Change Requests Mocking ──────────────────────────────────────────────
+
+export interface BillingChangeRequest {
+    id: number
+    type: 'downgrade' | 'cancellation'
+    reason: string
+    details?: string
+    status: 'pending' | 'approved' | 'rejected'
+    submitted_at: string
+}
+
+let mockRequests: BillingChangeRequest[] = []
+
+export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancellation'; reason: string; details?: string }): Promise<{ success: boolean; data: BillingChangeRequest }> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const newReq: BillingChangeRequest = {
+                id: Date.now(),
+                type: data.type,
+                reason: data.reason,
+                details: data.details,
+                status: 'pending',
+                submitted_at: new Date().toISOString(),
+            }
+            mockRequests.push(newReq)
+            resolve({ success: true, data: newReq })
+        }, 600)
+    })
+}
+
+export const getBillingRequests = async (): Promise<BillingChangeRequest[]> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve([...mockRequests])
+        }, 300)
+    })
+}
+
+// ─── Add Vehicles Beyond Capacity ────────────────────────────────────────────
+
+export interface AddVehiclesResponse {
+    success: boolean
+    message: string
+    batch_id: string
+    quantity: number
+    prorated_charge: number
+    currency: string
+    next_billing_date: string
+}
+
+export const addVehiclesBeyondCapacity = async (data: { count: number; proration_kobo: number }): Promise<AddVehiclesResponse> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const nextMonth = new Date()
+            nextMonth.setMonth(nextMonth.getMonth() + 1)
+            resolve({
+                success: true,
+                message: `${data.count} vehicles successfully added to your fleet subscription.`,
+                batch_id: `batch-${Date.now().toString().slice(-6)}`,
+                quantity: data.count,
+                prorated_charge: data.proration_kobo,
+                currency: 'NGN',
+                next_billing_date: nextMonth.toISOString(),
+            })
+        }, 800)
+    })
+}
+
