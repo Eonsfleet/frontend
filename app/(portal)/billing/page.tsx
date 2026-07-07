@@ -192,7 +192,7 @@ export default function BillingOverviewPage() {
         )
     }
 
-    if (isSubError || !subscription) {
+    if (isSubError) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
                 <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
@@ -209,18 +209,9 @@ export default function BillingOverviewPage() {
         )
     }
 
-    // Currency Formatting Context
-    const currency = subscription.currency || 'NGN'
-
-    // Quotas depending on Plan Tier
-    const tier = subscription.plan.tier
-    const smsLimit = tier === 'starter' ? 500 : tier === 'growth' ? 5000 : 100000
-    const apiLimit = tier === 'starter' ? 25000 : tier === 'growth' ? 250000 : 1000000
-    const storageLimit = tier === 'starter' ? 10 : tier === 'growth' ? 100 : 1000 // in GB
-
-    const isUnlimitedVehicles = subscription.vehicle_limit === null
-    const usagePercentage = isUnlimitedVehicles ? 0 : Math.round((subscription.vehicle_count / (subscription.vehicle_limit as number)) * 100) || 0
-    const isNearLimit = !isUnlimitedVehicles && usagePercentage >= 80
+    const isUnlimited = subscription ? subscription.vehicle_limit === null : false
+    const usagePercentage = subscription && !isUnlimited ? Math.round((subscription.vehicle_count / (subscription.vehicle_limit as number)) * 100) || 0 : 0
+    const isNearLimit = subscription ? (!isUnlimited && usagePercentage >= 80) : false
     const recentInvoices = invoicesData?.data?.data?.slice(0, 3) || []
 
     // Proration Calculations for B2B Fleet Expansion
@@ -307,171 +298,122 @@ export default function BillingOverviewPage() {
                     </CardContent>
                 </Card>
 
-                {/* SMS Sent */}
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="py-4 px-5">
-                        <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <MessageSquare className="w-4 h-4 text-indigo-500" /> SMS Sent (Live)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5 pt-0">
-                        <p className="text-2xl font-black text-slate-900">
-                            {smsUsed.toLocaleString()} <span className="text-xs text-slate-400 font-medium">/ {smsLimit.toLocaleString()}</span>
-                        </p>
-                        <div className="mt-3">
-                            <Progress value={(smsUsed / smsLimit) * 100} className="h-1.5 [&>div]:bg-indigo-500" />
-                            <p className="text-[10px] text-slate-400 font-medium mt-1.5">
-                                {Math.round((smsUsed / smsLimit) * 100)}% of limit consumed
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
+            {/* Plan Card + Billing Cycle */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {subscription ? (
+                    <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden">
+                        <CardHeader className="pb-0 pt-5 px-6">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Current Plan</CardTitle>
+                                <StatusPill status={subscription.status} />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="px-6 pt-4 pb-6 space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                                <div>
+                                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">{subscription.plan.name}</h2>
+                                    <p className="text-slate-400 text-sm mt-1 capitalize">{subscription.billing_cycle} billing</p>
+                                </div>
+                                <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0" asChild>
+                                    <Link href="/billing/upgrade">
+                                        <Zap className="mr-2 h-3.5 w-3.5" /> Upgrade Plan
+                                    </Link>
+                                </Button>
+                            </div>
 
-                {/* API Calls */}
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="py-4 px-5">
-                        <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Zap className="w-4 h-4 text-indigo-500" /> API Requests (Live)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5 pt-0">
-                        <p className="text-2xl font-black text-slate-900">
-                            {apiUsed.toLocaleString()} <span className="text-xs text-slate-400 font-medium">/ {apiLimit.toLocaleString()}</span>
-                        </p>
-                        <div className="mt-3">
-                            <Progress value={(apiUsed / apiLimit) * 100} className="h-1.5 [&>div]:bg-indigo-500" />
-                            <p className="text-[10px] text-slate-400 font-medium mt-1.5">
-                                {Math.round((apiUsed / apiLimit) * 100)}% API allowance
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Storage */}
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="py-4 px-5">
-                        <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Layers className="w-4 h-4 text-indigo-500" /> Document Storage (Live)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5 pt-0">
-                        <p className="text-2xl font-black text-slate-900">
-                            {storageUsed.toFixed(2)} GB <span className="text-xs text-slate-400 font-medium">/ {storageLimit} GB</span>
-                        </p>
-                        <div className="mt-3">
-                            <Progress value={(storageUsed / storageLimit) * 100} className="h-1.5 [&>div]:bg-indigo-500" />
-                            <p className="text-[10px] text-slate-400 font-medium mt-1.5">
-                                {((storageUsed / storageLimit) * 100).toFixed(1)}% disk consumed
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Plan Info and Actions Card */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Plan Tier Detail */}
-                <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
-                    <CardHeader className="pb-0 pt-5 px-6">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Plan & Subscription</CardTitle>
-                            <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border', 
-                                subscription.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'
-                            )}>
-                                {subscription.status}
-                            </span>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="px-6 pt-4 pb-6 flex-1 flex flex-col justify-between">
-                        <div>
-                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">{subscription.plan.name}</h2>
-                            <p className="text-slate-400 text-xs mt-1 capitalize">{subscription.billing_cycle} billing cycle</p>
-
-                            <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                {/* Renewal */}
                                 <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                                        <CalendarDays className="w-4 h-4 text-slate-500" />
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                                        <CalendarDays className="w-4 h-4 text-indigo-500" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Renewal Date</p>
-                                        <p className="text-sm font-black text-slate-900 mt-0.5">
-                                            {subscription.ends_at ? format(new Date(subscription.ends_at), 'MMM d, yyyy') : 'No expiry'}
+                                        <p className="text-xs font-medium text-slate-400">Renewal Date</p>
+                                        <p className="text-sm font-bold text-slate-900 mt-0.5">
+                                            {subscription.ends_at
+                                                ? format(new Date(subscription.ends_at), 'MMM d, yyyy')
+                                                : 'No expiry set'}
+                                        </p>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            Started {format(new Date(subscription.starts_at), 'MMM d, yyyy')}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                                        <Layers className="w-4 h-4 text-slate-500" />
+                                {/* Vehicle Usage */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-medium text-slate-500 flex items-center gap-1.5">
+                                            <Car className="w-3.5 h-3.5 text-slate-400" /> Vehicle Limit
+                                        </span>
+                                        <span className={cn('font-bold', isNearLimit ? 'text-amber-600' : 'text-indigo-600')}>
+                                            {subscription.vehicle_count} / {isUnlimited ? 'Unlimited' : subscription.vehicle_limit}
+                                        </span>
                                     </div>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Start Date</p>
-                                        <p className="text-sm font-black text-slate-800 mt-0.5">
-                                            {format(new Date(subscription.starts_at), 'MMM d, yyyy')}
-                                        </p>
+                                    {!isUnlimited && (
+                                        <>
+                                            <Progress
+                                                value={usagePercentage}
+                                                className={cn('h-2 bg-slate-100', isNearLimit ? '[&>div]:bg-amber-500' : '[&>div]:bg-indigo-500')}
+                                            />
+                                            <p className={cn('text-[11px] mt-1.5', isNearLimit ? 'text-amber-600 font-medium' : 'text-slate-400')}>
+                                                {isNearLimit
+                                                    ? `${100 - usagePercentage}% of capacity remaining — consider upgrading.`
+                                                    : `${usagePercentage}% of vehicle quota used.`
+                                                }
+                                            </p>
+                                        </>
+                                    )}
+                                    {isUnlimited && (
+                                        <p className="text-[11px] text-slate-400 mt-1">No vehicle limit on your current plan.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden bg-white">
+                        <CardHeader className="pb-0 pt-5 px-6">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Plan Status</CardTitle>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
+                                    No Active Plan
+                                </span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="px-6 pt-4 pb-6 space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Select a Subscription Plan</h2>
+                                    <p className="text-slate-500 text-sm mt-2 max-w-md">
+                                        Your organization does not have an active subscription. Choose a plan to add vehicles, track your fleet, and monitor driver behavior.
+                                    </p>
+                                </div>
+                                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-sm" asChild>
+                                    <Link href="/billing/upgrade">
+                                        <Zap className="mr-2 h-3.5 w-3.5" /> View Plans
+                                    </Link>
+                                </Button>
+                            </div>
+                            <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-slate-600">
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                    <div className="text-xs">
+                                        <p className="font-semibold text-slate-800">Real-Time GPS Tracking</p>
+                                        <p className="text-slate-400 mt-0.5">Live tracking with instant alerts.</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                    <div className="text-xs">
+                                        <p className="font-semibold text-slate-800">Smart Fuel & Maintenance</p>
+                                        <p className="text-slate-400 mt-0.5">Monitor fuel usage and schedule servicing.</p>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Plan Adjust Actions */}
-                        <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap gap-2">
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9" asChild>
-                                <Link href="/billing/upgrade">
-                                    <Zap className="mr-1.5 h-3.5 w-3.5" /> Upgrade Plan
-                                </Link>
-                            </Button>
-
-                            {isOwner ? (
-                                <>
-                                    {/* Direct Self-service Downgrade */}
-                                    <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9" asChild>
-                                        <Link href="/billing/upgrade">
-                                            <ArrowDownCircle className="mr-1.5 h-3.5 w-3.5" /> Downgrade Plan
-                                        </Link>
-                                    </Button>
-
-                                    {/* Direct Self-service Cancellation */}
-                                    <Button 
-                                        variant="outline" 
-                                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 text-xs h-9"
-                                        onClick={() => setIsCancelB2COpen(true)}
-                                    >
-                                        <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel Subscription
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    {/* Gated B2B Downgrade Change Request */}
-                                    <Button 
-                                        variant="outline" 
-                                        className="border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9"
-                                        onClick={() => {
-                                            setB2bRequestType('downgrade')
-                                            setIsB2BRequestSuccess(false)
-                                            setIsB2BRequestOpen(true)
-                                        }}
-                                    >
-                                        <ArrowDownCircle className="mr-1.5 h-3.5 w-3.5" /> Downgrade Plan
-                                    </Button>
-
-                                    {/* Gated B2B Cancel Change Request */}
-                                    <Button 
-                                        variant="outline" 
-                                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 text-xs h-9"
-                                        onClick={() => {
-                                            setB2bRequestType('cancellation')
-                                            setIsB2BRequestSuccess(false)
-                                            setIsB2BRequestOpen(true)
-                                        }}
-                                    >
-                                        <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel Subscription
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Payment Methods (View, Add, Remove depending on B2C/B2B) */}
                 <Card className="border-slate-200 shadow-sm flex flex-col justify-between">
@@ -480,103 +422,36 @@ export default function BillingOverviewPage() {
                             <CreditCard className="w-4 h-4 text-slate-500" /> Card Details
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="px-5 pb-5 pt-0 flex-1 flex flex-col justify-between">
-                        <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1">
-                            {cards && cards.map((c) => (
-                                <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 hover:border-slate-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.01)] group transition-all">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-10 h-7 bg-slate-50 rounded border border-slate-200 flex items-center justify-center font-bold text-[9px] uppercase tracking-wide text-slate-500">
-                                            {c.brand}
-                                        </div>
-                                        <div>
-                                            <p className="font-mono text-xs font-bold text-slate-800">•••• {c.last4}</p>
-                                            <p className="text-[10px] text-slate-400">Expires {c.exp_month}/{c.exp_year.toString().slice(-2)}</p>
-                                        </div>
+                    <CardContent className="relative z-10 flex-1 flex flex-col justify-center px-5 py-6">
+                        {subscription ? (
+                            <div className="flex items-center gap-3">
+                                <div className="w-14 h-9 bg-slate-100/10 rounded-md flex items-center justify-center border border-slate-700">
+                                    <div className="relative w-8 h-5">
+                                        <div className="absolute left-0 w-5 h-5 rounded-full bg-red-500/80" />
+                                        <div className="absolute right-0 w-5 h-5 rounded-full bg-amber-400/80" />
                                     </div>
-                                    {c.is_default && (
-                                        <span className="text-[8px] font-extrabold uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5">
-                                            Default
-                                        </span>
-                                    )}
-
-                                    {/* Action to remove cards - B2C gets full, B2B cannot remove default */}
-                                    {isOwner ? (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 text-slate-400 hover:text-red-600 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                            onClick={() => handleRemoveCard(c.id)}
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
-                                    ) : (
-                                        !c.is_default && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-slate-400 hover:text-red-600 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                                onClick={() => handleRemoveCard(c.id)}
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                        )
-                                    )}
                                 </div>
-                            ))}
-                            {cards && cards.length === 0 && (
-                                <p className="text-xs text-slate-400 italic py-4 text-center">No payment methods configured.</p>
-                            )}
-                        </div>
-
-                        <Button 
-                            className="w-full mt-4 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold h-9"
-                            variant="outline"
-                            onClick={() => setIsAddCardOpen(true)}
-                        >
-                            <Plus className="mr-1.5 w-3.5 h-3.5" /> Add Payment Method
-                        </Button>
+                                <div>
+                                    <p className="font-mono text-base font-medium tracking-widest text-slate-200">•••• 4242</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Expires 12/28</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <div className="mx-auto w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+                                    <CreditCard className="w-5 h-5 text-slate-400" />
+                                </div>
+                                <p className="text-xs text-slate-400">No payment method on file</p>
+                                <p className="text-[10px] text-slate-500 mt-1">Stored securely during plan selection</p>
+                            </div>
+                        )}
+                        {subscription && <p className="text-[10px] text-slate-600 mt-5 italic">Payment method management coming soon.</p>}
                     </CardContent>
                 </Card>
             </div>
 
-            {/* B2B Change Requests Log (Visible only for B2B) */}
-            {!isOwner && requests && requests.length > 0 && (
-                <Card className="border-slate-200 shadow-sm overflow-hidden">
-                    <CardHeader className="bg-slate-50 border-b border-slate-100 py-3.5 px-5">
-                        <CardTitle className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                            <Mail className="w-4 h-4 text-slate-400" /> Pending Billing Requests
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <table className="w-full text-xs text-left">
-                            <thead>
-                                <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-                                    <th className="px-5 py-3">Type</th>
-                                    <th className="px-5 py-3">Reason</th>
-                                    <th className="px-5 py-3">Submitted At</th>
-                                    <th className="px-5 py-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {requests.map((req) => (
-                                    <tr key={req.id}>
-                                        <td className="px-5 py-3 font-semibold text-slate-700 capitalize">{req.type}</td>
-                                        <td className="px-5 py-3 text-slate-500">{req.reason}</td>
-                                        <td className="px-5 py-3 text-slate-400">
-                                            {format(new Date(req.submitted_at), 'MMM dd, yyyy (hh:mm a)')}
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
-                                                {req.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </CardContent>
-                </Card>
-            )}
+            {/* Asset Subscription Summary */}
+            {subscription && assetSummary && <AssetSummaryStrip summary={assetSummary} />}
 
             {/* Invoices List */}
             <Card className="border-slate-200 shadow-sm overflow-hidden">
