@@ -42,7 +42,11 @@ import { AssignClusterDialog } from "@/components/vehicles/AssignClusterDialog";
 import { AssignTrackerDialog } from "@/components/vehicles/AssignTrackerDialog";
 import { LayoutGrid, Loader2, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getCurrentDriver, getVehicleDriverHistory } from "@/lib/api/vehicles";
+import {
+  getCurrentDriver,
+  getVehicleDriverHistory,
+  getVehicleLocation,
+} from "@/lib/api/vehicles";
 import { getVehicleMaintenanceSchedules } from "@/lib/api/maintenance";
 import { getVehicleDocuments, downloadDocument } from "@/lib/api/documents";
 import { getVehicleCurrentFuel, getVehicleFuelHistory } from "@/lib/api/fuel";
@@ -51,7 +55,7 @@ import { UploadDocumentDialog } from "@/components/vehicles/UploadDocumentDialog
 import { CreateMaintenanceScheduleModal } from "@/components/maintenance/CreateScheduleModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, normalizeTelemetry } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { TelemetryRow } from "@/components/shared/TelemetryRow";
 
@@ -72,11 +76,22 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false);
   const [isAddScheduleOpen, setIsAddScheduleOpen] = React.useState(false);
 
-  // Location is read from the vehicle relationship.
-  // Detail endpoint may still return the old {attributes: {...}} envelope;
-  // list endpoint returns the new flat shape. Support both.
+  // Fresh telemetry snapshot from GET /vehicles/{uuid}/location, polled to
+  // keep the Live Telemetry tab current rather than relying on the one-time
+  // embedded snapshot from vehicle.relationships.current_location.
+  const { data: locationSnapshot } = useQuery({
+    queryKey: ["vehicle-location", vehicle.attributes.uuid],
+    queryFn: () => getVehicleLocation(vehicle.attributes.uuid),
+    enabled: !!vehicle.attributes.uuid,
+    refetchInterval: 15000,
+  });
+
+  // Fall back to the embedded relationship snapshot if the dedicated
+  // endpoint hasn't returned yet. Detail endpoint may still return the old
+  // {attributes: {...}} envelope; list endpoint returns the new flat shape.
   const currentLocation = vehicle.relationships?.current_location ?? null;
-  const loc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
+  const embeddedLoc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
+  const loc = normalizeTelemetry(locationSnapshot) ?? embeddedLoc;
 
   const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
     queryKey: ["vehicle-current-driver", vehicle.attributes.uuid],
@@ -85,13 +100,13 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
 
   const { data: maintenanceResponse, isLoading: isLoadingMaintenance } =
     useQuery({
-      queryKey: ["vehicle-maintenance-schedules", vehicle.attributes.uuid],
-      queryFn: () => getVehicleMaintenanceSchedules(vehicle.attributes.uuid),
+      queryKey: ["vehicle-maintenance-schedules", vehicle.id],
+      queryFn: () => getVehicleMaintenanceSchedules(vehicle.id),
     });
 
   const { data: documentsResponse, isLoading: isLoadingDocuments } = useQuery({
-    queryKey: ["vehicle-documents", vehicle.attributes.uuid],
-    queryFn: () => getVehicleDocuments(vehicle.attributes.uuid),
+    queryKey: ["vehicle-documents", vehicle.id],
+    queryFn: () => getVehicleDocuments(vehicle.id),
   });
 
   const { data: fuelResponse, isLoading: isLoadingFuel } = useQuery({
@@ -1054,7 +1069,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <DriverHistoryList vehicleId={vehicle.attributes.uuid} />
+              <DriverHistoryList vehicleId={vehicle.id} />
             </CardContent>
           </Card>
         </TabsContent>
