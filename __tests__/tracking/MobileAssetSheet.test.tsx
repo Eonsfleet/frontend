@@ -19,6 +19,10 @@ const baseProps = {
   setStatusFilter: vi.fn(),
   searchQuery: '',
   setSearchQuery: vi.fn(),
+  isFilterActive: false,
+  onOpenFilterDrawer: vi.fn(),
+  viewType: 'list' as const,
+  clusters: [],
 }
 
 describe('MobileAssetSheet', () => {
