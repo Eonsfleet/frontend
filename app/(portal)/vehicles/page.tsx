@@ -110,7 +110,7 @@ export default function VehiclesPage() {
 
             {assignVehicle && (
                 <AssignDriverDialog
-                    vehicleId={assignVehicle.id}
+                    vehicleId={assignVehicle.attributes.uuid}
                     vehicleReg={assignVehicle.attributes.registration_number}
                     isOpen={!!assignVehicle}
                     onClose={() => setAssignVehicle(null)}
@@ -119,7 +119,7 @@ export default function VehiclesPage() {
 
             {assignClusterVehicle && (
                 <AssignClusterDialog
-                    vehicleId={assignClusterVehicle.id}
+                    vehicleId={assignClusterVehicle.attributes.uuid}
                     vehicleReg={assignClusterVehicle.attributes.registration_number}
                     isOpen={!!assignClusterVehicle}
                     onClose={() => setAssignClusterVehicle(null)}
@@ -128,7 +128,7 @@ export default function VehiclesPage() {
 
             {assignTrackerVehicle && (
                 <AssignTrackerDialog
-                    vehicleId={assignTrackerVehicle.id}
+                    vehicleId={assignTrackerVehicle.attributes.uuid}
                     vehicleReg={assignTrackerVehicle.attributes.registration_number}
                     isOpen={!!assignTrackerVehicle}
                     onClose={() => setAssignTrackerVehicle(null)}

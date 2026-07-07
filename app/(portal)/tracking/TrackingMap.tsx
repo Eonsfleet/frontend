@@ -104,20 +104,21 @@ const MapController = ({ selected, locs, allVehicles }: any) => {
     if (selected) {
       setMapFollowEnabled(true);
     }
-  }, [selected?.id, setMapFollowEnabled]);
+  }, [selected?.attributes?.uuid, setMapFollowEnabled]);
 
   // Selection Follow
   useEffect(() => {
-    if (selected && locs[selected.id] && isMapFollowEnabled && !allVehicles.isReplayMode) {
-      const l = locs[selected.id];
+    const selectedUuid = selected?.attributes?.uuid;
+    if (selected && selectedUuid && locs[selectedUuid] && isMapFollowEnabled && !allVehicles.isReplayMode) {
+      const l = locs[selectedUuid];
       if (l.lat && l.lng) {
         map.flyTo([l.lat, l.lng], 18);
       }
     }
   }, [
-    selected?.id,
-    locs[selected?.id]?.lat,
-    locs[selected?.id]?.lng,
+    selected?.attributes?.uuid,
+    locs[selected?.attributes?.uuid || ""]?.lat,
+    locs[selected?.attributes?.uuid || ""]?.lng,
     isMapFollowEnabled,
     map,
     allVehicles.isReplayMode
@@ -173,7 +174,7 @@ export default function TrackingMap({
   // map already follows it via MapController's flyTo, so freezing its imperative
   // position for the popup's lifetime keeps the popup rock-steady.
   const selectedIdRef = useRef<string | null>(null);
-  selectedIdRef.current = selectedVehicle ? String(selectedVehicle.id) : null;
+  selectedIdRef.current = selectedVehicle ? selectedVehicle.attributes.uuid : null;
 
   const createClusterCustomIcon = (cluster: any) => {
     return L.divIcon({
@@ -385,7 +386,7 @@ export default function TrackingMap({
         >
           {filteredVehicles
             .filter((v) => {
-              const loc = locations[v.id];
+              const loc = locations[v.attributes.uuid];
               return (
                 loc &&
                 loc.lat != null &&
@@ -395,9 +396,9 @@ export default function TrackingMap({
               );
             })
             .map((v) => {
-              const loc = locations[v.id];
-              const idKey = String(v.id);
-              const isSelected = selectedVehicle?.id === v.id;
+              const loc = locations[v.attributes.uuid];
+              const idKey = v.attributes.uuid;
+              const isSelected = selectedVehicle?.attributes?.uuid === v.attributes.uuid;
               const hasAlarm = alarmState[idKey] === true;
               const markerState = getMarkerState(
                 { status: loc.status, is_online: loc.is_online, speed: loc.speed },
@@ -410,7 +411,7 @@ export default function TrackingMap({
               // time) would be an impure render, so it only happens in the rAF tick.
               return (
                 <VehicleMarker
-                  key={v.id}
+                  key={v.attributes.uuid}
                   vehicle={v}
                   lat={loc.lat}
                   lng={loc.lng}
@@ -419,7 +420,7 @@ export default function TrackingMap({
                   markerState={markerState}
                   isSelected={isSelected}
                   onSelect={() =>
-                    setSelectedVehicle(selectedVehicle?.id === v.id ? null : v)
+                    setSelectedVehicle(selectedVehicle?.attributes?.uuid === v.attributes.uuid ? null : v)
                   }
                   registerRef={(instance) => {
                     if (instance) markerRefs.current.set(idKey, instance);

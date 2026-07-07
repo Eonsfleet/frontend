@@ -14,6 +14,7 @@ export interface OrganizationSubscription {
     vehicle_count: number
     starts_at: string
     ends_at: string | null
+    currency: string
 }
 
 const FEATURE_OVERRIDES: Record<number, Capability[]> = {
@@ -94,6 +95,7 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         capabilities = Array.from(new Set([...capabilities, ...overrides]))
     }
 
+    const currency = (rawData as any).attributes.currency || (rawData as any).relationships?.plan?.currency || 'NGN'
     return {
         id: rawData.id,
         status: rawData.attributes.status,
@@ -111,7 +113,8 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         admin_limit: rawData.relationships.plan.admin_limit ?? null,
         vehicle_count: 0,
         starts_at: rawData.attributes.started_at,
-        ends_at: rawData.attributes.ended_at
+        ends_at: rawData.attributes.ended_at,
+        currency,
     }
 }
 

@@ -234,7 +234,7 @@ export function VehicleTable({
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem asChild>
-                                <Link href={`/vehicles/${vehicle.id}`}>
+                                <Link href={`/vehicles/${vehicle.attributes.uuid}`}>
                                     <Eye className="mr-2 h-4 w-4" /> View Details
                                 </Link>
                             </DropdownMenuItem>
@@ -440,7 +440,7 @@ export function VehicleTable({
                             </Button>
                             <Button
                                 className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
-                                onClick={() => handleDelete(deleteTarget.id)}
+                                onClick={() => handleDelete(deleteTarget.attributes.uuid)}
                                 disabled={isDeleting}
                             >
                                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Delete'}

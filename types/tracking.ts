@@ -1,6 +1,6 @@
 export interface PlaybackMovement {
   id: number
-  vehicle_id: number
+  vehicle_id: number | string
   lat: number
   lng: number
   speed: number
