@@ -252,11 +252,6 @@ export function AssetPanel({
       {/* Header */}
       <div className="relative border-b border-slate-100 bg-slate-50 shrink-0">
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <span
-            className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border", statusCfg.badge)}
-          >
-            {statusCfg.label}
-          </span>
           <button
             onClick={toggleAssetPanel}
             aria-label="Collapse asset panel"
@@ -273,17 +268,28 @@ export function AssetPanel({
           </button>
         </div>
 
-        <div className="h-32 flex items-center justify-center bg-white">
-          <div data-testid="asset-panel-photo-fallback" className="h-20 w-20 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+        <div className="flex items-center gap-4 px-6 py-5 pr-24">
+          <div
+            data-testid="asset-panel-photo-fallback"
+            className="h-20 w-20 shrink-0 rounded-2xl bg-slate-900 flex items-center justify-center text-white"
+          >
             <TypeIcon className="h-8 w-8" />
           </div>
-        </div>
 
-        <div className="px-6 pb-4">
-          <h2 className="text-sm font-bold text-slate-900 truncate">
-            {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
-          </h2>
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{plate}</p>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-slate-900 truncate">
+              {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
+            </h2>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">{plate}</p>
+            <span
+              className={cn(
+                "mt-1.5 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border",
+                statusCfg.badge,
+              )}
+            >
+              {statusCfg.label}
+            </span>
+          </div>
         </div>
       </div>
 
