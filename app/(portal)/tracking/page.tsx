@@ -105,7 +105,7 @@ export default function TrackingPage() {
 
   const selectedVehicle = useMemo(
     () =>
-      vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)) || null,
+      vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(selectedVehicleId)) || null,
     [vehicles, selectedVehicleId],
   );
 
@@ -119,13 +119,13 @@ export default function TrackingPage() {
   // mobile variants, toggled with CSS breakpoints, not conditional mounting), and
   // BottomCards needs the same live-resolved telemetry, so all three consume this
   // single subscription instead of each opening their own.
-  const selectedLoc = selectedVehicle ? locations[selectedVehicle.id] : null;
+  const selectedLoc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
   const selectedVehicleSnapshot = useMemo(
     () => buildVehicleSnapshot(selectedVehicle, selectedLoc),
     [selectedVehicle, selectedLoc],
   );
   const resolvedTelemetry = useResolvedVehicleTelemetry(
-    selectedVehicle?.id ?? null,
+    selectedVehicle?.attributes.uuid ?? null,
     selectedVehicleSnapshot,
     !!selectedVehicle,
   );
@@ -338,10 +338,10 @@ export default function TrackingPage() {
       !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
     if (isNarrowed) {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
         const input = { status: loc?.status, is_online: isOnline, speed: loc?.speed };
-        const hasAlarm = alarmState[v.id] === true;
+        const hasAlarm = alarmState[v.attributes.uuid] === true;
         return filters.statuses.some((bucket) =>
           matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
         );
@@ -352,7 +352,7 @@ export default function TrackingPage() {
     if (filters.locationType === "radius" && filters.locationCoords) {
       const { latitude: centerLat, longitude: centerLng } = filters.locationCoords;
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         if (!loc?.lat || !loc?.lng) return false;
         const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
         return dist <= filters.radiusKm;
@@ -364,7 +364,7 @@ export default function TrackingPage() {
       const selectedGeofence = geofences.find((g) => String(g.id) === filters.geofenceId);
       if (selectedGeofence) {
         result = result.filter((v: Vehicle) => {
-          const loc = locations[v.id];
+          const loc = locations[v.attributes.uuid];
           if (!loc?.lat || !loc?.lng) return false;
           return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
         });
@@ -407,9 +407,10 @@ export default function TrackingPage() {
     }
 
     // 10. Speed Range
+    // 10. Speed Range
     if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const speed = loc?.speed ?? 0;
         return speed >= filters.speedRange[0] && speed <= filters.speedRange[1];
       });
@@ -418,7 +419,7 @@ export default function TrackingPage() {
     // 11. Engine Status
     if (filters.engineStatus !== "all") {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const isIgnitionOn = loc?.ignition === "on" || loc?.ignition === "1" || loc?.ignition === true;
         if (filters.engineStatus === "on") return isIgnitionOn;
         if (filters.engineStatus === "off") return !isIgnitionOn;
@@ -429,7 +430,7 @@ export default function TrackingPage() {
     // 12. Fuel Level
     if (filters.fuelLevel !== "all") {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const fuel = loc?.fuel_level_percent ?? 0;
         if (filters.fuelLevel === "low") return fuel < 20;
         if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
@@ -445,7 +446,7 @@ export default function TrackingPage() {
   useEffect(() => {
     if (
       selectedVehicleId &&
-      !filteredVehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))
+      !filteredVehicles.find((v: Vehicle) => String(v.attributes.uuid) === String(selectedVehicleId))
     ) {
       setSelectedVehicleId(null);
     }
@@ -459,7 +460,7 @@ export default function TrackingPage() {
         trip.attributes?.vehicleId ||
         trip.attributes?.vehicle_id;
       const fleetVehicle = bestVehicleId
-        ? vehicles.find((v: Vehicle) => String(v.id) === String(bestVehicleId))
+        ? vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(bestVehicleId) || String(v.id) === String(bestVehicleId))
         : null;
       return {
         ...trip,
@@ -507,20 +508,20 @@ export default function TrackingPage() {
     const q = locationSearch.trim().toLowerCase();
     if (!q) return;
     const match = vehicles.find((v: Vehicle) => {
-      const loc = locations[v.id];
+      const loc = locations[v.attributes.uuid];
       return (
         v.attributes.registration_number?.toLowerCase().includes(q) ||
         (loc?.address ?? "").toLowerCase().includes(q)
       );
     });
-    const loc = match ? locations[match.id] : null;
+    const loc = match ? locations[match.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
       (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
     }
   }, [locationSearch, vehicles, locations]);
 
   const handleLiveTrack = useCallback(() => {
-    const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
+    const loc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
       (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 18);
     }
@@ -606,7 +607,7 @@ export default function TrackingPage() {
             filteredVehicles={filteredVehicles}
             locations={locations}
             selectedVehicle={selectedVehicle}
-            setSelectedVehicle={(v) => setSelectedVehicleId(v?.id)}
+            setSelectedVehicle={(v) => setSelectedVehicleId(v?.attributes.uuid ?? null)}
             vehicles={vehicles}
             TILE_URL={MAP_LAYERS[mapStyle]}
             mapStyle={mapStyle}
@@ -667,7 +668,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
           />
         </div>
 
@@ -678,7 +679,7 @@ export default function TrackingPage() {
                 selectedVehicle={selectedVehicle}
                 resolved={resolvedTelemetry}
                 loc={selectedLoc}
-                hasActiveAlarm={alarmState[selectedVehicle.id] === true}
+                hasActiveAlarm={alarmState[selectedVehicle.attributes.uuid] === true}
               />
             </div>
           </div>
@@ -698,7 +699,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
           />
         </div>
 

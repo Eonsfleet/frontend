@@ -121,6 +121,7 @@ export function useVehicleLocations({
     setLocations((prev) => {
       const next = { ...prev };
       vehicles.forEach((v: Vehicle) => {
+        const vehicleId = v.attributes.uuid || String(v.id);
         const loc = v.relationships?.current_location ?? null;
         // is_online + last_packet are now on attributes, not on device relationship
         const isOnline = v.attributes?.is_online ?? false;
@@ -132,12 +133,12 @@ export function useVehicleLocations({
         const staleOffline = isStaleOffline(isOnline, lastPacketTs || lastUpdateTs);
 
         if (!loc) {
-          if (next[v.id]) {
-            next[v.id] = {
-              ...next[v.id],
+          if (next[vehicleId]) {
+            next[vehicleId] = {
+              ...next[vehicleId],
               is_online: isOnline,
-              status: staleOffline ? "offline" : next[v.id]?.status,
-              lastPacket: lastPacketTs ?? next[v.id]?.lastPacket,
+              status: staleOffline ? "offline" : next[vehicleId]?.status,
+              lastPacket: lastPacketTs ?? next[vehicleId]?.lastPacket,
             };
           }
           return;
@@ -153,7 +154,7 @@ export function useVehicleLocations({
             ? "in_transit"
             : "parked";
 
-        const prevEntry = next[v.id];
+        const prevEntry = next[vehicleId];
         const statusSinceMs =
           prevEntry?.status === derivedStatus
             ? (prevEntry?.statusSinceMs ?? Date.now())
@@ -192,7 +193,7 @@ export function useVehicleLocations({
           : { ...restData, ...prevEntry };
 
         if (!lat || !lng) {
-          next[v.id] = {
+          next[vehicleId] = {
             ...positionalBase,
             is_online: isOnline,
             status: derivedStatus,
@@ -205,8 +206,8 @@ export function useVehicleLocations({
 
         // Seed the interpolator once per vehicle so the marker doesn't animate in
         // from nowhere on first load; subsequent WS packets take over via ingest().
-        if (!interpolator.hasVehicle(String(v.id))) {
-          interpolator.snap(String(v.id), {
+        if (!interpolator.hasVehicle(vehicleId)) {
+          interpolator.snap(vehicleId, {
             lat,
             lng,
             heading: 0,
@@ -216,7 +217,7 @@ export function useVehicleLocations({
 
         // A WS-updated prev entry only keeps positional priority when it's newer
         // than this REST snapshot; REST is always authoritative for is_online/status.
-        next[v.id] = {
+        next[vehicleId] = {
           ...positionalBase,
           status: derivedStatus,
           statusSinceMs,

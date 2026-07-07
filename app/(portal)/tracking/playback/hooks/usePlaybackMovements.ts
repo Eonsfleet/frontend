@@ -30,7 +30,7 @@ export function usePlaybackMovements({ vehicleId, tripId, startTime, endTime }: 
     return raw
       .map((p: any) => ({
         id: p.id ?? 0,
-        vehicle_id: Number(vehicleId),
+        vehicle_id: vehicleId || '',
         lat: p.lat ?? p.latitude,
         lng: p.lng ?? p.longitude,
         speed: p.speed ?? 0,

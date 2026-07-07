@@ -6,6 +6,7 @@ export interface Device {
 }
 
 export interface VehicleAttributes {
+    uuid: string
     make: string
     model: string
     image: string | null

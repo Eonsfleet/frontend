@@ -79,31 +79,31 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const loc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
 
   const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
-    queryKey: ["vehicle-current-driver", vehicle.id],
-    queryFn: () => getCurrentDriver(vehicle.id),
+    queryKey: ["vehicle-current-driver", vehicle.attributes.uuid],
+    queryFn: () => getCurrentDriver(vehicle.attributes.uuid),
   });
 
   const { data: maintenanceResponse, isLoading: isLoadingMaintenance } =
     useQuery({
-      queryKey: ["vehicle-maintenance-schedules", vehicle.id],
-      queryFn: () => getVehicleMaintenanceSchedules(vehicle.id),
+      queryKey: ["vehicle-maintenance-schedules", vehicle.attributes.uuid],
+      queryFn: () => getVehicleMaintenanceSchedules(vehicle.attributes.uuid),
     });
 
   const { data: documentsResponse, isLoading: isLoadingDocuments } = useQuery({
-    queryKey: ["vehicle-documents", vehicle.id],
-    queryFn: () => getVehicleDocuments(vehicle.id),
+    queryKey: ["vehicle-documents", vehicle.attributes.uuid],
+    queryFn: () => getVehicleDocuments(vehicle.attributes.uuid),
   });
 
   const { data: fuelResponse, isLoading: isLoadingFuel } = useQuery({
-    queryKey: ["vehicle-fuel", vehicle.id],
-    queryFn: () => getVehicleCurrentFuel(vehicle.id),
+    queryKey: ["vehicle-fuel", vehicle.attributes.uuid],
+    queryFn: () => getVehicleCurrentFuel(vehicle.attributes.uuid),
     refetchInterval: 30000,
   });
 
   const { data: fuelHistoryResponse, isLoading: isLoadingFuelHistory } =
     useQuery({
-      queryKey: ["vehicle-fuel-history", vehicle.id],
-      queryFn: () => getVehicleFuelHistory(vehicle.id),
+      queryKey: ["vehicle-fuel-history", vehicle.attributes.uuid],
+      queryFn: () => getVehicleFuelHistory(vehicle.attributes.uuid),
     });
 
   // Try embedded current_driver array first, fall back to query result
@@ -1054,7 +1054,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <DriverHistoryList vehicleId={vehicle.id} />
+              <DriverHistoryList vehicleId={vehicle.attributes.uuid} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1619,28 +1619,28 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
 
         {/* ── DIALOGS ───────────────────────────────────────────────── */}
         <AssignDriverDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignOpen}
           onClose={() => setIsAssignOpen(false)}
         />
 
         <AssignClusterDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignClusterOpen}
           onClose={() => setIsAssignClusterOpen(false)}
         />
 
         <AssignTrackerDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignTrackerOpen}
           onClose={() => setIsAssignTrackerOpen(false)}
         />
 
         <UploadDocumentDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           isOpen={isUploadDocOpen}
           onClose={() => setIsUploadDocOpen(false)}
         />
@@ -1648,7 +1648,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         <CreateMaintenanceScheduleModal
           open={isAddScheduleOpen}
           onOpenChange={setIsAddScheduleOpen}
-          preselectedVehicleId={vehicle.id.toString()}
+          preselectedVehicleId={vehicle.attributes.uuid}
           preselectedVehicleReg={vehicle.attributes.registration_number}
         />
       </Tabs>

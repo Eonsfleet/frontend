@@ -117,7 +117,7 @@ export default function PlaybackPage() {
     return vehicles.filter((v) => String(v.relationships?.cluster?.id ?? '') === clusterId)
   }, [vehicles, clusterId])
 
-  const selectedVehicle = vehicles.find((v) => String(v.id) === vehicleId) ?? null
+  const selectedVehicle = vehicles.find((v) => v.attributes.uuid === vehicleId || String(v.id) === vehicleId) ?? null
   const vehicleLabel = selectedVehicle?.attributes.registration_number ?? '—'
 
   const { movements, isLoading } = usePlaybackMovements({
@@ -187,7 +187,7 @@ export default function PlaybackPage() {
       </div>
 
       <PlaybackFilterBar
-        vehicles={visibleVehicles.map((v) => ({ id: String(v.id), label: v.attributes.registration_number }))}
+        vehicles={visibleVehicles.map((v) => ({ id: v.attributes.uuid, label: v.attributes.registration_number }))}
         selectedVehicleId={vehicleId}
         onVehicleChange={(id) => {
           setVehicleId(id)
