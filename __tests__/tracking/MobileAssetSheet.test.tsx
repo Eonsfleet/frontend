@@ -21,7 +21,7 @@ const baseProps = {
   setSearchQuery: vi.fn(),
   isFilterActive: false,
   onOpenFilterDrawer: vi.fn(),
-  viewType: 'list' as const,
+  viewType: 'listing' as const,
   clusters: [],
 }
 
