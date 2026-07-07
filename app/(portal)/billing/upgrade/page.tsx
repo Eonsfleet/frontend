@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import * as api from '@/lib/api/billing'
 import { cn, extractApiError } from '@/lib/utils'
-import { useAuthStore } from '@/store/authStore'
+import { useAccessControl } from '@/hooks/useAccessControl'
 
 const TIER_WEIGHTS: Record<string, number> = {
     starter: 1,
@@ -53,7 +53,6 @@ export default function PlanUpgradePage() {
     const { isOwner } = useAccessControl()
     const [isCheckoutLoading, setIsCheckoutLoading] = useState<number | null>(null)
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
-    const { organization } = useAuthStore()
 
     // B2B Request Modal States
     const [isRequestOpen, setIsRequestOpen] = useState(false)
@@ -84,41 +83,44 @@ export default function PlanUpgradePage() {
         },
     })
 
-    const initializeSubscriptionMutation = useMutation({
-        mutationFn: api.initializeSubscription,
-        onSuccess: (res) => {
-            toast.success('Redirecting to secure payment checkout…')
-            if (res.data.authorization_url) window.location.href = res.data.authorization_url
+    const submitRequestMutation = useMutation({
+        mutationFn: api.submitBillingRequest,
+        onSuccess: () => {
+            setRequestSuccess(true)
+            toast.success('Downgrade request submitted.')
+            queryClient.invalidateQueries({ queryKey: ['billing-requests'] })
         },
-        onError: (err: any) => {
-            setIsCheckoutLoading(null)
-            toast.error(extractApiError(err, 'Failed to initialise subscription.'))
-        },
+        onError: (err) => {
+            toast.error(extractApiError(err, 'Failed to submit downgrade request.'))
+        }
     })
 
-    const handleUpgrade = (planId: number) => {
-        setIsCheckoutLoading(planId)
-        if (subscription) {
-            changePlanMutation.mutate({
-                subscription_id: subscription.id,
-                plan_id: planId,
-                billing_cycle: billingCycle,
-                redirect_url: `${window.location.origin}/billing/callback`,
-            })
-        } else {
-            const orgIdentifier = organization?.attributes?.identifier || organization?.id
-            if (!orgIdentifier) {
-                setIsCheckoutLoading(null)
-                toast.error('Organization details not found. Please log in again.')
-                return
-            }
-            initializeSubscriptionMutation.mutate({
-                organization_id: orgIdentifier,
-                plan_id: planId,
-                billing_cycle: billingCycle,
-                redirect_url: `${window.location.origin}/billing/callback`,
-            })
+    const handlePlanAction = (planId: number, planName: string, planTier: string) => {
+        if (!subscription) return
+
+        const currentTierWeight = TIER_WEIGHTS[subscription.plan.tier] || 1
+        const targetTierWeight = TIER_WEIGHTS[planTier] || 1
+
+        const isDowngrade = targetTierWeight < currentTierWeight
+
+        if (isDowngrade && !isOwner) {
+            // Gated for B2B - Open change request dialog
+            setTargetPlanName(planName)
+            setRequestReason('')
+            setRequestDetails('')
+            setRequestSuccess(false)
+            setIsRequestOpen(true)
+            return
         }
+
+        // Self-serve (B2C or B2B Upgrade)
+        setIsCheckoutLoading(planId)
+        changePlanMutation.mutate({
+            subscription_id: subscription.id,
+            plan_id: planId,
+            billing_cycle: billingCycle,
+            redirect_url: `${window.location.origin}/billing/callback`,
+        })
     }
 
     const handleB2BRequestSubmit = (e: React.FormEvent) => {
@@ -139,7 +141,7 @@ export default function PlanUpgradePage() {
         )
     }
 
-    if (isError || !plansData) {
+    if (isError || !plansData || !subscription) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
                 <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
@@ -154,7 +156,8 @@ export default function PlanUpgradePage() {
         )
     }
 
-    const currentPlanId = subscription?.plan?.id ?? null
+    const currentPlanId = subscription.plan.id
+    const currency = subscription.currency || 'NGN'
 
     return (
         <div className="space-y-8 max-w-5xl p-8 pb-16 bg-slate-50 min-h-full">
@@ -365,7 +368,7 @@ export default function PlanUpgradePage() {
                                     ) : (
                                         <ArrowUpCircle className="w-4 h-4 mr-2" />
                                     )}
-                                    {isCurrent ? 'Current Plan' : (subscription ? (plan.id > (currentPlanId ?? 0) ? 'Upgrade' : 'Switch Plan') : 'Subscribe')}
+                                    {isCurrent ? 'Current Plan' : (isDowngrade && !isOwner ? 'Request Downgrade' : 'Select Plan')}
                                 </Button>
                             </CardFooter>
                         </Card>
