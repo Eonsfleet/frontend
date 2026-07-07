@@ -76,12 +76,12 @@ export function TrackingSidebar({
     <VehicleListItem
       key={v.id}
       vehicle={v}
-      loc={locations[v.id]}
-      isSelected={String(selectedVehicleId) === String(v.id)}
-      hasActiveAlarm={alarmState[v.id] === true}
+      loc={locations[v.attributes.uuid]}
+      isSelected={String(selectedVehicleId) === String(v.attributes.uuid)}
+      hasActiveAlarm={alarmState[v.attributes.uuid] === true}
       onSelect={() => {
-        const isSelected = String(selectedVehicleId) === String(v.id);
-        setSelectedVehicleId(isSelected ? null : v.id);
+        const isSelected = String(selectedVehicleId) === String(v.attributes.uuid);
+        setSelectedVehicleId(isSelected ? null : v.attributes.uuid);
       }}
     />
   );
