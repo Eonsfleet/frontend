@@ -61,20 +61,20 @@ export function AlertDetailPanel({ alert, trend, onClose }: AlertDetailPanelProp
                 </button>
             </div>
 
-            {/* Vehicle card */}
-            <div className="mt-3 flex gap-3">
-                <div className="flex h-16 w-20 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                    <Truck className="h-8 w-8" />
+            {/* Vehicle card — image | chassis+model | details, all on one row */}
+            <div className="mt-3 flex items-center gap-3">
+                <div className="flex h-14 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                    <Truck className="h-7 w-7" />
                 </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-slate-900">{alert.vehicle}</p>
-                    <p className="text-[11px] text-slate-400">{alert.model}</p>
-                    <dl className="mt-1.5 space-y-0.5 text-[11px]">
-                        <div className="flex justify-between gap-2"><dt className="text-slate-400">Driver</dt><dd className="font-medium text-slate-600">{alert.driver}</dd></div>
-                        <div className="flex justify-between gap-2"><dt className="text-slate-400">Group</dt><dd className="font-medium text-slate-600">{alert.group}</dd></div>
-                        <div className="flex justify-between gap-2"><dt className="text-slate-400">Last Updated</dt><dd className="font-medium text-slate-600">{alert.lastUpdated}</dd></div>
-                    </dl>
+                <div className="min-w-0 shrink-0">
+                    <p className="truncate text-sm font-bold text-slate-900">{alert.vehicle}</p>
+                    <p className="truncate text-[11px] text-slate-400">{alert.model}</p>
                 </div>
+                <dl className="min-w-0 flex-1 space-y-0.5 text-[11px]">
+                    <div className="flex justify-between gap-2"><dt className="text-slate-400">Driver</dt><dd className="truncate font-medium text-slate-600">{alert.driver}</dd></div>
+                    <div className="flex justify-between gap-2"><dt className="text-slate-400">Group</dt><dd className="truncate font-medium text-slate-600">{alert.group}</dd></div>
+                    <div className="flex justify-between gap-2"><dt className="shrink-0 text-slate-400">Last Updated</dt><dd className="truncate font-medium text-slate-600">{alert.lastUpdated}</dd></div>
+                </dl>
             </div>
 
             {/* 3 stat cells */}

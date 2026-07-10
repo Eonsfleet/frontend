@@ -10,7 +10,7 @@
  * location, today trend) is likewise mock/placeholder.
  */
 
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { format, subMinutes } from 'date-fns'
 
 export type AlertType = 'low_fuel' | 'fuel_theft' | 'rapid_drop' | 'unauthorized_drain' | 'sensor_error'
@@ -82,26 +82,54 @@ export interface AlertKpis {
     total: number
 }
 
+export interface AlertFilters {
+    types: AlertType[]
+    severities: Severity[]
+    status: AlertStatus | 'all'
+}
+
+export const EMPTY_FILTERS: AlertFilters = { types: [], severities: [], status: 'all' }
+
 export interface AlertTrendPoint {
     label: string
     value: number
 }
 
+function seedAlerts(): FuelAlertRow[] {
+    const base = new Date()
+    // Spread times descending from a fixed reference so the list reads like a feed.
+    const gaps = [0, 34, 68, 103, 143, 176, 210, 258]
+    return SEED.map((a, i) => {
+        const t = subMinutes(base, gaps[i])
+        return {
+            ...a,
+            time: format(t, 'hh:mm a'),
+            date: format(t, 'MMM d'),
+            lastUpdated: format(t, 'hh:mm a, MMM d, yyyy'),
+        }
+    })
+}
+
 export function useFuelAlerts() {
-    const alerts = useMemo<FuelAlertRow[]>(() => {
-        const base = new Date()
-        // Spread times descending from a fixed reference so the list reads like a feed.
-        const gaps = [0, 34, 68, 103, 143, 176, 210, 258]
-        return SEED.map((a, i) => {
-            const t = subMinutes(base, gaps[i])
-            return {
-                ...a,
-                time: format(t, 'hh:mm a'),
-                date: format(t, 'MMM d'),
-                lastUpdated: format(t, 'hh:mm a, MMM d, yyyy'),
-            }
-        })
+    const [alerts, setAlerts] = useState<FuelAlertRow[]>(seedAlerts)
+    const [filters, setFilters] = useState<AlertFilters>(EMPTY_FILTERS)
+
+    const setStatus = useCallback((id: string, status: AlertStatus) => {
+        setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)))
     }, [])
+
+    const removeAlert = useCallback((id: string) => {
+        setAlerts((prev) => prev.filter((a) => a.id !== id))
+    }, [])
+
+    const filtered = useMemo(() => {
+        return alerts.filter((a) => {
+            if (filters.types.length && !filters.types.includes(a.type)) return false
+            if (filters.severities.length && !filters.severities.includes(a.severity)) return false
+            if (filters.status !== 'all' && a.status !== filters.status) return false
+            return true
+        })
+    }, [alerts, filters])
 
     const kpis = useMemo<AlertKpis>(() => ({
         critical: alerts.filter((a) => a.severity === 'critical').length,
@@ -112,7 +140,10 @@ export function useFuelAlerts() {
         total: 24,
     }), [alerts])
 
-    return { alerts, kpis }
+    const activeFilterCount =
+        filters.types.length + filters.severities.length + (filters.status !== 'all' ? 1 : 0)
+
+    return { alerts, filtered, kpis, filters, setFilters, setStatus, removeAlert, activeFilterCount }
 }
 
 /** Today fuel-level trend for the selected alert's vehicle. */

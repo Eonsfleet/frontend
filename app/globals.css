@@ -131,3 +131,13 @@
     @apply bg-background text-foreground;
   }
 }
+/* Keep Leaflet maps (panes + controls default to z-index 400–1000) below the
+   Radix dialog overlay/content (z-50), so a map never renders on top of a modal. */
+.leaflet-container {
+  z-index: 0;
+}
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1 !important;
+}

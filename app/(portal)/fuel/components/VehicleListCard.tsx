@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Search, SlidersHorizontal, MoreVertical, Truck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,21 @@ import type { VehicleRow, VehicleMovement } from './useFuelOverview'
 interface VehicleListCardProps {
     vehicles: VehicleRow[]
     isLoading?: boolean
+    search: string
+    filter: VehicleFilter
+    onSearchChange: (search: string) => void
+    onFilterChange: (filter: VehicleFilter) => void
 }
+
+export type VehicleFilter = 'all' | 'moving' | 'offline' | 'low_fuel' | 'unknown_fuel'
+
+const VEHICLE_FILTERS: Array<{ label: string; value: VehicleFilter }> = [
+    { label: 'All vehicles', value: 'all' },
+    { label: 'Moving', value: 'moving' },
+    { label: 'Offline', value: 'offline' },
+    { label: 'Low fuel', value: 'low_fuel' },
+    { label: 'Unknown fuel', value: 'unknown_fuel' },
+]
 
 function fuelBarColor(pct: number | null): string {
     if (pct == null) return 'bg-slate-300'
@@ -41,19 +55,10 @@ function StatusPill({ status }: { status: VehicleMovement }) {
     )
 }
 
-export function VehicleListCard({ vehicles, isLoading }: VehicleListCardProps) {
-    const [search, setSearch] = useState('')
+export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchChange, onFilterChange }: VehicleListCardProps) {
+    const [isFilterOpen, setIsFilterOpen] = useState(false)
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase()
-        if (!q) return vehicles
-        return vehicles.filter(
-            (v) =>
-                v.registration.toLowerCase().includes(q) ||
-                v.model.toLowerCase().includes(q) ||
-                v.chassis.toLowerCase().includes(q),
-        )
-    }, [vehicles, search])
+    const activeFilterLabel = VEHICLE_FILTERS.find((option) => option.value === filter)?.label ?? 'All vehicles'
 
     return (
         <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-5 shadow-none">
@@ -67,26 +72,58 @@ export function VehicleListCard({ vehicles, isLoading }: VehicleListCardProps) {
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <Input
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => onSearchChange(e.target.value)}
                             placeholder="Search vehicle..."
                             className="h-9 border-slate-200 bg-slate-50 pl-8 text-sm"
                             aria-label="Search vehicles"
                         />
                     </div>
-                    <button
-                        type="button"
-                        aria-label="Filter vehicles"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-200 hover:bg-slate-50"
-                    >
-                        <SlidersHorizontal className="h-4 w-4" />
-                    </button>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            aria-label="Filter vehicles"
+                            aria-expanded={isFilterOpen}
+                            className={cn(
+                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-white transition-colors duration-200 hover:bg-slate-50',
+                                filter === 'all' ? 'border-slate-200 text-slate-500' : 'border-blue-200 text-blue-600',
+                            )}
+                            onClick={() => setIsFilterOpen((open) => !open)}
+                        >
+                            <SlidersHorizontal className="h-4 w-4" />
+                        </button>
+                        {isFilterOpen && (
+                            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                {VEHICLE_FILTERS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        className={cn(
+                                            'block w-full px-3 py-1.5 text-left text-[12px] font-medium transition-colors hover:bg-slate-50',
+                                            option.value === filter ? 'text-blue-600' : 'text-slate-600',
+                                        )}
+                                        onClick={() => {
+                                            onFilterChange(option.value)
+                                            setIsFilterOpen(false)
+                                        }}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
+            {filter !== 'all' && (
+                <p className="mt-2 text-[11px] font-medium text-slate-400">
+                    Showing {activeFilterLabel.toLowerCase()}
+                </p>
+            )}
 
             {/* 4-column table */}
-            <div className="mt-4 -mx-1 flex-1 overflow-x-auto">
+            <div className="mt-4 -mx-1 max-h-[420px] flex-1 overflow-auto pr-1">
                 <table className="w-full min-w-[420px] text-left">
-                    <thead>
+                    <thead className="sticky top-0 z-10 bg-white">
                         <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             <th className="px-1 pb-2 font-bold">Vehicle</th>
                             <th className="px-1 pb-2 font-bold">Fuel Level</th>
@@ -109,14 +146,14 @@ export function VehicleListCard({ vehicles, isLoading }: VehicleListCardProps) {
                                     </td>
                                 </tr>
                             ))
-                        ) : filtered.length === 0 ? (
+                        ) : vehicles.length === 0 ? (
                             <tr>
                                 <td colSpan={4} className="px-1 py-10 text-center text-sm text-slate-400">
-                                    No vehicles match your search.
+                                    No vehicles match your filters.
                                 </td>
                             </tr>
                         ) : (
-                            filtered.map((v) => (
+                            vehicles.map((v) => (
                                 <tr key={v.id} className="align-top">
                                     {/* Column 1 — Vehicle: image + name + chassis */}
                                     <td className="px-1 py-3">
@@ -170,15 +207,6 @@ export function VehicleListCard({ vehicles, isLoading }: VehicleListCardProps) {
                         )}
                     </tbody>
                 </table>
-            </div>
-
-            <div className="mt-3 border-t border-slate-100 pt-3">
-                <button
-                    type="button"
-                    className="text-left text-[13px] font-semibold text-blue-600 transition-colors duration-200 hover:text-blue-700"
-                >
-                    View all vehicles →
-                </button>
             </div>
         </Card>
     )

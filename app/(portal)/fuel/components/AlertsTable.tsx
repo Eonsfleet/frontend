@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import {
-    ChevronDown, Calendar, SlidersHorizontal, Filter, MoreVertical, MapPin,
+    ChevronDown, Calendar, Filter, MapPin,
     FuelIcon, Droplets, Moon, Cpu, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { AlertRowMenu } from './AlertRowMenu'
 import {
     TYPE_META, SEVERITY_META, STATUS_META,
     type FuelAlertRow, type Severity, type AlertType,
@@ -16,6 +17,12 @@ interface AlertsTableProps {
     alerts: FuelAlertRow[]
     activeId: string | null
     onSelect: (id: string) => void
+    onOpenFilters: () => void
+    onCreateRule: () => void
+    onAcknowledge: (id: string) => void
+    onResolve: (id: string) => void
+    onDelete: (id: string) => void
+    activeFilterCount?: number
 }
 
 const ALERT_ICON: Record<AlertType, { icon: LucideIcon; class: string }> = {
@@ -34,7 +41,9 @@ function Dropdown({ label }: { label: string }) {
     )
 }
 
-export function AlertsTable({ alerts, activeId, onSelect }: AlertsTableProps) {
+export function AlertsTable({
+    alerts, activeId, onSelect, onOpenFilters, onCreateRule, onAcknowledge, onResolve, onDelete, activeFilterCount = 0,
+}: AlertsTableProps) {
     const [sev, setSev] = useState<'all' | Severity>('all')
 
     const counts = useMemo(() => ({
@@ -81,11 +90,18 @@ export function AlertsTable({ alerts, activeId, onSelect }: AlertsTableProps) {
                     <button type="button" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50">
                         <Calendar className="h-4 w-4 text-slate-400" /> May 16, 2024
                     </button>
-                    <button type="button" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50">
-                        <SlidersHorizontal className="h-4 w-4 text-slate-400" /> Filters
-                    </button>
-                    <button type="button" aria-label="Clear filters" className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">
-                        <Filter className="h-4 w-4" />
+                    <button
+                        type="button"
+                        onClick={onOpenFilters}
+                        className={cn(
+                            'inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[13px] font-medium hover:bg-slate-50',
+                            activeFilterCount > 0 ? 'border-blue-300 bg-blue-50/60 text-blue-600' : 'border-slate-200 bg-white text-slate-600',
+                        )}
+                    >
+                        Filters <Filter className="h-4 w-4 text-slate-400" />
+                        {activeFilterCount > 0 && (
+                            <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">{activeFilterCount}</span>
+                        )}
                     </button>
                 </div>
             </div>
@@ -156,9 +172,14 @@ export function AlertsTable({ alerts, activeId, onSelect }: AlertsTableProps) {
                                             <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', STATUS_META[a.status].badge)}>{STATUS_META[a.status].label}</span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <button type="button" aria-label={`Actions for ${a.vehicle}`} onClick={(e) => e.stopPropagation()} className="rounded-md p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500">
-                                                <MoreVertical className="h-4 w-4" />
-                                            </button>
+                                            <AlertRowMenu
+                                                label={a.vehicle}
+                                                onViewDetails={() => onSelect(a.id)}
+                                                onAcknowledge={() => onAcknowledge(a.id)}
+                                                onResolve={() => onResolve(a.id)}
+                                                onCreateRule={onCreateRule}
+                                                onDelete={() => onDelete(a.id)}
+                                            />
                                         </td>
                                     </tr>
                                 )

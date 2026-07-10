@@ -12,8 +12,18 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format, subDays } from 'date-fns'
-import { getCostAnalysis, getFuelVehicles, getTheftSummary } from '@/lib/api/fuel'
+import { format } from 'date-fns'
+import {
+    getFuelVehicles,
+    getTheftSummary,
+    getFuelConsumptionReport,
+    getFuelCostReport,
+    getFuelEfficiencyReport,
+    getFuelDistribution,
+    getFuelEfficiencyGraph,
+    getTopFuelConsumers,
+} from '@/lib/api/fuel'
+import { getVehiclesBatched } from '@/lib/api/vehicles'
 import type { FuelVehicle } from '@/types/fuel'
 
 const KOBO = 100
@@ -33,9 +43,26 @@ function sparkline(seed: number, points = 16, base = 50, spread = 20): number[] 
     return out
 }
 
+function formatDateOrFallback(value: string | number | Date | null | undefined, pattern: string, fallback = '—') {
+    if (value == null || value === '') return fallback
+    const date = value instanceof Date ? value : new Date(value)
+    return Number.isNaN(date.getTime()) ? fallback : format(date, pattern)
+}
+
+function finiteNumberOrFallback(value: unknown, fallback = 0) {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : fallback
+}
+
 export interface FuelOverviewRange {
     startDate: string // yyyy-MM-dd
     endDate: string
+}
+
+export interface FuelOverviewFilters {
+    vehicleSearch?: string
+    vehicleFilter?: string
+    topConsumersFilter?: string
 }
 
 // ── KPI + summary view-models ────────────────────────────────────────────────
@@ -136,24 +163,76 @@ function mapVehicleRow(v: FuelVehicle): VehicleRow {
         model: `${v.attributes.make} ${v.attributes.model}`.trim(),
         chassis: v.attributes.device_imei ?? '—',
         fuelPercent: v.fuel_level ? Math.round(v.fuel_level.fuel_level_percent) : null,
-        fuelLiters: v.fuel_level ? Number(v.fuel_level.fuel_level_liters.toFixed(1)) : null,
+        fuelLiters: v.fuel_level ? Number(finiteNumberOrFallback(v.fuel_level.fuel_level_liters).toFixed(1)) : null,
         online,
         location: null,
         status,
     }
 }
 
-export function useFuelOverview(range: FuelOverviewRange) {
-    const params = { start_date: range.startDate, end_date: range.endDate }
+const BAND_LABEL: Record<string, string> = {
+    '0-20': '0 – 20%',
+    '20-40': '20 – 40%',
+    '40-60': '40 – 60%',
+    '60-80': '60 – 80%',
+    '80-100': '80 – 100%',
+}
+const BAND_COLOR: Record<string, string> = {
+    '0-20': '#ef4444',
+    '20-40': '#3b82f6',
+    '40-60': '#60a5fa',
+    '60-80': '#f59e0b',
+    '80-100': '#10b981',
+}
 
-    const costQuery = useQuery({
-        queryKey: ['fuel-overview', 'cost-analysis', params],
-        queryFn: () => getCostAnalysis(params),
+export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewFilters = {}) {
+    const params = { start_date: range.startDate, end_date: range.endDate }
+    const vehicleParams = {
+        per_page: 200,
+        search: filters.vehicleSearch?.trim() || undefined,
+        filter: filters.vehicleFilter && filters.vehicleFilter !== 'all' ? filters.vehicleFilter : undefined,
+    }
+    const topConsumersParams = {
+        filter: filters.topConsumersFilter,
+    }
+
+    // Total Fuel Used → consumption-report (also drives the fuel-used sparkline).
+    const consumptionQuery = useQuery({
+        queryKey: ['fuel-overview', 'consumption-report'],
+        queryFn: () => getFuelConsumptionReport(),
+    })
+
+    // Total Fuel Cost → cost-report (sum of monthly totals).
+    const costReportQuery = useQuery({
+        queryKey: ['fuel-overview', 'cost-report'],
+        queryFn: () => getFuelCostReport(),
+    })
+
+    // Avg Fuel Efficiency → efficiency-report fleet_average.
+    const efficiencyQuery = useQuery({
+        queryKey: ['fuel-overview', 'efficiency-report'],
+        queryFn: () => getFuelEfficiencyReport(),
+    })
+
+    // Total Vehicles → full (batched) vehicle fetch.
+    const totalVehiclesQuery = useQuery({
+        queryKey: ['fuel-overview', 'all-vehicles-count'],
+        queryFn: () => getVehiclesBatched(),
     })
 
     const vehiclesQuery = useQuery({
-        queryKey: ['fuel-overview', 'vehicles'],
-        queryFn: () => getFuelVehicles({ per_page: 200 }),
+        queryKey: ['fuel-overview', 'vehicles', vehicleParams],
+        queryFn: () => getFuelVehicles(vehicleParams),
+    })
+
+    const distributionQuery = useQuery({
+        queryKey: ['fuel-overview', 'distribution'],
+        queryFn: () => getFuelDistribution(),
+    })
+
+    const topConsumersQuery = useQuery({
+        queryKey: ['fuel-overview', 'top-consumers', topConsumersParams],
+        queryFn: () => getTopFuelConsumers(topConsumersParams),
     })
 
     const theftQuery = useQuery({
@@ -166,38 +245,50 @@ export function useFuelOverview(range: FuelOverviewRange) {
         [vehiclesQuery.data],
     )
 
-    const cost = costQuery.data?.data
     const theft = theftQuery.data?.data
+    const consumption = consumptionQuery.data?.data
+    const costReport = costReportQuery.data?.data
+    const efficiency = efficiencyQuery.data?.data
 
     const kpi = useMemo<KpiViewModel>(() => {
-        const totalCost = cost ? nairaFromKobo(cost.total_cost_kobo) : 0
-        const totalVolume = cost?.total_volume_liters ?? 0
-        // Efficiency has no fleet endpoint yet; show a nominal figure when we have
-        // volume data, else zero. Replace when a fleet-efficiency endpoint lands.
-        const avgEff = totalVolume > 0 ? 4.35 : 0
+        const totalCost = (costReport?.months ?? []).reduce((s, m) => s + (m.total_cost ?? 0), 0)
+        const totalVolume = finiteNumberOrFallback(consumption?.total_liters)
+        // consumption-report trend → live fuel-used sparkline (fall back to a mock walk).
+        const fuelUsedSpark = consumption?.trend?.length
+            ? consumption.trend.map((t) => finiteNumberOrFallback(t.liters))
+            : sparkline(1, 16, 55, 22)
         return {
             totalFuelUsedLiters: Number(totalVolume.toFixed(2)),
             totalFuelCostNaira: totalCost,
-            avgEfficiencyKmPerL: avgEff,
-            totalRefills: cost?.by_vehicle?.length ?? 0,
-            totalVehicles: vehicles.length,
+            avgEfficiencyKmPerL: efficiency?.fleet_average ?? 0,
+            totalRefills: (topConsumersQuery.data?.data.vehicles ?? []).reduce((s, v) => s + (v.segment_count ?? 0), 0),
+            totalVehicles: totalVehiclesQuery.data?.length ?? vehicles.length,
             sparklines: {
-                fuelUsed: sparkline(1, 16, 55, 22),
+                fuelUsed: fuelUsedSpark,
                 cost: sparkline(7, 16, 52, 20),
                 efficiency: sparkline(3, 16, 48, 14),
                 refills: sparkline(9, 16, 50, 24),
             },
             trends: { fuelUsed: 8.6, cost: 6.4, efficiency: 5.2, refills: 4 },
         }
-    }, [cost, vehicles.length])
+    }, [consumption, costReport, efficiency, topConsumersQuery.data, totalVehiclesQuery.data, vehicles.length])
 
     const distribution = useMemo<DistributionBand[]>(() => {
+        const layers = distributionQuery.data?.data.layers
+        if (layers?.length) {
+            return layers.map((l) => ({
+                key: l.range,
+                label: BAND_LABEL[l.range] ?? l.range,
+                color: BAND_COLOR[l.range] ?? '#94a3b8',
+                count: l.vehicle_count,
+                percent: l.percentage,
+            }))
+        }
+        // Fallback: derive from the live vehicle list until distribution loads.
         const withLevel = vehicles.filter((v) => v.fuelPercent != null)
         const total = withLevel.length || 1
         return FUEL_BANDS.map((band) => {
-            const count = withLevel.filter(
-                (v) => v.fuelPercent! >= band.min && v.fuelPercent! < band.max,
-            ).length
+            const count = withLevel.filter((v) => v.fuelPercent! >= band.min && v.fuelPercent! < band.max).length
             return {
                 key: band.key,
                 label: band.label,
@@ -206,7 +297,7 @@ export function useFuelOverview(range: FuelOverviewRange) {
                 percent: Number(((count / total) * 100).toFixed(1)),
             }
         })
-    }, [vehicles])
+    }, [distributionQuery.data, vehicles])
 
     const lowFuelAlerts = useMemo<LowFuelAlert[]>(() => {
         // Prefer real theft/abnormality incidents that carry a location; supplement
@@ -217,9 +308,9 @@ export function useFuelOverview(range: FuelOverviewRange) {
                 id: i.alert_id,
                 registration: i.registration_number,
                 fuelPercent: Math.max(0, Math.round(100 - i.confidence * 100)),
-                fuelLiters: Number(i.liters_lost.toFixed(1)),
+                fuelLiters: Number(finiteNumberOrFallback(i.liters_lost).toFixed(1)),
                 location: i.location?.address ?? '—',
-                time: i.occurred_at ? format(new Date(i.occurred_at), 'hh:mm a') : '—',
+                time: formatDateOrFallback(i.occurred_at, 'hh:mm a'),
             }))
         if (fromIncidents.length >= 3) return fromIncidents
 
@@ -239,25 +330,34 @@ export function useFuelOverview(range: FuelOverviewRange) {
     }, [theft, vehicles])
 
     const topConsumers = useMemo<TopConsumer[]>(() => {
-        const rows = (cost?.by_vehicle ?? [])
+        // Cost per litre derived from cost-report (Σ cost / Σ litres) so the top-consumers
+        // rows (which carry only litres) can show an approximate spend column.
+        const months = costReport?.months ?? []
+        const totalCost = months.reduce((s, m) => s + (m.total_cost ?? 0), 0)
+        const totalLiters = months.reduce((s, m) => s + (m.liters ?? 0), 0)
+        const pricePerL = totalLiters > 0 ? totalCost / totalLiters : 0
+
+        const rows = (topConsumersQuery.data?.data.vehicles ?? [])
             .map((r) => ({
                 id: r.vehicle_id,
-                registration: r.registration_number,
-                model: `${r.make} ${r.model}`.trim(),
-                litersUsed: Number(r.total_liters.toFixed(2)),
-                costNaira: nairaFromKobo(r.total_cost_kobo),
+                registration: r.vehicle.registration_number,
+                model: `${r.vehicle.make} ${r.vehicle.model}`.trim(),
+                litersUsed: Number(finiteNumberOrFallback(r.fuel_used_liters).toFixed(2)),
+                costNaira: Number((finiteNumberOrFallback(r.fuel_used_liters) * pricePerL).toFixed(2)),
             }))
             .sort((a, b) => b.litersUsed - a.litersUsed)
             .slice(0, 5)
         const max = rows[0]?.litersUsed || 1
         return rows.map((r) => ({ ...r, share: r.litersUsed / max }))
-    }, [cost])
+    }, [topConsumersQuery.data, costReport])
 
     const summary = useMemo<SummaryMetrics>(() => {
         const litersLost = theft?.total_liters_lost ?? 0
-        const avgPerL = cost && cost.total_volume_liters > 0
-            ? nairaFromKobo(cost.average_cost_per_liter_kobo)
-            : 765
+        // Approx price/L from the cost-report to value the litres saved.
+        const months = costReport?.months ?? []
+        const totalCost = months.reduce((s, m) => s + (m.total_cost ?? 0), 0)
+        const totalLiters = months.reduce((s, m) => s + (m.liters ?? 0), 0)
+        const avgPerL = totalLiters > 0 ? totalCost / totalLiters : 765
         return {
             idleFuelLiters: 125.45,
             idleTrend: 7.5,
@@ -268,7 +368,7 @@ export function useFuelOverview(range: FuelOverviewRange) {
             totalSavingsNaira: 3245.6,
             totalSavingsTrend: 12.6,
         }
-    }, [theft, cost])
+    }, [theft, costReport])
 
     return {
         kpi,
@@ -278,8 +378,11 @@ export function useFuelOverview(range: FuelOverviewRange) {
         topConsumers,
         summary,
         theftIncidents: theft?.incidents ?? [],
-        isLoading: costQuery.isLoading || vehiclesQuery.isLoading,
-        isError: costQuery.isError && vehiclesQuery.isError,
+        isLoading: consumptionQuery.isLoading || vehiclesQuery.isLoading,
+        isError:
+            consumptionQuery.isError &&
+            costReportQuery.isError &&
+            vehiclesQuery.isError,
     }
 }
 
@@ -291,29 +394,44 @@ export interface TrendPoint {
 }
 
 /**
- * Consumption + efficiency day series. The backend history endpoint is per-vehicle,
- * so for a fleet-wide trend we synthesize a stable series seeded by the range. Swap
- * `getVehicleFuelHistory` aggregation here when a fleet history endpoint lands.
+ * Consumption + efficiency day series for the two analytics charts.
+ *  - Consumption Trend  → /analytics/fuel/consumption-report (trend[].date/liters)
+ *  - Fuel Efficiency    → /fuel-consumptions/efficiency-graph (labels[] / efficiency_data[])
  */
-export function useFuelTrends(range: FuelOverviewRange) {
+export interface FuelTrendFilters {
+    consumptionPeriod?: string
+    efficiencyFilter?: string
+}
+
+export function useFuelTrends(_range: FuelOverviewRange, filters: FuelTrendFilters = {}) {
+    void _range
+
+    const consumptionParams = {
+        period: filters.consumptionPeriod,
+    }
+    const efficiencyParams = {
+        filter: filters.efficiencyFilter,
+    }
+
+    const consumptionQuery = useQuery({
+        queryKey: ['fuel-overview', 'consumption-report', consumptionParams],
+        queryFn: () => getFuelConsumptionReport(consumptionParams),
+    })
+    const efficiencyGraphQuery = useQuery({
+        queryKey: ['fuel-overview', 'efficiency-graph', efficiencyParams],
+        queryFn: () => getFuelEfficiencyGraph(efficiencyParams),
+    })
+
     return useMemo(() => {
-        const end = new Date(range.endDate)
-        const days = 31
-        const consumption: TrendPoint[] = []
-        const efficiency: TrendPoint[] = []
-        for (let i = days - 1; i >= 0; i--) {
-            const d = subDays(end, i)
-            const label = format(d, 'MMM d')
-            const seed = d.getDate()
-            consumption.push({
-                date: label,
-                value: Number((400 + Math.sin(seed * 0.6) * 120 + Math.cos(seed) * 80 + 90).toFixed(1)),
-            })
-            efficiency.push({
-                date: label,
-                value: Number((4.1 + Math.sin(seed * 0.5) * 0.6 + Math.cos(seed * 0.9) * 0.3).toFixed(2)),
-            })
-        }
+        const consumption: TrendPoint[] = (consumptionQuery.data?.data.trend ?? []).map((t) => ({
+            date: formatDateOrFallback(t.date, 'MMM d'),
+            value: Number(finiteNumberOrFallback(t.liters).toFixed(1)),
+        }))
+        const g = efficiencyGraphQuery.data?.data
+        const efficiency: TrendPoint[] = (g?.labels ?? []).map((label, i) => ({
+            date: label,
+            value: Number(finiteNumberOrFallback(g?.efficiency_data?.[i]).toFixed(2)),
+        }))
         return { consumption, efficiency }
-    }, [range.endDate])
+    }, [consumptionQuery.data, efficiencyGraphQuery.data])
 }
