@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, SlidersHorizontal } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { QueryError } from '@/components/shared/QueryError'
 import { FuelTabs } from '../components/FuelTabs'
 import { RealtimeVehicleRail } from '../components/RealtimeVehicleRail'
@@ -26,14 +24,6 @@ export default function FuelRealtimePage() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Real-time Fuel Tracking</h1>
                     <p className="mt-1 text-sm text-slate-500">Monitor live fuel level, consumption and events in real-time.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button size="sm" className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700">
-                        <Bell className="h-4 w-4" /> Create Alert
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none">
-                        <SlidersHorizontal className="h-4 w-4" /> Filters
-                    </Button>
                 </div>
             </div>
 

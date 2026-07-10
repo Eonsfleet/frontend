@@ -1,26 +1,27 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Search, Trash2, SlidersHorizontal, MoreVertical, FileText, Truck, CreditCard, Banknote } from 'lucide-react'
+import { Search, MoreVertical, FileText, Truck, CreditCard, Banknote } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { TX_TYPE_META, type TransactionRow, type TxType } from './useFuelTransactions'
+import { TX_TYPE_META, type FuelTransactionFilters, type TransactionRow, type TxType } from './useFuelTransactions'
+import type { FuelPagination } from '@/lib/api/fuel'
 
 interface TransactionsTableProps {
     rows: TransactionRow[]
     isLoading?: boolean
+    filters: FuelTransactionFilters
+    pagination: FuelPagination
+    onFiltersChange: (filters: FuelTransactionFilters) => void
 }
 
 const PILLS: { key: 'all' | TxType; label: string }[] = [
     { key: 'all', label: 'All Transactions' },
-    { key: 'purchase', label: 'Fuel Purchases' },
     { key: 'refill', label: 'Refills' },
-    { key: 'adjustment', label: 'Adjustments' },
-    { key: 'drain', label: 'Drains' },
+    { key: 'theft', label: 'Theft' },
+    { key: 'leakage', label: 'Leakage' },
 ]
 
-const PAGE_SIZE = 10
 const fmtNaira = (n: number | null) => (n == null ? '—' : `₦${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
 function PaymentCell({ method }: { method: TransactionRow['payment'] }) {
@@ -38,27 +39,18 @@ function PaymentCell({ method }: { method: TransactionRow['payment'] }) {
     )
 }
 
-export function TransactionsTable({ rows, isLoading }: TransactionsTableProps) {
-    const [pill, setPill] = useState<'all' | TxType>('all')
-    const [search, setSearch] = useState('')
-    const [page, setPage] = useState(1)
+export function TransactionsTable({ rows, isLoading, filters, pagination, onFiltersChange }: TransactionsTableProps) {
+    const totalPages = Math.max(1, pagination.last_page)
+    const clampedPage = Math.min(filters.page, totalPages)
+    const pageWindowStart = Math.max(1, Math.min(clampedPage - 2, Math.max(1, totalPages - 4)))
+    const pageNumbers = Array.from(
+        { length: Math.min(5, totalPages - pageWindowStart + 1) },
+        (_, index) => pageWindowStart + index,
+    )
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase()
-        return rows.filter((r) => {
-            if (pill !== 'all' && r.type !== pill) return false
-            if (!q) return true
-            return (
-                r.vehicle.toLowerCase().includes(q) ||
-                r.driver.toLowerCase().includes(q) ||
-                r.station.toLowerCase().includes(q)
-            )
-        })
-    }, [rows, pill, search])
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-    const clampedPage = Math.min(page, totalPages)
-    const pageRows = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE)
+    const updateFilters = (next: Partial<FuelTransactionFilters>) => {
+        onFiltersChange({ ...filters, ...next })
+    }
 
     return (
         <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-0 shadow-none">
@@ -69,10 +61,10 @@ export function TransactionsTable({ rows, isLoading }: TransactionsTableProps) {
                         <button
                             key={p.key}
                             type="button"
-                            onClick={() => { setPill(p.key); setPage(1) }}
+                            onClick={() => updateFilters({ type: p.key, page: 1 })}
                             className={cn(
                                 'rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors duration-200',
-                                pill === p.key ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50',
+                                filters.type === p.key ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50',
                             )}
                         >
                             {p.label}
@@ -83,26 +75,20 @@ export function TransactionsTable({ rows, isLoading }: TransactionsTableProps) {
                     <div className="relative w-full lg:w-56">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <Input
-                            value={search}
-                            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                            value={filters.search}
+                            onChange={(e) => updateFilters({ search: e.target.value, page: 1 })}
                             placeholder="Search transactions..."
                             className="h-9 border-slate-200 bg-slate-50 pl-8 text-sm"
                             aria-label="Search transactions"
                         />
                     </div>
-                    <button type="button" aria-label="Delete selected" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors duration-200 hover:bg-slate-50">
-                        <Trash2 className="h-4 w-4" />
-                    </button>
-                    <button type="button" aria-label="Column settings" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors duration-200 hover:bg-slate-50">
-                        <SlidersHorizontal className="h-4 w-4" />
-                    </button>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left text-[13px]">
-                    <thead>
+            <div className="min-h-0 flex-1 overflow-auto">
+                <table className="w-full min-w-[1280px] whitespace-nowrap text-left text-[13px]">
+                    <thead className="sticky top-0 z-10 bg-white">
                         <tr className="border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                             <th className="px-4 py-3">Date &amp; Time</th>
                             <th className="px-4 py-3">Vehicle</th>
@@ -122,10 +108,10 @@ export function TransactionsTable({ rows, isLoading }: TransactionsTableProps) {
                             Array.from({ length: 6 }).map((_, i) => (
                                 <tr key={i}><td colSpan={11} className="px-4 py-3"><div className="h-8 w-full animate-pulse rounded bg-slate-50" /></td></tr>
                             ))
-                        ) : pageRows.length === 0 ? (
+                        ) : rows.length === 0 ? (
                             <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-400">No transactions found.</td></tr>
                         ) : (
-                            pageRows.map((r) => {
+                            rows.map((r) => {
                                 const meta = TX_TYPE_META[r.type]
                                 const negative = (r.volumeLiters ?? 0) < 0
                                 return (
@@ -182,35 +168,35 @@ export function TransactionsTable({ rows, isLoading }: TransactionsTableProps) {
             {/* Pagination footer */}
             <div className="flex flex-col gap-3 border-t border-slate-100 p-4 text-[13px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <span>
-                    Showing {filtered.length === 0 ? 0 : (clampedPage - 1) * PAGE_SIZE + 1} to{' '}
-                    {Math.min(clampedPage * PAGE_SIZE, filtered.length)} of {filtered.length} transactions
+                    Showing {pagination.total === 0 ? 0 : (clampedPage - 1) * pagination.per_page + 1} to{' '}
+                    {Math.min(clampedPage * pagination.per_page, pagination.total)} of {pagination.total} transactions
                 </span>
                 <div className="flex items-center gap-1">
                     <button
                         type="button"
                         disabled={clampedPage <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        onClick={() => updateFilters({ page: Math.max(1, clampedPage - 1) })}
                         className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors duration-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         ‹
                     </button>
-                    {Array.from({ length: totalPages }).slice(0, 5).map((_, i) => (
+                    {pageNumbers.map((pageNumber) => (
                         <button
-                            key={i}
+                            key={pageNumber}
                             type="button"
-                            onClick={() => setPage(i + 1)}
+                            onClick={() => updateFilters({ page: pageNumber })}
                             className={cn(
                                 'flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-[12px] font-medium transition-colors duration-200',
-                                clampedPage === i + 1 ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50',
+                                clampedPage === pageNumber ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50',
                             )}
                         >
-                            {i + 1}
+                            {pageNumber}
                         </button>
                     ))}
                     <button
                         type="button"
                         disabled={clampedPage >= totalPages}
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        onClick={() => updateFilters({ page: Math.min(totalPages, clampedPage + 1) })}
                         className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition-colors duration-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         ›

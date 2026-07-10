@@ -17,9 +17,10 @@ interface TrendChartCardProps {
     color: string
     /** Formats the tooltip value, e.g. `(v) => \`${v} L\``. */
     formatValue: (v: number) => string
-    filter: string
-    filterOptions: TrendFilterOption[]
-    onFilterChange: (filter: string) => void
+    filter?: string
+    filterOptions?: TrendFilterOption[]
+    onFilterChange?: (filter: string) => void
+    granularity?: string
 }
 
 function TrendTooltip({
@@ -42,10 +43,11 @@ function TrendTooltip({
     )
 }
 
-export function TrendChartCard({ title, data, color, formatValue, filter, filterOptions, onFilterChange }: TrendChartCardProps) {
+export function TrendChartCard({ title, data, color, formatValue, filter, filterOptions = [], onFilterChange, granularity }: TrendChartCardProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const gradientId = `trend-${title.replace(/\W/g, '')}`
-    const activeFilterLabel = filterOptions.find((option) => option.value === filter)?.label ?? filterOptions[0]?.label ?? 'Filter'
+    const activeFilterLabel = filterOptions.find((option) => option.value === filter)?.label ?? granularity ?? filterOptions[0]?.label ?? 'Filter'
+    const canFilter = filterOptions.length > 0 && onFilterChange != null
 
     return (
         <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
@@ -56,11 +58,11 @@ export function TrendChartCard({ title, data, color, formatValue, filter, filter
                         type="button"
                         aria-expanded={isMenuOpen}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
-                        onClick={() => setIsMenuOpen((open) => !open)}
+                        onClick={() => canFilter && setIsMenuOpen((open) => !open)}
                     >
                         {activeFilterLabel} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                     </button>
-                    {isMenuOpen && (
+                    {canFilter && isMenuOpen && (
                         <div className="absolute right-0 top-full z-20 mt-1 w-28 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                             {filterOptions.map((option) => (
                                 <button
@@ -68,7 +70,7 @@ export function TrendChartCard({ title, data, color, formatValue, filter, filter
                                     type="button"
                                     className="block w-full px-3 py-1.5 text-left text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
                                     onClick={() => {
-                                        onFilterChange(option.value)
+                                        onFilterChange?.(option.value)
                                         setIsMenuOpen(false)
                                     }}
                                 >

@@ -69,11 +69,11 @@ export function TxKpiCards({ kpis }: { kpis: TxKpis }) {
                 trend={{ value: '4.8%', isPositive: true, label: 'vs prev.' }}
             />
             <KpiCard
-                title="Total Refills"
-                value={`${kpis.totalRefills}`}
+                title="Pending Approval"
+                value={`${kpis.pendingApprovalCount}`}
                 icon={Fuel}
                 iconClass="bg-blue-50 text-blue-500"
-                trend={{ value: '5.1%', isPositive: true, label: 'vs prev.' }}
+                trend={{ value: `${kpis.totalRefills}`, isPositive: true, label: 'fuel expenses' }}
             />
         </div>
     )

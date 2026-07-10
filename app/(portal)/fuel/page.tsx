@@ -81,12 +81,6 @@ export default function FuelOverviewPage() {
     efficiencyFilter,
   });
 
-  const rangeLabel = useMemo(() => {
-    const s = new Date(range.startDate);
-    const e = new Date(range.endDate);
-    return `${format(s, "MMM d")} – ${format(e, "MMM d, yyyy")}`;
-  }, [range]);
-
   // Map markers come from theft/abnormality incidents that carry coordinates.
   const markers = useMemo<MapMarkerPoint[]>(
     () =>
@@ -120,7 +114,7 @@ export default function FuelOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <OverviewHeader rangeLabel={rangeLabel} />
+      <OverviewHeader />
 
       {isError ? (
         <QueryError message="Failed to load fuel overview." />

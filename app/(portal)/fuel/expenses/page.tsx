@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,7 @@ import { getVehicles } from '@/lib/api/vehicles'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { FuelExpense } from '@/types'
-import { useForm } from 'react-hook-form'
+import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { extractApiError } from '@/lib/utils'
@@ -178,7 +178,7 @@ function LogExpenseDialog({ open, onClose }: { open: boolean; onClose: () => voi
     const queryClient = useQueryClient()
     const { user } = useAuthStore()
     const { register, handleSubmit, reset, formState: { errors } } = useForm<LogForm>({
-        resolver: zodResolver(logSchema) as any,
+        resolver: zodResolver(logSchema) as Resolver<LogForm>,
         defaultValues: { entry_date: format(new Date(), 'yyyy-MM-dd') },
     })
 
@@ -328,7 +328,9 @@ export default function FuelExpensesPage() {
 
     const m = metricsData?.data
     const expenses: FuelExpense[] = data?.data?.fuel_expenses ?? []
-    const paginationData = data?.data?.pagination as any
+    const paginationData = data?.data?.pagination as
+        | { current?: number; current_page?: number; lastPage?: number; last_page?: number; total?: number }
+        | undefined
     
     // Map API pagination to component expectations (API uses camelCase, type uses snake_case)
     const pagination = paginationData ? {
@@ -388,8 +390,8 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Pending Approval</p>
                         <div className="flex items-end gap-2">
-                            <p className="text-2xl font-bold text-amber-600">{m?.pending_count ?? '—'}</p>
-                            {m && m.pending_count > 0 && <Clock className="h-4 w-4 text-amber-500 mb-1" />}
+                            <p className="text-2xl font-bold text-amber-600">{m?.pending_count ?? m?.pending_approval_count ?? '—'}</p>
+                            {m && (m.pending_count ?? m.pending_approval_count ?? 0) > 0 && <Clock className="h-4 w-4 text-amber-500 mb-1" />}
                         </div>
                     </CardContent>
                 </Card>
