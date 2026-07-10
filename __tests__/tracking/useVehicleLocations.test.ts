@@ -69,6 +69,55 @@ describe('useVehicleLocations trail buffer', () => {
   })
 })
 
+describe('useVehicleLocations fleet-channel id resolution', () => {
+  it('keys the fleet-wide WS packet by attributes.uuid, not the DB vehicle_id it arrives with', () => {
+    const vehicles = [
+      { id: '7', attributes: { uuid: 'uuid-7' } },
+    ] as any
+
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+
+    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    act(() => {
+      // Backend broadcasts vehicle_id as the DB id (same convention as
+      // trips/maintenance/fuel elsewhere), not the uuid consumers read by.
+      locationHandler({ vehicle_id: '7', latitude: 6.5, longitude: 3.4, speed: 10, status: 'in_transit' })
+    })
+
+    expect(result.current.locations['uuid-7']).toMatchObject({ lat: 6.5, lng: 3.4, speed: 10 })
+    expect(result.current.locations['7']).toBeUndefined()
+  })
+
+  it('keys .vehicle.status.changed and .fuel.event by attributes.uuid too', () => {
+    const vehicles = [
+      { id: '7', attributes: { uuid: 'uuid-7' } },
+    ] as any
+
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+
+    const statusHandler = handlers.get(`vehicle.status.org-1::.vehicle.status.changed`)!
+    act(() => {
+      statusHandler({ vehicle_id: '7', new_status: 'idle' })
+    })
+    expect(result.current.locations['uuid-7'].status).toBe('idle')
+
+    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel.event')!
+    act(() => {
+      fuelHandler({ vehicle_id: '7' })
+    })
+    expect(result.current.alarmState['uuid-7']).toBe(true)
+    expect(result.current.alarmState['7']).toBeUndefined()
+  })
+})
+
 describe('useVehicleLocations lastUpdate/lastPacket timestamp priority', () => {
   it('prefers timestamp_utc (server ingestion time) over device-reported updated_at/gps_datetime', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()

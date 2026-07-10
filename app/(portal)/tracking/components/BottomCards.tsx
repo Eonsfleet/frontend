@@ -1,14 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Route, Navigation, Cpu, Loader2, SignalHigh, SignalMedium, SignalLow, SignalZero } from "lucide-react";
-import { format, formatDistanceStrict } from "date-fns";
-import { getActiveTripForVehicle } from "@/lib/api/trips";
+import {
+  Navigation,
+  Cpu,
+  Camera,
+  Maximize2,
+  SignalHigh,
+  SignalMedium,
+  SignalLow,
+  SignalZero,
+} from "lucide-react";
 import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
+import { StreetViewModal } from "./StreetViewModal";
 
 interface BottomCardsProps {
   selectedVehicle: any;
@@ -56,13 +65,53 @@ function simLabel(status: string | null | undefined): string | null {
   return status;
 }
 
-export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = false }: BottomCardsProps) {
-  const { data: trip, isLoading: isLoadingTrip } = useQuery({
-    queryKey: ["active-trip", selectedVehicle?.id],
-    queryFn: () => getActiveTripForVehicle(selectedVehicle!.id),
-    enabled: !!selectedVehicle,
-  });
+function StreetViewCard({ lat, lng }: { lat?: number | null; lng?: number | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY;
+  const hasCoords = lat != null && lng != null;
 
+  return (
+    <div className="bg-white px-4 py-3 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <Camera className="h-3.5 w-3.5 text-blue-600" />
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Street View</span>
+        </div>
+        {apiKey && hasCoords && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="text-slate-400 hover:text-slate-600"
+            aria-label="Expand street view"
+          >
+            <Maximize2 className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <div className="flex-1 min-h-[110px] rounded-lg overflow-hidden bg-slate-100">
+        {apiKey && hasCoords ? (
+          <iframe
+            key={`${lat},${lng}`}
+            title="Street View"
+            className="h-full w-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            src={`https://www.google.com/maps/embed/v1/streetview?key=${apiKey}&location=${lat},${lng}`}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center p-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            {hasCoords ? "Street View unavailable" : "Location unavailable"}
+          </div>
+        )}
+      </div>
+      {apiKey && hasCoords && (
+        <StreetViewModal lat={lat} lng={lng} open={expanded} onOpenChange={setExpanded} />
+      )}
+    </div>
+  );
+}
+
+export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = false }: BottomCardsProps) {
   // /devices/{id} (device HARDWARE record) — not /tracker/{imei}, which only
   // returns GPS telemetry and never included model/network/SIM fields.
   const deviceRecordId = selectedVehicle?.relationships?.device?.id ?? selectedVehicle?.relationships?.device?.data?.id;
@@ -88,10 +137,6 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
 
   if (!selectedVehicle) return null;
 
-  const tripStart = trip?.attributes?.actual_start_time ?? trip?.attributes?.planned_start_time;
-  const tripDuration = tripStart ? formatDistanceStrict(new Date(tripStart), new Date()) : null;
-  const tripStops = trip?.attributes?.routes?.filter((r: any) => r.is_stop_point).length ?? null;
-
   const attrs = deviceInfoData?.data?.attributes ?? {};
   const hardware = deviceInfoData?.data?.relationships?.hardware;
   const device = selectedVehicle.relationships?.device;
@@ -110,31 +155,6 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
 
   return (
     <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
-      <CardShell icon={Route} title="Summary">
-        {isLoadingTrip ? (
-          <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
-        ) : trip ? (
-          <div className="grid grid-cols-2 gap-x-6">
-            <div className="space-y-2">
-              <Stat label="Started" value={tripStart ? format(new Date(tripStart), "hh:mm a") : null} />
-              <Stat label="Duration" value={tripDuration} />
-              <Stat
-                label="Distance"
-                value={trip.attributes.distance_covered_km != null ? `${trip.attributes.distance_covered_km} km` : null}
-              />
-              <Stat label="Stops" value={tripStops} />
-            </div>
-            <div className="space-y-2">
-              <Stat label="Avg. Speed" value={trip.attributes.avg_speed != null ? `${trip.attributes.avg_speed} km/h` : null} />
-              <Stat label="Fuel Used" value={null} />
-              <Stat label="Idle Time" value={null} />
-            </div>
-          </div>
-        ) : (
-          <p className="text-[10px] font-bold text-slate-400">No active trip</p>
-        )}
-      </CardShell>
-
       <CardShell icon={Navigation} title="Location & Movement">
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
           <Stat label="Speed" value={`${loc?.speed ?? resolved.speed ?? 0} km/h`} />
@@ -194,6 +214,8 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
           <Stat label="Status" value={sim} />
         </div>
       </CardShell>
+
+      <StreetViewCard lat={loc?.lat ?? resolved.lat} lng={loc?.lng ?? resolved.lng} />
     </div>
   );
 }

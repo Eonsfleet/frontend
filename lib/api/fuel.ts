@@ -60,9 +60,12 @@ export interface CreateFuelExpensePayload {
     user_id: number
     cost_per_volume: number
     volume: number
-    status?: string
-    purchase_from?: string
-    reference_number?: string
+    currency?: string | null
+    fuel_transaction_id?: number | null
+    purchase_from?: string | null
+    receipt_url?: string | null
+    reference_number?: string | null
+    status?: 'pending_approval' | 'approved' | 'rejected' | 'reimbursed' | null
     entry_date: string
 }
 
@@ -90,7 +93,18 @@ export const rejectFuelExpense = async (id: string | number, reason: string): Pr
     return response.data
 }
 
-export const exportFuelExpenses = async (params?: Omit<FuelExpenseListParams, 'page' | 'per_page'>): Promise<Blob> => {
+export interface FuelExpenseExportParams {
+    q?: string
+    status?: string
+    vehicle_id?: number
+    user_id?: number
+    type?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+}
+
+export const exportFuelExpenses = async (params?: FuelExpenseExportParams): Promise<Blob> => {
     const response = await apiClient.get('/fuel-expenses/export', { params, responseType: 'blob' })
     return response.data
 }
@@ -168,6 +182,44 @@ export interface CardTransactionListResponse {
 
 export const getCardTransactions = async (params?: CardTransactionListParams): Promise<CardTransactionListResponse> => {
     const response = await apiClient.get<CardTransactionListResponse>('/fuel-card/transactions', { params })
+    return response.data
+}
+
+// Fuel transactions
+export interface FuelTransactionListParams {
+    q?: string
+    vehicle_id?: number
+    type?: string
+    start_date?: string
+    end_date?: string
+    per_page?: number
+    page?: number
+    sort_by?: string
+    order_by?: 'asc' | 'desc'
+}
+
+export type FuelTransactionApiItem = {
+    id?: string | number
+    attributes?: Record<string, unknown>
+    relationships?: Record<string, unknown>
+    [key: string]: unknown
+}
+
+export interface FuelTransactionListResponse {
+    data:
+        | FuelTransactionApiItem[]
+        | {
+            fuel_transactions?: FuelTransactionApiItem[]
+            transactions?: FuelTransactionApiItem[]
+            pagination?: FuelPagination
+        }
+    meta?: {
+        pagination?: FuelPagination
+    }
+}
+
+export const getFuelTransactions = async (params?: FuelTransactionListParams): Promise<FuelTransactionListResponse> => {
+    const response = await apiClient.get<FuelTransactionListResponse>('/fuel-transactions', { params })
     return response.data
 }
 
@@ -280,12 +332,88 @@ export const getCostAnalysis = async (params?: { start_date?: string; end_date?:
     return response.data
 }
 
+// ── 8.7 Fuel Analytics Reports ───────────────────────────────────────────────
+
+export interface FuelConsumptionReport {
+    period: string
+    total_liters: number
+    trend: Array<{ date: string; liters: number }>
+}
+
+export const getFuelConsumptionReport = async (params?: { period?: string }): Promise<{ message: string; data: FuelConsumptionReport }> => {
+    const response = await apiClient.get('/analytics/fuel/consumption-report', { params })
+    return response.data
+}
+
+export interface FuelCostReport {
+    currency: string
+    months: Array<{ month: string; total_cost: number; liters: number }>
+}
+
+export const getFuelCostReport = async (params?: { period?: string }): Promise<{ message: string; data: FuelCostReport }> => {
+    const response = await apiClient.get('/analytics/fuel/cost-report', { params })
+    return response.data
+}
+
+export interface FuelEfficiencyReport {
+    months: Array<{ month: string; efficiency_l_per_100km: number; distance_km: number }>
+    fleet_average: number
+}
+
+export const getFuelEfficiencyReport = async (params?: { period?: string }): Promise<{ message: string; data: FuelEfficiencyReport }> => {
+    const response = await apiClient.get('/analytics/fuel/efficiency-report', { params })
+    return response.data
+}
+
+export interface FuelDistribution {
+    total_vehicles: number
+    layers: Array<{ range: string; vehicle_count: number; percentage: number }>
+}
+
+export const getFuelDistribution = async (): Promise<{ message: string; data: FuelDistribution }> => {
+    const response = await apiClient.get('/fuel/vehicles/distribution')
+    return response.data
+}
+
+export interface FuelEfficiencyGraph {
+    filter: string
+    labels: string[]
+    efficiency_data: number[]
+    average_efficiency_km_per_liter: number
+}
+
+export const getFuelEfficiencyGraph = async (params?: { filter?: string }): Promise<{ message: string; data: FuelEfficiencyGraph }> => {
+    const response = await apiClient.get('/fuel-consumptions/efficiency-graph', { params })
+    return response.data
+}
+
+export interface TopFuelConsumer {
+    vehicle_id: number
+    fuel_used_liters: number
+    distance_km: number
+    segment_count: number
+    vehicle: { id: number; registration_number: string; make: string; model: string }
+}
+
+export interface TopFuelConsumersResponse {
+    filter: string
+    period: { start_at: string; end_at: string; timezone: string }
+    vehicles: TopFuelConsumer[]
+    total_fuel_used_liters: number
+}
+
+export const getTopFuelConsumers = async (params?: { filter?: string }): Promise<{ message: string; data: TopFuelConsumersResponse }> => {
+    const response = await apiClient.get('/fuel-consumptions/top-consumers', { params })
+    return response.data
+}
+
 // ── 8.5 Live Fuel Monitor ────────────────────────────────────────────────────
 
 export interface FuelVehicleListParams {
     per_page?: number
     page?: number
     search?: string
+    filter?: string
 }
 
 export interface FuelVehicleListResponse {

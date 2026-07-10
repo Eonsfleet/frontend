@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Marker, Popup } from "react-leaflet";
 import L from "leaflet";
+import { Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
 import { buildMarkerHtml, type MarkerState } from "../utils";
+import { StreetViewModal } from "./StreetViewModal";
 
 const normalizeReg = (reg: string) => (reg || "").toUpperCase();
 const capitalize = (str: string) => {
@@ -71,6 +73,8 @@ function VehicleMarkerImpl({
   const frozenPos = useRef<[number, number]>([lat, lng]);
   if (!isSelected) frozenPos.current = [lat, lng];
   const position: [number, number] = isSelected ? frozenPos.current : [lat, lng];
+
+  const [streetViewOpen, setStreetViewOpen] = useState(false);
 
   const icon = useMemo(
     () =>
@@ -170,8 +174,25 @@ function VehicleMarkerImpl({
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStreetViewOpen(true);
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100"
+          >
+            <Camera className="size-3" />
+            Street View
+          </button>
         </div>
       </Popup>
+      <StreetViewModal
+        lat={position[0]}
+        lng={position[1]}
+        open={streetViewOpen}
+        onOpenChange={setStreetViewOpen}
+      />
     </Marker>
   );
 }
