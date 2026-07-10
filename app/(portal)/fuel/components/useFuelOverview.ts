@@ -59,6 +59,12 @@ export interface FuelOverviewRange {
     endDate: string
 }
 
+export interface FuelOverviewFilters {
+    vehicleSearch?: string
+    vehicleFilter?: string
+    topConsumersFilter?: string
+}
+
 // ── KPI + summary view-models ────────────────────────────────────────────────
 
 export interface KpiViewModel {
@@ -179,8 +185,16 @@ const BAND_COLOR: Record<string, string> = {
     '80-100': '#10b981',
 }
 
-export function useFuelOverview(range: FuelOverviewRange) {
+export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewFilters = {}) {
     const params = { start_date: range.startDate, end_date: range.endDate }
+    const vehicleParams = {
+        per_page: 200,
+        search: filters.vehicleSearch?.trim() || undefined,
+        filter: filters.vehicleFilter && filters.vehicleFilter !== 'all' ? filters.vehicleFilter : undefined,
+    }
+    const topConsumersParams = {
+        filter: filters.topConsumersFilter,
+    }
 
     // Total Fuel Used → consumption-report (also drives the fuel-used sparkline).
     const consumptionQuery = useQuery({
@@ -207,8 +221,8 @@ export function useFuelOverview(range: FuelOverviewRange) {
     })
 
     const vehiclesQuery = useQuery({
-        queryKey: ['fuel-overview', 'vehicles'],
-        queryFn: () => getFuelVehicles({ per_page: 200 }),
+        queryKey: ['fuel-overview', 'vehicles', vehicleParams],
+        queryFn: () => getFuelVehicles(vehicleParams),
     })
 
     const distributionQuery = useQuery({
@@ -217,8 +231,8 @@ export function useFuelOverview(range: FuelOverviewRange) {
     })
 
     const topConsumersQuery = useQuery({
-        queryKey: ['fuel-overview', 'top-consumers'],
-        queryFn: () => getTopFuelConsumers(),
+        queryKey: ['fuel-overview', 'top-consumers', topConsumersParams],
+        queryFn: () => getTopFuelConsumers(topConsumersParams),
     })
 
     const theftQuery = useQuery({
@@ -384,16 +398,28 @@ export interface TrendPoint {
  *  - Consumption Trend  → /analytics/fuel/consumption-report (trend[].date/liters)
  *  - Fuel Efficiency    → /fuel-consumptions/efficiency-graph (labels[] / efficiency_data[])
  */
-export function useFuelTrends(_range: FuelOverviewRange) {
+export interface FuelTrendFilters {
+    consumptionPeriod?: string
+    efficiencyFilter?: string
+}
+
+export function useFuelTrends(_range: FuelOverviewRange, filters: FuelTrendFilters = {}) {
     void _range
 
+    const consumptionParams = {
+        period: filters.consumptionPeriod,
+    }
+    const efficiencyParams = {
+        filter: filters.efficiencyFilter,
+    }
+
     const consumptionQuery = useQuery({
-        queryKey: ['fuel-overview', 'consumption-report'],
-        queryFn: () => getFuelConsumptionReport(),
+        queryKey: ['fuel-overview', 'consumption-report', consumptionParams],
+        queryFn: () => getFuelConsumptionReport(consumptionParams),
     })
     const efficiencyGraphQuery = useQuery({
-        queryKey: ['fuel-overview', 'efficiency-graph'],
-        queryFn: () => getFuelEfficiencyGraph(),
+        queryKey: ['fuel-overview', 'efficiency-graph', efficiencyParams],
+        queryFn: () => getFuelEfficiencyGraph(efficiencyParams),
     })
 
     return useMemo(() => {

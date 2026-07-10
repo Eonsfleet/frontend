@@ -1,27 +1,63 @@
 'use client'
 
+import { useState } from 'react'
 import { ChevronDown, Truck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import type { TopConsumer } from './useFuelOverview'
 
 interface TopConsumersCardProps {
     consumers: TopConsumer[]
+    filter: TopConsumersFilter
+    onFilterChange: (filter: TopConsumersFilter) => void
 }
+
+export type TopConsumersFilter = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+const CONSUMER_FILTERS: Array<{ label: string; value: TopConsumersFilter }> = [
+    { label: 'Daily', value: 'daily' },
+    { label: 'Weekly', value: 'weekly' },
+    { label: 'Monthly', value: 'monthly' },
+    { label: 'Yearly', value: 'yearly' },
+]
 
 const fmtL = (n: number) => `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`
 const fmtNaira = (n: number) => `₦${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function TopConsumersCard({ consumers }: TopConsumersCardProps) {
+export function TopConsumersCard({ consumers, filter, onFilterChange }: TopConsumersCardProps) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const activeFilterLabel = CONSUMER_FILTERS.find((option) => option.value === filter)?.label ?? 'Daily'
+
     return (
         <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
             <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-900">Top Fuel Consumers</h2>
-                <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
-                >
-                    This Month <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                </button>
+                <div className="relative">
+                    <button
+                        type="button"
+                        aria-expanded={isMenuOpen}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
+                        onClick={() => setIsMenuOpen((open) => !open)}
+                    >
+                        {activeFilterLabel} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                    {isMenuOpen && (
+                        <div className="absolute right-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            {CONSUMER_FILTERS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className="block w-full px-3 py-1.5 text-left text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                                    onClick={() => {
+                                        onFilterChange(option.value)
+                                        setIsMenuOpen(false)
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="mt-4 overflow-x-auto">
@@ -77,15 +113,6 @@ export function TopConsumersCard({ consumers }: TopConsumersCardProps) {
                         ))}
                     </tbody>
                 </table>
-            </div>
-
-            <div className="mt-3 border-t border-slate-100 pt-3">
-                <button
-                    type="button"
-                    className="text-[13px] font-semibold text-blue-600 transition-colors duration-200 hover:text-blue-700"
-                >
-                    View full report →
-                </button>
             </div>
         </Card>
     )

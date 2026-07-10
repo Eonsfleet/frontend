@@ -1,9 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import type { TrendPoint } from './useFuelOverview'
+
+export interface TrendFilterOption {
+    label: string
+    value: string
+}
 
 interface TrendChartCardProps {
     title: string
@@ -11,7 +17,9 @@ interface TrendChartCardProps {
     color: string
     /** Formats the tooltip value, e.g. `(v) => \`${v} L\``. */
     formatValue: (v: number) => string
-    granularity?: string
+    filter: string
+    filterOptions: TrendFilterOption[]
+    onFilterChange: (filter: string) => void
 }
 
 function TrendTooltip({
@@ -34,18 +42,42 @@ function TrendTooltip({
     )
 }
 
-export function TrendChartCard({ title, data, color, formatValue, granularity = 'Daily' }: TrendChartCardProps) {
+export function TrendChartCard({ title, data, color, formatValue, filter, filterOptions, onFilterChange }: TrendChartCardProps) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
     const gradientId = `trend-${title.replace(/\W/g, '')}`
+    const activeFilterLabel = filterOptions.find((option) => option.value === filter)?.label ?? filterOptions[0]?.label ?? 'Filter'
+
     return (
         <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
             <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-900">{title}</h2>
-                <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
-                >
-                    {granularity} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                </button>
+                <div className="relative">
+                    <button
+                        type="button"
+                        aria-expanded={isMenuOpen}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
+                        onClick={() => setIsMenuOpen((open) => !open)}
+                    >
+                        {activeFilterLabel} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                    {isMenuOpen && (
+                        <div className="absolute right-0 top-full z-20 mt-1 w-28 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            {filterOptions.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className="block w-full px-3 py-1.5 text-left text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                                    onClick={() => {
+                                        onFilterChange(option.value)
+                                        setIsMenuOpen(false)
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="mt-4 h-56">
@@ -63,7 +95,7 @@ export function TrendChartCard({ title, data, color, formatValue, granularity = 
                             tick={{ fontSize: 10, fill: '#94a3b8' }}
                             tickLine={false}
                             axisLine={false}
-                            interval={5}
+                            interval={Math.max(0, Math.ceil(data.length / 6) - 1)}
                         />
                         <YAxis
                             tick={{ fontSize: 10, fill: '#94a3b8' }}

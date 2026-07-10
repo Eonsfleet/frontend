@@ -361,6 +361,7 @@ export interface FuelVehicleListParams {
     per_page?: number
     page?: number
     search?: string
+    filter?: string
 }
 
 export interface FuelVehicleListResponse {
