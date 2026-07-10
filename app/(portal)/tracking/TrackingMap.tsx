@@ -334,20 +334,22 @@ export default function TrackingMap({
             }
 
             if (type === "polygon") {
-              // coordinates is an array of {lat, lng} objects or [lng, lat] arrays
-              if (!Array.isArray(coordinates) || coordinates.length === 0) {
+              // coordinates may be a GeoJSON Polygon geometry ({ type: "Polygon", coordinates: [[[lng, lat], ...]] }),
+              // a flat array of [lng, lat] pairs, or a flat array of {lat, lng} objects.
+              let positions: [number, number][] = [];
+
+              if (coordinates?.type === "Polygon" && Array.isArray(coordinates.coordinates)) {
+                positions = coordinates.coordinates[0].map(([lng, lat]: [number, number]) => [lat, lng]);
+              } else if (Array.isArray(coordinates)) {
+                positions = coordinates.map((coord: any) =>
+                  Array.isArray(coord) ? [coord[1], coord[0]] : [coord.lat, coord.lng],
+                );
+              }
+
+              if (positions.length === 0) {
                 console.warn(`Geofence ${g.id} has invalid polygon coordinates:`, coordinates);
                 return null;
               }
-
-              const positions = coordinates.map((coord: any) => {
-                if (Array.isArray(coord)) {
-                  // GeoJSON standard is [lng, lat]
-                  return [coord[1], coord[0]];
-                }
-                // Flat {lat, lng} object
-                return [coord.lat, coord.lng];
-              });
 
               return (
                 <Polygon
