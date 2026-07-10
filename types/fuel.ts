@@ -26,8 +26,10 @@ export interface FuelExpenseMetrics {
     total_volume: number
     total_cost: number
     average_cost_per_liter: number
-    pending_count: number
-    approved_count: number
+    total_expenses: number
+    pending_approval_count: number
+    pending_count?: number
+    approved_count?: number
 }
 
 export interface FuelCardProviderType {

@@ -60,9 +60,12 @@ export interface CreateFuelExpensePayload {
     user_id: number
     cost_per_volume: number
     volume: number
-    status?: string
-    purchase_from?: string
-    reference_number?: string
+    currency?: string | null
+    fuel_transaction_id?: number | null
+    purchase_from?: string | null
+    receipt_url?: string | null
+    reference_number?: string | null
+    status?: 'pending_approval' | 'approved' | 'rejected' | 'reimbursed' | null
     entry_date: string
 }
 
@@ -90,7 +93,18 @@ export const rejectFuelExpense = async (id: string | number, reason: string): Pr
     return response.data
 }
 
-export const exportFuelExpenses = async (params?: Omit<FuelExpenseListParams, 'page' | 'per_page'>): Promise<Blob> => {
+export interface FuelExpenseExportParams {
+    q?: string
+    status?: string
+    vehicle_id?: number
+    user_id?: number
+    type?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+}
+
+export const exportFuelExpenses = async (params?: FuelExpenseExportParams): Promise<Blob> => {
     const response = await apiClient.get('/fuel-expenses/export', { params, responseType: 'blob' })
     return response.data
 }
@@ -168,6 +182,44 @@ export interface CardTransactionListResponse {
 
 export const getCardTransactions = async (params?: CardTransactionListParams): Promise<CardTransactionListResponse> => {
     const response = await apiClient.get<CardTransactionListResponse>('/fuel-card/transactions', { params })
+    return response.data
+}
+
+// Fuel transactions
+export interface FuelTransactionListParams {
+    q?: string
+    vehicle_id?: number
+    type?: string
+    start_date?: string
+    end_date?: string
+    per_page?: number
+    page?: number
+    sort_by?: string
+    order_by?: 'asc' | 'desc'
+}
+
+export type FuelTransactionApiItem = {
+    id?: string | number
+    attributes?: Record<string, unknown>
+    relationships?: Record<string, unknown>
+    [key: string]: unknown
+}
+
+export interface FuelTransactionListResponse {
+    data:
+        | FuelTransactionApiItem[]
+        | {
+            fuel_transactions?: FuelTransactionApiItem[]
+            transactions?: FuelTransactionApiItem[]
+            pagination?: FuelPagination
+        }
+    meta?: {
+        pagination?: FuelPagination
+    }
+}
+
+export const getFuelTransactions = async (params?: FuelTransactionListParams): Promise<FuelTransactionListResponse> => {
+    const response = await apiClient.get<FuelTransactionListResponse>('/fuel-transactions', { params })
     return response.data
 }
 
