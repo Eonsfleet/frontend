@@ -25,11 +25,15 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => (
 )
 
 describe('BottomCards', () => {
-  it('renders the three mockup card titles', () => {
+  it('renders the mockup card titles', () => {
     render(<BottomCards selectedVehicle={vehicle} resolved={resolved} />, { wrapper: Wrapper })
-    expect(screen.getByText('Current Trip')).toBeInTheDocument()
     expect(screen.getByText('Location & Movement')).toBeInTheDocument()
     expect(screen.getByText('Device Status')).toBeInTheDocument()
+  })
+
+  it('no longer renders the Current Trip card (moved to the asset panel Trip tab)', () => {
+    render(<BottomCards selectedVehicle={vehicle} resolved={resolved} />, { wrapper: Wrapper })
+    expect(screen.queryByText('Current Trip')).not.toBeInTheDocument()
   })
 
   it('renders live speed and address in the Location & Movement card', () => {
@@ -41,23 +45,6 @@ describe('BottomCards', () => {
   it('no longer renders the AI Insights card', () => {
     render(<BottomCards selectedVehicle={vehicle} resolved={resolved} />, { wrapper: Wrapper })
     expect(screen.queryByText('AI Insights')).not.toBeInTheDocument()
-  })
-
-  it('renders trip stats across two columns when a trip is active', async () => {
-    const { getActiveTripForVehicle } = await import('@/lib/api/trips')
-    vi.mocked(getActiveTripForVehicle).mockResolvedValueOnce({
-      attributes: {
-        status: 'in_progress',
-        actual_start_time: '2026-07-03T08:15:00Z',
-        distance_covered_km: 126,
-        avg_speed: 64,
-        routes: [{ is_stop_point: true }, { is_stop_point: false }, { is_stop_point: true }],
-      },
-    } as any)
-    render(<BottomCards selectedVehicle={vehicle} resolved={resolved} />, { wrapper: Wrapper })
-    expect(await screen.findByText('126 km')).toBeInTheDocument()
-    expect(screen.getByText('64 km/h')).toBeInTheDocument()
-    expect(screen.getByText('2')).toBeInTheDocument()
   })
 
   it('renders GPS signal, battery, fuel, device and SIM in the Device Status card', async () => {
