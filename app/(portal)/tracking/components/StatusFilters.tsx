@@ -55,11 +55,12 @@ export function StatusFilters({
           s === "all"
             ? vehicles.length
             : vehicles.filter((v: Vehicle) => {
-                const loc = locations[v.id];
+                const loc = locations[v.attributes.uuid];
+                const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
                 return matchesStatusBucket(
                   s as StatusBucket,
-                  { status: loc?.status, is_online: loc?.is_online, speed: loc?.speed },
-                  alarmState[v.id] === true,
+                  { status: loc?.status, is_online: isOnline, speed: loc?.speed },
+                  alarmState[v.attributes.uuid] === true,
                 );
               }).length;
 
