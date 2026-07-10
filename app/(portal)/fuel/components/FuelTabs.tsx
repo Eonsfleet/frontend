@@ -25,7 +25,7 @@ const TABS: FuelTab[] = [
     { label: 'Fuel Transactions', icon: Receipt, href: '/fuel/transactions' },
     { label: 'Fuel Analysis', icon: BarChart3, href: '/fuel/analysis' },
     { label: 'Fuel Alerts', icon: Bell, href: '/fuel/alerts' },
-    { label: 'Fuel Settings', icon: Settings },
+    { label: 'Fuel Settings', icon: Settings, href: '/fuel/settings' },
 ]
 
 const TAB_CLASS =

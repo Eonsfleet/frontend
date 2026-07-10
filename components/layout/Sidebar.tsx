@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   Fuel,
   BarChart3,
-  CreditCard,
   Store,
   Settings,
   Lock,
@@ -188,14 +187,6 @@ const NAV_ITEMS = [
     permission: null,
     module: "documents",
     trialAllowed: false,
-  },
-  {
-    href: "/billing",
-    label: "Billing",
-    icon: CreditCard,
-    permission: "billing:read",
-    module: null,
-    trialAllowed: true,
   },
   {
     href: "/vendors",
