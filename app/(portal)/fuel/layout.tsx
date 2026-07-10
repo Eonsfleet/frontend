@@ -4,7 +4,7 @@ import React from 'react'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Fuel, CreditCard, GitCompare, BarChart3, Radio, Lock as LockIcon } from 'lucide-react'
+import { Fuel, CreditCard, GitCompare, BarChart3, Radio, LayoutDashboard, Lock as LockIcon } from 'lucide-react'
 import { useSubscription } from '@/hooks/useSubscription'
 
 export default function FuelLayout({ children }: { children: React.ReactNode }) {
@@ -12,12 +12,22 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
     const { hasCapability } = useSubscription()
 
     const navItems = [
-        { name: 'Expenses', href: '/fuel', icon: Fuel },
+        { name: 'Overview', href: '/fuel', icon: LayoutDashboard },
+        { name: 'Expenses', href: '/fuel/expenses', icon: Fuel },
         // { name: 'Card Management', href: '/fuel/cards', icon: CreditCard },
         { name: 'Reconciliation', href: '/fuel/reconciliation', icon: GitCompare },
         { name: 'Reports', href: '/fuel/reports', icon: BarChart3 },
         { name: 'Live Monitor', href: '/fuel/monitor', icon: Radio },
     ]
+
+    // The tabbed dashboard pages (Overview, Real-time Tracking) are full-width with
+    // their own top-tab navigation, so they drop the secondary sidebar sub-pages use.
+    const isOverview =
+        pathname === '/fuel' ||
+        pathname === '/fuel/realtime' ||
+        pathname === '/fuel/transactions' ||
+        pathname === '/fuel/analysis' ||
+        pathname === '/fuel/alerts'
 
     return (
         <UpgradeGate
@@ -26,6 +36,11 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
             description="Track fuel expenses, integrate external fuel cards, and run anomaly detection algorithms to stop fuel theft."
             requiredPlan="growth"
         >
+            {isOverview ? (
+                <div className="h-full overflow-y-auto bg-slate-50">
+                    <main className="min-w-0 p-6 lg:p-8">{children}</main>
+                </div>
+            ) : (
             <div className="flex h-full flex-col lg:flex-row bg-slate-50">
                 {/* Secondary Sidebar Navigation */}
                 <aside className="w-full lg:w-64 shrink-0 border-r border-slate-200 bg-white shadow-[1px_0_2px_rgba(0,0,0,0.02)] h-auto lg:h-[calc(100vh-64px)] overflow-y-auto">
@@ -71,6 +86,7 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
                     {children}
                 </main>
             </div>
+            )}
         </UpgradeGate>
     )
 }
