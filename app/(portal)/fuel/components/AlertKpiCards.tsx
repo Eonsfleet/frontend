@@ -23,23 +23,25 @@ function KpiCard({ title, value, icon: Icon, iconClass, sub, trend, highlight }:
                 highlight ? 'border-rose-200 bg-rose-50/50' : 'border-slate-100',
             )}
         >
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
                 <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconClass)}>
                     <Icon className="h-5 w-5" />
                 </div>
-                <p className={cn('truncate text-[12px] font-semibold', highlight ? 'text-rose-600' : 'text-slate-500')}>{title}</p>
+                <div className="min-w-0 flex-1">
+                    <p className={cn('truncate text-[12px] font-semibold', highlight ? 'text-rose-600' : 'text-slate-500')}>{title}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+                    {trend ? (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] font-medium">
+                            <span className={trend.isPositive ? 'text-emerald-600' : 'text-rose-600'}>
+                                {trend.isPositive ? '↑' : '↓'} {trend.value}
+                            </span>
+                            <span className="text-slate-400">vs yesterday</span>
+                        </p>
+                    ) : (
+                        sub && <p className="mt-1 truncate text-[11px] font-medium text-slate-400">{sub}</p>
+                    )}
+                </div>
             </div>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-            {trend ? (
-                <p className="mt-1 flex items-center gap-1 text-[11px] font-medium">
-                    <span className={trend.isPositive ? 'text-emerald-600' : 'text-rose-600'}>
-                        {trend.isPositive ? '↑' : '↓'} {trend.value}
-                    </span>
-                    <span className="text-slate-400">vs yesterday</span>
-                </p>
-            ) : (
-                sub && <p className="mt-1 truncate text-[11px] font-medium text-slate-400">{sub}</p>
-            )}
         </Card>
     )
 }
