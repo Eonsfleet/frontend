@@ -99,25 +99,10 @@ export function useFuelAnalysis() {
 
     const byVehicle = useMemo(() => cost?.by_vehicle ?? [], [cost])
 
-    const kpis = useMemo<AnalysisKpis>(() => {
-        const consumed = cost?.total_volume_liters ?? 12452
+    const totalFuelConsumedLiters = useMemo(() => Math.round(cost?.total_volume_liters ?? 12452), [cost])
+    const totalFuelCostNaira = useMemo(() => {
         const totalCost = cost ? nairaFromKobo(cost.total_cost_kobo) : 7523.68
-        return {
-            totalFuelConsumedLiters: Math.round(consumed),
-            totalFuelCostNaira: Number(totalCost.toFixed(2)),
-            avgEfficiency: 4.35,
-            fuelSavingsNaira: 1254.3,
-            co2SavedKg: 2345,
-            idleFuelWasteLiters: 125.45,
-            sparklines: {
-                consumed: walk(1, 16, 55, 20),
-                cost: walk(4, 16, 52, 18),
-                efficiency: walk(7, 16, 50, 12),
-                savings: walk(2, 16, 48, 22),
-                co2: walk(9, 16, 54, 20),
-                idle: walk(5, 16, 46, 24),
-            },
-        }
+        return Number(totalCost.toFixed(2))
     }, [cost])
 
     // Fuel Consumption Trend — this vs previous period (15 days).
@@ -178,7 +163,7 @@ export function useFuelAnalysis() {
     }, [fuelByVehicle])
 
     const fuelTypeDonut = useMemo<{ total: number; slices: DonutSlice[] }>(() => {
-        const total = kpis.totalFuelConsumedLiters
+        const total = totalFuelConsumedLiters
         const defs = [
             { label: 'Diesel', pct: 82.3, color: '#3b82f6' },
             { label: 'Petrol', pct: 14.8, color: '#10b981' },
@@ -189,17 +174,17 @@ export function useFuelAnalysis() {
             total,
             slices: defs.map((d) => ({ label: d.label, value: Math.round((d.pct / 100) * total), percent: d.pct, color: d.color })),
         }
-    }, [kpis.totalFuelConsumedLiters])
+    }, [totalFuelConsumedLiters])
 
     const costBreakdown = useMemo<BreakdownRow[]>(() => {
-        const total = kpis.totalFuelCostNaira
+        const total = totalFuelCostNaira
         return [
             { label: 'Fuel Purchases', amountNaira: Number((total * 0.892).toFixed(2)), percent: 89.2, color: 'bg-blue-500' },
             { label: 'Additives', amountNaira: 356.4, percent: 4.2, color: 'bg-emerald-500' },
             { label: 'Service Charges', amountNaira: 189.75, percent: 2.2, color: 'bg-amber-500' },
             { label: 'Others', amountNaira: 363.17, percent: 4.3, color: 'bg-slate-400' },
         ]
-    }, [kpis.totalFuelCostNaira])
+    }, [totalFuelCostNaira])
 
     const wasters = useMemo<WasterRow[]>(() => [
         { label: 'Excessive Idling', liters: 45.6, color: 'bg-rose-500' },
@@ -225,7 +210,6 @@ export function useFuelAnalysis() {
     }, [fuelByVehicle, efficiencyBars])
 
     return {
-        kpis,
         consumptionTrend,
         costTrend,
         fuelByVehicle,

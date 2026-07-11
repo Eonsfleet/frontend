@@ -19,6 +19,12 @@ export interface FuelPagination {
     per_page: number
     current_page: number
     last_page: number
+    perPage?: number
+    current?: number
+    lastPage?: number
+    next_page_url?: string | null
+    prev_page_url?: string | null
+    from?: number | null
 }
 
 // ── 8.1 Fuel Expenses ────────────────────────────────────────────────────────
@@ -438,6 +444,87 @@ export const getVehicleFuelHistory = async (vehicleId: string | number, params?:
     return response.data
 }
 
+export type FuelLevelTrendFilter = '24hrs' | 'daily' | 'weekly' | 'monthly'
+export type FuelRateTrendFilter = 'daily' | 'weekly' | 'monthly'
+
+export interface FuelLevelTrendPoint {
+    timestamp?: string
+    date?: string
+    label?: string
+    fuel_level_liters?: number
+    fuel_level_percent?: number
+    liters?: number
+    rate?: number
+    flow_rate?: number
+    fuel_rate?: number
+    value?: number | null
+}
+
+export interface FuelLevelTrendResponse {
+    message?: string
+    data:
+        | FuelLevelTrendPoint[]
+        | {
+            filter?: FuelLevelTrendFilter
+            vehicle_id?: number
+            labels?: string[]
+            fuel_data?: Array<number | null>
+            rate_data?: Array<number | null>
+            flow_data?: Array<number | null>
+            values?: Array<number | null>
+            unit?: string
+            trend?: FuelLevelTrendPoint[]
+            history?: FuelLevelTrendPoint[]
+        }
+}
+
+export const getFuelLevelTrend = async (params: { vehicle_id: number; filter?: FuelLevelTrendFilter }): Promise<FuelLevelTrendResponse> => {
+    const response = await apiClient.get<FuelLevelTrendResponse>('/fuel/level-trend', { params })
+    return response.data
+}
+
+export type FuelRateTrendResponse = FuelLevelTrendResponse
+
+export const getFuelRateTrend = async (params: { vehicle_id: number; filter?: FuelRateTrendFilter }): Promise<FuelRateTrendResponse> => {
+    const response = await apiClient.get<FuelRateTrendResponse>('/fuel/rate-trend', { params })
+    return response.data
+}
+
+export interface FuelEventApiItem {
+    id?: string | number
+    type?: string
+    title?: string
+    occurred_at?: string
+    timestamp?: string
+    detail?: string
+    description?: string
+    amount_liters?: number
+    volume_liters?: number
+    attributes?: Record<string, unknown>
+    [key: string]: unknown
+}
+
+export interface FuelEventsResponse {
+    message?: string
+    data:
+        | FuelEventApiItem[]
+        | {
+            events?: FuelEventApiItem[]
+            fuel_transactions?: FuelEventApiItem[]
+            pagination?: FuelPagination | {
+                current?: number
+                lastPage?: number
+                total?: number
+                perPage?: number
+            }
+        }
+}
+
+export const getFuelEvents = async (params?: { vehicle_id?: number; page?: number; per_page?: number; limit?: number }): Promise<FuelEventsResponse> => {
+    const response = await apiClient.get<FuelEventsResponse>('/fuel/events', { params })
+    return response.data
+}
+
 export interface AbnormalityListParams {
     type?: string
     status?: string
@@ -466,6 +553,65 @@ export const resolveFuelAlert = async (alertId: number, notes?: string): Promise
 
 export const markFuelAlertFalsePositive = async (alertId: number, notes?: string): Promise<{ message: string }> => {
     const response = await apiClient.post(`/fuel-alerts/${alertId}/false-positive`, { notes })
+    return response.data
+}
+
+export interface FuelAlertLogListParams {
+    search?: string
+    per_page?: number
+    page?: number
+    vehicle_id?: number
+    date?: string
+    start_date?: string
+    end_date?: string
+    type?: string
+    status?: string
+    severity?: string
+}
+
+export interface FuelAlertLogApiItem {
+    id?: string | number
+    type?: string
+    severity?: string
+    status?: string
+    message?: string
+    title?: string
+    description?: string
+    alert_time?: string
+    occurred_at?: string
+    created_at?: string
+    location?: { latitude?: number | string | null; longitude?: number | string | null; address?: string | null } | null
+    vehicle?: { id?: string | number; registration_number?: string; make?: string; model?: string }
+    attributes?: Record<string, unknown>
+    relationships?: Record<string, unknown>
+    table?: Record<string, unknown>
+    detail?: Record<string, unknown>
+    [key: string]: unknown
+}
+
+export interface FuelAlertLogsSummary {
+    cards?: Record<string, { label?: string; count?: number; description?: string; today_count?: number; yesterday_count?: number; change_vs_yesterday_percent?: number }>
+    tabs?: { all?: number; critical?: number; warning?: number; info?: number }
+}
+
+export interface FuelAlertLogsResponse {
+    message?: string
+    data:
+        | FuelAlertLogApiItem[]
+        | {
+            alerts?: FuelAlertLogApiItem[]
+            fuel_alerts?: FuelAlertLogApiItem[]
+            alert_logs?: FuelAlertLogApiItem[]
+            fuel_alert_logs?: FuelAlertLogApiItem[]
+            summary?: FuelAlertLogsSummary
+            filters?: Record<string, unknown>
+            pagination?: FuelPagination
+        }
+    status?: number
+}
+
+export const getFuelAlertLogs = async (params?: FuelAlertLogListParams): Promise<FuelAlertLogsResponse> => {
+    const response = await apiClient.get<FuelAlertLogsResponse>('/fuel-alert-logs', { params })
     return response.data
 }
 

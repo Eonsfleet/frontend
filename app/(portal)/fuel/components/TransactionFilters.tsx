@@ -50,7 +50,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
         const q = vehicleSearch.trim().toLowerCase()
         return (vehiclesQuery.data?.data.vehicles ?? [])
             .map((vehicle) => ({
-                id: vehicle.id,
+                id: Number(vehicle.id),
                 label: vehicle.attributes.registration_number,
                 meta: `${vehicle.attributes.make} ${vehicle.attributes.model}`.trim(),
             }))

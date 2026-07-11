@@ -158,7 +158,7 @@ function mapVehicleRow(v: FuelVehicle): VehicleRow {
     // for when a speed signal becomes available.)
     const status: VehicleMovement = online ? 'moving' : 'offline'
     return {
-        id: v.id,
+        id: Number(v.id),
         registration: v.attributes.registration_number,
         model: `${v.attributes.make} ${v.attributes.model}`.trim(),
         chassis: v.attributes.device_imei ?? '—',
@@ -432,6 +432,11 @@ export function useFuelTrends(_range: FuelOverviewRange, filters: FuelTrendFilte
             date: label,
             value: Number(finiteNumberOrFallback(g?.efficiency_data?.[i]).toFixed(2)),
         }))
-        return { consumption, efficiency }
-    }, [consumptionQuery.data, efficiencyGraphQuery.data])
+        return {
+            consumption,
+            efficiency,
+            isConsumptionLoading: consumptionQuery.isFetching,
+            isEfficiencyLoading: efficiencyGraphQuery.isFetching,
+        }
+    }, [consumptionQuery.data, consumptionQuery.isFetching, efficiencyGraphQuery.data, efficiencyGraphQuery.isFetching])
 }

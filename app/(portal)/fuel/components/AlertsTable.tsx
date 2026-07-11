@@ -2,15 +2,16 @@
 
 import { useMemo, useState } from 'react'
 import {
-    ChevronDown, Calendar, Filter, MapPin,
+    ChevronLeft, ChevronRight, Filter, Loader2, MapPin, Search,
     FuelIcon, Droplets, Moon, Cpu, TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { AlertRowMenu } from './AlertRowMenu'
 import {
     TYPE_META, SEVERITY_META, STATUS_META,
-    type FuelAlertRow, type Severity, type AlertType,
+    type FuelAlertRow, type Severity, type AlertType, type AlertPagination,
 } from './useFuelAlerts'
 
 interface AlertsTableProps {
@@ -23,6 +24,14 @@ interface AlertsTableProps {
     onResolve: (id: string) => void
     onDelete: (id: string) => void
     activeFilterCount?: number
+    search?: string
+    onSearchChange?: (value: string) => void
+    pagination?: AlertPagination
+    onPageChange?: (page: number) => void
+    isLoading?: boolean
+    isFetching?: boolean
+    /** Accurate severity totals from the API summary (not just the current page). */
+    tabCounts?: { all: number; critical: number; warning: number; info: number }
 }
 
 const ALERT_ICON: Record<AlertType, { icon: LucideIcon; class: string }> = {
@@ -31,29 +40,41 @@ const ALERT_ICON: Record<AlertType, { icon: LucideIcon; class: string }> = {
     rapid_drop: { icon: Droplets, class: 'bg-amber-50 text-amber-500' },
     unauthorized_drain: { icon: Moon, class: 'bg-purple-50 text-purple-500' },
     sensor_error: { icon: Cpu, class: 'bg-blue-50 text-blue-500' },
-}
-
-function Dropdown({ label }: { label: string }) {
-    return (
-        <button type="button" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50">
-            {label} <ChevronDown className="h-4 w-4 text-slate-400" />
-        </button>
-    )
+    refill: { icon: FuelIcon, class: 'bg-blue-50 text-blue-500' },
 }
 
 export function AlertsTable({
-    alerts, activeId, onSelect, onOpenFilters, onCreateRule, onAcknowledge, onResolve, onDelete, activeFilterCount = 0,
+    alerts,
+    activeId,
+    onSelect,
+    onOpenFilters,
+    onCreateRule,
+    onAcknowledge,
+    onResolve,
+    onDelete,
+    activeFilterCount = 0,
+    search = '',
+    onSearchChange,
+    pagination,
+    onPageChange,
+    isLoading,
+    isFetching,
+    tabCounts,
 }: AlertsTableProps) {
     const [sev, setSev] = useState<'all' | Severity>('all')
 
-    const counts = useMemo(() => ({
+    const counts = useMemo(() => tabCounts ?? ({
         all: alerts.length,
         critical: alerts.filter((a) => a.severity === 'critical').length,
         warning: alerts.filter((a) => a.severity === 'warning').length,
         info: alerts.filter((a) => a.severity === 'info').length,
-    }), [alerts])
+    }), [alerts, tabCounts])
 
     const filtered = useMemo(() => (sev === 'all' ? alerts : alerts.filter((a) => a.severity === sev)), [alerts, sev])
+    const start = pagination && pagination.total > 0 ? (pagination.current - 1) * pagination.perPage + 1 : 0
+    const end = pagination ? Math.min(pagination.current * pagination.perPage, pagination.total) : filtered.length
+    const canGoPrevious = !!pagination && pagination.current > 1
+    const canGoNext = !!pagination && pagination.current < pagination.lastPage
 
     const pills: { key: 'all' | Severity; label: string; count: number; icon?: LucideIcon; color?: string }[] = [
         { key: 'all', label: 'All Alerts', count: counts.all, icon: TriangleAlert },
@@ -84,12 +105,15 @@ export function AlertsTable({
                     ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Dropdown label="All Types" />
-                    <Dropdown label="All Vehicles" />
-                    <Dropdown label="Active" />
-                    <button type="button" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50">
-                        <Calendar className="h-4 w-4 text-slate-400" /> May 16, 2024
-                    </button>
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input
+                            value={search}
+                            onChange={(event) => onSearchChange?.(event.target.value)}
+                            placeholder="Search alerts..."
+                            className="h-9 w-56 border-slate-200 bg-white pl-8 text-sm"
+                        />
+                    </div>
                     <button
                         type="button"
                         onClick={onOpenFilters}
@@ -103,6 +127,7 @@ export function AlertsTable({
                             <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">{activeFilterCount}</span>
                         )}
                     </button>
+                    {isFetching && !isLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
                 </div>
             </div>
 
@@ -122,7 +147,16 @@ export function AlertsTable({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {filtered.length === 0 ? (
+                        {isLoading ? (
+                            <tr>
+                                <td colSpan={8} className="px-4 py-16 text-center text-slate-400">
+                                    <span className="inline-flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                                        Loading alerts
+                                    </span>
+                                </td>
+                            </tr>
+                        ) : filtered.length === 0 ? (
                             <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-400">No alerts.</td></tr>
                         ) : (
                             filtered.map((a) => {
@@ -174,6 +208,7 @@ export function AlertsTable({
                                         <td className="px-4 py-3">
                                             <AlertRowMenu
                                                 label={a.vehicle}
+                                                status={a.status}
                                                 onViewDetails={() => onSelect(a.id)}
                                                 onAcknowledge={() => onAcknowledge(a.id)}
                                                 onResolve={() => onResolve(a.id)}
@@ -191,13 +226,29 @@ export function AlertsTable({
 
             {/* Pagination footer */}
             <div className="flex flex-col gap-3 border-t border-slate-100 p-4 text-[13px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>Showing 1 to {filtered.length} of 24 alerts</span>
+                <span>Showing {start} to {end} of {pagination?.total ?? filtered.length} alerts</span>
                 <div className="flex items-center gap-1">
-                    <button type="button" className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:bg-slate-50">‹</button>
-                    {[1, 2, 3].map((p) => (
-                        <button key={p} type="button" className={cn('flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-[12px] font-medium', p === 1 ? 'bg-blue-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50')}>{p}</button>
-                    ))}
-                    <button type="button" className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50">›</button>
+                    <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!canGoPrevious || isFetching}
+                        onClick={() => pagination && onPageChange?.(pagination.current - 1)}
+                        aria-label="Previous alerts page"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-12 text-center text-[12px] font-semibold text-slate-600">
+                        {pagination?.current ?? 1}/{pagination?.lastPage ?? 1}
+                    </span>
+                    <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!canGoNext || isFetching}
+                        onClick={() => pagination && onPageChange?.(pagination.current + 1)}
+                        aria-label="Next alerts page"
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
                 </div>
             </div>
         </Card>

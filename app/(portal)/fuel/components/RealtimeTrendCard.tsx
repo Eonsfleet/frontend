@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import type { TrendPoint } from './useFuelRealtime'
 
@@ -12,7 +13,11 @@ interface RealtimeTrendCardProps {
     color: string
     /** Right-side pills, e.g. vehicle plate + range/Live. */
     filters: string[]
-    formatValue: (v: number) => string
+    formatValue: (v: number | null) => string
+    filterOptions?: Array<{ label: string; value: string }>
+    selectedFilter?: string
+    onFilterChange?: (filter: string) => void
+    isLoading?: boolean
 }
 
 function TrendTooltip({
@@ -22,9 +27,9 @@ function TrendTooltip({
     formatValue,
 }: {
     active?: boolean
-    payload?: Array<{ value: number }>
+    payload?: Array<{ value: number | null }>
     label?: string
-    formatValue: (v: number) => string
+    formatValue: (v: number | null) => string
 }) {
     if (!active || !payload?.length) return null
     return (
@@ -35,8 +40,13 @@ function TrendTooltip({
     )
 }
 
-export function RealtimeTrendCard({ title, unit, data, color, filters, formatValue }: RealtimeTrendCardProps) {
+export function RealtimeTrendCard({ title, unit, data, color, filters, formatValue, filterOptions = [], selectedFilter, onFilterChange, isLoading }: RealtimeTrendCardProps) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
     const gradientId = `rt-trend-${title.replace(/\W/g, '')}`
+    const activeFilterLabel = filterOptions.find((option) => option.value === selectedFilter)?.label
+    const staticFilters = activeFilterLabel ? [...filters, activeFilterLabel] : filters
+    const xAxisInterval = data.length <= 8 ? 0 : data.length <= 24 ? 5 : 6
+
     return (
         <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
             <div className="flex items-center justify-between gap-3">
@@ -44,19 +54,49 @@ export function RealtimeTrendCard({ title, unit, data, color, filters, formatVal
                     {title} <span className="font-medium text-slate-400">({unit})</span>
                 </h2>
                 <div className="flex items-center gap-2">
-                    {filters.map((f) => (
-                        <button
-                            key={f}
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
-                        >
-                            {f} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                        </button>
-                    ))}
+                    {staticFilters.map((f, index) => {
+                        const isFilterButton = index === staticFilters.length - 1 && filterOptions.length > 0 && onFilterChange
+                        return (
+                            <div key={`${f}-${index}`} className="relative">
+                                <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
+                                    onClick={() => isFilterButton && setIsMenuOpen((open) => !open)}
+                                >
+                                    {f} {isFilterButton && <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+                                </button>
+                                {isFilterButton && isMenuOpen && (
+                                    <div className="absolute right-0 top-full z-20 mt-1 w-28 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                        {filterOptions.map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                className="block w-full px-3 py-1.5 text-left text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                                                onClick={() => {
+                                                    onFilterChange(option.value)
+                                                    setIsMenuOpen(false)
+                                                }}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
 
-            <div className="mt-4 h-44">
+            <div className="relative mt-4 h-44">
+                {isLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px]">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                            Loading
+                        </span>
+                    </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                         <defs>
@@ -66,7 +106,7 @@ export function RealtimeTrendCard({ title, unit, data, color, filters, formatVal
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={5} />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={xAxisInterval} />
                         <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={40} />
                         <Tooltip content={<TrendTooltip formatValue={formatValue} />} cursor={{ stroke: color, strokeDasharray: '4 4' }} />
                         <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} fill={`url(#${gradientId})`} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} isAnimationActive={false} />

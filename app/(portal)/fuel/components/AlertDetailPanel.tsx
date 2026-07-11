@@ -1,6 +1,6 @@
 'use client'
 
-import { X, Truck, FuelIcon, MapPin } from 'lucide-react'
+import { X, Truck, FuelIcon, MapPin, Loader2 } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -10,7 +10,10 @@ import { SEVERITY_META, type FuelAlertRow, type AlertTrendPoint } from './useFue
 interface AlertDetailPanelProps {
     alert: FuelAlertRow | null
     trend: AlertTrendPoint[]
+    isTrendLoading?: boolean
     onClose?: () => void
+    onAcknowledge?: () => void
+    onResolve?: () => void
 }
 
 function StatCell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -32,7 +35,7 @@ function TrendTip({ active, payload, label }: { active?: boolean; payload?: Arra
     )
 }
 
-export function AlertDetailPanel({ alert, trend, onClose }: AlertDetailPanelProps) {
+export function AlertDetailPanel({ alert, trend, isTrendLoading, onClose, onAcknowledge, onResolve }: AlertDetailPanelProps) {
     if (!alert) {
         return (
             <Card className="flex h-full items-center justify-center rounded-2xl border-slate-100 p-6 text-center text-sm text-slate-400 shadow-none">
@@ -114,6 +117,15 @@ export function AlertDetailPanel({ alert, trend, onClose }: AlertDetailPanelProp
             <div className="mt-4">
                 <h3 className="text-sm font-bold text-slate-900">Fuel Level Trend (Today)</h3>
                 <div className="mt-2 h-36">
+                    {isTrendLoading ? (
+                        <div className="flex h-full items-center justify-center text-slate-300">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        </div>
+                    ) : trend.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-[12px] text-slate-400">
+                            No trend data for this vehicle.
+                        </div>
+                    ) : (
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={trend} margin={{ top: 8, right: 6, left: -20, bottom: 0 }}>
                             <defs>
@@ -128,16 +140,27 @@ export function AlertDetailPanel({ alert, trend, onClose }: AlertDetailPanelProp
                             <Area type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2.5} fill="url(#alertTrend)" dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} isAnimationActive={false} />
                         </AreaChart>
                     </ResponsiveContainer>
+                    )}
                 </div>
             </div>
 
             {/* Actions */}
             <div className="mt-4 flex items-center gap-2">
-                <button type="button" className="h-9 flex-1 rounded-lg bg-blue-600 text-[13px] font-semibold text-white transition-colors duration-200 hover:bg-blue-700">
+                <button
+                    type="button"
+                    onClick={onAcknowledge}
+                    disabled={alert.status !== 'new'}
+                    className="h-9 flex-1 rounded-lg bg-blue-600 text-[13px] font-semibold text-white transition-colors duration-200 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                >
                     Acknowledge
                 </button>
-                <button type="button" className="h-9 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-600 transition-colors duration-200 hover:bg-slate-50">
-                    View Details
+                <button
+                    type="button"
+                    onClick={onResolve}
+                    disabled={alert.status === 'resolved'}
+                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-600 transition-colors duration-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                >
+                    Resolve
                 </button>
             </div>
         </Card>

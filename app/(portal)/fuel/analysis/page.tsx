@@ -4,7 +4,6 @@ import { Upload, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryError } from '@/components/shared/QueryError'
 import { FuelTabs } from '../components/FuelTabs'
-import { AnalysisKpiCards } from '../components/AnalysisKpiCards'
 import { AnalysisToolbar } from '../components/AnalysisToolbar'
 import { ConsumptionTrendCard } from '../components/ConsumptionTrendCard'
 import { DonutBreakdownCard } from '../components/DonutBreakdownCard'
@@ -17,7 +16,6 @@ import { useFuelAnalysis } from '../components/useFuelAnalysis'
 
 export default function FuelAnalysisPage() {
     const {
-        kpis,
         consumptionTrend,
         costTrend,
         fuelByVehicle,
@@ -53,7 +51,6 @@ export default function FuelAnalysisPage() {
                 <QueryError message="Failed to load fuel analysis." />
             ) : (
                 <>
-                    <AnalysisKpiCards kpis={kpis} />
                     <AnalysisToolbar />
 
                     {/* Row 1: consumption trend | fuel by vehicle | efficiency */}

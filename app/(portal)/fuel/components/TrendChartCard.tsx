@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import type { TrendPoint } from './useFuelOverview'
 
@@ -21,6 +21,7 @@ interface TrendChartCardProps {
     filterOptions?: TrendFilterOption[]
     onFilterChange?: (filter: string) => void
     granularity?: string
+    isLoading?: boolean
 }
 
 function TrendTooltip({
@@ -43,7 +44,7 @@ function TrendTooltip({
     )
 }
 
-export function TrendChartCard({ title, data, color, formatValue, filter, filterOptions = [], onFilterChange, granularity }: TrendChartCardProps) {
+export function TrendChartCard({ title, data, color, formatValue, filter, filterOptions = [], onFilterChange, granularity, isLoading }: TrendChartCardProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const gradientId = `trend-${title.replace(/\W/g, '')}`
     const activeFilterLabel = filterOptions.find((option) => option.value === filter)?.label ?? granularity ?? filterOptions[0]?.label ?? 'Filter'
@@ -82,7 +83,15 @@ export function TrendChartCard({ title, data, color, formatValue, filter, filter
                 </div>
             </div>
 
-            <div className="mt-4 h-56">
+            <div className="relative mt-4 h-56">
+                {isLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px]">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                            Loading
+                        </span>
+                    </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                         <defs>
