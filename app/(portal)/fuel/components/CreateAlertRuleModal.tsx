@@ -49,13 +49,13 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
 
     const reset = () => { setStep(0); setActive(true); setRuleName(''); setChannels({ 'In-app Notification': true }) }
     const close = (o: boolean) => { if (!o) reset(); onOpenChange(o) }
-    const finish = () => { toast.success('Alert rule created'); close(false) }
+    const finish = () => { toast.success('Alert created'); close(false) }
 
     return (
         <Dialog open={open} onOpenChange={close}>
             <DialogContent className="max-w-4xl sm:max-w-4xl">
                 <DialogHeader>
-                    <DialogTitle>Create Alert Rule</DialogTitle>
+                    <DialogTitle>Create Alert</DialogTitle>
                     <p className="text-sm text-slate-500">Define conditions to be notified when an alert should be triggered.</p>
                 </DialogHeader>
 

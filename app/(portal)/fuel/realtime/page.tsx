@@ -9,13 +9,49 @@ import { VehicleDetailPanel } from '../components/VehicleDetailPanel'
 import { RealtimeTrendCard } from '../components/RealtimeTrendCard'
 import { RecentFuelEventsCard } from '../components/RecentFuelEventsCard'
 import { useFuelRealtime } from '../components/useFuelRealtime'
+import type { FuelLevelTrendFilter, FuelRateTrendFilter } from '@/lib/api/fuel'
+
+const LEVEL_TREND_FILTERS: Array<{ label: string; value: FuelLevelTrendFilter }> = [
+    { label: 'Daily', value: 'daily' },
+    { label: 'Weekly', value: 'weekly' },
+    { label: 'Monthly', value: 'monthly' },
+]
+
+const RATE_TREND_FILTERS: Array<{ label: string; value: FuelRateTrendFilter }> = [
+    { label: 'Daily', value: 'daily' },
+    { label: 'Weekly', value: 'weekly' },
+    { label: 'Monthly', value: 'monthly' },
+]
 
 export default function FuelRealtimePage() {
     const [selectedId, setSelectedId] = useState<number | null>(null)
-    const { vehicles, activeId, detail, fuelLevelTrend, fuelFlowTrend, events, isLoading, isError } =
-        useFuelRealtime(selectedId)
+    const [levelTrendFilter, setLevelTrendFilter] = useState<FuelLevelTrendFilter>('daily')
+    const [rateTrendFilter, setRateTrendFilter] = useState<FuelRateTrendFilter>('daily')
+    const [eventsPage, setEventsPage] = useState(1)
+    const {
+        vehicles,
+        activeId,
+        detail,
+        fuelLevelTrend,
+        fuelLevelTrendUnit,
+        fuelFlowTrend,
+        fuelFlowTrendUnit,
+        events,
+        eventsPagination,
+        isFuelLevelTrendLoading,
+        isFuelFlowTrendLoading,
+        isEventsLoading,
+        isEventsRefreshing,
+        isLoading,
+        isError,
+    } =
+        useFuelRealtime(selectedId, levelTrendFilter, eventsPage, rateTrendFilter)
 
     const plate = detail?.registration ?? 'Vehicle'
+    const handleVehicleSelect = (id: number) => {
+        setSelectedId(id)
+        setEventsPage(1)
+    }
 
     return (
         <div className="space-y-5">
@@ -35,20 +71,23 @@ export default function FuelRealtimePage() {
                 <>
                     {/* Main row: rail | map | detail (detail only shows once a vehicle is picked) */}
                     <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-                        <div className="lg:col-span-3">
+                        <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
                             <RealtimeVehicleRail
                                 vehicles={vehicles}
                                 activeId={activeId}
-                                onSelect={setSelectedId}
+                                onSelect={handleVehicleSelect}
                                 isLoading={isLoading}
                             />
                         </div>
-                        <div className={detail ? 'lg:col-span-6' : 'lg:col-span-9'}>
-                            <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={setSelectedId} />
+                        <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-9'}>
+                            <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={handleVehicleSelect} />
                         </div>
                         {detail && (
-                            <div className="lg:col-span-3 lg:self-start">
-                                <VehicleDetailPanel detail={detail} onClose={() => setSelectedId(null)} />
+                            <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
+                                <VehicleDetailPanel detail={detail} onClose={() => {
+                                    setSelectedId(null)
+                                    setEventsPage(1)
+                                }} />
                             </div>
                         )}
                     </div>
@@ -57,21 +96,35 @@ export default function FuelRealtimePage() {
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <RealtimeTrendCard
                             title="Fuel Level Trend"
-                            unit="L"
+                            unit={fuelLevelTrendUnit}
                             data={fuelLevelTrend}
                             color="#3b82f6"
-                            filters={[plate, 'Last 24 Hours']}
-                            formatValue={(v) => `${v} L`}
+                            filters={[plate]}
+                            filterOptions={LEVEL_TREND_FILTERS}
+                            selectedFilter={levelTrendFilter}
+                            onFilterChange={(filter) => setLevelTrendFilter(filter as FuelLevelTrendFilter)}
+                            isLoading={isFuelLevelTrendLoading}
+                            formatValue={(v) => v == null ? 'No data' : `${v} ${fuelLevelTrendUnit}`}
                         />
                         <RealtimeTrendCard
                             title="Fuel Flow Rate"
-                            unit="L/h"
+                            unit={fuelFlowTrendUnit}
                             data={fuelFlowTrend}
                             color="#10b981"
-                            filters={[plate, 'Live']}
-                            formatValue={(v) => `${v} L/h`}
+                            filters={[plate]}
+                            filterOptions={RATE_TREND_FILTERS}
+                            selectedFilter={rateTrendFilter}
+                            onFilterChange={(filter) => setRateTrendFilter(filter as FuelRateTrendFilter)}
+                            isLoading={isFuelFlowTrendLoading}
+                            formatValue={(v) => v == null ? 'No data' : `${v} ${fuelFlowTrendUnit}`}
                         />
-                        <RecentFuelEventsCard events={events} />
+                        <RecentFuelEventsCard
+                            events={events}
+                            isLoading={isEventsLoading}
+                            isRefreshing={isEventsRefreshing}
+                            pagination={eventsPagination}
+                            onPageChange={setEventsPage}
+                        />
                     </div>
 
                     {/* Footer */}
@@ -80,7 +133,7 @@ export default function FuelRealtimePage() {
                             <span className="inline-flex items-center gap-1.5">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Showing real-time data
                             </span>
-                            <span className="text-slate-400">Auto refresh every 10 seconds</span>
+                            <span className="text-slate-400">Auto refresh every 60 seconds</span>
                         </div>
                         <span className="inline-flex items-center gap-2">
                             Data accuracy

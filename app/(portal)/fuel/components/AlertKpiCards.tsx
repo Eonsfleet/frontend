@@ -46,7 +46,28 @@ function KpiCard({ title, value, icon: Icon, iconClass, sub, trend, highlight }:
     )
 }
 
-export function AlertKpiCards({ kpis }: { kpis: AlertKpis }) {
+function AlertKpiSkeleton() {
+    return (
+        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-none">
+            <div className="flex items-center gap-3">
+                <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+            </div>
+            <div className="mt-2 h-7 w-16 animate-pulse rounded bg-slate-200" />
+            <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-50" />
+        </div>
+    )
+}
+
+export function AlertKpiCards({ kpis, isLoading }: { kpis: AlertKpis; isLoading?: boolean }) {
+    if (isLoading) {
+        return (
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+                {Array.from({ length: 6 }).map((_, i) => <AlertKpiSkeleton key={i} />)}
+            </div>
+        )
+    }
+
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
             <KpiCard title="Critical Alerts" value={kpis.critical} icon={TriangleAlert} iconClass="bg-rose-100 text-rose-600" sub="Require immediate attention" highlight />
