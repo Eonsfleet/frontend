@@ -23,6 +23,7 @@ import {
   Calendar,
   ChevronDown,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -41,6 +42,7 @@ import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
+import { useStreetImageryStore } from "@/store/streetImageryStore";
 import { getDriverById } from "@/lib/api/drivers";
 import { getCurrentDriver } from "@/lib/api/vehicles";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
@@ -213,6 +215,24 @@ export function AssetPanel({
     toast.success("Location link copied to clipboard");
   };
 
+  const handleStreetView = () => {
+    const lat = loc?.lat ?? resolved.lat;
+    const lng = loc?.lng ?? resolved.lng;
+    if (lat == null || lng == null) {
+      toast.info("No current position available for this asset yet.");
+      return;
+    }
+    useStreetImageryStore.getState().open(
+      { lat, lng },
+      {
+        label: plate,
+        subtitle: statusCfg.label,
+        sourceTimestamp: resolved.lastUpdate,
+        vehicleId: selectedVehicle.attributes?.uuid,
+      },
+    );
+  };
+
   const moreActions = [
     {
       label: isMapFollowEnabled ? "Stop Focus" : "Focus",
@@ -229,6 +249,7 @@ export function AssetPanel({
       }
     },
     { label: "Nearby Assets", icon: Radar, onClick: handleNearbyAssets },
+    { label: "Street View", icon: Camera, onClick: handleStreetView },
     { label: "Send Command", icon: Terminal, onClick: () => toast.info("Send Command is not yet available.") },
     { label: "Immobilize", icon: Lock, onClick: () => toast.info("Immobilize is not yet available.") },
     { label: "Geofence", icon: MapPinned, onClick: () => router.push("/geofences") },

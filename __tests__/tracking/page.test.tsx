@@ -2,22 +2,14 @@ import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createFakeMapProvider } from '../helpers/fakeMapProvider'
 
-vi.mock('leaflet', () => ({
-  default: { divIcon: vi.fn(() => ({})), point: vi.fn((x: number, y: number) => ({ x, y })) },
+// TrackingMap/PlaybackMap mount a real Mapbox/Leaflet instance via
+// lib/map/MapProviderFactory — jsdom can't run either, so swap in the fake
+// provider test double instead of exercising the real map engines here.
+vi.mock('@/lib/map/MapProviderFactory', () => ({
+  createMapProvider: vi.fn(async () => createFakeMapProvider()),
 }))
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: any) => <div>{children}</div>,
-  TileLayer: () => null,
-  Marker: ({ children }: any) => <div>{children}</div>,
-  Popup: ({ children }: any) => <div>{children}</div>,
-  Polyline: () => null,
-  Polygon: () => null,
-  Circle: () => null,
-  Tooltip: ({ children }: any) => <div>{children}</div>,
-  useMap: () => ({ fitBounds: vi.fn(), flyTo: vi.fn() }),
-}))
-vi.mock('react-leaflet-cluster', () => ({ default: ({ children }: any) => <div>{children}</div> }))
 
 // AssetPanel (rendered by page.tsx) calls useRouter() — no app router is mounted in
 // this test env, so mock it the same way __tests__/tracking/AssetPanel.test.tsx does.

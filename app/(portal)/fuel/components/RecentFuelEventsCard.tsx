@@ -1,9 +1,9 @@
 'use client'
 
-import { FuelIcon, AlertTriangle, Timer, type LucideIcon } from 'lucide-react'
+import { FuelIcon, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Timer, type LucideIcon } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import type { FuelEvent } from './useFuelRealtime'
+import type { FuelEvent, FuelEventsPagination } from './useFuelRealtime'
 
 const EVENT_META: Record<FuelEvent['kind'], { icon: LucideIcon; iconClass: string }> = {
     refill_started: { icon: FuelIcon, iconClass: 'bg-emerald-50 text-emerald-500' },
@@ -13,16 +13,38 @@ const EVENT_META: Record<FuelEvent['kind'], { icon: LucideIcon; iconClass: strin
     idle: { icon: Timer, iconClass: 'bg-amber-50 text-amber-500' },
 }
 
-export function RecentFuelEventsCard({ events }: { events: FuelEvent[] }) {
+interface RecentFuelEventsCardProps {
+    events: FuelEvent[]
+    isLoading?: boolean
+    isRefreshing?: boolean
+    pagination?: FuelEventsPagination | null
+    onPageChange?: (page: number) => void
+}
+
+export function RecentFuelEventsCard({ events, isLoading, isRefreshing, pagination, onPageChange }: RecentFuelEventsCardProps) {
+    const start = pagination && pagination.total > 0 ? (pagination.current - 1) * pagination.perPage + 1 : 0
+    const end = pagination ? Math.min(pagination.current * pagination.perPage, pagination.total) : events.length
+    const canGoPrevious = !!pagination && pagination.current > 1
+    const canGoNext = !!pagination && pagination.current < pagination.lastPage
+
     return (
-        <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
-            <div className="flex items-center justify-between">
+        <Card className="flex h-[292px] min-h-0 flex-col rounded-2xl border-slate-100 p-5 shadow-none">
+            <div className="flex shrink-0 items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-slate-900">Recent Fuel Events</h2>
+                {isRefreshing && (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-label="Refreshing events" />
+                )}
             </div>
 
-            <ul className="mt-3 space-y-3">
-                {events.length === 0 && <li className="py-6 text-center text-sm text-slate-400">No recent events.</li>}
-                {events.map((e) => {
+            <ul className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {isLoading && (
+                    <li className="flex items-center justify-center gap-2 py-6 text-sm font-medium text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        Loading events
+                    </li>
+                )}
+                {!isLoading && events.length === 0 && <li className="py-6 text-center text-sm text-slate-400">No recent events.</li>}
+                {!isLoading && events.map((e) => {
                     const meta = EVENT_META[e.kind]
                     const Icon = meta.icon
                     return (
@@ -39,6 +61,37 @@ export function RecentFuelEventsCard({ events }: { events: FuelEvent[] }) {
                     )
                 })}
             </ul>
+
+            {pagination && (
+                <div className="mt-3 flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <span className="text-[11px] font-medium text-slate-400">
+                        Showing {start}-{end} of {pagination.total}
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={!canGoPrevious || isLoading || isRefreshing}
+                            onClick={() => pagination && onPageChange?.(pagination.current - 1)}
+                            aria-label="Previous fuel events page"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="min-w-10 text-center text-[11px] font-semibold text-slate-500">
+                            {pagination.current}/{pagination.lastPage}
+                        </span>
+                        <button
+                            type="button"
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={!canGoNext || isLoading || isRefreshing}
+                            onClick={() => pagination && onPageChange?.(pagination.current + 1)}
+                            aria-label="Next fuel events page"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </Card>
     )
 }

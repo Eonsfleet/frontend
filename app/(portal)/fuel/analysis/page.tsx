@@ -1,10 +1,11 @@
 'use client'
 
+import { useState } from 'react'
+import { format, subDays } from 'date-fns'
 import { Upload, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryError } from '@/components/shared/QueryError'
 import { FuelTabs } from '../components/FuelTabs'
-import { AnalysisKpiCards } from '../components/AnalysisKpiCards'
 import { AnalysisToolbar } from '../components/AnalysisToolbar'
 import { ConsumptionTrendCard } from '../components/ConsumptionTrendCard'
 import { DonutBreakdownCard } from '../components/DonutBreakdownCard'
@@ -16,8 +17,11 @@ import { VehiclePerformanceTable } from '../components/VehiclePerformanceTable'
 import { useFuelAnalysis } from '../components/useFuelAnalysis'
 
 export default function FuelAnalysisPage() {
+    const [dateRange, setDateRange] = useState(() => ({
+        startDate: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
+        endDate: format(new Date(), 'yyyy-MM-dd'),
+    }))
     const {
-        kpis,
         consumptionTrend,
         costTrend,
         fuelByVehicle,
@@ -27,7 +31,7 @@ export default function FuelAnalysisPage() {
         wasters,
         performance,
         isError,
-    } = useFuelAnalysis()
+    } = useFuelAnalysis(dateRange)
 
     return (
         <div className="space-y-5">
@@ -53,8 +57,7 @@ export default function FuelAnalysisPage() {
                 <QueryError message="Failed to load fuel analysis." />
             ) : (
                 <>
-                    <AnalysisKpiCards kpis={kpis} />
-                    <AnalysisToolbar />
+                    <AnalysisToolbar startDate={dateRange.startDate} endDate={dateRange.endDate} onDateRangeChange={setDateRange} />
 
                     {/* Row 1: consumption trend | fuel by vehicle | efficiency */}
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

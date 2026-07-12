@@ -1,7 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
+import { getFuelSettings, updateFuelSettings } from '@/lib/api/fuel'
+import { extractApiError } from '@/lib/utils'
+import { QueryError } from '@/components/shared/QueryError'
+import { apiToForm, formToApi } from '../components/settings/mappers'
 import { SettingsHeader } from '../components/settings/SettingsHeader'
 import { SettingsNav } from '../components/settings/SettingsNav'
 import { GeneralSettingsCard } from '../components/settings/GeneralSettingsCard'
@@ -20,31 +26,64 @@ const SECTION_LABELS: Record<string, string> = {
 }
 
 export default function FuelSettingsPage() {
+    const queryClient = useQueryClient()
     const [form, setForm] = useState<FuelSettingsFormState>(DEFAULT_FUEL_SETTINGS)
     const [activeSection, setActiveSection] = useState('General Settings')
-    const [isSaving, setIsSaving] = useState(false)
+
+    const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
+        queryKey: ['fuel-settings'],
+        queryFn: () => getFuelSettings(),
+    })
+
+    // Re-seed the form whenever a fresh server response arrives (initial load or
+    // post-save refetch). React sanctions this "adjust state while rendering" pattern
+    // when it's guarded by a stored marker (here the query's dataUpdatedAt).
+    const [syncedAt, setSyncedAt] = useState(0)
+    if (data?.data && dataUpdatedAt !== syncedAt) {
+        setSyncedAt(dataUpdatedAt)
+        setForm(apiToForm(data.data))
+    }
+
+    const { mutate: save, isPending: isSaving } = useMutation({
+        mutationFn: () => updateFuelSettings(formToApi(form)),
+        onSuccess: () => {
+            toast.success('Fuel settings updated successfully')
+            queryClient.invalidateQueries({ queryKey: ['fuel-settings'] })
+        },
+        onError: (err) => toast.error(extractApiError(err)),
+    })
 
     const handleNavigate = (id: string) => {
         setActiveSection(SECTION_LABELS[id] ?? activeSection)
         document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
 
+    // Reset restores the last-saved server values (or defaults if unavailable).
     const handleReset = () => {
-        setForm(DEFAULT_FUEL_SETTINGS)
-        toast.success('Settings reset to defaults')
+        setForm(data?.data ? apiToForm(data.data) : DEFAULT_FUEL_SETTINGS)
+        toast.success('Settings reset')
     }
 
-    const handleSave = () => {
-        setIsSaving(true)
-        setTimeout(() => {
-            setIsSaving(false)
-            toast.success('Fuel settings updated successfully')
-        }, 500)
+    if (isError) {
+        return (
+            <div className="space-y-6">
+                <SettingsHeader onReset={handleReset} onSave={() => save()} isSaving={isSaving} />
+                <QueryError message="Failed to load fuel settings." onRetry={refetch} />
+            </div>
+        )
+    }
+
+    if (isLoading) {
+        return (
+            <div className="flex h-64 items-center justify-center text-slate-300">
+                <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+        )
     }
 
     return (
         <div className="space-y-6">
-            <SettingsHeader onReset={handleReset} onSave={handleSave} isSaving={isSaving} />
+            <SettingsHeader onReset={handleReset} onSave={() => save()} isSaving={isSaving} />
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[240px_1fr_320px]">
                 <div className="xl:order-1">

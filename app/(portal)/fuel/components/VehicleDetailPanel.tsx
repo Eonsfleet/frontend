@@ -78,7 +78,7 @@ export function VehicleDetailPanel({
         : "bg-emerald-500";
 
   return (
-    <Card className="flex flex-col rounded-2xl border-slate-100 p-4 shadow-none">
+    <Card className="flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border-slate-100 p-4 shadow-none">
       {/* Header: thumb + chassis + status + close */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">

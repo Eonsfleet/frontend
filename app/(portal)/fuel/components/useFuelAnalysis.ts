@@ -13,7 +13,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format, subDays } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, subDays } from 'date-fns'
 import { getCostAnalysis } from '@/lib/api/fuel'
 
 const KOBO = 100
@@ -90,42 +90,46 @@ export interface PerfRow {
 const VEHICLE_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#94a3b8']
 const MODELS = ['Volvo FH16', 'Mercedes Actros', 'MAN TGX', 'Scania R450', 'Volvo FM']
 
-export function useFuelAnalysis() {
+export interface FuelAnalysisRange {
+    startDate: string
+    endDate: string
+}
+
+function trendWindow(range?: FuelAnalysisRange) {
+    const fallbackEnd = new Date()
+    const parsedEnd = range?.endDate ? new Date(range.endDate) : fallbackEnd
+    const end = Number.isNaN(parsedEnd.getTime()) ? fallbackEnd : parsedEnd
+    const parsedStart = range?.startDate ? new Date(range.startDate) : subDays(end, 14)
+    const start = Number.isNaN(parsedStart.getTime()) || parsedStart > end ? subDays(end, 14) : parsedStart
+    const points = Math.min(31, Math.max(1, differenceInCalendarDays(end, start) + 1))
+
+    return { start, points }
+}
+
+export function useFuelAnalysis(range?: FuelAnalysisRange) {
     const costQuery = useQuery({
-        queryKey: ['fuel-analysis', 'cost-analysis'],
-        queryFn: () => getCostAnalysis(),
+        queryKey: ['fuel-analysis', 'cost-analysis', range?.startDate, range?.endDate],
+        queryFn: () => getCostAnalysis({
+            start_date: range?.startDate || undefined,
+            end_date: range?.endDate || undefined,
+        }),
     })
     const cost = costQuery.data?.data
 
     const byVehicle = useMemo(() => cost?.by_vehicle ?? [], [cost])
 
-    const kpis = useMemo<AnalysisKpis>(() => {
-        const consumed = cost?.total_volume_liters ?? 12452
+    const totalFuelConsumedLiters = useMemo(() => Math.round(cost?.total_volume_liters ?? 12452), [cost])
+    const totalFuelCostNaira = useMemo(() => {
         const totalCost = cost ? nairaFromKobo(cost.total_cost_kobo) : 7523.68
-        return {
-            totalFuelConsumedLiters: Math.round(consumed),
-            totalFuelCostNaira: Number(totalCost.toFixed(2)),
-            avgEfficiency: 4.35,
-            fuelSavingsNaira: 1254.3,
-            co2SavedKg: 2345,
-            idleFuelWasteLiters: 125.45,
-            sparklines: {
-                consumed: walk(1, 16, 55, 20),
-                cost: walk(4, 16, 52, 18),
-                efficiency: walk(7, 16, 50, 12),
-                savings: walk(2, 16, 48, 22),
-                co2: walk(9, 16, 54, 20),
-                idle: walk(5, 16, 46, 24),
-            },
-        }
+        return Number(totalCost.toFixed(2))
     }, [cost])
 
-    // Fuel Consumption Trend — this vs previous period (15 days).
+    // Fuel Consumption Trend — this vs previous period for the selected window.
     const consumptionTrend = useMemo<TrendDualPoint[]>(() => {
-        const end = new Date()
+        const { start, points } = trendWindow(range)
         const out: TrendDualPoint[] = []
-        for (let i = 14; i >= 0; i--) {
-            const d = subDays(end, i)
+        for (let i = 0; i < points; i++) {
+            const d = addDays(start, i)
             const s = d.getDate()
             out.push({
                 label: format(d, 'MMM d'),
@@ -134,18 +138,17 @@ export function useFuelAnalysis() {
             })
         }
         return out
-    }, [])
+    }, [range])
 
     const costTrend = useMemo<TrendPoint[]>(() => {
-        const end = new Date()
+        const { start, points } = trendWindow(range)
         const out: TrendPoint[] = []
-        for (let i = 14; i >= 0; i--) {
-            const d = subDays(end, i)
+        for (let i = 0; i < points; i++) {
+            const d = addDays(start, i)
             out.push({ label: format(d, 'MMM d'), value: Number((520 + Math.sin(d.getDate() * 0.8) * 120).toFixed(0)) })
         }
         return out
-    }, [])
-
+    }, [range])
     // Fuel by Vehicle donut (real volumes) + "Others" bucket.
     const fuelByVehicle = useMemo<{ total: number; slices: DonutSlice[] }>(() => {
         const rows = byVehicle.length
@@ -178,7 +181,7 @@ export function useFuelAnalysis() {
     }, [fuelByVehicle])
 
     const fuelTypeDonut = useMemo<{ total: number; slices: DonutSlice[] }>(() => {
-        const total = kpis.totalFuelConsumedLiters
+        const total = totalFuelConsumedLiters
         const defs = [
             { label: 'Diesel', pct: 82.3, color: '#3b82f6' },
             { label: 'Petrol', pct: 14.8, color: '#10b981' },
@@ -189,17 +192,17 @@ export function useFuelAnalysis() {
             total,
             slices: defs.map((d) => ({ label: d.label, value: Math.round((d.pct / 100) * total), percent: d.pct, color: d.color })),
         }
-    }, [kpis.totalFuelConsumedLiters])
+    }, [totalFuelConsumedLiters])
 
     const costBreakdown = useMemo<BreakdownRow[]>(() => {
-        const total = kpis.totalFuelCostNaira
+        const total = totalFuelCostNaira
         return [
             { label: 'Fuel Purchases', amountNaira: Number((total * 0.892).toFixed(2)), percent: 89.2, color: 'bg-blue-500' },
             { label: 'Additives', amountNaira: 356.4, percent: 4.2, color: 'bg-emerald-500' },
             { label: 'Service Charges', amountNaira: 189.75, percent: 2.2, color: 'bg-amber-500' },
             { label: 'Others', amountNaira: 363.17, percent: 4.3, color: 'bg-slate-400' },
         ]
-    }, [kpis.totalFuelCostNaira])
+    }, [totalFuelCostNaira])
 
     const wasters = useMemo<WasterRow[]>(() => [
         { label: 'Excessive Idling', liters: 45.6, color: 'bg-rose-500' },
@@ -225,7 +228,6 @@ export function useFuelAnalysis() {
     }, [fuelByVehicle, efficiencyBars])
 
     return {
-        kpis,
         consumptionTrend,
         costTrend,
         fuelByVehicle,
@@ -238,3 +240,6 @@ export function useFuelAnalysis() {
         isError: costQuery.isError,
     }
 }
+
+
+

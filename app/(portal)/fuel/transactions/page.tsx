@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Upload, Plus } from 'lucide-react'
+import { Loader2, Upload, Plus, AlertTriangle, ImageUp, Download, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { QueryError } from '@/components/shared/QueryError'
@@ -11,12 +11,13 @@ import { FuelTabs } from '../components/FuelTabs'
 import { TxKpiCards } from '../components/TxKpiCards'
 import { TransactionsTable } from '../components/TransactionsTable'
 import { TransactionFilters } from '../components/TransactionFilters'
-import { useFuelTransactions, type FuelTransactionFilters } from '../components/useFuelTransactions'
+import { useFuelTransactions, type EditableFuelExpenseStatus, type FuelTransactionFilters, type TransactionRow } from '../components/useFuelTransactions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { createFuelExpense, exportFuelExpenses, getFuelVehicles } from '@/lib/api/fuel'
+import { createFuelExpense, deleteFuelExpense, exportFuelExpenses, getFuelVehicles, ingestCardData, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
 import { getDrivers } from '@/lib/api/drivers'
+import { uploadFile } from '@/lib/api/documents'
 import { extractApiError } from '@/lib/utils'
 
 interface ExpenseForm {
@@ -26,12 +27,18 @@ interface ExpenseForm {
     costPerVolume: string
     entryDate: string
     currency: string
-    fuelTransactionId: string
     purchaseFrom: string
     receiptUrl: string
     referenceNumber: string
-    status: 'pending_approval' | 'approved' | 'rejected' | 'reimbursed'
+    status: EditableFuelExpenseStatus
 }
+
+const STATUS_OPTIONS: Array<{ value: EditableFuelExpenseStatus; label: string }> = [
+    { value: 'pending_approval', label: 'Pending Approval' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'reimbursed', label: 'Reimbursed' },
+]
 
 const defaultExpenseForm = (): ExpenseForm => ({
     vehicleId: '',
@@ -40,12 +47,55 @@ const defaultExpenseForm = (): ExpenseForm => ({
     costPerVolume: '',
     entryDate: format(new Date(), 'yyyy-MM-dd'),
     currency: 'NGN',
-    fuelTransactionId: '',
     purchaseFrom: '',
     receiptUrl: '',
     referenceNumber: '',
     status: 'pending_approval',
 })
+
+function inputDate(value: string) {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? format(new Date(), 'yyyy-MM-dd') : format(date, 'yyyy-MM-dd')
+}
+
+function rowToForm(row: TransactionRow): ExpenseForm {
+    return {
+        vehicleId: row.vehicleId ? String(row.vehicleId) : '',
+        userId: row.userId ? String(row.userId) : '',
+        volume: row.volumeLiters != null ? String(Math.abs(row.volumeLiters)) : '',
+        costPerVolume: row.pricePerLiter != null ? String(row.pricePerLiter) : '',
+        entryDate: row.occurredAt ? inputDate(row.occurredAt) : format(new Date(), 'yyyy-MM-dd'),
+        currency: row.currency || 'NGN',
+        purchaseFrom: row.station === '-' ? '' : row.station,
+        receiptUrl: row.receiptUrl,
+        referenceNumber: row.referenceNumber,
+        status: row.status,
+    }
+}
+
+function formToPayload(form: ExpenseForm): CreateFuelExpensePayload {
+    const vehicleId = Number(form.vehicleId)
+    const userId = Number(form.userId)
+    const volume = Number(form.volume)
+    const costPerVolume = Number(form.costPerVolume)
+
+    if (!vehicleId || !userId || !volume || !costPerVolume || !form.entryDate) {
+        throw new Error('Vehicle, driver, volume, cost per litre, and date are required.')
+    }
+
+    return {
+        vehicle_id: vehicleId,
+        user_id: userId,
+        volume,
+        cost_per_volume: costPerVolume,
+        entry_date: form.entryDate,
+        currency: form.currency.trim() || null,
+        purchase_from: form.purchaseFrom.trim() || null,
+        receipt_url: form.receiptUrl.trim() || null,
+        reference_number: form.referenceNumber.trim() || null,
+        status: form.status,
+    }
+}
 
 function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob)
@@ -58,62 +108,50 @@ function downloadBlob(blob: Blob, filename: string) {
     URL.revokeObjectURL(url)
 }
 
-function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-    const queryClient = useQueryClient()
-    const [form, setForm] = useState<ExpenseForm>(defaultExpenseForm)
+function TransactionExpenseDialog({
+    open,
+    mode,
+    row,
+    isPending,
+    onOpenChange,
+    onSubmit,
+}: {
+    open: boolean
+    mode: 'create' | 'edit'
+    row?: TransactionRow | null
+    isPending?: boolean
+    onOpenChange: (open: boolean) => void
+    onSubmit: (form: ExpenseForm) => void
+}) {
+    const [form, setForm] = useState<ExpenseForm>(() => mode === 'edit' && row ? rowToForm(row) : defaultExpenseForm())
 
     const vehiclesQuery = useQuery({
-        queryKey: ['fuel-transaction-create-vehicles'],
+        queryKey: ['fuel-transaction-form-vehicles'],
         queryFn: () => getFuelVehicles({ per_page: 200 }),
         enabled: open,
     })
     const driversQuery = useQuery({
-        queryKey: ['fuel-transaction-create-drivers'],
+        queryKey: ['fuel-transaction-form-drivers'],
         queryFn: () => getDrivers({ per_page: 200 }),
         enabled: open,
     })
 
-    const createMutation = useMutation({
-        mutationFn: () => {
-            const vehicleId = Number(form.vehicleId)
-            const userId = Number(form.userId)
-            const volume = Number(form.volume)
-            const costPerVolume = Number(form.costPerVolume)
-            const fuelTransactionId = form.fuelTransactionId ? Number(form.fuelTransactionId) : null
-
-            if (!vehicleId || !userId || !volume || !costPerVolume || !form.entryDate) {
-                throw new Error('Vehicle, driver, volume, cost per litre, and date are required.')
-            }
-            if (form.fuelTransactionId && !Number.isFinite(fuelTransactionId)) {
-                throw new Error('Fuel transaction ID must be a valid number.')
-            }
-
-            return createFuelExpense({
-                vehicle_id: vehicleId,
-                user_id: userId,
-                volume,
-                cost_per_volume: costPerVolume,
-                entry_date: form.entryDate,
-                currency: form.currency.trim() || null,
-                fuel_transaction_id: fuelTransactionId,
-                purchase_from: form.purchaseFrom.trim() || null,
-                receipt_url: form.receiptUrl.trim() || null,
-                reference_number: form.referenceNumber.trim() || null,
-                status: form.status,
-            })
+    const receiptUploadMutation = useMutation({
+        mutationFn: (file: File) => uploadFile(file),
+        onSuccess: ({ url }) => {
+            setForm((current) => ({ ...current, receiptUrl: url }))
+            toast.success('Receipt image uploaded.')
         },
-        onSuccess: () => {
-            toast.success('Fuel expense created.')
-            queryClient.invalidateQueries({ queryKey: ['fuel-transactions'] })
-            queryClient.invalidateQueries({ queryKey: ['fuel-expense-metrics'] })
-            setForm(defaultExpenseForm())
-            onOpenChange(false)
-        },
-        onError: (error) => toast.error(extractApiError(error, 'Failed to create fuel expense.')),
+        onError: (error) => toast.error(extractApiError(error, 'Failed to upload receipt image.')),
     })
 
     const updateForm = (key: keyof ExpenseForm, value: string) => {
         setForm((current) => ({ ...current, [key]: value }))
+    }
+
+    const uploadReceipt = (file: File | undefined) => {
+        if (!file) return
+        receiptUploadMutation.mutate(file)
     }
 
     return (
@@ -126,7 +164,10 @@ function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         >
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Add Fuel Transaction</DialogTitle>
+                    <DialogTitle>{mode === 'edit' ? 'Edit Fuel Transaction' : 'Add Fuel Transaction'}</DialogTitle>
+                    <DialogDescription>
+                        {mode === 'edit' ? 'Update the selected fuel transaction record.' : 'Create a fuel expense transaction record.'}
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -185,16 +226,10 @@ function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             onChange={(event) => updateForm('status', event.target.value)}
                             className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
                         >
-                            <option value="pending_approval">Pending Approval</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="reimbursed">Reimbursed</option>
+                            {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                         </select>
                     </div>
-                    <div>
-                        <Label>Fuel Transaction ID</Label>
-                        <Input value={form.fuelTransactionId} onChange={(event) => updateForm('fuelTransactionId', event.target.value)} type="number" className="mt-1.5" />
-                    </div>
+
                     <div>
                         <Label>Purchase From</Label>
                         <Input value={form.purchaseFrom} onChange={(event) => updateForm('purchaseFrom', event.target.value)} className="mt-1.5" />
@@ -204,8 +239,31 @@ function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                         <Input value={form.referenceNumber} onChange={(event) => updateForm('referenceNumber', event.target.value)} className="mt-1.5" />
                     </div>
                     <div className="sm:col-span-2">
-                        <Label>Receipt URL</Label>
-                        <Input value={form.receiptUrl} onChange={(event) => updateForm('receiptUrl', event.target.value)} className="mt-1.5" />
+                        <Label>Receipt Image</Label>
+                        <div className="mt-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3">
+                            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:text-blue-600">
+                                <span className="inline-flex items-center gap-2">
+                                    <ImageUp className="h-4 w-4 text-blue-500" />
+                                    {form.receiptUrl ? 'Replace receipt image' : 'Upload receipt image'}
+                                </span>
+                                {receiptUploadMutation.isPending && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="sr-only"
+                                    disabled={receiptUploadMutation.isPending}
+                                    onChange={(event) => uploadReceipt(event.target.files?.[0])}
+                                />
+                            </label>
+                            <div className="mt-2 text-[12px] text-slate-500">
+                                {receiptUploadMutation.isPending ? 'Uploading receipt image...' : form.receiptUrl ? 'Receipt image uploaded and ready.' : 'Upload a receipt image before submitting.'}
+                            </div>
+                            {form.receiptUrl && (
+                                <a href={form.receiptUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex max-w-full truncate text-[12px] font-medium text-blue-600 hover:text-blue-700">
+                                    {form.receiptUrl}
+                                </a>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -213,9 +271,9 @@ function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
-                        {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Create
+                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={isPending || receiptUploadMutation.isPending || (mode === 'create' && !form.receiptUrl)} onClick={() => onSubmit(form)}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {mode === 'edit' ? 'Save Changes' : 'Create'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -223,8 +281,200 @@ function AddFuelExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     )
 }
 
+function TransactionViewDialog({ row, onClose }: { row: TransactionRow | null; onClose: () => void }) {
+    const details = row ? [
+        ['Vehicle', `${row.vehicle} (${row.vehicleModel})`],
+        ['Driver', row.driver],
+        ['Date', `${row.date} ${row.time}`],
+        ['Type', row.type],
+        ['Status', row.status.replace('_', ' ')],
+        ['Volume', row.volumeLiters != null ? `${row.volumeLiters} L` : '-'],
+        ['Amount', row.amountNaira != null ? `NGN ${row.amountNaira.toLocaleString()}` : '-'],
+        ['Price / L', row.pricePerLiter != null ? `NGN ${row.pricePerLiter.toLocaleString()}` : '-'],
+        ['Payment', row.payment === 'fleet_card' ? 'Fleet Card' : 'Cash'],
+        ['Location', row.station],
+        ['Reference', row.referenceNumber || '-'],
+        ['Receipt', row.receiptUrl || '-'],
+    ] : []
+
+    return (
+        <Dialog open={!!row} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Fuel Transaction Details</DialogTitle>
+                    <DialogDescription>Review the selected transaction record.</DialogDescription>
+                </DialogHeader>
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {details.map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                            <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+                            <dd className="mt-1 break-words text-sm font-medium capitalize text-slate-800">{value}</dd>
+                        </div>
+                    ))}
+                </dl>
+                <DialogFooter>
+                    <Button type="button" onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function DeleteTransactionsDialog({ rows, isPending, onClose, onConfirm }: { rows: TransactionRow[]; isPending?: boolean; onClose: () => void; onConfirm: () => void }) {
+    return (
+        <Dialog open={rows.length > 0} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-rose-500" /> Delete Transaction{rows.length === 1 ? '' : 's'}</DialogTitle>
+                    <DialogDescription>
+                        This will permanently delete {rows.length} selected fuel transaction{rows.length === 1 ? '' : 's'}.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button type="button" variant="destructive" disabled={isPending} onClick={onConfirm}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Delete
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function BulkEditDialog({ rows, isPending, onClose, onConfirm }: { rows: TransactionRow[]; isPending?: boolean; onClose: () => void; onConfirm: (status: EditableFuelExpenseStatus) => void }) {
+    const [status, setStatus] = useState<EditableFuelExpenseStatus>('approved')
+
+    return (
+        <Dialog open={rows.length > 0} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Bulk Edit Transactions</DialogTitle>
+                    <DialogDescription>Apply a status update to {rows.length} selected fuel transaction{rows.length === 1 ? '' : 's'}.</DialogDescription>
+                </DialogHeader>
+                <div>
+                    <Label>Status</Label>
+                    <select
+                        value={status}
+                        onChange={(event) => setStatus(event.target.value as EditableFuelExpenseStatus)}
+                        className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+                    >
+                        {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={isPending} onClick={() => onConfirm(status)}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Apply Update
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+const FUEL_TRANSACTION_TEMPLATE_ROWS = [
+    ['provider', 'external_id', 'card_number_last4', 'merchant_name', 'transaction_date', 'amount', 'volume_liters', 'currency', 'vehicle_registration', 'reference_number'],
+    ['generic_csv', 'TXN-0001', '1234', 'Total Energy Station VI', '2026-03-08', '26775', '35', 'NGN', 'LND-123-XY', 'REF-00042'],
+]
+
+function downloadFuelTransactionTemplate() {
+    const csv = FUEL_TRANSACTION_TEMPLATE_ROWS.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    downloadBlob(blob, 'fuel-transactions-import-template.csv')
+}
+
+function ImportFuelTransactionsDialog({ open, isPending, onClose, onImport }: { open: boolean; isPending?: boolean; onClose: () => void; onImport: (file: File, provider: string) => void }) {
+    const [file, setFile] = useState<File | null>(null)
+    const [provider, setProvider] = useState('generic_csv')
+
+    const close = () => {
+        setFile(null)
+        setProvider('generic_csv')
+        onClose()
+    }
+
+    const selectFile = (nextFile: File | undefined) => {
+        if (!nextFile) return
+        const extension = nextFile.name.split('.').pop()?.toLowerCase()
+        if (!['csv', 'json'].includes(extension ?? '')) {
+            toast.error('Only CSV and JSON files are accepted.')
+            return
+        }
+        setFile(nextFile)
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) close() }}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Import Fuel Transactions</DialogTitle>
+                    <DialogDescription>Upload a CSV or JSON fuel card transaction file for ingestion.</DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-800">Start with the CSV template</p>
+                                <p className="mt-0.5 text-[12px] text-slate-500">Use the expected columns before uploading fuel transaction data.</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-2 bg-white" onClick={downloadFuelTransactionTemplate}>
+                                <Download className="h-4 w-4" /> Template
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label>Provider</Label>
+                        <select
+                            value={provider}
+                            onChange={(event) => setProvider(event.target.value)}
+                            className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+                        >
+                            <option value="generic_csv">Generic CSV</option>
+                            <option value="ovh">OVH</option>
+                            <option value="total">TotalEnergies</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <Label>Transaction File</Label>
+                        <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+                            <FileSpreadsheet className="h-9 w-9 text-blue-500" />
+                            <span className="text-sm font-semibold text-slate-700">{file ? file.name : 'Choose CSV or JSON file'}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">CSV or JSON, max 10 MB</span>
+                            <input
+                                type="file"
+                                accept=".csv,.json,text/csv,application/json"
+                                className="sr-only"
+                                disabled={isPending}
+                                onChange={(event) => selectFile(event.target.files?.[0])}
+                            />
+                        </label>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!file || isPending} onClick={() => file && onImport(file, provider)}>
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        Import
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
 export default function FuelTransactionsPage() {
+    const queryClient = useQueryClient()
     const [createOpen, setCreateOpen] = useState(false)
+    const [importOpen, setImportOpen] = useState(false)
+    const [viewRow, setViewRow] = useState<TransactionRow | null>(null)
+    const [editRow, setEditRow] = useState<TransactionRow | null>(null)
+    const [deleteRows, setDeleteRows] = useState<TransactionRow[]>([])
+    const [bulkEditRows, setBulkEditRows] = useState<TransactionRow[]>([])
     const [filters, setFilters] = useState<FuelTransactionFilters>({
         search: '',
         vehicleId: undefined,
@@ -240,6 +490,69 @@ export default function FuelTransactionsPage() {
 
     const { rows, kpis, pagination, isLoading, isError } = useFuelTransactions(filters)
 
+    const refreshFuelTransactions = () => {
+        queryClient.invalidateQueries({ queryKey: ['fuel-transactions'] })
+        queryClient.invalidateQueries({ queryKey: ['fuel-expense-metrics'] })
+    }
+
+    const createMutation = useMutation({
+        mutationFn: (form: ExpenseForm) => createFuelExpense(formToPayload(form)),
+        onSuccess: () => {
+            toast.success('Fuel expense created.')
+            refreshFuelTransactions()
+            setCreateOpen(false)
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to create fuel expense.')),
+    })
+
+    const editMutation = useMutation({
+        mutationFn: ({ row, form }: { row: TransactionRow; form: ExpenseForm }) => updateFuelExpense(row.id, formToPayload(form)),
+        onSuccess: () => {
+            toast.success('Fuel transaction updated.')
+            refreshFuelTransactions()
+            setEditRow(null)
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to update fuel transaction.')),
+    })
+
+    const deleteMutation = useMutation({
+        mutationFn: (targetRows: TransactionRow[]) => Promise.all(targetRows.map((row) => deleteFuelExpense(row.id))),
+        onSuccess: (_, targetRows) => {
+            toast.success(`${targetRows.length} fuel transaction${targetRows.length === 1 ? '' : 's'} deleted.`)
+            refreshFuelTransactions()
+            setDeleteRows([])
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to delete fuel transaction.')),
+    })
+
+    const bulkStatusMutation = useMutation({
+        mutationFn: ({ targetRows, status }: { targetRows: TransactionRow[]; status: EditableFuelExpenseStatus }) => Promise.all(
+            targetRows.map((row) => updateFuelExpense(row.id, { status })),
+        ),
+        onSuccess: (_, variables) => {
+            toast.success(`${variables.targetRows.length} transaction${variables.targetRows.length === 1 ? '' : 's'} updated.`)
+            refreshFuelTransactions()
+            setBulkEditRows([])
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to update selected transactions.')),
+    })
+
+    const importMutation = useMutation({
+        mutationFn: ({ file, provider }: { file: File; provider: string }) => {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('provider', provider)
+            return ingestCardData(formData)
+        },
+        onSuccess: (response) => {
+            const created = response.data?.created ?? 0
+            const skipped = response.data?.skipped ?? 0
+            toast.success(`Fuel transactions imported. Created ${created}, skipped ${skipped}.`)
+            refreshFuelTransactions()
+            setImportOpen(false)
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to import fuel transactions.')),
+    })
     const exportMutation = useMutation({
         mutationFn: () => {
             const exportParams = {
@@ -268,8 +581,11 @@ export default function FuelTransactionsPage() {
                     <p className="mt-1 text-sm text-slate-500">View and manage all fuel purchases, refills, drains and adjustments.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" disabled={importMutation.isPending} onClick={() => setImportOpen(true)}>
+                        {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import
+                    </Button>
                     <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>
-                        {exportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Export
+                        {exportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
                     </Button>
                     <Button size="sm" className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => setCreateOpen(true)}>
                         <Plus className="h-4 w-4" /> Add Transaction
@@ -294,6 +610,10 @@ export default function FuelTransactionsPage() {
                                 filters={filters}
                                 pagination={pagination}
                                 onFiltersChange={setFilters}
+                                onViewRow={setViewRow}
+                                onEditRow={setEditRow}
+                                onDeleteRows={setDeleteRows}
+                                onBulkEditRows={setBulkEditRows}
                             />
                         </div>
                         <div className="h-[min(560px,calc(100vh-220px))] xl:col-span-1">
@@ -302,7 +622,43 @@ export default function FuelTransactionsPage() {
                     </div>
                 </>
             )}
-            <AddFuelExpenseDialog open={createOpen} onOpenChange={setCreateOpen} />
+            <ImportFuelTransactionsDialog
+                open={importOpen}
+                isPending={importMutation.isPending}
+                onClose={() => setImportOpen(false)}
+                onImport={(file, provider) => importMutation.mutate({ file, provider })}
+            />
+            <TransactionExpenseDialog
+                key="create-transaction"
+                open={createOpen}
+                mode="create"
+                isPending={createMutation.isPending}
+                onOpenChange={setCreateOpen}
+                onSubmit={(form) => createMutation.mutate(form)}
+            />
+            <TransactionExpenseDialog
+                key={editRow?.id ?? 'edit-transaction'}
+                open={!!editRow}
+                mode="edit"
+                row={editRow}
+                isPending={editMutation.isPending}
+                onOpenChange={(open) => { if (!open) setEditRow(null) }}
+                onSubmit={(form) => { if (editRow) editMutation.mutate({ row: editRow, form }) }}
+            />
+            <TransactionViewDialog row={viewRow} onClose={() => setViewRow(null)} />
+            <DeleteTransactionsDialog
+                rows={deleteRows}
+                isPending={deleteMutation.isPending}
+                onClose={() => setDeleteRows([])}
+                onConfirm={() => deleteMutation.mutate(deleteRows)}
+            />
+            <BulkEditDialog
+                key={bulkEditRows.map((row) => row.id).join('-') || 'bulk-edit-transactions'}
+                rows={bulkEditRows}
+                isPending={bulkStatusMutation.isPending}
+                onClose={() => setBulkEditRows([])}
+                onConfirm={(status) => bulkStatusMutation.mutate({ targetRows: bulkEditRows, status })}
+            />
         </div>
     )
 }

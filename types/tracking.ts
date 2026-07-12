@@ -6,6 +6,12 @@ export interface PlaybackMovement {
   speed: number
   heading: number
   timestamp: string
+  fuel_level?: number
+  fuel_level_liters?: number
+  fuel_level_percent?: number
+  altitude?: number
+  ignition?: boolean | string | number | null
+  movement?: boolean | string | number | null
 }
 
 export interface PlaybackStats {
@@ -49,3 +55,4 @@ export interface PlaybackSpeedSegment {
   bucket: PlaybackSpeedBucket
   color: string
 }
+

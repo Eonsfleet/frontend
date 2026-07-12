@@ -1,25 +1,31 @@
 'use client'
 
-import { Eye, Check, CircleCheck, BellPlus, StickyNote, Share2, Download, Trash2, MoreVertical } from 'lucide-react'
+import { Eye, Check, CircleCheck, ShieldOff, MoreVertical } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { toast } from 'sonner'
+import type { AlertStatus } from './useFuelAlerts'
 
 interface AlertRowMenuProps {
     onViewDetails: () => void
     onAcknowledge: () => void
     onResolve: () => void
-    onCreateRule: () => void
+    /** Marks the alert as a false positive (kept as `onDelete` in callers). */
     onDelete: () => void
+    onCreateRule?: () => void
     label: string
+    status: AlertStatus
 }
 
-export function AlertRowMenu({ onViewDetails, onAcknowledge, onResolve, onCreateRule, onDelete, label }: AlertRowMenuProps) {
+export function AlertRowMenu({ onViewDetails, onAcknowledge, onResolve, onDelete, label, status }: AlertRowMenuProps) {
+    // The backend only allows these transitions on an active (new) alert (and resolve
+    // on anything not already resolved) — gate the items so we don't fire a 422.
+    const canAcknowledge = status === 'new'
+    const canResolve = status !== 'resolved'
+    const canFalsePositive = status === 'new'
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -36,28 +42,21 @@ export function AlertRowMenu({ onViewDetails, onAcknowledge, onResolve, onCreate
                 <DropdownMenuItem onClick={onViewDetails}>
                     <Eye className="mr-2 h-4 w-4 text-slate-400" /> View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onAcknowledge}>
+                <DropdownMenuItem onClick={onAcknowledge} disabled={!canAcknowledge}>
                     <Check className="mr-2 h-4 w-4 text-slate-400" /> Acknowledge Alert
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onResolve}>
+                <DropdownMenuItem onClick={onResolve} disabled={!canResolve}>
                     <CircleCheck className="mr-2 h-4 w-4 text-slate-400" /> Resolve Alert
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onCreateRule}>
-                    <BellPlus className="mr-2 h-4 w-4 text-slate-400" /> Create Alert Rule
+                <DropdownMenuItem onClick={onDelete} disabled={!canFalsePositive} className="text-rose-600 focus:text-rose-600">
+                    <ShieldOff className="mr-2 h-4 w-4" /> Mark as False Positive
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info('Add Note is not yet available.')}>
-                    <StickyNote className="mr-2 h-4 w-4 text-slate-400" /> Add Note
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.success('Alert link copied to clipboard')}>
-                    <Share2 className="mr-2 h-4 w-4 text-slate-400" /> Share Alert
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.success('Alert exported')}>
-                    <Download className="mr-2 h-4 w-4 text-slate-400" /> Export Alert
-                </DropdownMenuItem>
+                {/* Delete Alert — commented out for now
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onDelete} className="text-rose-600 focus:text-rose-600">
                     <Trash2 className="mr-2 h-4 w-4" /> Delete Alert
                 </DropdownMenuItem>
+                */}
             </DropdownMenuContent>
         </DropdownMenu>
     )

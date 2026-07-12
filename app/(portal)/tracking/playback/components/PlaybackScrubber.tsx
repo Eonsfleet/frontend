@@ -1,10 +1,13 @@
 'use client'
 
-import { Play, Pause, Rewind, FastForward, Navigation as NavigationIcon, Truck } from 'lucide-react'
+import { Play, Pause, Rewind, FastForward, Navigation as NavigationIcon, Truck, Camera } from 'lucide-react'
 import { format } from 'date-fns'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
 import type { PlaybackMovement } from '@/types'
+import type { PlaybackFrame, PlaybackSpeed } from '@/lib/playback/interpolation'
+
+const SPEEDS: PlaybackSpeed[] = [0.25, 0.5, 1, 2, 4, 8, 16, 32]
 
 export interface PlaybackScrubberProps {
   movements: PlaybackMovement[]
@@ -12,13 +15,33 @@ export interface PlaybackScrubberProps {
   onIndexChange: (index: number) => void
   isPlaying: boolean
   onTogglePlaying: () => void
-  speed: 1 | 2 | 4 | 8
-  onSpeedChange: (speed: 1 | 2 | 4 | 8) => void
+  speed: PlaybackSpeed
+  onSpeedChange: (speed: PlaybackSpeed) => void
+  onViewStreet?: () => void
+  currentFrame?: PlaybackFrame | null
+  progressPercent?: number
+  onProgressChange?: (percent: number) => void
 }
 
-export function PlaybackScrubber({ movements, currentIndex, onIndexChange, isPlaying, onTogglePlaying, speed, onSpeedChange }: PlaybackScrubberProps) {
-  const currentMovement = movements[currentIndex]
-  const progress = movements.length > 1 ? [(currentIndex / (movements.length - 1)) * 100] : [0]
+function speedLabel(speed: PlaybackSpeed): string {
+  return `${speed}X`
+}
+
+export function PlaybackScrubber({
+  movements,
+  currentIndex,
+  onIndexChange,
+  isPlaying,
+  onTogglePlaying,
+  speed,
+  onSpeedChange,
+  onViewStreet,
+  currentFrame,
+  progressPercent,
+  onProgressChange,
+}: PlaybackScrubberProps) {
+  const currentMovement = currentFrame ?? movements[currentIndex]
+  const progress = [progressPercent ?? (movements.length > 1 ? (currentIndex / (movements.length - 1)) * 100 : 0)]
 
   return (
     <div className="bg-white border-t border-slate-200 px-6 py-4">
@@ -50,17 +73,18 @@ export function PlaybackScrubber({ movements, currentIndex, onIndexChange, isPla
             <FastForward className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-1 bg-slate-100 rounded-full p-1 ml-2">
-            {([1, 2, 4, 8] as const).map((s) => (
+            {SPEEDS.map((s) => (
               <button
                 key={s}
                 type="button"
+                aria-label={speedLabel(s)}
                 onClick={() => onSpeedChange(s)}
                 className={cn(
-                  'h-7 w-9 rounded-full text-[10px] font-black transition-colors',
+                  'h-7 min-w-9 rounded-full px-2 text-[10px] font-black transition-colors',
                   speed === s ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-900',
                 )}
               >
-                {s}X
+                {speedLabel(s)}
               </button>
             ))}
           </div>
@@ -77,6 +101,16 @@ export function PlaybackScrubber({ movements, currentIndex, onIndexChange, isPla
                 <Truck className="h-3.5 w-3.5" /> {Math.round(currentMovement.speed)} km/h
               </span>
               <span>{format(new Date(currentMovement.timestamp), 'hh:mm:ss a')}</span>
+              {onViewStreet && (
+                <button
+                  type="button"
+                  onClick={onViewStreet}
+                  className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 hover:text-blue-600"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  View Street
+                </button>
+              )}
             </>
           )}
         </div>
@@ -88,7 +122,8 @@ export function PlaybackScrubber({ movements, currentIndex, onIndexChange, isPla
         step={0.1}
         onValueChange={([val]) => {
           if (movements.length === 0) return
-          onIndexChange(Math.round((val / 100) * (movements.length - 1)))
+          if (onProgressChange) onProgressChange(val)
+          else onIndexChange(Math.round((val / 100) * (movements.length - 1)))
         }}
       />
       <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1">

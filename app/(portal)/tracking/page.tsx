@@ -16,8 +16,10 @@ import { getClusters } from "@/lib/api/settings";
 import { getGeofences } from "@/lib/api/geofencing";
 import TrackingMap from "./TrackingMap";
 import { AssetPanel } from "./components/AssetPanel";
-import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, type TrackingMapStyle } from "./utils";
+import { getVehicleIcon, type TrackingMapStyle } from "./utils";
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
+import { useMapProvider } from "./hooks/useMapProvider";
+import { MapInstanceProvider } from "./MapInstanceContext";
 import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
 import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
 import { TrackingSidebar } from "./components/TrackingSidebar";
@@ -28,6 +30,7 @@ import { MapLegend } from "./components/MapLegend";
 import { FilterPanelDrawer, FilterState, initialFilterState } from "./components/FilterPanelDrawer";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { StreetImageryPanel } from "./components/StreetImageryPanel";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
@@ -51,12 +54,20 @@ export default function TrackingPage() {
   const [showTraffic, setShowTraffic] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
 
   const resetZoom = () => setZoomResetKey((prev) => prev + 1);
+
+  const mapInstance = useMapProvider({
+    containerRef: mapContainerRef,
+    initialCenter: { lat: 6.5244, lng: 3.3792 },
+    initialZoom: 12,
+    styleKey: mapStyle,
+  });
 
   const router = useRouter();
   const { token, organization } = useAuthStore();
@@ -516,16 +527,16 @@ export default function TrackingPage() {
     });
     const loc = match ? locations[match.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
-      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+      mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 16);
     }
-  }, [locationSearch, vehicles, locations]);
+  }, [locationSearch, vehicles, locations, mapInstance.provider]);
 
   const handleLiveTrack = useCallback(() => {
     const loc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
-      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 18);
+      mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 18);
     }
-  }, [selectedVehicle, locations]);
+  }, [selectedVehicle, locations, mapInstance.provider]);
 
   const navigateToPlayback = useCallback(
     (vehicleId: string, tripId?: string | null) => {
@@ -603,56 +614,56 @@ export default function TrackingPage() {
         </div>
 
         <div className="relative row-start-1 overflow-hidden">
-          <TrackingMap
-            filteredVehicles={filteredVehicles}
-            locations={locations}
-            selectedVehicle={selectedVehicle}
-            setSelectedVehicle={(v) => setSelectedVehicleId(v?.attributes.uuid ?? null)}
-            vehicles={vehicles}
-            TILE_URL={MAP_LAYERS[mapStyle]}
-            mapStyle={mapStyle}
-            showTraffic={showTraffic}
-            trail={selectedTrail}
-            getMarkerSVG={getMarkerSVG}
-            getVehicleIcon={getVehicleIcon}
-            statusFilter={statusFilter}
-            zoomResetKey={zoomResetKey}
-            showGeofences={showGeofences}
-            geofences={geofences}
-            interpolator={interpolator}
-            alarmState={alarmState}
-          />
-
-          <div
-            className={cn(
-              "absolute top-4 right-4 z-30 transition-[left] duration-300 ease-in-out",
-              isAssetListCollapsed ? "left-14" : "left-4",
-            )}
-          >
-            <TrackingTopBar
-              locationSearch={locationSearch}
-              setLocationSearch={setLocationSearch}
-              onLocationSearchSubmit={handleLocationSearchSubmit}
-              mapStyle={mapStyle}
-              setMapStyle={setMapStyle}
+          <MapInstanceProvider value={mapInstance}>
+            <TrackingMap
+              containerRef={mapContainerRef}
+              filteredVehicles={filteredVehicles}
+              locations={locations}
+              selectedVehicle={selectedVehicle}
+              setSelectedVehicle={(v) => setSelectedVehicleId(v?.attributes.uuid ?? null)}
               showTraffic={showTraffic}
-              setShowTraffic={setShowTraffic}
+              trail={selectedTrail}
+              getVehicleIcon={getVehicleIcon}
+              statusFilter={statusFilter}
+              zoomResetKey={zoomResetKey}
               showGeofences={showGeofences}
-              setShowGeofences={setShowGeofences}
+              geofences={geofences}
+              interpolator={interpolator}
+              alarmState={alarmState}
             />
-          </div>
 
-          <div className="absolute left-4 top-24 z-30 flex flex-col gap-3">
-            <MapZoomControl />
-            <MapExtraControls
-              isFullscreen={isFullscreen}
-              onToggleFullscreen={toggleFullscreen}
-              onRecenter={resetZoom}
-            />
-          </div>
+            <div
+              className={cn(
+                "absolute top-4 right-4 z-30 transition-[left] duration-300 ease-in-out",
+                isAssetListCollapsed ? "left-14" : "left-4",
+              )}
+            >
+              <TrackingTopBar
+                locationSearch={locationSearch}
+                setLocationSearch={setLocationSearch}
+                onLocationSearchSubmit={handleLocationSearchSubmit}
+                mapStyle={mapStyle}
+                setMapStyle={setMapStyle}
+                showTraffic={showTraffic}
+                setShowTraffic={setShowTraffic}
+                showGeofences={showGeofences}
+                setShowGeofences={setShowGeofences}
+              />
+            </div>
 
-          <MapLegend />
-          <ConnectionBanner />
+            <div className="absolute left-4 top-24 z-30 flex flex-col gap-3">
+              <MapZoomControl />
+              <MapExtraControls
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                onRecenter={resetZoom}
+              />
+            </div>
+
+            <MapLegend />
+            <ConnectionBanner />
+            <StreetImageryPanel locations={locations} />
+          </MapInstanceProvider>
         </div>
 
         <div className="hidden lg:block row-start-1 row-span-2 overflow-hidden">

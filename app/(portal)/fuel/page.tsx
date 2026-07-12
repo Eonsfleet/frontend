@@ -160,6 +160,7 @@ export default function FuelOverviewPage() {
               formatValue={(v) => `${v.toLocaleString()} L`}
               filter={consumptionFilter}
               filterOptions={CONSUMPTION_FILTER_OPTIONS}
+              isLoading={trends.isConsumptionLoading}
               onFilterChange={(filter) =>
                 setConsumptionFilter(filter as TrendApiFilter)
               }
@@ -171,6 +172,7 @@ export default function FuelOverviewPage() {
               formatValue={(v) => `${v} km/L`}
               filter={efficiencyFilter}
               filterOptions={EFFICIENCY_FILTER_OPTIONS}
+              isLoading={trends.isEfficiencyLoading}
               onFilterChange={(filter) =>
                 setEfficiencyFilter(filter as EfficiencyApiFilter)
               }

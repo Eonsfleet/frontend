@@ -1,21 +1,25 @@
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { MapZoomControl } from '@/app/(portal)/tracking/components/MapZoomControl'
 import { MapLegend } from '@/app/(portal)/tracking/components/MapLegend'
+import { MapInstanceProvider } from '@/app/(portal)/tracking/MapInstanceContext'
+import { createFakeMapProvider } from '../helpers/fakeMapProvider'
 
 describe('MapZoomControl', () => {
-  it('calls window.leafletMap.zoomIn / zoomOut on click', () => {
-    const zoomIn = vi.fn()
-    const zoomOut = vi.fn()
-    ;(window as any).leafletMap = { zoomIn, zoomOut }
+  it('calls provider.zoomIn / zoomOut on click', () => {
+    const provider = createFakeMapProvider()
 
-    const { getByLabelText } = render(<MapZoomControl />)
+    const { getByLabelText } = render(
+      <MapInstanceProvider value={{ provider, providerKind: provider.kind, isReady: true, isFallback: false }}>
+        <MapZoomControl />
+      </MapInstanceProvider>,
+    )
     fireEvent.click(getByLabelText('Zoom in'))
     fireEvent.click(getByLabelText('Zoom out'))
 
-    expect(zoomIn).toHaveBeenCalledTimes(1)
-    expect(zoomOut).toHaveBeenCalledTimes(1)
+    expect(provider.zoomIn).toHaveBeenCalledTimes(1)
+    expect(provider.zoomOut).toHaveBeenCalledTimes(1)
   })
 })
 

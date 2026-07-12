@@ -65,7 +65,7 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
     ]
 
     return (
-        <Card className="flex h-full max-h-[640px] min-h-[520px] flex-col rounded-2xl border-slate-100 p-4 shadow-none">
+        <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-4 shadow-none">
             <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">
                     Vehicles <span className="text-slate-400">({vehicles.length})</span>
