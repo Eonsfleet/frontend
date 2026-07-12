@@ -573,7 +573,7 @@ export default function FuelTransactionsPage() {
     })
 
     return (
-        <div className="space-y-5">
+        <div className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-5 lg:h-[calc(100vh-4rem)]">
             {/* Header */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -602,8 +602,8 @@ export default function FuelTransactionsPage() {
                     <TxKpiCards kpis={kpis} />
 
                     {/* Table + filters sidebar */}
-                    <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-4">
-                        <div className="h-[min(560px,calc(100vh-220px))] xl:col-span-3">
+                    <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 xl:grid-cols-4">
+                        <div className="min-h-0 xl:col-span-3">
                             <TransactionsTable
                                 rows={rows}
                                 isLoading={isLoading}
@@ -616,7 +616,7 @@ export default function FuelTransactionsPage() {
                                 onBulkEditRows={setBulkEditRows}
                             />
                         </div>
-                        <div className="h-[min(560px,calc(100vh-220px))] xl:col-span-1">
+                        <div className="min-h-0 xl:col-span-1">
                             <TransactionFilters filters={filters} onFiltersChange={setFilters} />
                         </div>
                     </div>
