@@ -47,7 +47,7 @@ export default function FuelRealtimePage() {
     } =
         useFuelRealtime(selectedId, levelTrendFilter, eventsPage, rateTrendFilter)
 
-    const plate = detail?.registration ?? 'Vehicle'
+    const plate = detail?.registration ?? 'All Vehicles'
     const handleVehicleSelect = (id: number) => {
         setSelectedId(id)
         setEventsPage(1)

@@ -478,14 +478,16 @@ export interface FuelLevelTrendResponse {
         }
 }
 
-export const getFuelLevelTrend = async (params: { vehicle_id: number; filter?: FuelLevelTrendFilter }): Promise<FuelLevelTrendResponse> => {
+// vehicle_id is optional — omitted, the backend returns the fleet-wide trend
+// (same convention as getFuelEvents below), used when no vehicle is selected.
+export const getFuelLevelTrend = async (params: { vehicle_id?: number; filter?: FuelLevelTrendFilter }): Promise<FuelLevelTrendResponse> => {
     const response = await apiClient.get<FuelLevelTrendResponse>('/fuel/level-trend', { params })
     return response.data
 }
 
 export type FuelRateTrendResponse = FuelLevelTrendResponse
 
-export const getFuelRateTrend = async (params: { vehicle_id: number; filter?: FuelRateTrendFilter }): Promise<FuelRateTrendResponse> => {
+export const getFuelRateTrend = async (params: { vehicle_id?: number; filter?: FuelRateTrendFilter }): Promise<FuelRateTrendResponse> => {
     const response = await apiClient.get<FuelRateTrendResponse>('/fuel/rate-trend', { params })
     return response.data
 }

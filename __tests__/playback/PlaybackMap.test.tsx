@@ -1,14 +1,10 @@
 import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { createFakeMapProvider } from '../helpers/fakeMapProvider'
 
-vi.mock('leaflet', () => ({ default: { divIcon: vi.fn(() => ({})) } }))
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: any) => <div data-testid="map-container">{children}</div>,
-  TileLayer: () => null,
-  Marker: ({ children }: any) => <div>{children}</div>,
-  Polyline: ({ color }: any) => <div data-testid="polyline" style={{ color }} />,
-  useMap: () => ({ fitBounds: vi.fn(), flyTo: vi.fn() }),
+vi.mock('@/lib/map/MapProviderFactory', () => ({
+  createMapProvider: vi.fn(async () => createFakeMapProvider()),
 }))
 
 import { PlaybackMap } from '@/app/(portal)/tracking/playback/components/PlaybackMap'

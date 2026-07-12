@@ -97,6 +97,11 @@ export function RealtimeTrendCard({ title, unit, data, color, filters, formatVal
                         </span>
                     </div>
                 )}
+                {!isLoading && data.length === 0 && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white">
+                        <span className="text-[12px] font-medium text-slate-400">No data available for this period</span>
+                    </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                         <defs>

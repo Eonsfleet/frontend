@@ -15,6 +15,7 @@ import { getFuelExpenseMetrics, getFuelTransactions, type FuelPagination, type F
 
 export type TxType = 'refill' | 'theft' | 'leakage'
 export type PaymentMethod = 'fleet_card' | 'cash'
+export type EditableFuelExpenseStatus = 'pending_approval' | 'approved' | 'rejected' | 'reimbursed'
 
 export interface FuelTransactionFilters {
     search: string
@@ -33,16 +34,24 @@ export interface TransactionRow {
     id: string
     date: string
     time: string
+    occurredAt: string
     vehicle: string
     vehicleModel: string
+    vehicleId: number | null
     type: TxType
     station: string
     driver: string
+    userId: number | null
     volumeLiters: number | null
     amountNaira: number | null
     pricePerLiter: number | null
     payment: PaymentMethod
     hasReceipt: boolean
+    currency: string
+    receiptUrl: string
+    referenceNumber: string
+    status: EditableFuelExpenseStatus
+    canManage: boolean
 }
 
 export interface TxKpis {
@@ -73,7 +82,7 @@ function firstRecord(...values: unknown[]) {
     return {}
 }
 
-function readString(record: Record<string, unknown>, keys: string[], fallback = '—') {
+function readString(record: Record<string, unknown>, keys: string[], fallback = '-') {
     for (const key of keys) {
         const value = record[key]
         if (typeof value === 'string' && value.trim()) return value
@@ -93,12 +102,17 @@ function readNumber(record: Record<string, unknown>, keys: string[]) {
 
 function formatDatePart(value: string, pattern: string) {
     const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? '—' : format(date, pattern)
+    return Number.isNaN(date.getTime()) ? '-' : format(date, pattern)
 }
 
 function normalizeType(value: string): TxType {
     if (value === 'theft' || value === 'leakage') return value
     return 'refill'
+}
+
+function normalizeStatus(value: string): EditableFuelExpenseStatus {
+    if (value === 'approved' || value === 'rejected' || value === 'reimbursed') return value
+    return 'pending_approval'
 }
 
 function extractRows(data: Awaited<ReturnType<typeof getFuelTransactions>> | undefined): FuelTransactionApiItem[] {
@@ -130,34 +144,46 @@ function mapRow(item: FuelTransactionApiItem): TransactionRow {
     const attributes = firstRecord(item.attributes, item)
     const relationships = asRecord(item.relationships)
     const vehicle = firstRecord(attributes.vehicle, item.vehicle, relationships.vehicle)
-    const driver = firstRecord(attributes.driver, item.driver, relationships.driver)
+    const driver = firstRecord(attributes.driver, item.driver, relationships.driver, attributes.user, item.user, relationships.user)
     const location = firstRecord(attributes.location, item.location)
 
+    const backendId = readString(item, ['id'], readString(attributes, ['id'], ''))
     const type = normalizeType(readString(attributes, ['type'], 'refill').toLowerCase())
-    const occurredAt = readString(attributes, ['occurred_at', 'transaction_date', 'timestamp', 'created_at'], '')
+    const occurredAt = readString(attributes, ['occurred_at', 'entry_date', 'transaction_date', 'timestamp', 'created_at'], '')
     const volume = readNumber(attributes, ['amount_liters', 'volume_liters', 'fuel_level_liters', 'liters', 'volume'])
     const amount = readNumber(attributes, ['amount_naira', 'total_cost', 'amount', 'cost', 'total_cost_naira'])
-    const price = amount != null && volume ? Number((amount / Math.abs(volume)).toFixed(2)) : readNumber(attributes, ['price_per_liter', 'cost_per_liter'])
+    const price = amount != null && volume ? Number((amount / Math.abs(volume)).toFixed(2)) : readNumber(attributes, ['price_per_liter', 'cost_per_liter', 'cost_per_volume'])
     const station = readString(
         attributes,
-        ['fuel_station', 'station', 'station_name', 'merchant_name', 'address'],
-        readString(location, ['address', 'name'], '—'),
+        ['fuel_station', 'station', 'station_name', 'merchant_name', 'purchase_from', 'address'],
+        readString(location, ['address', 'name'], '-'),
     )
+    const vehicleId = readNumber(attributes, ['vehicle_id']) ?? readNumber(vehicle, ['id'])
+    const userId = readNumber(attributes, ['user_id', 'driver_id']) ?? readNumber(driver, ['id'])
+    const receiptUrl = readString(attributes, ['receipt_url', 'receipt'], '')
 
     return {
-        id: readString(item, ['id'], crypto.randomUUID()),
-        date: occurredAt ? formatDatePart(occurredAt, 'MMM d, yyyy') : '—',
-        time: occurredAt ? formatDatePart(occurredAt, 'hh:mm a') : '—',
-        vehicle: readString(vehicle, ['registration_number', 'registration', 'name'], readString(attributes, ['registration_number', 'vehicle_registration'], '—')),
-        vehicleModel: [readString(vehicle, ['make'], ''), readString(vehicle, ['model'], '')].filter(Boolean).join(' ') || '—',
+        id: backendId || crypto.randomUUID(),
+        date: occurredAt ? formatDatePart(occurredAt, 'MMM d, yyyy') : '-',
+        time: occurredAt ? formatDatePart(occurredAt, 'hh:mm a') : '-',
+        occurredAt,
+        vehicle: readString(vehicle, ['registration_number', 'registration', 'name'], readString(attributes, ['registration_number', 'vehicle_registration'], '-')),
+        vehicleModel: [readString(vehicle, ['make'], ''), readString(vehicle, ['model'], '')].filter(Boolean).join(' ') || '-',
+        vehicleId,
         type,
         station,
-        driver: readString(driver, ['name', 'full_name'], readString(attributes, ['driver_name'], '—')),
+        driver: readString(driver, ['name', 'full_name'], readString(attributes, ['driver_name'], '-')),
+        userId,
         volumeLiters: volume == null ? null : Number((type === 'refill' ? Math.abs(volume) : -Math.abs(volume)).toFixed(1)),
         amountNaira: amount,
         pricePerLiter: price,
         payment: readString(attributes, ['payment_method', 'source'], '').toLowerCase().includes('card') ? 'fleet_card' : 'cash',
-        hasReceipt: Boolean(attributes.receipt_url ?? attributes.receipt ?? attributes.fuel_expense_id),
+        hasReceipt: Boolean(receiptUrl || attributes.fuel_expense_id),
+        currency: readString(attributes, ['currency'], 'NGN'),
+        receiptUrl,
+        referenceNumber: readString(attributes, ['reference_number', 'reference', 'external_id'], ''),
+        status: normalizeStatus(readString(attributes, ['status'], 'pending_approval')),
+        canManage: Boolean(backendId),
     }
 }
 

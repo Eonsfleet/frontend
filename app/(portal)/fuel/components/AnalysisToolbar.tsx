@@ -6,6 +6,12 @@ import { cn } from '@/lib/utils'
 
 type Granularity = 'Daily' | 'Weekly' | 'Monthly'
 
+interface AnalysisToolbarProps {
+    startDate: string
+    endDate: string
+    onDateRangeChange: (range: { startDate: string; endDate: string }) => void
+}
+
 function Dropdown({ label, icon: Icon }: { label: string; icon?: typeof Calendar }) {
     return (
         <button
@@ -19,19 +25,31 @@ function Dropdown({ label, icon: Icon }: { label: string; icon?: typeof Calendar
     )
 }
 
-export function AnalysisToolbar() {
+export function AnalysisToolbar({ startDate, endDate, onDateRangeChange }: AnalysisToolbarProps) {
     const [granularity, setGranularity] = useState<Granularity>('Daily')
     const [view, setView] = useState<'chart' | 'table'>('chart')
 
     return (
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
-                >
-                    <Calendar className="h-4 w-4 text-slate-400" /> May 1 – May 16, 2024
-                </button>
+                <div className="inline-flex min-h-9 flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <input
+                        type="date"
+                        value={startDate}
+                        max={endDate || undefined}
+                        onChange={(event) => onDateRangeChange({ startDate: event.target.value, endDate })}
+                        className="h-7 rounded-md border border-slate-200 px-2 text-[13px] font-medium text-slate-600 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-[13px] font-medium text-slate-400">to</span>
+                    <input
+                        type="date"
+                        value={endDate}
+                        min={startDate || undefined}
+                        onChange={(event) => onDateRangeChange({ startDate, endDate: event.target.value })}
+                        className="h-7 rounded-md border border-slate-200 px-2 text-[13px] font-medium text-slate-600 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
                 <Dropdown label="All Groups" />
                 <Dropdown label="All Vehicles" />
                 <Dropdown label="All Drivers" />

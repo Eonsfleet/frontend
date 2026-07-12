@@ -3,11 +3,15 @@
 /**
  * Data layer for the Real-time Tracking tab.
  *
- * Real data: getFuelVehicles (the rail + fleet KPIs), getFuelLevelTrend (the
- * Fuel Level Trend for the selected vehicle). Fields the fuel API does not expose —
- * driver, group, engine status, speed, odometer, fuel-flow rate, engine hours,
- * recent events, GSM signal — are filled with deterministic, clearly-flagged mock
- * values keyed off the vehicle id so they are stable and swappable later.
+ * Real data: getFuelVehicles (the rail + fleet KPIs), getFuelLevelTrend/
+ * getFuelRateTrend (Fuel Level Trend / Fuel Flow Rate charts — fleet-wide
+ * when no vehicle is selected, scoped to the selected vehicle otherwise;
+ * vehicle_id is simply omitted from the request rather than skipping the
+ * fetch, same convention as getFuelEvents). Fields the fuel API does not
+ * expose — driver, group, engine status, speed, odometer, fuel-flow rate,
+ * engine hours, recent events, GSM signal — are filled with deterministic,
+ * clearly-flagged mock values keyed off the vehicle id so they are stable
+ * and swappable later.
  */
 
 import { useMemo } from 'react'
@@ -16,6 +20,7 @@ import { format, subHours } from 'date-fns'
 import { getFuelEvents, getFuelLevelTrend, getFuelRateTrend, getFuelVehicles, type FuelEventApiItem, type FuelLevelTrendFilter, type FuelLevelTrendPoint, type FuelRateTrendFilter } from '@/lib/api/fuel'
 import type { FuelVehicle } from '@/types/fuel'
 import type { VehicleMovement } from './useFuelOverview'
+import { useFuelLiveSync, type FuelLiveOverride } from './useFuelLiveSync'
 
 // ── Rail row ─────────────────────────────────────────────────────────────────
 
@@ -38,48 +43,42 @@ function toNumber(value: unknown): number | null {
     return Number.isFinite(number) ? number : null
 }
 
-function vehicleSpeed(v: RealtimeVehicleSource): number {
-    return toNumber(v.attributes.speed ?? v.relationships?.current_location?.speed) ?? 0
-}
-
+// The /fuel/vehicles payload has no speed/odometer/device_status field and no
+// `relationships` block — those only ever arrive live, via the WS overlay
+// (see useFuelLiveSync) — so the REST-only baseline is honestly just
+// coordinates + device_online, not a defensive read of fields that never exist.
 function vehiclePosition(v: RealtimeVehicleSource): [number, number] | null {
-    const lat = toNumber(v.attributes.coordinates?.latitude ?? v.relationships?.current_location?.latitude)
-    const lng = toNumber(v.attributes.coordinates?.longitude ?? v.relationships?.current_location?.longitude)
+    const lat = toNumber(v.attributes.coordinates?.latitude)
+    const lng = toNumber(v.attributes.coordinates?.longitude)
     return lat != null && lng != null ? [lat, lng] : null
 }
 
 function isVehicleOnline(v: RealtimeVehicleSource): boolean {
-    const explicitOnline = v.attributes.is_online ?? v.attributes.device_online
-    if (explicitOnline === false) return false
-
-    const statuses = [
-        v.attributes.device_status,
-        v.relationships?.device?.status,
-    ].map((status) => String(status ?? '').toLowerCase()).filter(Boolean)
-
-    if (statuses.some((status) => ['offline', 'inactive', 'disconnected'].includes(status))) return false
-    return explicitOnline === true || statuses.some((status) => ['online', 'active'].includes(status))
+    return v.attributes.device_online === true
 }
 
-function deriveStatus(v: RealtimeVehicleSource): VehicleMovement {
-    if (!isVehicleOnline(v)) return 'offline'
-    return vehicleSpeed(v) > 0 ? 'moving' : 'idle'
+function deriveStatus(online: boolean, speedKmh: number): VehicleMovement {
+    if (!online) return 'offline'
+    return speedKmh > 0 ? 'moving' : 'idle'
 }
 
-function mapRealtimeVehicle(v: RealtimeVehicleSource, index: number): RealtimeVehicle {
+function mapRealtimeVehicle(v: RealtimeVehicleSource, index: number, live?: FuelLiveOverride): RealtimeVehicle {
     const id = toNumber(v.id) ?? index
-    const online = isVehicleOnline(v)
+    const online = live?.isOnline ?? isVehicleOnline(v)
+    const speedKmh = live?.speedKmh ?? 0
     const fuelLevel = fuelLevelFor(v)
+    const position: [number, number] | null =
+        live?.lat != null && live?.lng != null ? [live.lat, live.lng] : vehiclePosition(v)
     return {
         id,
         registration: v.attributes.registration_number,
         model: `${v.attributes.make} ${v.attributes.model}`.trim(),
-        fuelPercent: fuelLevel ? Math.round(fuelLevel.fuel_level_percent) : null,
-        fuelLiters: fuelLevel ? Number(fuelLevel.fuel_level_liters.toFixed(1)) : null,
-        status: deriveStatus(v),
-        speedKmh: vehicleSpeed(v),
-        odometerKm: toNumber(v.attributes.odometer?.lifetime_km),
-        position: vehiclePosition(v),
+        fuelPercent: live?.fuelPercent ?? (fuelLevel ? Math.round(fuelLevel.fuel_level_percent) : null),
+        fuelLiters: live?.fuelLiters ?? (fuelLevel ? Number(fuelLevel.fuel_level_liters.toFixed(1)) : null),
+        status: deriveStatus(online, speedKmh),
+        speedKmh,
+        odometerKm: null,
+        position,
         signal: online ? 2 + ((id + index) % 3) : 0,
     }
 }
@@ -152,10 +151,21 @@ function fuelLevelFor(v: RealtimeVehicleSource) {
     return 'fuel_level' in v ? v.fuel_level : null
 }
 
-function buildDetail(v: RealtimeVehicle, capacity: number): VehicleDetail {
+function capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : value
+}
+
+function buildDetail(v: RealtimeVehicle, raw: RealtimeVehicleSource | undefined, capacity: number): VehicleDetail {
     const s = v.id
     const pct = v.fuelPercent ?? 0
     const liters = v.fuelLiters ?? 0
+    const fuelLevel = raw ? fuelLevelFor(raw) : null
+    const lastUpdatedDate = fuelLevel?.last_updated ? new Date(fuelLevel.last_updated) : null
+    const lastUpdated =
+        lastUpdatedDate && !Number.isNaN(lastUpdatedDate.getTime())
+            ? format(lastUpdatedDate, 'hh:mm:ss a')
+            : format(new Date(), 'hh:mm:ss a')
+
     return {
         id: v.id,
         registration: v.registration,
@@ -167,13 +177,18 @@ function buildDetail(v: RealtimeVehicle, capacity: number): VehicleDetail {
         driver: DRIVERS[s % DRIVERS.length],
         group: GROUPS[s % GROUPS.length],
         location: LOCATIONS[s % LOCATIONS.length],
-        lastUpdated: format(new Date(), 'hh:mm:ss a'),
+        lastUpdated,
         fuelStatus: pct <= 20 ? 'Low' : 'Normal',
         engineOn: v.status !== 'offline',
         speedKmh: Math.round(v.speedKmh),
         odometerKm: Math.round(v.odometerKm ?? 20000 + s * 137),
         liveFuel: [
             { label: 'Fuel Level', value: `${liters} L` },
+            { label: 'Fuel Type', value: raw?.attributes.fuel_type ? capitalize(raw.attributes.fuel_type) : 'Unknown' },
+            {
+                label: 'Data Quality',
+                value: fuelLevel?.data_quality_score != null ? `${Math.round(fuelLevel.data_quality_score * 100)}%` : '—',
+            },
             { label: 'Fuel Consumption', value: `${(2.4 + (s % 10) / 10).toFixed(1)} L/h` },
             { label: 'Fuel Flow Rate', value: `${(1.8 + (s % 8) / 10).toFixed(1)} L/h` },
             { label: 'Engine Hours', value: `${(120 + (s % 20)).toFixed(1)} Hrs` },
@@ -336,7 +351,14 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
     })
 
     const raw = useMemo(() => vehicleRows(vehiclesQuery.data), [vehiclesQuery.data])
-    const vehicles = useMemo<RealtimeVehicle[]>(() => raw.map(mapRealtimeVehicle), [raw])
+
+    // Live overlay from the same WS channels tracking uses — fills in
+    // coordinates/online-status/fuel-level/speed between the 10s REST polls.
+    const live = useFuelLiveSync()
+    const vehicles = useMemo<RealtimeVehicle[]>(
+        () => raw.map((v, index) => mapRealtimeVehicle(v, index, live[toNumber(v.id) ?? -1])),
+        [raw, live],
+    )
 
     // No auto-select: the detail panel stays hidden until a vehicle is explicitly
     // clicked, and closing it (X) clears the selection back to null.
@@ -364,56 +386,36 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
         const row = vehicles.find((v) => v.id === activeId)
         if (!row) return null
         const capacity = (selectedRaw ? fuelLevelFor(selectedRaw)?.tank_capacity : null) ?? selectedRaw?.attributes.fuel_capacity ?? 100
-        return buildDetail(row, Math.round(capacity))
+        return buildDetail(row, selectedRaw, Math.round(capacity))
     }, [vehicles, activeId, selectedRaw])
 
-    // Real fuel-level trend for the selected vehicle → Fuel Level Trend chart.
+    // Real fuel-level trend → Fuel Level Trend chart. Always runs, whether or
+    // not a vehicle is selected — vehicle_id omitted means "fleet-wide",
+    // mirroring the eventsQuery convention below.
     const levelTrendQuery = useQuery({
         queryKey: ['fuel-realtime', 'level-trend', activeId, levelTrendFilter],
-        queryFn: () => getFuelLevelTrend({ vehicle_id: activeId!, filter: levelTrendFilter }),
-        enabled: !!activeId,
+        queryFn: () => getFuelLevelTrend({ vehicle_id: activeId ?? undefined, filter: levelTrendFilter }),
     })
 
     const fuelLevelTrend = useMemo<TrendPoint[]>(() => {
-        const rows = trendRows(levelTrendQuery.data)
-        if (rows.length > 0) {
-            return rows.map((row, index) => ({
-                label: formatTrendLabel(row, index),
-                value: trendValue(row),
-            }))
-        }
-        // Fallback synthetic 24h series so the chart is never empty.
-        const out: TrendPoint[] = []
-        const base = detail?.fuelLiters ?? 68
-        for (let i = 24; i >= 0; i--) {
-            const d = subHours(new Date(), i)
-            out.push({ label: format(d, 'HH:mm'), value: Number((base + Math.sin(i * 0.6) * 6).toFixed(1)) })
-        }
-        return out
-    }, [levelTrendQuery.data, detail?.fuelLiters])
+        return trendRows(levelTrendQuery.data).map((row, index) => ({
+            label: formatTrendLabel(row, index),
+            value: trendValue(row),
+        }))
+    }, [levelTrendQuery.data])
 
     const fuelLevelTrendUnit = useMemo(() => trendUnit(levelTrendQuery.data), [levelTrendQuery.data])
 
     const rateTrendQuery = useQuery({
         queryKey: ['fuel-realtime', 'rate-trend', activeId, rateTrendFilter],
-        queryFn: () => getFuelRateTrend({ vehicle_id: activeId!, filter: rateTrendFilter }),
-        enabled: !!activeId,
+        queryFn: () => getFuelRateTrend({ vehicle_id: activeId ?? undefined, filter: rateTrendFilter }),
     })
 
     const fuelFlowTrend = useMemo<TrendPoint[]>(() => {
-        const rows = trendRows(rateTrendQuery.data)
-        if (rows.length > 0) {
-            return rows.map((row, index) => ({
-                label: formatTrendLabel(row, index),
-                value: trendValue(row),
-            }))
-        }
-        const out: TrendPoint[] = []
-        for (let i = 24; i >= 0; i--) {
-            const d = subHours(new Date(), i)
-            out.push({ label: format(d, 'HH:mm'), value: Number((2.4 + Math.sin(i * 0.8) * 0.8).toFixed(2)) })
-        }
-        return out
+        return trendRows(rateTrendQuery.data).map((row, index) => ({
+            label: formatTrendLabel(row, index),
+            value: trendValue(row),
+        }))
     }, [rateTrendQuery.data])
 
     const fuelFlowTrendUnit = useMemo(() => trendUnit(rateTrendQuery.data, 'L/h'), [rateTrendQuery.data])

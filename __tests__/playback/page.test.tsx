@@ -2,6 +2,7 @@ import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createFakeMapProvider } from '../helpers/fakeMapProvider'
 
 // jsdom has no ResizeObserver — the shadcn Slider (Radix) used by PlaybackScrubber
 // needs one to mount at all.
@@ -12,13 +13,10 @@ class ResizeObserverStub {
 }
 ;(globalThis as any).ResizeObserver = ResizeObserverStub
 
-vi.mock('leaflet', () => ({ default: { divIcon: vi.fn(() => ({})) } }))
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: any) => <div>{children}</div>,
-  TileLayer: () => null,
-  Marker: ({ children }: any) => <div>{children}</div>,
-  Polyline: () => null,
-  useMap: () => ({ fitBounds: vi.fn(), flyTo: vi.fn() }),
+// PlaybackMap mounts a real Mapbox/Leaflet instance via lib/map/MapProviderFactory —
+// jsdom can't run either, so swap in the fake provider test double.
+vi.mock('@/lib/map/MapProviderFactory', () => ({
+  createMapProvider: vi.fn(async () => createFakeMapProvider()),
 }))
 
 vi.mock('next/navigation', () => ({

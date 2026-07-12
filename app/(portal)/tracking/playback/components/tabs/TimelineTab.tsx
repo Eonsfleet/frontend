@@ -19,24 +19,25 @@ interface TimelineEntry {
   timestamp: string
   lat: number
   lng: number
+  index: number
 }
 
 export function buildTimelineEntries(movements: PlaybackMovement[], events: PlaybackEvent[]): TimelineEntry[] {
   const entries: TimelineEntry[] = []
   if (movements[0]) {
-    entries.push({ key: 'start', icon: Flag, label: 'Playback Started', timestamp: movements[0].timestamp, lat: movements[0].lat, lng: movements[0].lng })
+    entries.push({ key: 'start', icon: Flag, label: 'Playback Started', timestamp: movements[0].timestamp, lat: movements[0].lat, lng: movements[0].lng, index: 0 })
   }
   events.forEach((e, i) => {
-    entries.push({ key: `event-${i}`, icon: AlertTriangle, label: EVENT_LABELS[e.type], timestamp: e.timestamp, lat: e.lat, lng: e.lng })
+    entries.push({ key: `event-${i}`, icon: AlertTriangle, label: EVENT_LABELS[e.type], timestamp: e.timestamp, lat: e.lat, lng: e.lng, index: e.startIndex })
   })
   if (movements.length > 1) {
     const last = movements[movements.length - 1]
-    entries.push({ key: 'end', icon: Flag, label: 'Playback Ended', timestamp: last.timestamp, lat: last.lat, lng: last.lng })
+    entries.push({ key: 'end', icon: Flag, label: 'Playback Ended', timestamp: last.timestamp, lat: last.lat, lng: last.lng, index: movements.length - 1 })
   }
   return entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 }
 
-export function TimelineTab({ movements, events }: { movements: PlaybackMovement[]; events: PlaybackEvent[] }) {
+export function TimelineTab({ movements, events, onJumpToIndex }: { movements: PlaybackMovement[]; events: PlaybackEvent[]; onJumpToIndex?: (index: number) => void }) {
   const entries = buildTimelineEntries(movements, events)
   if (entries.length === 0) {
     return <p className="text-[10px] font-bold text-slate-400 p-4">No timeline data for this window.</p>
@@ -44,7 +45,12 @@ export function TimelineTab({ movements, events }: { movements: PlaybackMovement
   return (
     <div className="divide-y divide-slate-100">
       {entries.map((entry) => (
-        <div key={entry.key} className="flex items-center gap-3 py-2.5 px-1">
+        <button
+          key={entry.key}
+          type="button"
+          onClick={() => onJumpToIndex?.(entry.index)}
+          className="flex w-full items-center gap-3 py-2.5 px-1 text-left hover:bg-slate-50"
+        >
           <entry.icon className="h-4 w-4 text-blue-600 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-900">{entry.label}</p>
@@ -53,7 +59,7 @@ export function TimelineTab({ movements, events }: { movements: PlaybackMovement
             </p>
           </div>
           <span className="text-[10px] font-bold text-slate-400">{format(new Date(entry.timestamp), 'hh:mm:ss a')}</span>
-        </div>
+        </button>
       ))}
     </div>
   )

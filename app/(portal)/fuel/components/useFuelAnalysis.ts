@@ -13,7 +13,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format, subDays } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, subDays } from 'date-fns'
 import { getCostAnalysis } from '@/lib/api/fuel'
 
 const KOBO = 100
@@ -90,10 +90,29 @@ export interface PerfRow {
 const VEHICLE_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#94a3b8']
 const MODELS = ['Volvo FH16', 'Mercedes Actros', 'MAN TGX', 'Scania R450', 'Volvo FM']
 
-export function useFuelAnalysis() {
+export interface FuelAnalysisRange {
+    startDate: string
+    endDate: string
+}
+
+function trendWindow(range?: FuelAnalysisRange) {
+    const fallbackEnd = new Date()
+    const parsedEnd = range?.endDate ? new Date(range.endDate) : fallbackEnd
+    const end = Number.isNaN(parsedEnd.getTime()) ? fallbackEnd : parsedEnd
+    const parsedStart = range?.startDate ? new Date(range.startDate) : subDays(end, 14)
+    const start = Number.isNaN(parsedStart.getTime()) || parsedStart > end ? subDays(end, 14) : parsedStart
+    const points = Math.min(31, Math.max(1, differenceInCalendarDays(end, start) + 1))
+
+    return { start, points }
+}
+
+export function useFuelAnalysis(range?: FuelAnalysisRange) {
     const costQuery = useQuery({
-        queryKey: ['fuel-analysis', 'cost-analysis'],
-        queryFn: () => getCostAnalysis(),
+        queryKey: ['fuel-analysis', 'cost-analysis', range?.startDate, range?.endDate],
+        queryFn: () => getCostAnalysis({
+            start_date: range?.startDate || undefined,
+            end_date: range?.endDate || undefined,
+        }),
     })
     const cost = costQuery.data?.data
 
@@ -105,12 +124,12 @@ export function useFuelAnalysis() {
         return Number(totalCost.toFixed(2))
     }, [cost])
 
-    // Fuel Consumption Trend — this vs previous period (15 days).
+    // Fuel Consumption Trend — this vs previous period for the selected window.
     const consumptionTrend = useMemo<TrendDualPoint[]>(() => {
-        const end = new Date()
+        const { start, points } = trendWindow(range)
         const out: TrendDualPoint[] = []
-        for (let i = 14; i >= 0; i--) {
-            const d = subDays(end, i)
+        for (let i = 0; i < points; i++) {
+            const d = addDays(start, i)
             const s = d.getDate()
             out.push({
                 label: format(d, 'MMM d'),
@@ -119,18 +138,17 @@ export function useFuelAnalysis() {
             })
         }
         return out
-    }, [])
+    }, [range])
 
     const costTrend = useMemo<TrendPoint[]>(() => {
-        const end = new Date()
+        const { start, points } = trendWindow(range)
         const out: TrendPoint[] = []
-        for (let i = 14; i >= 0; i--) {
-            const d = subDays(end, i)
+        for (let i = 0; i < points; i++) {
+            const d = addDays(start, i)
             out.push({ label: format(d, 'MMM d'), value: Number((520 + Math.sin(d.getDate() * 0.8) * 120).toFixed(0)) })
         }
         return out
-    }, [])
-
+    }, [range])
     // Fuel by Vehicle donut (real volumes) + "Others" bucket.
     const fuelByVehicle = useMemo<{ total: number; slices: DonutSlice[] }>(() => {
         const rows = byVehicle.length
@@ -222,3 +240,6 @@ export function useFuelAnalysis() {
         isError: costQuery.isError,
     }
 }
+
+
+

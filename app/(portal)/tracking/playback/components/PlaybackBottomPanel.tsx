@@ -16,9 +16,10 @@ export interface PlaybackBottomPanelProps {
   stops: PlaybackStop[]
   stats: PlaybackStats
   vehicleLabel: string
+  onJumpToIndex?: (index: number) => void
 }
 
-export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLabel }: PlaybackBottomPanelProps) {
+export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLabel, onJumpToIndex }: PlaybackBottomPanelProps) {
   return (
     <Tabs defaultValue="timeline" className="bg-white border-t border-slate-200">
       <TabsList className="h-11 w-full justify-start gap-4 rounded-none bg-transparent p-0 px-4 border-b border-slate-100">
@@ -32,13 +33,13 @@ export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLa
       </TabsList>
       <div className="p-4 max-h-64 overflow-y-auto">
         <TabsContent value="timeline" className="m-0">
-          <TimelineTab movements={movements} events={events} />
+          <TimelineTab movements={movements} events={events} onJumpToIndex={onJumpToIndex} />
         </TabsContent>
         <TabsContent value="events" className="m-0">
-          <EventsTab events={events} />
+          <EventsTab events={events} onJumpToIndex={onJumpToIndex} />
         </TabsContent>
         <TabsContent value="stops" className="m-0">
-          <StopsTab stops={stops} />
+          <StopsTab stops={stops} onJumpToIndex={onJumpToIndex} />
         </TabsContent>
         <TabsContent value="speed" className="m-0">
           <SpeedTab movements={movements} events={events} />
@@ -56,3 +57,4 @@ export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLa
     </Tabs>
   )
 }
+

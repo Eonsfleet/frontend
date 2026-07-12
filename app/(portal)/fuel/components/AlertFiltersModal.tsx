@@ -42,6 +42,16 @@ function SelectBox({ children, ...props }: React.SelectHTMLAttributes<HTMLSelect
     )
 }
 
+function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+    return (
+        <input
+            {...props}
+            type="date"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+    )
+}
+
 export function AlertFiltersModal({ open, onOpenChange, value, onApply }: AlertFiltersModalProps) {
     const [draft, setDraft] = useState<AlertFilters>(value)
 
@@ -114,12 +124,25 @@ export function AlertFiltersModal({ open, onOpenChange, value, onApply }: AlertF
                     </div>
 
                     {/* Date Range */}
-                    <div>
-                        <FieldLabel>Date Range</FieldLabel>
-                        <button type="button" className="flex h-9 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50">
-                            May 9 – May 16, 2024
-                            <Calendar className="h-4 w-4 text-slate-400" />
-                        </button>
+                    <div className="sm:col-span-3">
+                        <div className="mb-2 flex items-center gap-2">
+                            <FieldLabel>Date Range</FieldLabel>
+                            <Calendar className="mb-2 h-4 w-4 text-slate-400" />
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <DateInput
+                                aria-label="Start date"
+                                value={draft.startDate ?? ''}
+                                max={draft.endDate || undefined}
+                                onChange={(event) => setDraft((d) => ({ ...d, startDate: event.target.value || undefined, date: undefined }))}
+                            />
+                            <DateInput
+                                aria-label="End date"
+                                value={draft.endDate ?? ''}
+                                min={draft.startDate || undefined}
+                                onChange={(event) => setDraft((d) => ({ ...d, endDate: event.target.value || undefined, date: undefined }))}
+                            />
+                        </div>
                     </div>
 
                     {/* Time Range */}

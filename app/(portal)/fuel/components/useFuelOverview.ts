@@ -23,7 +23,6 @@ import {
     getFuelEfficiencyGraph,
     getTopFuelConsumers,
 } from '@/lib/api/fuel'
-import { getVehiclesBatched } from '@/lib/api/vehicles'
 import type { FuelVehicle } from '@/types/fuel'
 
 const KOBO = 100
@@ -52,6 +51,11 @@ function formatDateOrFallback(value: string | number | Date | null | undefined, 
 function finiteNumberOrFallback(value: unknown, fallback = 0) {
     const number = Number(value)
     return Number.isFinite(number) ? number : fallback
+}
+
+function paginationTotal(value: unknown): number | null {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : null
 }
 
 export interface FuelOverviewRange {
@@ -185,6 +189,25 @@ const BAND_COLOR: Record<string, string> = {
     '80-100': '#10b981',
 }
 
+function appendNoReadingBand(bands: DistributionBand[], totalVehicles: number): DistributionBand[] {
+    const total = Math.max(0, totalVehicles)
+    const bucketed = bands.reduce((sum, band) => sum + band.count, 0)
+    const noReadingCount = Math.max(0, total - bucketed)
+
+    if (noReadingCount === 0) return bands
+
+    return [
+        ...bands,
+        {
+            key: 'no-reading',
+            label: 'No reading',
+            color: '#94a3b8',
+            count: noReadingCount,
+            percent: total > 0 ? Number(((noReadingCount / total) * 100).toFixed(1)) : 0,
+        },
+    ]
+}
+
 export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewFilters = {}) {
     const params = { start_date: range.startDate, end_date: range.endDate }
     const vehicleParams = {
@@ -214,10 +237,9 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         queryFn: () => getFuelEfficiencyReport(),
     })
 
-    // Total Vehicles → full (batched) vehicle fetch.
-    const totalVehiclesQuery = useQuery({
-        queryKey: ['fuel-overview', 'all-vehicles-count'],
-        queryFn: () => getVehiclesBatched(),
+    const totalFuelVehiclesQuery = useQuery({
+        queryKey: ['fuel-overview', 'fuel-vehicles-count'],
+        queryFn: () => getFuelVehicles({ page: 1, per_page: 1 }),
     })
 
     const vehiclesQuery = useQuery({
@@ -249,6 +271,10 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
     const consumption = consumptionQuery.data?.data
     const costReport = costReportQuery.data?.data
     const efficiency = efficiencyQuery.data?.data
+    const totalFuelVehicles =
+        paginationTotal(totalFuelVehiclesQuery.data?.data.pagination.total) ??
+        paginationTotal(distributionQuery.data?.data.total_vehicles) ??
+        vehicles.length
 
     const kpi = useMemo<KpiViewModel>(() => {
         const totalCost = (costReport?.months ?? []).reduce((s, m) => s + (m.total_cost ?? 0), 0)
@@ -262,7 +288,7 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
             totalFuelCostNaira: totalCost,
             avgEfficiencyKmPerL: efficiency?.fleet_average ?? 0,
             totalRefills: (topConsumersQuery.data?.data.vehicles ?? []).reduce((s, v) => s + (v.segment_count ?? 0), 0),
-            totalVehicles: totalVehiclesQuery.data?.length ?? vehicles.length,
+            totalVehicles: totalFuelVehicles,
             sparklines: {
                 fuelUsed: fuelUsedSpark,
                 cost: sparkline(7, 16, 52, 20),
@@ -271,24 +297,25 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
             },
             trends: { fuelUsed: 8.6, cost: 6.4, efficiency: 5.2, refills: 4 },
         }
-    }, [consumption, costReport, efficiency, topConsumersQuery.data, totalVehiclesQuery.data, vehicles.length])
+    }, [consumption, costReport, efficiency, topConsumersQuery.data, totalFuelVehicles])
 
     const distribution = useMemo<DistributionBand[]>(() => {
         const layers = distributionQuery.data?.data.layers
         if (layers?.length) {
-            return layers.map((l) => ({
+            const total = paginationTotal(distributionQuery.data?.data.total_vehicles) ?? totalFuelVehicles
+            const bands = layers.map((l) => ({
                 key: l.range,
                 label: BAND_LABEL[l.range] ?? l.range,
                 color: BAND_COLOR[l.range] ?? '#94a3b8',
                 count: l.vehicle_count,
                 percent: l.percentage,
             }))
+            return appendNoReadingBand(bands, total)
         }
         // Fallback: derive from the live vehicle list until distribution loads.
-        const withLevel = vehicles.filter((v) => v.fuelPercent != null)
-        const total = withLevel.length || 1
-        return FUEL_BANDS.map((band) => {
-            const count = withLevel.filter((v) => v.fuelPercent! >= band.min && v.fuelPercent! < band.max).length
+        const total = vehicles.length || 1
+        const bands = FUEL_BANDS.map((band) => {
+            const count = vehicles.filter((v) => v.fuelPercent != null && v.fuelPercent >= band.min && v.fuelPercent < band.max).length
             return {
                 key: band.key,
                 label: band.label,
@@ -297,7 +324,8 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
                 percent: Number(((count / total) * 100).toFixed(1)),
             }
         })
-    }, [distributionQuery.data, vehicles])
+        return appendNoReadingBand(bands, total)
+    }, [distributionQuery.data, totalFuelVehicles, vehicles])
 
     const lowFuelAlerts = useMemo<LowFuelAlert[]>(() => {
         // Prefer real theft/abnormality incidents that carry a location; supplement

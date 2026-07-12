@@ -5,11 +5,24 @@ import { useQuery } from '@tanstack/react-query'
 import * as trackingApi from '@/lib/api/tracking'
 import type { PlaybackMovement } from '@/types'
 
+type RawPlaybackPoint = Record<string, unknown>
+
 export interface UsePlaybackMovementsParams {
   vehicleId: string | null
   tripId: string | null
   startTime: string | null
   endTime: string | null
+}
+
+function numeric(value: unknown, fallback = 0): number {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+function optionalNumeric(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined
+  const number = Number(value)
+  return Number.isFinite(number) ? number : undefined
 }
 
 export function usePlaybackMovements({ vehicleId, tripId, startTime, endTime }: UsePlaybackMovementsParams) {
@@ -26,18 +39,24 @@ export function usePlaybackMovements({ vehicleId, tripId, startTime, endTime }: 
   })
 
   const movements = useMemo<PlaybackMovement[]>(() => {
-    const raw: any[] = tripId ? (tripQuery.data?.data?.gps_points ?? []) : (historyQuery.data?.data ?? [])
+    const raw = (tripId ? (tripQuery.data?.data?.gps_points ?? []) : (historyQuery.data?.data ?? [])) as RawPlaybackPoint[]
     return raw
-      .map((p: any) => ({
-        id: p.id ?? 0,
-        vehicle_id: vehicleId || '',
-        lat: p.lat ?? p.latitude,
-        lng: p.lng ?? p.longitude,
-        speed: p.speed ?? 0,
-        heading: p.heading ?? 0,
-        timestamp: p.timestamp ?? p.gps_datetime,
+      .map((p) => ({
+        id: numeric(p.id),
+        vehicle_id: String(p.vehicle_id ?? vehicleId ?? ''),
+        lat: numeric(p.lat ?? p.latitude, Number.NaN),
+        lng: numeric(p.lng ?? p.longitude, Number.NaN),
+        speed: numeric(p.speed),
+        heading: numeric(p.heading ?? p.course ?? p.bearing),
+        timestamp: String(p.timestamp ?? p.gps_datetime ?? p.recorded_at ?? p.created_at ?? ''),
+        fuel_level: optionalNumeric(p.fuel_level),
+        fuel_level_liters: optionalNumeric(p.fuel_level_liters),
+        fuel_level_percent: optionalNumeric(p.fuel_level_percent),
+        altitude: optionalNumeric(p.altitude),
+        ignition: p.ignition as PlaybackMovement['ignition'],
+        movement: p.movement as PlaybackMovement['movement'],
       }))
-      .filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number')
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.timestamp)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
   }, [tripId, tripQuery.data, historyQuery.data, vehicleId])
 

@@ -273,7 +273,10 @@ export function useFuelAlerts() {
     }, [alerts, query.data])
 
     const activeFilterCount =
-        filters.types.length + filters.severities.length + (filters.status !== 'all' ? 1 : 0)
+        filters.types.length
+        + filters.severities.length
+        + (filters.status !== 'all' ? 1 : 0)
+        + (filters.startDate || filters.endDate ? 1 : 0)
 
     return {
         alerts,
@@ -331,3 +334,4 @@ export function useAlertFuelTrend(alert: FuelAlertRow | null): { points: AlertTr
         return { points, isLoading: query.isFetching }
     }, [query.data, query.isFetching])
 }
+
