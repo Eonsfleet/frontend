@@ -282,19 +282,20 @@ function TransactionExpenseDialog({
 }
 
 function TransactionViewDialog({ row, onClose }: { row: TransactionRow | null; onClose: () => void }) {
-    const details = row ? [
+    const details: Array<[string, string]> = row ? [
         ['Vehicle', `${row.vehicle} (${row.vehicleModel})`],
-        ['Driver', row.driver],
         ['Date', `${row.date} ${row.time}`],
         ['Type', row.type],
-        ['Status', row.status.replace('_', ' ')],
+        ['Source', row.source],
         ['Volume', row.volumeLiters != null ? `${row.volumeLiters} L` : '-'],
-        ['Amount', row.amountNaira != null ? `NGN ${row.amountNaira.toLocaleString()}` : '-'],
-        ['Price / L', row.pricePerLiter != null ? `NGN ${row.pricePerLiter.toLocaleString()}` : '-'],
-        ['Payment', row.payment === 'fleet_card' ? 'Fleet Card' : 'Cash'],
-        ['Location', row.station],
-        ['Reference', row.referenceNumber || '-'],
-        ['Receipt', row.receiptUrl || '-'],
+        ['Fuel Level', row.fuelLevelBefore != null && row.fuelLevelAfter != null ? `${row.fuelLevelBefore}% → ${row.fuelLevelAfter}%` : '-'],
+        ['Odometer', row.odometerKm != null ? `${row.odometerKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km` : '-'],
+        ['Confidence', row.confidence != null ? `${Math.round(row.confidence * 100)}%` : '-'],
+        ['Location', row.lat != null && row.lng != null ? `${row.lat.toFixed(5)}, ${row.lng.toFixed(5)}` : row.station],
+        // Cost/expense fields only appear when the transaction is linked to an expense.
+        ...(row.amountNaira != null ? [['Amount', `NGN ${row.amountNaira.toLocaleString()}`] as [string, string]] : []),
+        ...(row.pricePerLiter != null ? [['Price / L', `NGN ${row.pricePerLiter.toLocaleString()}`] as [string, string]] : []),
+        ...(row.receiptUrl ? [['Receipt', row.receiptUrl] as [string, string]] : []),
     ] : []
 
     return (
@@ -599,7 +600,6 @@ export default function FuelTransactionsPage() {
                                     pagination={pagination}
                                     onFiltersChange={setFilters}
                                     onViewRow={setViewRow}
-                                    onEditRow={setEditRow}
                                     onDeleteRows={setDeleteRows}
                                     onBulkEditRows={setBulkEditRows}
                                 />
