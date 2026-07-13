@@ -5,6 +5,7 @@ import { Maximize, Minimize, LocateFixed } from "lucide-react";
 interface MapExtraControlsProps {
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  /** Bumps `zoomResetKey`, which useMapCameraFollow reacts to by re-fitting the fleet. */
   onRecenter: () => void;
 }
 

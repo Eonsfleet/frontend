@@ -1,50 +1,29 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-  Polyline,
-  Polygon,
-  Circle,
-  Tooltip as LeafletTooltip,
-} from "react-leaflet";
-import MarkerClusterGroup from "react-leaflet-cluster";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { cn } from "@/lib/utils";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useTrackingUiStore } from "@/store/trackingUiStore";
-import { Badge } from "@/components/ui/badge";
-import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { VEHICLE_STATUS } from "@/lib/vehicleStatus";
 import { getMarkerState, buildMarkerHtml } from "./utils";
 import type { VehicleInterpolator } from "@/lib/vehicleInterpolation";
-import { TrafficOverlay } from "./components/TrafficOverlay";
-import type { TrackingMapStyle } from "./utils";
 import type { TrailPoint } from "@/lib/vehicleTrail";
-
-// Normalization & Helpers (Passed from parent or redefined if pure)
-const normalizeReg = (reg: string) => (reg || "").toUpperCase();
-const capitalize = (str: string) => {
-  if (!str) return "N/A";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-};
+import type { LatLng, MapMarkerHandle } from "@/lib/map/types";
+import { useMapInstance } from "./MapInstanceContext";
+import { useMapCameraFollow } from "./hooks/useMapCameraFollow";
+import { useMapClustering } from "./hooks/useMapClustering";
+import { VehicleMarker } from "./components/VehicleMarker";
+import { ClusterMarker } from "./components/ClusterMarker";
+import { TrafficOverlay } from "./components/TrafficOverlay";
+import { MapErrorBoundary } from "./components/MapErrorBoundary";
+import { MapCompatibilityBanner } from "./components/MapCompatibilityBanner";
 
 interface TrackingMapProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
   filteredVehicles: any[];
   locations: Record<string, any>;
   selectedVehicle: any;
   setSelectedVehicle: (v: any) => void;
-  vehicles: any[];
-  TILE_URL: string;
-  mapStyle?: TrackingMapStyle;
   showTraffic?: boolean;
   trail?: TrailPoint[];
-  getMarkerSVG: (bodyType: string) => string;
   getVehicleIcon: (bodyType: string, status: string) => React.ReactNode;
   playbackData?: any[];
   playbackIndex?: number;
@@ -57,106 +36,16 @@ interface TrackingMapProps {
   alarmState?: Record<string, boolean>;
 }
 
-const MapController = ({ selected, locs, allVehicles }: any) => {
-  const map = useMap();
-  const hasFitted = React.useRef(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      (window as any).leafletMap = map;
-    }
-  }, [map]);
-
-  // Initial Fit Bounds & Manual Reset
-  const fitFleet = React.useCallback(() => {
-    const points = Object.values(locs)
-      .map((l: any) => [l.lat, l.lng] as [number, number])
-      .filter((p) => p[0] !== 0 && p[1] !== 0 && !isNaN(p[0]) && !isNaN(p[1]));
-
-    if (points.length > 0) {
-      map.fitBounds(points, { padding: [100, 100], maxZoom: 14 });
-      hasFitted.current = true;
-    }
-  }, [locs, map]);
-
-  useEffect(() => {
-    if (!hasFitted.current && allVehicles.length > 0) {
-      fitFleet();
-    }
-  }, [allVehicles.length, fitFleet]);
-
-  useEffect(() => {
-    if (allVehicles.zoomResetKey > 0) {
-      fitFleet();
-    }
-  }, [allVehicles.zoomResetKey, fitFleet]);
-
-  const { isMapFollowEnabled, setMapFollowEnabled } = useTrackingUiStore();
-
-  // Listen to manual map drags/pans to disable auto-follow
-  useEffect(() => {
-    const disableFollow = () => {
-      setMapFollowEnabled(false);
-    };
-    map.on("dragstart", disableFollow);
-    map.on("zoomstart", disableFollow);
-    return () => {
-      map.off("dragstart", disableFollow);
-      map.off("zoomstart", disableFollow);
-    };
-  }, [map, setMapFollowEnabled]);
-
-  // Set map follow to true on selected ID change
-  useEffect(() => {
-    if (selected) {
-      setMapFollowEnabled(true);
-    }
-  }, [selected?.id, setMapFollowEnabled]);
-
-  // Selection Follow
-  useEffect(() => {
-    if (selected && locs[selected.id] && isMapFollowEnabled && !allVehicles.isReplayMode) {
-      const l = locs[selected.id];
-      if (l.lat && l.lng) {
-        map.flyTo([l.lat, l.lng], 18);
-      }
-    }
-  }, [
-    selected?.id,
-    locs[selected?.id]?.lat,
-    locs[selected?.id]?.lng,
-    isMapFollowEnabled,
-    map,
-    allVehicles.isReplayMode
-  ]);
-
-  // Replay Follow
-  useEffect(() => {
-    if (
-      allVehicles.isReplayMode &&
-      allVehicles.playbackData?.[allVehicles.playbackIndex]
-    ) {
-      const p = allVehicles.playbackData[allVehicles.playbackIndex];
-      if (p.lat && p.lng) {
-        map.flyTo([p.lat, p.lng], 16);
-      }
-    }
-  }, [allVehicles.playbackIndex, allVehicles.isReplayMode, map]);
-
-  return null;
-};
+const PLAYBACK_GHOST_ICON = { iconSize: [36, 36] as [number, number], iconAnchor: [18, 18] as [number, number] };
 
 export default function TrackingMap({
+  containerRef,
   filteredVehicles,
   locations,
   selectedVehicle,
   setSelectedVehicle,
-  vehicles,
-  TILE_URL,
-  mapStyle = "standard",
   showTraffic = false,
   trail = [],
-  getMarkerSVG,
   getVehicleIcon,
   playbackData = [],
   playbackIndex = 0,
@@ -168,333 +57,289 @@ export default function TrackingMap({
   interpolator,
   alarmState = {},
 }: TrackingMapProps) {
-  const markerRefs = useRef<Map<string, L.Marker>>(new Map());
+  const { provider, isReady, isFallback } = useMapInstance();
 
-  const createClusterCustomIcon = (cluster: any) => {
-    return L.divIcon({
-      html: `<div><span>${cluster.getChildCount()}</span></div>`,
-      className: cn("custom-marker-cluster", `cluster-${statusFilter}`),
-      iconSize: L.point(40, 40, true),
-    });
-  };
+  const markerRefs = useRef<Map<string, MapMarkerHandle>>(new Map());
+  // Last position/heading actually written to each marker, so the rAF loop can
+  // skip redundant provider writes when the interpolated value hasn't changed
+  // (e.g. a stationary vehicle the interpolator keeps returning the same point
+  // for). Re-writing an unchanged position 60x/s reflows the marker — and any
+  // open popup — every frame, which is what caused the popup flicker this
+  // guarded against originally.
+  const appliedRef = useRef<Map<string, { lat: number; lng: number; heading: number }>>(new Map());
+  // Current selection, read inside the rAF loop without restarting it. The marker
+  // whose popup is open must NOT be nudged every frame or the popup jitters; the
+  // map already follows it via useMapCameraFollow's flyTo, so freezing its
+  // imperative position for the popup's lifetime keeps the popup rock-steady.
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedVehicle ? selectedVehicle.attributes.uuid : null;
+
+  const { isMapFollowEnabled, setMapFollowEnabled } = useTrackingUiStore();
+
+  useEffect(() => {
+    if (selectedVehicle) setMapFollowEnabled(true);
+  }, [selectedVehicle?.attributes?.uuid, setMapFollowEnabled]);
+
+  const currentPlayback = playbackData[playbackIndex];
+  const selectedLoc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
+
+  const followTarget: LatLng | null = isReplayMode
+    ? currentPlayback
+      ? { lat: currentPlayback.lat, lng: currentPlayback.lng }
+      : null
+    : selectedLoc?.lat != null && selectedLoc?.lng != null
+      ? { lat: selectedLoc.lat, lng: selectedLoc.lng }
+      : null;
+
+  const fleetPoints = useMemo(
+    () =>
+      Object.values(locations)
+        .map((l: any) => ({ lat: l.lat, lng: l.lng }))
+        .filter((p) => p.lat !== 0 && p.lng !== 0 && !Number.isNaN(p.lat) && !Number.isNaN(p.lng)),
+    [locations],
+  );
+
+  useMapCameraFollow({
+    provider,
+    isReady,
+    fleetPoints,
+    zoomResetKey,
+    onManualInteraction: () => setMapFollowEnabled(false),
+    followTarget,
+    followZoom: isReplayMode ? 16 : 18,
+    isFollowEnabled: isMapFollowEnabled,
+    forceFollow: isReplayMode,
+  });
 
   // Shared rAF loop driving smooth marker movement/rotation between GPS packets —
   // one loop for the whole fleet, not one per vehicle, so this stays cheap at scale.
-  // Position updates are applied imperatively to the underlying Leaflet marker
-  // instances, bypassing React re-render entirely for motion.
+  // Position/rotation updates are applied imperatively via each marker's
+  // MapMarkerHandle, bypassing React re-render entirely for motion.
   useEffect(() => {
-    if (!interpolator) return;
+    if (!interpolator || !isReady) return;
     let frameId: number;
 
     const tick = () => {
       const now = performance.now();
-      markerRefs.current.forEach((marker, id) => {
+      const openPopupId = selectedIdRef.current;
+      markerRefs.current.forEach((handle, id) => {
+        if (id === openPopupId && handle.isPopupOpen()) return;
+
         const interp = interpolator.getInterpolated(id, now);
         if (!interp) return;
-        marker.setLatLng([interp.lat, interp.lng]);
-        const el = marker.getElement();
-        const base = el?.querySelector<HTMLElement>(".marker-base");
-        if (base) base.style.transform = `rotate(${interp.heading || 0}deg)`;
+
+        const last = appliedRef.current.get(id);
+        const moved =
+          !last ||
+          last.lat !== interp.lat ||
+          last.lng !== interp.lng ||
+          last.heading !== (interp.heading || 0);
+        if (!moved) return;
+
+        appliedRef.current.set(id, { lat: interp.lat, lng: interp.lng, heading: interp.heading || 0 });
+        handle.setPosition(interp.lat, interp.lng);
+        handle.setRotation(interp.heading || 0);
       });
       frameId = requestAnimationFrame(tick);
     };
 
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [interpolator]);
+  }, [interpolator, isReady]);
 
-  const currentPlayback = playbackData[playbackIndex];
+  // Live breadcrumb trail for the selected vehicle.
+  useEffect(() => {
+    if (!provider || !isReady) return;
+    if (!isReplayMode && selectedVehicle && trail.length > 1) {
+      provider.setPolyline(
+        "trail",
+        trail.map((p) => ({ lat: p.lat, lng: p.lng })),
+        { color: "#2563eb", weight: 4, opacity: 0.85 },
+      );
+    } else {
+      provider.removeOverlay("trail");
+    }
+  }, [provider, isReady, isReplayMode, selectedVehicle, trail]);
+
+  // Playback route (dashed) — the ghost marker below tracks the current index.
+  useEffect(() => {
+    if (!provider || !isReady) return;
+    if (isReplayMode && playbackData.length > 0) {
+      provider.setPolyline(
+        "playback-route",
+        playbackData.map((p) => ({ lat: p.lat, lng: p.lng })),
+        { color: "#3b82f6", weight: 4, opacity: 0.6, dashed: true },
+      );
+    } else {
+      provider.removeOverlay("playback-route");
+    }
+  }, [provider, isReady, isReplayMode, playbackData]);
+
+  const ghostHandleRef = useRef<MapMarkerHandle | null>(null);
+  useEffect(() => {
+    if (!provider || !isReady) return;
+    if (isReplayMode && currentPlayback) {
+      const html = buildMarkerHtml({
+        heading: currentPlayback.heading || 0,
+        state: { statusKey: "moving", pulse: true, greyed: false, scale: 1, zIndexOffset: 0 },
+      });
+      if (!ghostHandleRef.current) {
+        ghostHandleRef.current = provider.addMarker("playback-ghost", {
+          lat: currentPlayback.lat,
+          lng: currentPlayback.lng,
+          html,
+          ...PLAYBACK_GHOST_ICON,
+        });
+      } else {
+        ghostHandleRef.current.setPosition(currentPlayback.lat, currentPlayback.lng);
+        ghostHandleRef.current.setHtml(html, PLAYBACK_GHOST_ICON);
+      }
+    } else if (ghostHandleRef.current) {
+      provider.removeMarker("playback-ghost");
+      ghostHandleRef.current = null;
+    }
+  }, [provider, isReady, isReplayMode, currentPlayback]);
+
+  // Geofences (circle/polygon) — handles GeoJSON Polygon geometry, flat
+  // [lng,lat] arrays, or flat {lat,lng} objects, same as the pre-refactor code.
+  const prevGeofenceKeysRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!provider || !isReady) return;
+    const activeKeys = new Set<string>();
+
+    if (showGeofences) {
+      geofences.forEach((g: any) => {
+        if (!g.attributes?.coordinates) return;
+        const { type, coordinates, radius, name } = g.attributes;
+        const key = `geofence-${g.id}`;
+
+        if (type === "circle") {
+          const lat = coordinates.lat ?? coordinates.latitude;
+          const lng = coordinates.lng ?? coordinates.longitude;
+          if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+            console.warn(`Geofence ${g.id} has invalid circle coordinates:`, coordinates);
+            return;
+          }
+          provider.setCircle(key, { lat, lng }, radius || 500, { color: "#10b981", fillOpacity: 0.2 }, name);
+          activeKeys.add(key);
+          return;
+        }
+
+        if (type === "polygon") {
+          let positions: LatLng[] = [];
+          if (coordinates?.type === "Polygon" && Array.isArray(coordinates.coordinates)) {
+            positions = coordinates.coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
+          } else if (Array.isArray(coordinates)) {
+            positions = coordinates.map((coord: any) =>
+              Array.isArray(coord) ? { lat: coord[1], lng: coord[0] } : { lat: coord.lat, lng: coord.lng },
+            );
+          }
+          if (positions.length === 0) {
+            console.warn(`Geofence ${g.id} has invalid polygon coordinates:`, coordinates);
+            return;
+          }
+          provider.setPolygon(key, positions, { color: "#3b82f6", fillOpacity: 0.2 }, name);
+          activeKeys.add(key);
+        }
+      });
+    }
+
+    prevGeofenceKeysRef.current.forEach((key) => {
+      if (!activeKeys.has(key)) provider.removeOverlay(key);
+    });
+    prevGeofenceKeysRef.current = activeKeys;
+  }, [provider, isReady, showGeofences, geofences]);
+
+  // Clustering: recomputed on camera settle / fleet-size change (see
+  // useMapClustering) — every leaf below is always a real, individually
+  // addressable marker on both engines, never a proxied cluster feature.
+  const clusterInput = useMemo(
+    () =>
+      filteredVehicles
+        .filter((v) => {
+          const loc = locations[v.attributes.uuid];
+          return loc && loc.lat != null && loc.lng != null && !Number.isNaN(loc.lat) && !Number.isNaN(loc.lng);
+        })
+        .map((v) => ({
+          id: v.attributes.uuid as string,
+          lat: locations[v.attributes.uuid].lat,
+          lng: locations[v.attributes.uuid].lng,
+        })),
+    [filteredVehicles, locations],
+  );
+  const clusters = useMapClustering(provider, isReady, clusterInput);
+
+  const vehiclesById = useMemo(() => {
+    const map = new Map<string, any>();
+    filteredVehicles.forEach((v) => map.set(v.attributes.uuid, v));
+    return map;
+  }, [filteredVehicles]);
+
   return (
-    <div
-      role="region"
-      aria-label="Vehicle tracking map"
-      className="h-full w-full"
-    >
-      <MapContainer
-        center={[6.5244, 3.3792]}
-        zoom={12}
-        className="h-full w-full z-10"
-        zoomControl={false}
-      >
-        <TileLayer url={TILE_URL} attribution="&copy; Mapbox" />
+    <div role="region" aria-label="Vehicle tracking map" className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full z-10" />
 
-        <MapController
-          selected={selectedVehicle}
-          locs={locations}
-          allVehicles={{
-            length: vehicles.length,
-            isReplayMode,
-            playbackData,
-            playbackIndex,
-            zoomResetKey,
-          }}
-        />
-
-        {showTraffic && !isReplayMode && (
-          <TrafficOverlay filteredVehicles={filteredVehicles} locations={locations} />
-        )}
-
-        {!isReplayMode && selectedVehicle && trail.length > 1 && (
-          <Polyline
-            positions={trail.map((p) => [p.lat, p.lng])}
-            color="#2563eb"
-            weight={4}
-            opacity={0.85}
-          />
-        )}
-
-        {isReplayMode && playbackData.length > 0 && (
+      <MapErrorBoundary>
+        {isReady && (
           <>
-            <Polyline
-              positions={playbackData.map((p) => [p.lat, p.lng])}
-              color="#3b82f6"
-              weight={4}
-              opacity={0.6}
-              dashArray="10, 10"
-            />
-            {currentPlayback && (
-              <Marker
-                position={[currentPlayback.lat, currentPlayback.lng]}
-                icon={L.divIcon({
-                  className: "custom-marker-wrapper",
-                  html: buildMarkerHtml({
-                    heading: currentPlayback.heading || 0,
-                    state: {
-                      statusKey: "moving",
-                      pulse: true,
-                      greyed: false,
-                      scale: 1,
-                      zIndexOffset: 0,
-                    },
-                  }),
-                  iconSize: [36, 36],
-                  iconAnchor: [18, 18],
-                })}
-              />
+            {showTraffic && !isReplayMode && (
+              <TrafficOverlay filteredVehicles={filteredVehicles} locations={locations} />
             )}
+
+              {clusters.map((c) => {
+                if (c.kind === "cluster") {
+                  return (
+                    <ClusterMarker
+                      key={c.id}
+                      id={c.id}
+                      lat={c.lat}
+                      lng={c.lng}
+                      count={c.count}
+                      statusFilter={statusFilter}
+                      onExpand={() => provider?.flyTo({ lat: c.lat, lng: c.lng }, c.expansionZoom)}
+                    />
+                  );
+                }
+
+                const v = vehiclesById.get(c.id);
+                const loc = locations[c.id];
+                if (!v || !loc) return null;
+                const isSelected = selectedVehicle?.attributes?.uuid === c.id;
+                const hasAlarm = alarmState[c.id] === true;
+                const markerState = getMarkerState(
+                  { status: loc.status, is_online: loc.is_online, speed: loc.speed },
+                  isSelected,
+                  hasAlarm,
+                );
+
+                return (
+                  <VehicleMarker
+                    key={c.id}
+                    vehicle={v}
+                    lat={loc.lat}
+                    lng={loc.lng}
+                    heading={loc.heading ?? 0}
+                    speed={loc.speed}
+                    markerState={markerState}
+                    isSelected={isSelected}
+                    onSelect={() => setSelectedVehicle(isSelected ? null : v)}
+                    registerRef={(handle) => {
+                      if (handle) markerRefs.current.set(c.id, handle);
+                      else markerRefs.current.delete(c.id);
+                    }}
+                    getVehicleIcon={getVehicleIcon}
+                  />
+                );
+              })}
           </>
         )}
+      </MapErrorBoundary>
 
-        {showGeofences &&
-          geofences.map((g: any) => {
-            if (!g.attributes?.coordinates) return null;
-            const { type, coordinates, radius, name } = g.attributes;
-
-            if (type === "circle") {
-              // coordinates can be {lat, lng} or {latitude, longitude}
-              const lat = coordinates.lat ?? coordinates.latitude;
-              const lng = coordinates.lng ?? coordinates.longitude;
-
-              // Skip if coordinates are invalid
-              if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
-                console.warn(`Geofence ${g.id} has invalid circle coordinates:`, coordinates);
-                return null;
-              }
-
-              return (
-                <Circle
-                  key={g.id}
-                  center={[lat, lng]}
-                  radius={radius || 500}
-                  pathOptions={{
-                    color: "#10b981",
-                    fillColor: "#10b981",
-                    fillOpacity: 0.2,
-                  }}
-                >
-                  <LeafletTooltip
-                    sticky
-                    className="bg-slate-900 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md"
-                  >
-                    {name}
-                  </LeafletTooltip>
-                </Circle>
-              );
-            }
-
-            if (type === "polygon") {
-              // coordinates is an array of {lat, lng} objects or [lng, lat] arrays
-              if (!Array.isArray(coordinates) || coordinates.length === 0) {
-                console.warn(`Geofence ${g.id} has invalid polygon coordinates:`, coordinates);
-                return null;
-              }
-
-              const positions = coordinates.map((coord: any) => {
-                if (Array.isArray(coord)) {
-                  // GeoJSON standard is [lng, lat]
-                  return [coord[1], coord[0]];
-                }
-                // Flat {lat, lng} object
-                return [coord.lat, coord.lng];
-              });
-
-              return (
-                <Polygon
-                  key={g.id}
-                  positions={positions}
-                  pathOptions={{
-                    color: "#3b82f6",
-                    fillColor: "#3b82f6",
-                    fillOpacity: 0.2,
-                  }}
-                >
-                  <LeafletTooltip
-                    sticky
-                    className="bg-slate-900 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md"
-                  >
-                    {name}
-                  </LeafletTooltip>
-                </Polygon>
-              );
-            }
-
-            return null;
-          })}
-
-        <MarkerClusterGroup
-          chunkedLoading
-          iconCreateFunction={createClusterCustomIcon}
-        >
-          {filteredVehicles
-            .filter((v) => {
-              const loc = locations[v.id];
-              return (
-                loc &&
-                loc.lat != null &&
-                loc.lng != null &&
-                !isNaN(loc.lat) &&
-                !isNaN(loc.lng)
-              );
-            })
-            .map((v) => {
-              const loc = locations[v.id];
-              const idKey = String(v.id);
-              const isSelected = selectedVehicle?.id === v.id;
-              const hasAlarm = alarmState[idKey] === true;
-              const markerState = getMarkerState(
-                { status: loc.status, is_online: loc.is_online, speed: loc.speed },
-                isSelected,
-                hasAlarm,
-              );
-              const statusCfg = VEHICLE_STATUS[markerState.statusKey];
-
-              // Bind the declarative position/heading to the raw target — this is
-              // only what places a freshly-mounted marker or reconciles the prop;
-              // the rAF loop below owns the actual frame-by-frame smooth motion via
-              // direct Leaflet calls, correcting any prop-triggered snap within a
-              // single frame (~16ms, imperceptible). Reading the interpolator's
-              // time-varying position here (at render time) would be an impure
-              // render, so that read only happens inside the rAF callback.
-              const lat = loc.lat;
-              const lng = loc.lng;
-              const heading = loc.heading ?? 0;
-              const size = Math.round(40 * markerState.scale);
-
-              return (
-                <Marker
-                  key={v.id}
-                  ref={(instance) => {
-                    if (instance) markerRefs.current.set(idKey, instance);
-                    else markerRefs.current.delete(idKey);
-                  }}
-                  position={[lat, lng]}
-                  zIndexOffset={markerState.zIndexOffset}
-                  icon={L.divIcon({
-                    className: "custom-marker-wrapper",
-                    html: buildMarkerHtml({
-                      registrationNumber: normalizeReg(v.attributes.registration_number),
-                      speedOrStatus:
-                        markerState.statusKey === "moving" && loc.speed != null
-                          ? `${Math.round(loc.speed)} km/h`
-                          : VEHICLE_STATUS[markerState.statusKey].label,
-                      isSelected,
-                      heading,
-                      state: markerState,
-                    }),
-                    // Width=220 (full label card), height=45. Pin tip is at left edge (x=14 ≈ half pin width)
-                    // vertically centred on the pin circle top half, tip is at ~34px from top
-                    iconSize: [220, 45],
-                    iconAnchor: [14, 34],
-                  })}
-                  eventHandlers={{
-                    click: () => {
-                      const isAlreadySelected = selectedVehicle?.id === v.id;
-                      setSelectedVehicle(isAlreadySelected ? null : v);
-                    },
-                    keydown: (e: any) => {
-                      if (e.originalEvent?.key === "Enter" || e.originalEvent?.key === " ") {
-                        const isAlreadySelected = selectedVehicle?.id === v.id;
-                        setSelectedVehicle(isAlreadySelected ? null : v);
-                      }
-                    },
-                  }}
-                >
-                  <Popup className="custom-popup" closeButton={false}>
-                    <div className="p-3 min-w-50 bg-white rounded-2xl shadow-2xl border border-slate-100">
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge
-                          className={cn(
-                            "text-[8px] px-2 h-4 font-black uppercase tracking-widest border-none text-white",
-                          )}
-                          style={{ backgroundColor: statusCfg.marker }}
-                        >
-                          {statusCfg.label}
-                        </Badge>
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              markerState.statusKey !== "offline"
-                                ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                                : "bg-slate-300",
-                            )}
-                          />
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {normalizeReg(v.attributes.registration_number)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl">
-                        <div className="p-2 bg-white rounded-lg shadow-sm">
-                          {getVehicleIcon(v.attributes.body_type, markerState.statusKey)}
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-slate-900 leading-none">
-                            {capitalize(v.attributes.make || "Vehicle")}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                            {capitalize(v.attributes.model || "Unknown")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            Velocity
-                          </span>
-                          <span className="text-sm font-black text-blue-600 italic">
-                            {loc.speed} <span className="text-[9px]">KPH</span>
-                          </span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            Heading
-                          </span>
-                          <span className="text-sm font-black text-slate-900 italic">
-                            {Math.round(heading)}°
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
-        </MarkerClusterGroup>
-      </MapContainer>
+      <MapCompatibilityBanner isFallback={isFallback} />
 
       <style jsx global>{`
-        .leaflet-marker-icon {
+        .leaflet-marker-icon,
+        .custom-marker-wrapper {
           transition: transform 0.15s linear;
         }
 
@@ -505,7 +350,7 @@ export default function TrackingMap({
           overflow: visible;
         }
 
-        /* Fallback circle marker */
+        /* Fallback circle marker (playback ghost / legacy calls) */
         .marker-container {
           position: relative;
           width: 36px;
@@ -523,7 +368,8 @@ export default function TrackingMap({
           justify-content: center;
         }
 
-        .custom-popup .leaflet-popup-content-wrapper {
+        .custom-popup .leaflet-popup-content-wrapper,
+        .custom-popup .mapboxgl-popup-content {
           padding: 0;
           overflow: hidden;
           border-radius: 24px;
@@ -531,7 +377,12 @@ export default function TrackingMap({
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .custom-popup .leaflet-popup-tip-container {
+        .custom-popup .leaflet-popup-tip-container,
+        .custom-popup .mapboxgl-popup-tip {
+          display: none;
+        }
+
+        .geofence-label-popup .mapboxgl-popup-tip {
           display: none;
         }
 

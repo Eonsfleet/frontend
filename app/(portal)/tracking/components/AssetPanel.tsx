@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X,
-  Truck,
   Navigation,
   History,
   Route as RouteIcon,
@@ -24,6 +23,7 @@ import {
   Calendar,
   ChevronDown,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -39,8 +39,10 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
+import { getVehicleTypeIcon } from "../utils";
 import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
+import { useStreetImageryStore } from "@/store/streetImageryStore";
 import { getDriverById } from "@/lib/api/drivers";
 import { getCurrentDriver } from "@/lib/api/vehicles";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
@@ -146,8 +148,19 @@ export function AssetPanel({
 
   if (!selectedVehicle) return null;
 
+  const TypeIcon = getVehicleTypeIcon(selectedVehicle.attributes.body_type);
+
+  // Decide the top-line status from the SAME fleet-stream snapshot (locations[id])
+  // the sidebar card reads, so the panel and the sidebar can't disagree (e.g. panel
+  // "Stopped" while the list still says "Moving"). The per-vehicle telemetry channel
+  // in `resolved` still enriches every detail field below — it just doesn't get to
+  // drive the headline status on its own timeline, which is what caused the desync.
   const statusKey = resolveStatusKey(
-    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    {
+      status: loc?.status ?? resolved.status,
+      is_online: loc?.is_online ?? resolved.isDeviceOnline,
+      speed: loc?.speed ?? resolved.speed,
+    },
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
@@ -202,6 +215,24 @@ export function AssetPanel({
     toast.success("Location link copied to clipboard");
   };
 
+  const handleStreetView = () => {
+    const lat = loc?.lat ?? resolved.lat;
+    const lng = loc?.lng ?? resolved.lng;
+    if (lat == null || lng == null) {
+      toast.info("No current position available for this asset yet.");
+      return;
+    }
+    useStreetImageryStore.getState().open(
+      { lat, lng },
+      {
+        label: plate,
+        subtitle: statusCfg.label,
+        sourceTimestamp: resolved.lastUpdate,
+        vehicleId: selectedVehicle.attributes?.uuid,
+      },
+    );
+  };
+
   const moreActions = [
     {
       label: isMapFollowEnabled ? "Stop Focus" : "Focus",
@@ -218,6 +249,7 @@ export function AssetPanel({
       }
     },
     { label: "Nearby Assets", icon: Radar, onClick: handleNearbyAssets },
+    { label: "Street View", icon: Camera, onClick: handleStreetView },
     { label: "Send Command", icon: Terminal, onClick: () => toast.info("Send Command is not yet available.") },
     { label: "Immobilize", icon: Lock, onClick: () => toast.info("Immobilize is not yet available.") },
     { label: "Geofence", icon: MapPinned, onClick: () => router.push("/geofences") },
@@ -241,11 +273,6 @@ export function AssetPanel({
       {/* Header */}
       <div className="relative border-b border-slate-100 bg-slate-50 shrink-0">
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <span
-            className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border", statusCfg.badge)}
-          >
-            {statusCfg.label}
-          </span>
           <button
             onClick={toggleAssetPanel}
             aria-label="Collapse asset panel"
@@ -262,25 +289,28 @@ export function AssetPanel({
           </button>
         </div>
 
-        <div className="h-32 flex items-center justify-center bg-white">
-          {selectedVehicle.attributes.image ? (
-            <img
-              src={selectedVehicle.attributes.image}
-              alt={`${selectedVehicle.attributes.make} ${selectedVehicle.attributes.model}`}
-              className="h-full object-contain"
-            />
-          ) : (
-            <div data-testid="asset-panel-photo-fallback" className="h-20 w-20 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
-              <Truck className="h-8 w-8" />
-            </div>
-          )}
-        </div>
+        <div className="flex items-center gap-4 px-6 py-5 pr-24">
+          <div
+            data-testid="asset-panel-photo-fallback"
+            className="h-20 w-20 shrink-0 rounded-2xl bg-slate-900 flex items-center justify-center text-white"
+          >
+            <TypeIcon className="h-8 w-8" />
+          </div>
 
-        <div className="px-6 pb-4">
-          <h2 className="text-sm font-bold text-slate-900 truncate">
-            {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
-          </h2>
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{plate}</p>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-slate-900 truncate">
+              {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
+            </h2>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">{plate}</p>
+            <span
+              className={cn(
+                "mt-1.5 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border",
+                statusCfg.badge,
+              )}
+            >
+              {statusCfg.label}
+            </span>
+          </div>
         </div>
       </div>
 

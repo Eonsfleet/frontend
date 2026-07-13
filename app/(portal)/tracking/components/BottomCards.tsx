@@ -1,9 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Route, Navigation, Cpu, Loader2, SignalHigh, SignalMedium, SignalLow, SignalZero } from "lucide-react";
-import { format, formatDistanceStrict } from "date-fns";
-import { getActiveTripForVehicle } from "@/lib/api/trips";
+import {
+  Navigation,
+  Cpu,
+  SignalHigh,
+  SignalMedium,
+  SignalLow,
+  SignalZero,
+} from "lucide-react";
 import { getDeviceById } from "@/lib/api/tracking";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
@@ -14,6 +19,9 @@ interface BottomCardsProps {
   selectedVehicle: any;
   /** Live-resolved telemetry (WS + REST-merged), computed once at the page level. */
   resolved: ResolvedVehicleTelemetry;
+  /** The fleet-stream snapshot (locations[id]) the sidebar reads — used so the
+   * headline status here matches the sidebar/list exactly. */
+  loc?: any;
   hasActiveAlarm?: boolean;
 }
 
@@ -53,13 +61,7 @@ function simLabel(status: string | null | undefined): string | null {
   return status;
 }
 
-export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false }: BottomCardsProps) {
-  const { data: trip, isLoading: isLoadingTrip } = useQuery({
-    queryKey: ["active-trip", selectedVehicle?.id],
-    queryFn: () => getActiveTripForVehicle(selectedVehicle!.id),
-    enabled: !!selectedVehicle,
-  });
-
+export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = false }: BottomCardsProps) {
   // /devices/{id} (device HARDWARE record) — not /tracker/{imei}, which only
   // returns GPS telemetry and never included model/network/SIM fields.
   const deviceRecordId = selectedVehicle?.relationships?.device?.id ?? selectedVehicle?.relationships?.device?.data?.id;
@@ -71,17 +73,19 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
   });
 
   const lastUpdateRelative = useRelativeTime(resolved.lastUpdate);
+  // Headline status comes from the same fleet-stream snapshot the sidebar uses, so
+  // the lower sheet can't show "Stopped" while the list still says "Moving".
   const statusKey = resolveStatusKey(
-    { status: resolved.status, is_online: resolved.isDeviceOnline, speed: resolved.speed },
+    {
+      status: loc?.status ?? resolved.status,
+      is_online: loc?.is_online ?? resolved.isDeviceOnline,
+      speed: loc?.speed ?? resolved.speed,
+    },
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
 
   if (!selectedVehicle) return null;
-
-  const tripStart = trip?.attributes?.actual_start_time ?? trip?.attributes?.planned_start_time;
-  const tripDuration = tripStart ? formatDistanceStrict(new Date(tripStart), new Date()) : null;
-  const tripStops = trip?.attributes?.routes?.filter((r: any) => r.is_stop_point).length ?? null;
 
   const attrs = deviceInfoData?.data?.attributes ?? {};
   const hardware = deviceInfoData?.data?.relationships?.hardware;
@@ -101,34 +105,9 @@ export function BottomCards({ selectedVehicle, resolved, hasActiveAlarm = false 
 
   return (
     <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3 overflow-x-auto no-scrollbar min-w-0 p-3">
-      <CardShell icon={Route} title="Summary">
-        {isLoadingTrip ? (
-          <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
-        ) : trip ? (
-          <div className="grid grid-cols-2 gap-x-6">
-            <div className="space-y-2">
-              <Stat label="Started" value={tripStart ? format(new Date(tripStart), "hh:mm a") : null} />
-              <Stat label="Duration" value={tripDuration} />
-              <Stat
-                label="Distance"
-                value={trip.attributes.distance_covered_km != null ? `${trip.attributes.distance_covered_km} km` : null}
-              />
-              <Stat label="Stops" value={tripStops} />
-            </div>
-            <div className="space-y-2">
-              <Stat label="Avg. Speed" value={trip.attributes.avg_speed != null ? `${trip.attributes.avg_speed} km/h` : null} />
-              <Stat label="Fuel Used" value={null} />
-              <Stat label="Idle Time" value={null} />
-            </div>
-          </div>
-        ) : (
-          <p className="text-[10px] font-bold text-slate-400">No active trip</p>
-        )}
-      </CardShell>
-
       <CardShell icon={Navigation} title="Location & Movement">
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
-          <Stat label="Speed" value={`${resolved.speed ?? 0} km/h`} />
+          <Stat label="Speed" value={`${loc?.speed ?? resolved.speed ?? 0} km/h`} />
           <Stat label="Heading" value={resolved.heading != null ? `${Math.round(resolved.heading)}°` : null} />
           <Stat label="Ignition" value={resolved.ignition ? "On" : "Off"} />
           <Stat

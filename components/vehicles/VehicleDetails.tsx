@@ -42,7 +42,11 @@ import { AssignClusterDialog } from "@/components/vehicles/AssignClusterDialog";
 import { AssignTrackerDialog } from "@/components/vehicles/AssignTrackerDialog";
 import { LayoutGrid, Loader2, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getCurrentDriver, getVehicleDriverHistory } from "@/lib/api/vehicles";
+import {
+  getCurrentDriver,
+  getVehicleDriverHistory,
+  getVehicleLocation,
+} from "@/lib/api/vehicles";
 import { getVehicleMaintenanceSchedules } from "@/lib/api/maintenance";
 import { getVehicleDocuments, downloadDocument } from "@/lib/api/documents";
 import { getVehicleCurrentFuel, getVehicleFuelHistory } from "@/lib/api/fuel";
@@ -51,7 +55,7 @@ import { UploadDocumentDialog } from "@/components/vehicles/UploadDocumentDialog
 import { CreateMaintenanceScheduleModal } from "@/components/maintenance/CreateScheduleModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, normalizeTelemetry } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { TelemetryRow } from "@/components/shared/TelemetryRow";
 
@@ -72,15 +76,26 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false);
   const [isAddScheduleOpen, setIsAddScheduleOpen] = React.useState(false);
 
-  // Location is read from the vehicle relationship.
-  // Detail endpoint may still return the old {attributes: {...}} envelope;
-  // list endpoint returns the new flat shape. Support both.
+  // Fresh telemetry snapshot from GET /vehicles/{uuid}/location, polled to
+  // keep the Live Telemetry tab current rather than relying on the one-time
+  // embedded snapshot from vehicle.relationships.current_location.
+  const { data: locationSnapshot } = useQuery({
+    queryKey: ["vehicle-location", vehicle.attributes.uuid],
+    queryFn: () => getVehicleLocation(vehicle.attributes.uuid),
+    enabled: !!vehicle.attributes.uuid,
+    refetchInterval: 15000,
+  });
+
+  // Fall back to the embedded relationship snapshot if the dedicated
+  // endpoint hasn't returned yet. Detail endpoint may still return the old
+  // {attributes: {...}} envelope; list endpoint returns the new flat shape.
   const currentLocation = vehicle.relationships?.current_location ?? null;
-  const loc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
+  const embeddedLoc = (currentLocation as any)?.attributes ?? currentLocation ?? null;
+  const loc = normalizeTelemetry(locationSnapshot) ?? embeddedLoc;
 
   const { data: driverResponse, isLoading: isLoadingDriver } = useQuery({
-    queryKey: ["vehicle-current-driver", vehicle.id],
-    queryFn: () => getCurrentDriver(vehicle.id),
+    queryKey: ["vehicle-current-driver", vehicle.attributes.uuid],
+    queryFn: () => getCurrentDriver(vehicle.attributes.uuid),
   });
 
   const { data: maintenanceResponse, isLoading: isLoadingMaintenance } =
@@ -95,15 +110,15 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   });
 
   const { data: fuelResponse, isLoading: isLoadingFuel } = useQuery({
-    queryKey: ["vehicle-fuel", vehicle.id],
-    queryFn: () => getVehicleCurrentFuel(vehicle.id),
+    queryKey: ["vehicle-fuel", vehicle.attributes.uuid],
+    queryFn: () => getVehicleCurrentFuel(vehicle.attributes.uuid),
     refetchInterval: 30000,
   });
 
   const { data: fuelHistoryResponse, isLoading: isLoadingFuelHistory } =
     useQuery({
-      queryKey: ["vehicle-fuel-history", vehicle.id],
-      queryFn: () => getVehicleFuelHistory(vehicle.id),
+      queryKey: ["vehicle-fuel-history", vehicle.attributes.uuid],
+      queryFn: () => getVehicleFuelHistory(vehicle.attributes.uuid),
     });
 
   // Try embedded current_driver array first, fall back to query result
@@ -1619,28 +1634,28 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
 
         {/* ── DIALOGS ───────────────────────────────────────────────── */}
         <AssignDriverDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignOpen}
           onClose={() => setIsAssignOpen(false)}
         />
 
         <AssignClusterDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignClusterOpen}
           onClose={() => setIsAssignClusterOpen(false)}
         />
 
         <AssignTrackerDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}
           isOpen={isAssignTrackerOpen}
           onClose={() => setIsAssignTrackerOpen(false)}
         />
 
         <UploadDocumentDialog
-          vehicleId={vehicle.id}
+          vehicleId={vehicle.attributes.uuid}
           isOpen={isUploadDocOpen}
           onClose={() => setIsUploadDocOpen(false)}
         />
@@ -1648,7 +1663,7 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         <CreateMaintenanceScheduleModal
           open={isAddScheduleOpen}
           onOpenChange={setIsAddScheduleOpen}
-          preselectedVehicleId={vehicle.id.toString()}
+          preselectedVehicleId={vehicle.attributes.uuid}
           preselectedVehicleReg={vehicle.attributes.registration_number}
         />
       </Tabs>

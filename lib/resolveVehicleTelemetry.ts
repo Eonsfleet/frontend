@@ -224,12 +224,19 @@ export function resolveVehicleTelemetry({
   const liveFuelConsumed =
     meta.fuel_consumed ??
     meta.fuelConsumed ??
+    meta.fuel_consumed_counted ??
+    meta.fuel_consumed_delta ??
     telemetry?.fuel_consumed ??
     telemetry?.fuelConsumed ??
+    telemetry?.fuel_consumed_counted ??
+    telemetry?.fuel_consumed_delta ??
     raw.fuel_consumed ??
     raw.fuelConsumed ??
+    raw.fuel_consumed_counted ??
+    raw.fuel_consumed_delta ??
     (raw.metadata as any)?.fuel_consumed ??
     (raw.metadata as any)?.fuelConsumed ??
+    (raw.metadata as any)?.fuel_consumed_counted ??
     (vehicle as any)?.fuel_consumed ??
     (vehicle as any)?.fuelConsumed ??
     null;
@@ -299,7 +306,14 @@ export function resolveVehicleTelemetry({
   // the ingest pipeline actually broadcasts (see EXTENDED_METADATA_KEYS on the
   // backend); there's no separate carrier-name field, so it's shown as-is.
   const liveGsmOperator = meta.active_gsm_operator ?? telemetry?.active_gsm_operator ?? raw.active_gsm_operator ?? null;
-  const liveMileage = meta.mileage ?? telemetry?.total_mileage ?? raw.total_mileage ?? null;
+  const liveMileage =
+    meta.mileage ??
+    meta.total_mileage ??
+    meta.total_mileage_counted ??
+    telemetry?.total_mileage ??
+    raw.total_mileage ??
+    raw.total_mileage_counted ??
+    null;
   const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
   const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
   const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;

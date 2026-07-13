@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { FuelVehicle } from '@/types'
 import { extractApiError, cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { useFuelLiveSync, type FuelLiveOverride } from '../components/useFuelLiveSync'
 
 
 function FuelGauge({ percent, online }: { percent: number | null; online: boolean }) {
@@ -70,11 +71,23 @@ function AbnormalityIcon({ type }: { type: string }) {
     }
 }
 
-function VehicleDetailDialog({ vehicle, onClose }: { vehicle: any | null; onClose: () => void }) {
+function VehicleDetailDialog({
+    vehicle,
+    live,
+    onClose,
+}: {
+    vehicle: FuelVehicle | null
+    live: Record<number, FuelLiveOverride>
+    onClose: () => void
+}) {
     const queryClient = useQueryClient()
+    const override = vehicle ? live[Number(vehicle.id)] : undefined
+    const isOnline = override?.isOnline ?? vehicle?.attributes?.device_online ?? false
+    const levelPercent = override?.fuelPercent ?? vehicle?.fuel_level?.fuel_level_percent ?? null
+    const levelLiters = override?.fuelLiters ?? vehicle?.fuel_level?.fuel_level_liters ?? null
     const { data: abnData, isLoading: isLoadingAbn } = useQuery({
         queryKey: ['vehicle-abnormalities', vehicle?.id],
-        queryFn: () => api.getVehicleAbnormalities(vehicle!.id, { per_page: 10 }),
+        queryFn: () => api.getVehicleAbnormalities(Number(vehicle!.id), { per_page: 10 }),
         enabled: !!vehicle,
     })
 
@@ -119,21 +132,33 @@ function VehicleDetailDialog({ vehicle, onClose }: { vehicle: any | null; onClos
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Status</p>
                             <div className="flex items-center gap-1.5">
-                                <div className={`h-2 w-2 rounded-full ${vehicle?.attributes?.device_online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                <span className="text-sm font-semibold">{vehicle?.attributes?.device_online ? 'Online' : 'Offline'}</span>
+                                <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                <span className="text-sm font-semibold">{isOnline ? 'Online' : 'Offline'}</span>
                             </div>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Current Level</p>
-                            <p className="text-sm font-semibold">{(vehicle?.fuel_level?.fuel_level_percent ?? 0).toFixed(1)}%</p>
+                            <p className="text-sm font-semibold">{(levelPercent ?? 0).toFixed(1)}%</p>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Liters Remaining</p>
-                            <p className="text-sm font-semibold">{(vehicle?.fuel_level?.fuel_level_liters ?? 0).toFixed(1)} L</p>
+                            <p className="text-sm font-semibold">{(levelLiters ?? 0).toFixed(1)} L</p>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Tank Capacity</p>
-                            <p className="text-sm font-semibold">{vehicle?.attributes?.fuel_capacity} L</p>
+                            <p className="text-sm font-semibold">{vehicle?.fuel_level?.tank_capacity ?? vehicle?.attributes?.fuel_capacity} L</p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Last Updated</p>
+                            <p className="text-sm font-semibold">
+                                {vehicle?.fuel_level?.last_updated ? format(new Date(vehicle.fuel_level.last_updated), 'MMM d, hh:mm a') : '—'}
+                            </p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Data Quality</p>
+                            <p className="text-sm font-semibold">
+                                {vehicle?.fuel_level?.data_quality_score != null ? `${Math.round(vehicle.fuel_level.data_quality_score * 100)}%` : '—'}
+                            </p>
                         </div>
                     </div>
 
@@ -263,6 +288,7 @@ export default function LiveMonitorPage() {
     const [selectedVehicle, setSelectedVehicle] = useState<FuelVehicle | null>(null)
     const observerTarget = React.useRef<HTMLDivElement>(null)
     const { token } = useAuthStore()
+    const live = useFuelLiveSync()
 
     const { data: execKpis } = useQuery({
         queryKey: ['fuel-executive-kpis-monitor'],
@@ -281,11 +307,15 @@ export default function LiveMonitorPage() {
         fetchNextPage,
     } = useInfiniteQuery({
         queryKey: ['fuel-vehicles-infinite', search],
-        queryFn: ({ pageParam = 1 }) => api.getFuelVehicles({ 
-            page: pageParam, 
-            per_page: 12, 
-            search: search || undefined 
+        queryFn: ({ pageParam = 1 }) => api.getFuelVehicles({
+            page: pageParam,
+            per_page: 12,
+            search: search || undefined
         }),
+        // Baseline REST refresh — this page previously had none at all; the WS
+        // overlay (`live`, applied at render below) lowers perceived latency
+        // between these polls, same as the Real-time Tracking tab.
+        refetchInterval: 15_000,
         initialPageParam: 1,
         getNextPageParam: (lastPage: any) => {
             const current = lastPage.data.pagination.current_page
@@ -452,9 +482,10 @@ export default function LiveMonitorPage() {
                 <div className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                         {vehicles.map((v: FuelVehicle) => {
-                            const level = v.fuel_level?.fuel_level_percent ?? null
-                            const liters = v.fuel_level?.fuel_level_liters ?? null
-                            const online = v.attributes.device_online
+                            const override = live[Number(v.id)]
+                            const level = override?.fuelPercent ?? v.fuel_level?.fuel_level_percent ?? null
+                            const liters = override?.fuelLiters ?? v.fuel_level?.fuel_level_liters ?? null
+                            const online = override?.isOnline ?? v.attributes.device_online
 
                             return (
                                 <Card
@@ -477,7 +508,7 @@ export default function LiveMonitorPage() {
                                         <FuelGauge percent={level} online={online} />
                                         <div className="text-center">
                                             <p className="text-sm font-bold text-slate-900">
-                                                {liters?.toFixed(1) ?? '—'} L <span className="text-slate-400 font-normal">/ {v.attributes.fuel_capacity} L</span>
+                                                {liters?.toFixed(1) ?? '—'} L <span className="text-slate-400 font-normal">/ {v.fuel_level?.tank_capacity ?? v.attributes.fuel_capacity} L</span>
                                             </p>
                                         </div>
                                     </CardContent>
@@ -505,7 +536,7 @@ export default function LiveMonitorPage() {
                 </div>
             )}
 
-            <VehicleDetailDialog vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
+            <VehicleDetailDialog vehicle={selectedVehicle} live={live} onClose={() => setSelectedVehicle(null)} />
         </div>
     )
 }

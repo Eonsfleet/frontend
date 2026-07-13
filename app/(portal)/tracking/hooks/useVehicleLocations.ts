@@ -51,6 +51,27 @@ export function useVehicleLocations({
     selectedIdRef.current = selectedVehicleId;
   }, [selectedVehicleId]);
 
+  // The fleet-wide WS channels broadcast `vehicle_id` as the vehicle's DB id
+  // (same convention as trips/maintenance/fuel elsewhere in the app), but
+  // every consumer of `locations`/`alarmState` (map markers, sidebar cards,
+  // filters) reads by `attributes.uuid` — the same key the REST seed and the
+  // per-vehicle channel already use. Without this resolution, live packets
+  // land on a key nothing reads and only the 30s REST poll ever appears to
+  // update the UI. Keep both the DB id and the uuid as keys pointing at the
+  // uuid so a packet is resolved correctly regardless of which one arrives.
+  const idResolverRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    vehicles.forEach((v: Vehicle) => {
+      const uuid = v.attributes?.uuid;
+      if (!uuid) return;
+      map[String(v.id)] = String(uuid);
+      map[String(uuid)] = String(uuid);
+    });
+    idResolverRef.current = map;
+  }, [vehicles]);
+  const resolveIdKey = (rawId: unknown) => idResolverRef.current[String(rawId)] ?? String(rawId);
+
   useEffect(() => {
     setTrails({});
   }, [selectedVehicleId]);
@@ -121,6 +142,7 @@ export function useVehicleLocations({
     setLocations((prev) => {
       const next = { ...prev };
       vehicles.forEach((v: Vehicle) => {
+        const vehicleId = v.attributes.uuid || String(v.id);
         const loc = v.relationships?.current_location ?? null;
         // is_online + last_packet are now on attributes, not on device relationship
         const isOnline = v.attributes?.is_online ?? false;
@@ -132,12 +154,12 @@ export function useVehicleLocations({
         const staleOffline = isStaleOffline(isOnline, lastPacketTs || lastUpdateTs);
 
         if (!loc) {
-          if (next[v.id]) {
-            next[v.id] = {
-              ...next[v.id],
+          if (next[vehicleId]) {
+            next[vehicleId] = {
+              ...next[vehicleId],
               is_online: isOnline,
-              status: staleOffline ? "offline" : next[v.id]?.status,
-              lastPacket: lastPacketTs ?? next[v.id]?.lastPacket,
+              status: staleOffline ? "offline" : next[vehicleId]?.status,
+              lastPacket: lastPacketTs ?? next[vehicleId]?.lastPacket,
             };
           }
           return;
@@ -153,7 +175,7 @@ export function useVehicleLocations({
             ? "in_transit"
             : "parked";
 
-        const prevEntry = next[v.id];
+        const prevEntry = next[vehicleId];
         const statusSinceMs =
           prevEntry?.status === derivedStatus
             ? (prevEntry?.statusSinceMs ?? Date.now())
@@ -192,7 +214,7 @@ export function useVehicleLocations({
           : { ...restData, ...prevEntry };
 
         if (!lat || !lng) {
-          next[v.id] = {
+          next[vehicleId] = {
             ...positionalBase,
             is_online: isOnline,
             status: derivedStatus,
@@ -205,8 +227,8 @@ export function useVehicleLocations({
 
         // Seed the interpolator once per vehicle so the marker doesn't animate in
         // from nowhere on first load; subsequent WS packets take over via ingest().
-        if (!interpolator.hasVehicle(String(v.id))) {
-          interpolator.snap(String(v.id), {
+        if (!interpolator.hasVehicle(vehicleId)) {
+          interpolator.snap(vehicleId, {
             lat,
             lng,
             heading: 0,
@@ -216,7 +238,7 @@ export function useVehicleLocations({
 
         // A WS-updated prev entry only keeps positional priority when it's newer
         // than this REST snapshot; REST is always authoritative for is_online/status.
-        next[v.id] = {
+        next[vehicleId] = {
           ...positionalBase,
           status: derivedStatus,
           statusSinceMs,
@@ -242,7 +264,7 @@ export function useVehicleLocations({
         if (packet.vehicle_id) {
           const normalized = normalizeTelemetry(packet);
           const status = normalized.status;
-          const idKey = String(packet.vehicle_id);
+          const idKey = resolveIdKey(packet.vehicle_id);
 
           if (normalized.lat != null && normalized.lng != null) {
             const isMoving = status === "in_transit" && (normalized.speed ?? 0) > 0;
@@ -281,14 +303,14 @@ export function useVehicleLocations({
           }
 
           setLocations((prev) => {
-            const prevEntry = prev[packet.vehicle_id];
+            const prevEntry = prev[idKey];
             const statusSinceMs =
               prevEntry?.status === status
                 ? (prevEntry?.statusSinceMs ?? Date.now())
                 : Date.now();
             return {
               ...prev,
-              [packet.vehicle_id]: {
+              [idKey]: {
                 ...prevEntry,
                 ...normalized,
                 status,
@@ -327,11 +349,11 @@ export function useVehicleLocations({
       ".vehicle.status.changed",
       (data: any) => {
         if (data.vehicle_id) {
-          const idKey = String(data.vehicle_id);
+          const idKey = resolveIdKey(data.vehicle_id);
           setLocations((prev) => ({
             ...prev,
-            [data.vehicle_id]: {
-              ...prev[data.vehicle_id],
+            [idKey]: {
+              ...prev[idKey],
               status: data.new_status,
               statusSinceMs: Date.now(),
             },
@@ -347,7 +369,7 @@ export function useVehicleLocations({
       (alert: any) => {
         const vehicleId = alert?.vehicle_id ?? alert?.vehicleId;
         if (!vehicleId) return;
-        const idKey = String(vehicleId);
+        const idKey = resolveIdKey(vehicleId);
 
         setAlarmState((prev) => ({ ...prev, [idKey]: true }));
         pushIfSelected(idKey, ".fuel.event", alert);
@@ -366,7 +388,7 @@ export function useVehicleLocations({
       (payload: any) => {
         const vehicleId = payload?.vehicle_id ?? payload?.vehicleId;
         if (!vehicleId) return;
-        const idKey = String(vehicleId);
+        const idKey = resolveIdKey(vehicleId);
 
         // Payload shape varies (event_type enter/exit, or a boolean in_geofenced_area/
         // inZone flag) — treat anything that isn't an explicit "exit" as an active breach.

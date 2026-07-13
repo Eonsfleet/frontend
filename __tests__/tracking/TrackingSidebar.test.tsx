@@ -17,6 +17,7 @@ const baseProps = {
   vehicles,
   filteredVehicles: vehicles,
   locations: { '1': { status: 'in_transit', is_online: true, speed: 58 } },
+  alarmState: {},
   selectedVehicleId: null,
   setSelectedVehicleId: vi.fn(),
   isLoadingVehicles: false,
@@ -26,11 +27,15 @@ const baseProps = {
   setSearchQuery: vi.fn(),
   ongoingTripsCount: 0,
   ongoingTripsData: [],
-  setIsReplayOpen: vi.fn(),
+  onReplayVehicle: vi.fn(),
   isLoadingTrips: false,
   selectedClusterIds: [],
   onOpenClusterModal: vi.fn(),
   onRefresh: vi.fn(),
+  isFilterActive: false,
+  onOpenFilterDrawer: vi.fn(),
+  viewType: 'listing' as const,
+  clusters: [],
 }
 
 describe('TrackingSidebar', () => {

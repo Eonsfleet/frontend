@@ -2,22 +2,14 @@ import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createFakeMapProvider } from '../helpers/fakeMapProvider'
 
-vi.mock('leaflet', () => ({
-  default: { divIcon: vi.fn(() => ({})), point: vi.fn((x: number, y: number) => ({ x, y })) },
+// TrackingMap/PlaybackMap mount a real Mapbox/Leaflet instance via
+// lib/map/MapProviderFactory — jsdom can't run either, so swap in the fake
+// provider test double instead of exercising the real map engines here.
+vi.mock('@/lib/map/MapProviderFactory', () => ({
+  createMapProvider: vi.fn(async () => createFakeMapProvider()),
 }))
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: any) => <div>{children}</div>,
-  TileLayer: () => null,
-  Marker: ({ children }: any) => <div>{children}</div>,
-  Popup: ({ children }: any) => <div>{children}</div>,
-  Polyline: () => null,
-  Polygon: () => null,
-  Circle: () => null,
-  Tooltip: ({ children }: any) => <div>{children}</div>,
-  useMap: () => ({ fitBounds: vi.fn(), flyTo: vi.fn() }),
-}))
-vi.mock('react-leaflet-cluster', () => ({ default: ({ children }: any) => <div>{children}</div> }))
 
 // AssetPanel (rendered by page.tsx) calls useRouter() — no app router is mounted in
 // this test env, so mock it the same way __tests__/tracking/AssetPanel.test.tsx does.
@@ -38,16 +30,24 @@ vi.mock('@/store/authStore', () => ({ useAuthStore: () => ({ token: 'tok', organ
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ setSidebarCollapsed: vi.fn() }) }))
 vi.mock('@/hooks/useEcho', () => ({ useEcho: () => ({ subscribePrivate: vi.fn() }) }))
 vi.mock('@/hooks/useConnectionStatus', () => ({ useConnectionStatus: () => ({ status: 'connected' }) }))
-vi.mock('@/store/trackingUiStore', () => ({
-  useTrackingUiStore: () => ({
+// page.tsx consumes this store both as a whole-object call (AssetPanel) and with a
+// selector (page.tsx reads isAssetListCollapsed via `(s) => s.isAssetListCollapsed`),
+// so the mock must honor the selector argument — returning the whole object
+// unconditionally would make a boolean selector resolve to a truthy object.
+vi.mock('@/store/trackingUiStore', () => {
+  const state = {
     setActiveTab: vi.fn(),
     activeTab: 'details',
     isAssetPanelCollapsed: false,
     toggleAssetPanel: vi.fn(),
     isAssetListCollapsed: false,
     toggleAssetList: vi.fn(),
-  }),
-}))
+  }
+  return {
+    useTrackingUiStore: (selector?: (s: typeof state) => unknown) =>
+      selector ? selector(state) : state,
+  }
+})
 // UpgradeGate (pre-existing, unrelated to this task) blocks rendering unless the
 // "geofence" capability is present — bypass it the same way __tests__/geofencing/
 // flows.test.tsx does for the same gate, so the grid shell underneath is testable.
@@ -86,5 +86,16 @@ describe('TrackingPage grid shell', () => {
     const grid = container.querySelector('.grid') as HTMLElement
     expect(grid.className).toContain('lg:grid-cols-[320px_1fr_400px]')
     expect(container.querySelectorAll('.row-start-1.row-span-2')).toHaveLength(2)
+  })
+
+  it('navigates to the playback page with the selected vehicle when Playback is clicked', async () => {
+    const push = vi.fn()
+    ;(vi.mocked(await import('next/navigation')) as any).useRouter = () => ({ push })
+    render(<TrackingPage />, { wrapper: Wrapper })
+    const row = await screen.findByRole('button', { name: /ABC-123-XD/ })
+    fireEvent.click(row)
+    const [playbackButton] = await screen.findAllByRole('button', { name: /playback/i })
+    fireEvent.click(playbackButton)
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/tracking\/playback\?vehicleId=1&start=.+&end=.+$/))
   })
 })

@@ -1,5 +1,5 @@
 import { startOfDay } from "date-fns";
-import { Navigation, Truck, Layers } from "lucide-react";
+import { Navigation, Truck, Layers, Car, Bus, Bike, Van, Caravan, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey, type VehicleStatusKey } from "@/lib/vehicleStatus";
 
@@ -156,6 +156,43 @@ export function fmtTimestamp(ts: string | null | undefined): string {
     );
   } catch {
     return ts;
+  }
+}
+
+/**
+ * Maps a vehicle's body_type to a matching lucide icon *component* (not JSX), so
+ * the caller controls size/color via className. Covers the common road-fleet set;
+ * anything unrecognized falls back to a generic car so the slot is never empty.
+ */
+export function getVehicleTypeIcon(bodyType: string | null | undefined): LucideIcon {
+  switch ((bodyType ?? "").toLowerCase().trim()) {
+    case "truck":
+    case "lorry":
+    case "trailer":
+    case "tanker":
+      return Truck;
+    case "van":
+    case "minivan":
+      return Van;
+    case "bus":
+    case "coach":
+      return Bus;
+    case "motorcycle":
+    case "motorbike":
+    case "bike":
+    case "scooter":
+      return Bike;
+    case "caravan":
+    case "rv":
+      return Caravan;
+    case "car":
+    case "sedan":
+    case "suv":
+    case "pickup":
+    case "hatchback":
+      return Car;
+    default:
+      return Car;
   }
 }
 

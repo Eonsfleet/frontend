@@ -361,7 +361,7 @@ export function FilterPanelDrawer({
                 Status
               </label>
               <div className="flex flex-wrap gap-y-3 gap-x-4 pt-1">
-                {["moving", "idle", "stopped", "offline"].map((status) => {
+                {["moving", "idle", "stopped", "offline", "online"].map((status) => {
                   const isChecked = tempFilters.statuses.includes(status);
                   return (
                     <label key={status} className="flex items-center gap-2 cursor-pointer select-none">

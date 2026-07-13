@@ -6,6 +6,7 @@ export interface Device {
 }
 
 export interface VehicleAttributes {
+    uuid: string
     make: string
     model: string
     image: string | null
@@ -43,9 +44,12 @@ export interface VehicleAttributes {
     updated_at: string
     /** Online state — now a first-class field on all list responses */
     is_online?: boolean
+    device_online?: boolean
     /** Device connectivity status (e.g. "active", "inactive") */
     device_status?: string | null
     device_connected?: boolean
+    speed?: number | string | null
+    coordinates?: { latitude?: number | string | null; longitude?: number | string | null } | null
     is_assigned_to_driver?: boolean
     /** Timestamp of last telemetry packet — moved from device relationship to attributes */
     last_packet_received_at?: string | null
@@ -125,7 +129,7 @@ export interface VehicleCurrentLocation {
         jamming?: boolean
         immobilizer?: boolean
         driving_state?: string
-        [key: string]: any
+        [key: string]: unknown
     }
 }
 

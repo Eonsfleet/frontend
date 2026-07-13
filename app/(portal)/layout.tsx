@@ -55,6 +55,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 sub.dunning_stage ?? null,
                 sub.status ?? null
             )
+        } else if (sub === null) {
+            setSubscription(null, null, [], null, null)
         }
     }, [sub, setSubscription])
 

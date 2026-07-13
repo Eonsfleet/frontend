@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { subDays } from "date-fns";
-import { DateRange } from "react-day-picker";
+import { useRouter } from "next/navigation";
+import { subHours } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Vehicle, Trip } from "@/types";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
+import { useTrackingUiStore } from "@/store/trackingUiStore";
 import { useEcho } from "@/hooks/useEcho";
 import * as api from "@/lib/api/vehicles";
 import * as tripApi from "@/lib/api/trips";
@@ -15,12 +16,12 @@ import { getClusters } from "@/lib/api/settings";
 import { getGeofences } from "@/lib/api/geofencing";
 import TrackingMap from "./TrackingMap";
 import { AssetPanel } from "./components/AssetPanel";
-import { TripPlaybackTimeline } from "@/components/live/TripPlaybackTimeline";
-import { MAP_LAYERS, getMarkerSVG, getVehicleIcon, type TrackingMapStyle } from "./utils";
+import { getVehicleIcon, type TrackingMapStyle } from "./utils";
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
+import { useMapProvider } from "./hooks/useMapProvider";
+import { MapInstanceProvider } from "./MapInstanceContext";
 import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
 import { buildVehicleSnapshot } from "@/lib/resolveVehicleTelemetry";
-import { usePlaybackData } from "./hooks/usePlaybackData";
 import { TrackingSidebar } from "./components/TrackingSidebar";
 import { TrackingTopBar } from "./components/TrackingTopBar";
 import { MapZoomControl } from "./components/MapZoomControl";
@@ -29,19 +30,21 @@ import { MapLegend } from "./components/MapLegend";
 import { FilterPanelDrawer, FilterState, initialFilterState } from "./components/FilterPanelDrawer";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { StreetImageryPanel } from "./components/StreetImageryPanel";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { cn } from "@/lib/utils";
+import { cn, normalizeTelemetry } from "@/lib/utils";
+import { matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
 export default function TrackingPage() {
   const queryClient = useQueryClient();
+  const isAssetListCollapsed = useTrackingUiStore((s) => s.isAssetListCollapsed);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationSearch, setLocationSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [isReplayOpen, setIsReplayOpen] = useState(false);
   // The view-mode toggle UI (All Assets / Active Trips) was removed from the map
   // toolbar per design feedback; "focused" is currently unreachable, but the
   // underlying Active Trips code path in TrackingSidebar is left intact in case
@@ -51,18 +54,22 @@ export default function TrackingPage() {
   const [showTraffic, setShowTraffic] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
-  const [playbackType, setPlaybackType] = useState<"trip" | "history">("trip");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 1),
-    to: new Date(),
-  });
 
   const resetZoom = () => setZoomResetKey((prev) => prev + 1);
 
+  const mapInstance = useMapProvider({
+    containerRef: mapContainerRef,
+    initialCenter: { lat: 6.5244, lng: 3.3792 },
+    initialZoom: 12,
+    styleKey: mapStyle,
+  });
+
+  const router = useRouter();
   const { token, organization } = useAuthStore();
   const { setSidebarCollapsed } = useUIStore();
   const { subscribePrivate } = useEcho();
@@ -99,7 +106,7 @@ export default function TrackingPage() {
   const clusters = useMemo(() => clustersData?.data?.clusters || [], [clustersData]);
   const geofences = useMemo(() => geofencesData?.data?.geofences || [], [geofencesData]);
 
-  const { locations, interpolator, alarmState, trails } = useVehicleLocations({
+  const { locations, setLocations, interpolator, alarmState, trails } = useVehicleLocations({
     vehicles,
     token,
     organization,
@@ -109,7 +116,7 @@ export default function TrackingPage() {
 
   const selectedVehicle = useMemo(
     () =>
-      vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)) || null,
+      vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(selectedVehicleId)) || null,
     [vehicles, selectedVehicleId],
   );
 
@@ -123,16 +130,51 @@ export default function TrackingPage() {
   // mobile variants, toggled with CSS breakpoints, not conditional mounting), and
   // BottomCards needs the same live-resolved telemetry, so all three consume this
   // single subscription instead of each opening their own.
-  const selectedLoc = selectedVehicle ? locations[selectedVehicle.id] : null;
+  const selectedLoc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
   const selectedVehicleSnapshot = useMemo(
     () => buildVehicleSnapshot(selectedVehicle, selectedLoc),
     [selectedVehicle, selectedLoc],
   );
   const resolvedTelemetry = useResolvedVehicleTelemetry(
-    selectedVehicle?.id ?? null,
+    selectedVehicle?.attributes.uuid ?? null,
     selectedVehicleSnapshot,
     !!selectedVehicle,
   );
+
+  // The selected vehicle has an extra, faster per-vehicle WS channel open
+  // (location.vehicle.{id}) that the bottom sheet reads directly — so its speed
+  // updated ahead of the sidebar list and map badge, which read the shared
+  // locations[] map fed by the slower fleet channel. Fold each per-vehicle packet
+  // back into locations[id] so all three surfaces update from the same value at
+  // the same (fast) cadence. Guarded so it only writes when the packet is actually
+  // newer, and only for the currently-selected vehicle.
+  const rawTelemetry = resolvedTelemetry.rawTelemetry;
+  useEffect(() => {
+    if (!selectedVehicleId || !rawTelemetry) return;
+    const normalized = normalizeTelemetry(rawTelemetry);
+    if (!normalized) return;
+    setLocations((prev) => {
+      const prevEntry = prev[selectedVehicleId];
+      const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+      const pktTs = normalized.timestamp_utc || normalized.gps_datetime;
+      const pktUpdateMs = pktTs ? new Date(pktTs).getTime() : Date.now();
+      // Never let an older per-vehicle packet clobber a fresher fleet-channel one.
+      if (prevEntry && prevUpdateMs > pktUpdateMs) return prev;
+      return {
+        ...prev,
+        [selectedVehicleId]: {
+          ...prevEntry,
+          ...normalized,
+          statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
+          lastUpdate: pktTs ?? prevEntry?.lastUpdate,
+          lastPacket: normalized.last_packet_received_at ?? pktTs ?? prevEntry?.lastPacket,
+          fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
+          fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+          raw: normalized,
+        },
+      };
+    });
+  }, [rawTelemetry, selectedVehicleId, setLocations]);
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
 
@@ -163,6 +205,13 @@ export default function TrackingPage() {
         return { ...prev, statuses: ["stopped"] };
       } else if (newStatus === "offline") {
         return { ...prev, statuses: ["offline"] };
+      } else if (newStatus === "online") {
+        // "Online" = every live vehicle (moving + idle + parked), the complement
+        // of offline. Previously this case was missing, so clicking Online left
+        // the previous filter in place — the list kept showing offline assets.
+        return { ...prev, statuses: ["online"] };
+      } else if (newStatus === "alarm") {
+        return { ...prev, statuses: ["alarm"] };
       }
       return prev;
     });
@@ -177,6 +226,8 @@ export default function TrackingPage() {
       else if (s[0] === "idle") setStatusFilter("idle");
       else if (s[0] === "stopped") setStatusFilter("parked");
       else if (s[0] === "offline") setStatusFilter("offline");
+      else if (s[0] === "online") setStatusFilter("online");
+      else if (s[0] === "alarm") setStatusFilter("alarm");
     } else {
       setStatusFilter("all");
     }
@@ -287,18 +338,24 @@ export default function TrackingPage() {
       });
     }
 
-    // 3. Status filter
-    if (filters.statuses.length < 4) {
+    // 3. Status filter — resolve each vehicle through the SAME canonical status
+    // logic the sidebar cards / panels / markers use (matchesStatusBucket →
+    // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
+    // label disagrees with the status shown on its card. "all" is the full set of
+    // buckets, so only actually-narrowed filters run this pass.
+    const ALL_STATUS_BUCKETS = ["moving", "idle", "stopped", "offline"];
+    const isNarrowed =
+      filters.statuses.length > 0 &&
+      !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
+    if (isNarrowed) {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
-
-        let match = false;
-        if (filters.statuses.includes("moving") && loc?.status === "in_transit") match = true;
-        if (filters.statuses.includes("idle") && loc?.status === "idle") match = true;
-        if (filters.statuses.includes("stopped") && loc?.status === "parked") match = true;
-        if (filters.statuses.includes("offline") && (!isOnline || !loc)) match = true;
-        return match;
+        const input = { status: loc?.status, is_online: isOnline, speed: loc?.speed };
+        const hasAlarm = alarmState[v.attributes.uuid] === true;
+        return filters.statuses.some((bucket) =>
+          matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
+        );
       });
     }
 
@@ -306,7 +363,7 @@ export default function TrackingPage() {
     if (filters.locationType === "radius" && filters.locationCoords) {
       const { latitude: centerLat, longitude: centerLng } = filters.locationCoords;
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         if (!loc?.lat || !loc?.lng) return false;
         const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
         return dist <= filters.radiusKm;
@@ -318,7 +375,7 @@ export default function TrackingPage() {
       const selectedGeofence = geofences.find((g) => String(g.id) === filters.geofenceId);
       if (selectedGeofence) {
         result = result.filter((v: Vehicle) => {
-          const loc = locations[v.id];
+          const loc = locations[v.attributes.uuid];
           if (!loc?.lat || !loc?.lng) return false;
           return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
         });
@@ -361,9 +418,10 @@ export default function TrackingPage() {
     }
 
     // 10. Speed Range
+    // 10. Speed Range
     if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const speed = loc?.speed ?? 0;
         return speed >= filters.speedRange[0] && speed <= filters.speedRange[1];
       });
@@ -372,7 +430,7 @@ export default function TrackingPage() {
     // 11. Engine Status
     if (filters.engineStatus !== "all") {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const isIgnitionOn = loc?.ignition === "on" || loc?.ignition === "1" || loc?.ignition === true;
         if (filters.engineStatus === "on") return isIgnitionOn;
         if (filters.engineStatus === "off") return !isIgnitionOn;
@@ -383,7 +441,7 @@ export default function TrackingPage() {
     // 12. Fuel Level
     if (filters.fuelLevel !== "all") {
       result = result.filter((v: Vehicle) => {
-        const loc = locations[v.id];
+        const loc = locations[v.attributes.uuid];
         const fuel = loc?.fuel_level_percent ?? 0;
         if (filters.fuelLevel === "low") return fuel < 20;
         if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
@@ -393,13 +451,13 @@ export default function TrackingPage() {
     }
 
     return result;
-  }, [vehicles, filters, locations, geofences, getDistance, isVehicleInGeofence]);
+  }, [vehicles, filters, locations, alarmState, geofences, getDistance, isVehicleInGeofence]);
 
   // Clear selection if the selected vehicle is not in the filtered results
   useEffect(() => {
     if (
       selectedVehicleId &&
-      !filteredVehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId))
+      !filteredVehicles.find((v: Vehicle) => String(v.attributes.uuid) === String(selectedVehicleId))
     ) {
       setSelectedVehicleId(null);
     }
@@ -413,7 +471,7 @@ export default function TrackingPage() {
         trip.attributes?.vehicleId ||
         trip.attributes?.vehicle_id;
       const fleetVehicle = bestVehicleId
-        ? vehicles.find((v: Vehicle) => String(v.id) === String(bestVehicleId))
+        ? vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(bestVehicleId) || String(v.id) === String(bestVehicleId))
         : null;
       return {
         ...trip,
@@ -427,21 +485,6 @@ export default function TrackingPage() {
       };
     });
   }, [ongoingTrips, vehicles]);
-
-  const {
-    playbackData,
-    playbackIndex,
-    setPlaybackIndex,
-    isPlayingPlayback,
-    setIsPlayingPlayback,
-    isLoadingPlayback,
-  } = usePlaybackData({
-    isReplayOpen,
-    selectedVehicleId,
-    playbackType,
-    ongoingTripsData,
-    dateRange,
-  });
 
   useEffect(() => {
     setSidebarCollapsed(true);
@@ -476,30 +519,46 @@ export default function TrackingPage() {
     const q = locationSearch.trim().toLowerCase();
     if (!q) return;
     const match = vehicles.find((v: Vehicle) => {
-      const loc = locations[v.id];
+      const loc = locations[v.attributes.uuid];
       return (
         v.attributes.registration_number?.toLowerCase().includes(q) ||
         (loc?.address ?? "").toLowerCase().includes(q)
       );
     });
-    const loc = match ? locations[match.id] : null;
+    const loc = match ? locations[match.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
-      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 16);
+      mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 16);
     }
-  }, [locationSearch, vehicles, locations]);
+  }, [locationSearch, vehicles, locations, mapInstance.provider]);
 
   const handleLiveTrack = useCallback(() => {
-    const loc = selectedVehicle ? locations[selectedVehicle.id] : null;
+    const loc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
     if (loc?.lat && loc?.lng) {
-      (window as any).leafletMap?.flyTo([loc.lat, loc.lng], 18);
+      mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 18);
     }
-  }, [selectedVehicle, locations]);
+  }, [selectedVehicle, locations, mapInstance.provider]);
+
+  const navigateToPlayback = useCallback(
+    (vehicleId: string, tripId?: string | null) => {
+      const params = new URLSearchParams({ vehicleId });
+      if (tripId) {
+        params.set("tripId", tripId);
+      } else {
+        const end = new Date();
+        const start = subHours(end, 6);
+        params.set("start", start.toISOString());
+        params.set("end", end.toISOString());
+      }
+      router.push(`/tracking/playback?${params.toString()}`);
+    },
+    [router],
+  );
 
   const handlePlayback = useCallback(() => {
-    const hasTrip = ongoingTripsData.some((t) => t.vehicleId === selectedVehicleId);
-    setPlaybackType(hasTrip ? "trip" : "history");
-    setIsReplayOpen(true);
-  }, [ongoingTripsData, selectedVehicleId]);
+    if (!selectedVehicleId) return;
+    const trip = ongoingTripsData.find((t) => t.vehicleId === selectedVehicleId);
+    navigateToPlayback(selectedVehicleId, trip?.id ?? null);
+  }, [ongoingTripsData, selectedVehicleId, navigateToPlayback]);
 
   return (
     <UpgradeGate
@@ -513,11 +572,22 @@ export default function TrackingPage() {
           "h-screen w-full grid overflow-hidden bg-white",
           selectedVehicle ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]",
           "grid-cols-1",
-          selectedVehicle ? "lg:grid-cols-[320px_1fr_400px]" : "lg:grid-cols-[320px_1fr_0px]",
+          isAssetListCollapsed
+            ? selectedVehicle
+              ? "lg:grid-cols-[0px_1fr_400px]"
+              : "lg:grid-cols-[0px_1fr_0px]"
+            : selectedVehicle
+              ? "lg:grid-cols-[320px_1fr_400px]"
+              : "lg:grid-cols-[320px_1fr_0px]",
           "transition-[grid-template-columns] duration-300 ease-in-out",
         )}
       >
-        <div className="hidden lg:block row-start-1 row-span-2 border-r border-slate-200 overflow-hidden">
+        <div
+          className={cn(
+            "hidden lg:block row-start-1 row-span-2",
+            isAssetListCollapsed ? "overflow-visible" : "border-r border-slate-200 overflow-hidden",
+          )}
+        >
           <TrackingSidebar
             viewMode={viewMode}
             vehicles={vehicles}
@@ -532,7 +602,7 @@ export default function TrackingPage() {
             setSearchQuery={setSearchQuery}
             ongoingTripsCount={ongoingTrips.length}
             ongoingTripsData={ongoingTripsData}
-            setIsReplayOpen={setIsReplayOpen}
+            onReplayVehicle={navigateToPlayback}
             isLoadingTrips={isLoadingTrips}
             alarmState={alarmState}
             isFilterActive={isFilterActive}
@@ -544,51 +614,56 @@ export default function TrackingPage() {
         </div>
 
         <div className="relative row-start-1 overflow-hidden">
-          <TrackingMap
-            filteredVehicles={filteredVehicles}
-            locations={locations}
-            selectedVehicle={selectedVehicle}
-            setSelectedVehicle={(v) => setSelectedVehicleId(v?.id)}
-            vehicles={vehicles}
-            TILE_URL={MAP_LAYERS[mapStyle]}
-            mapStyle={mapStyle}
-            showTraffic={showTraffic}
-            trail={selectedTrail}
-            getMarkerSVG={getMarkerSVG}
-            getVehicleIcon={getVehicleIcon}
-            statusFilter={statusFilter}
-            zoomResetKey={zoomResetKey}
-            showGeofences={showGeofences}
-            geofences={geofences}
-            interpolator={interpolator}
-            alarmState={alarmState}
-          />
-
-          <div className="absolute top-4 left-4 right-4 z-30">
-            <TrackingTopBar
-              locationSearch={locationSearch}
-              setLocationSearch={setLocationSearch}
-              onLocationSearchSubmit={handleLocationSearchSubmit}
-              mapStyle={mapStyle}
-              setMapStyle={setMapStyle}
+          <MapInstanceProvider value={mapInstance}>
+            <TrackingMap
+              containerRef={mapContainerRef}
+              filteredVehicles={filteredVehicles}
+              locations={locations}
+              selectedVehicle={selectedVehicle}
+              setSelectedVehicle={(v) => setSelectedVehicleId(v?.attributes.uuid ?? null)}
               showTraffic={showTraffic}
-              setShowTraffic={setShowTraffic}
+              trail={selectedTrail}
+              getVehicleIcon={getVehicleIcon}
+              statusFilter={statusFilter}
+              zoomResetKey={zoomResetKey}
               showGeofences={showGeofences}
-              setShowGeofences={setShowGeofences}
+              geofences={geofences}
+              interpolator={interpolator}
+              alarmState={alarmState}
             />
-          </div>
 
-          <div className="absolute left-4 top-24 z-30 flex flex-col gap-3">
-            <MapZoomControl />
-            <MapExtraControls
-              isFullscreen={isFullscreen}
-              onToggleFullscreen={toggleFullscreen}
-              onRecenter={resetZoom}
-            />
-          </div>
+            <div
+              className={cn(
+                "absolute top-4 right-4 z-30 transition-[left] duration-300 ease-in-out",
+                isAssetListCollapsed ? "left-14" : "left-4",
+              )}
+            >
+              <TrackingTopBar
+                locationSearch={locationSearch}
+                setLocationSearch={setLocationSearch}
+                onLocationSearchSubmit={handleLocationSearchSubmit}
+                mapStyle={mapStyle}
+                setMapStyle={setMapStyle}
+                showTraffic={showTraffic}
+                setShowTraffic={setShowTraffic}
+                showGeofences={showGeofences}
+                setShowGeofences={setShowGeofences}
+              />
+            </div>
 
-          <MapLegend />
-          <ConnectionBanner />
+            <div className="absolute left-4 top-24 z-30 flex flex-col gap-3">
+              <MapZoomControl />
+              <MapExtraControls
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                onRecenter={resetZoom}
+              />
+            </div>
+
+            <MapLegend />
+            <ConnectionBanner />
+            <StreetImageryPanel locations={locations} />
+          </MapInstanceProvider>
         </div>
 
         <div className="hidden lg:block row-start-1 row-span-2 overflow-hidden">
@@ -604,7 +679,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
           />
         </div>
 
@@ -614,7 +689,8 @@ export default function TrackingPage() {
               <BottomCards
                 selectedVehicle={selectedVehicle}
                 resolved={resolvedTelemetry}
-                hasActiveAlarm={alarmState[selectedVehicle.id] === true}
+                loc={selectedLoc}
+                hasActiveAlarm={alarmState[selectedVehicle.attributes.uuid] === true}
               />
             </div>
           </div>
@@ -634,7 +710,7 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.id] === true : false}
+            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
           />
         </div>
 
@@ -666,20 +742,6 @@ export default function TrackingPage() {
         filters={filters}
         onApplyFilters={setFilters}
         onResetFilters={() => setFilters(initialFilterState)}
-      />
-
-      <TripPlaybackTimeline
-        isOpen={isReplayOpen}
-        onClose={() => setIsReplayOpen(false)}
-        data={playbackData}
-        currentIndex={playbackIndex}
-        onIndexChange={setPlaybackIndex}
-        isPlaying={isPlayingPlayback}
-        setIsPlaying={setIsPlayingPlayback}
-        isLoading={isLoadingPlayback}
-        title={playbackType === "trip" ? "TRIP REPLAY" : "HISTORY REPLAY"}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
       />
 
       <style jsx global>{`

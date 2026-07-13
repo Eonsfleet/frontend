@@ -26,7 +26,7 @@ interface TrackingSidebarProps {
   setSearchQuery: (query: string) => void;
   ongoingTripsCount: number;
   ongoingTripsData: any[];
-  setIsReplayOpen: (open: boolean) => void;
+  onReplayVehicle: (vehicleId: string, tripId: string | null) => void;
   isLoadingTrips: boolean;
   alarmState?: Record<string, boolean>;
   isFilterActive: boolean;
@@ -50,7 +50,7 @@ export function TrackingSidebar({
   setSearchQuery,
   ongoingTripsCount,
   ongoingTripsData,
-  setIsReplayOpen,
+  onReplayVehicle,
   isLoadingTrips,
   alarmState = {},
   isFilterActive,
@@ -76,12 +76,12 @@ export function TrackingSidebar({
     <VehicleListItem
       key={v.id}
       vehicle={v}
-      loc={locations[v.id]}
-      isSelected={String(selectedVehicleId) === String(v.id)}
-      hasActiveAlarm={alarmState[v.id] === true}
+      loc={locations[v.attributes.uuid]}
+      isSelected={String(selectedVehicleId) === String(v.attributes.uuid)}
+      hasActiveAlarm={alarmState[v.attributes.uuid] === true}
       onSelect={() => {
-        const isSelected = String(selectedVehicleId) === String(v.id);
-        setSelectedVehicleId(isSelected ? null : v.id);
+        const isSelected = String(selectedVehicleId) === String(v.attributes.uuid);
+        setSelectedVehicleId(isSelected ? null : v.attributes.uuid);
       }}
     />
   );
@@ -119,11 +119,11 @@ export function TrackingSidebar({
 
   if (isAssetListCollapsed) {
     return (
-      <div className="hidden lg:flex h-full flex-col pointer-events-none">
+      <div className="hidden lg:block relative h-full pointer-events-none">
         <button
           onClick={toggleAssetList}
           aria-label="Expand asset list"
-          className="pointer-events-auto self-start mt-2 h-12 w-8 rounded-r-2xl bg-white border border-slate-200 shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
+          className="pointer-events-auto absolute left-0 top-2 z-500 h-12 w-8 rounded-r-2xl bg-white border border-slate-200 shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -292,7 +292,7 @@ export function TrackingSidebar({
                   onSelect={() => {
                     if (trip.vehicleId) {
                       setSelectedVehicleId(trip.vehicleId);
-                      setIsReplayOpen(true);
+                      onReplayVehicle(trip.vehicleId, trip.id ?? null);
                     }
                   }}
                 />

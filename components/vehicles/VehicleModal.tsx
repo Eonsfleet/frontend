@@ -27,7 +27,7 @@ export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps
     const { mutate: handleMutation, isPending } = useMutation({
         mutationFn: (data: any) => {
             if (initialData) {
-                return updateVehicle(initialData.id, data)
+                return updateVehicle(initialData.attributes.uuid, data)
             }
             return createVehicle(data)
         },
@@ -35,7 +35,7 @@ export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps
             toast.success(initialData ? 'Vehicle updated successfully' : 'Vehicle created successfully')
             queryClient.invalidateQueries({ queryKey: ['vehicles'] })
             if (initialData) {
-                queryClient.invalidateQueries({ queryKey: ['vehicle', initialData.id] })
+                queryClient.invalidateQueries({ queryKey: ['vehicle', initialData.attributes.uuid] })
             }
             onClose()
         },

@@ -1,600 +1,323 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import {
-    ChevronLeft, Play, Pause, FastForward, Rewind,
-    Calendar as CalendarIcon, Clock, Truck, MapPin,
-    Layers, Search, Download, Settings, History,
-    Navigation, List, Loader2, Maximize2
-} from 'lucide-react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import * as vehicleApi from '@/lib/api/vehicles'
-import * as trackingApi from '@/lib/api/tracking'
-import * as tripsApi from '@/lib/api/trips'
-import { format, subHours, startOfHour, addMinutes, parseISO } from 'date-fns'
-import { Slider } from '@/components/ui/slider'
-import { useRouter } from 'next/navigation'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { format, subHours } from 'date-fns'
+import { ChevronLeft, History } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/store/uiStore'
-import { PAGE_SIZE_DROPDOWN } from '@/lib/config'
-import { QueryError } from '@/components/shared/QueryError'
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
-import dynamic from 'next/dynamic'
+import * as vehicleApi from '@/lib/api/vehicles'
+import * as driversApi from '@/lib/api/drivers'
+import * as tripApi from '@/lib/api/trips'
+import { getClusters } from '@/lib/api/settings'
+import { getGeofences } from '@/lib/api/geofencing'
+import type { PlaybackEventType } from '@/types'
+import { DEFAULT_THRESHOLDS, type DrivingBehaviourThresholds } from '@/lib/playback/derive'
+import type { PlaybackSpeed } from '@/lib/playback/interpolation'
+import { usePlaybackMovements } from './hooks/usePlaybackMovements'
+import { usePlaybackDerived } from './hooks/usePlaybackDerived'
+import { usePlaybackEngine } from './hooks/usePlaybackEngine'
+import { usePlaybackAddress } from './hooks/usePlaybackAddress'
+import { PlaybackFilterBar } from './components/PlaybackFilterBar'
+import { PlaybackAdvancedFilters } from './components/PlaybackAdvancedFilters'
+import { PlaybackMap } from './components/PlaybackMap'
+import { PlaybackScrubber } from './components/PlaybackScrubber'
+import { PlaybackSummaryPanel } from './components/PlaybackSummaryPanel'
+import { PlaybackBottomPanel } from './components/PlaybackBottomPanel'
+import { StreetImageryPanel } from '../components/StreetImageryPanel'
+import { useStreetImageryStore } from '@/store/streetImageryStore'
 
-const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false })
-const TileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false })
-const Marker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false })
-const Polyline = dynamic(() => import('react-leaflet').then(mod => mod.Polyline), { ssr: false })
-const useMap = typeof window !== 'undefined' ? require('react-leaflet').useMap : () => null
-
-const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
-const MAPBOX_STYLE = 'mapbox/dark-v11'
-const TILE_URL = MAPBOX_ACCESS_TOKEN
-    ? `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/{z}/{x}/{y}?access_token=${MAPBOX_ACCESS_TOKEN}`
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-
-interface MovementData {
-    lat: number;
-    lng: number;
-    timestamp: string;
-    heading: number;
-    speed: number;
+const DEFAULT_EVENT_FILTERS: Record<PlaybackEventType, boolean> = {
+  overspeed: true,
+  harsh_braking: true,
+  harsh_acceleration: true,
+  geofence_enter: true,
+  geofence_exit: true,
 }
 
-interface Vehicle {
-    id: string;
-    attributes: {
-        registration_number: string;
-        // Add other vehicle attributes if needed
-    };
+function toDatetimeLocal(iso: string): string {
+  return format(new Date(iso), "yyyy-MM-dd'T'HH:mm")
 }
 
 export default function PlaybackPage() {
-    const router = useRouter()
-    const { setSidebarCollapsed } = useUIStore()
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
-    const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
-    const [startTime, setStartTime] = useState(format(subHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm"))
-    const [endTime, setEndTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { setSidebarCollapsed } = useUIStore()
+  const containerRef = useRef<HTMLDivElement>(null)
 
-    // Playback control state
-    const [isPlaying, setIsPlaying] = useState(false)
-    const [playbackIndex, setPlaybackIndex] = useState(0)
-    const [playbackSpeed, setPlaybackSpeed] = useState(1) // 1x, 2x, 4x, 8x
-    const [showEvents, setShowEvents] = useState(true)
-    const [syncKey, setSyncKey] = useState(0)
+  const [vehicleId, setVehicleId] = useState<string | null>(searchParams.get('vehicleId'))
+  const [tripId, setTripId] = useState<string | null>(searchParams.get('tripId'))
+  const initialEnd = searchParams.get('end') ?? new Date().toISOString()
+  const initialStart = searchParams.get('start') ?? subHours(new Date(initialEnd), 6).toISOString()
+  const [startTime, setStartTime] = useState(toDatetimeLocal(initialStart))
+  const [endTime, setEndTime] = useState(toDatetimeLocal(initialEnd))
+  const [clusterId, setClusterId] = useState<string | null>(null)
+  const [driverId, setDriverId] = useState<string | null>(null)
 
-    useEffect(() => {
-        setSidebarCollapsed(true)
-    }, [])
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
+  const [vehicleStatusFilters, setVehicleStatusFilters] = useState({ moving: true, parked: true, idle: true, offline: true })
+  const [routeId, setRouteId] = useState<string | null>(null)
+  const [geofenceId, setGeofenceId] = useState<string | null>(null)
+  const [radiusKm, setRadiusKm] = useState(5)
+  const [eventFilters, setEventFilters] = useState(DEFAULT_EVENT_FILTERS)
+  const [thresholds, setThresholds] = useState<DrivingBehaviourThresholds>(DEFAULT_THRESHOLDS)
 
-    const { data: vehicleData, isError: isVehicleError, refetch: refetchVehicles } = useQuery<{ data: Vehicle[] }>({
-        queryKey: ['vehicles', { per_page: PAGE_SIZE_DROPDOWN }],
-        queryFn: () => vehicleApi.getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
-    })
+  const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('standard')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(16)
 
-    const vehicles = vehicleData?.data || []
+  useEffect(() => {
+    setSidebarCollapsed(true)
+    return () => setSidebarCollapsed(false)
+  }, [setSidebarCollapsed])
 
-    const { data: tripsData, isLoading: isLoadingTrips } = useQuery<{ data: { trips: any[] } }>({
-        queryKey: ['trips', selectedVehicleId],
-        queryFn: () => tripsApi.getTrips({ vehicle_id: selectedVehicleId! } as any),
-        enabled: !!selectedVehicleId
-    })
+  const { data: vehiclesData } = useQuery({
+    queryKey: ['playback-vehicles'],
+    queryFn: () => vehicleApi.getVehicles({ per_page: 200 }),
+  })
+  const vehicles = useMemo(() => vehiclesData?.data ?? [], [vehiclesData])
 
-    const vehicleTrips = useMemo(() => {
-        if (!tripsData?.data?.trips) return []
-        return tripsData.data.trips.filter((t: any) => {
-            const relVehicle = t.relationships?.vehicle as any
-            const vehicleId = relVehicle?.id || (t.attributes as any)?.vehicle_id
-            return String(vehicleId) === String(selectedVehicleId)
-        })
-    }, [tripsData, selectedVehicleId])
+  const { data: clustersData } = useQuery({
+    queryKey: ['playback-clusters'],
+    queryFn: () => getClusters({ per_page: 100 }),
+  })
+  const clusters = clustersData?.data?.clusters ?? []
 
-    const { data: tripPlaybackData, isLoading: isLoadingTripPlayback, isError: isTripPlaybackError, refetch: refetchTripPlayback } = useQuery({
-        queryKey: ['playback-trip', selectedVehicleId, selectedTripId],
-        queryFn: () => trackingApi.getTripPlayback(selectedVehicleId!, selectedTripId!),
-        enabled: !!selectedVehicleId && !!selectedTripId,
-    })
+  const { data: driversData } = useQuery({
+    queryKey: ['playback-drivers'],
+    queryFn: () => driversApi.getDrivers({ per_page: 200 }),
+  })
+  const drivers = useMemo(() => driversData?.data ?? [], [driversData])
 
-    const { data: vehiclePlaybackData, isLoading: isLoadingVehiclePlayback, isError: isVehiclePlaybackError, refetch: refetchVehiclePlayback } = useQuery({
-        queryKey: ['playback-vehicle', selectedVehicleId, syncKey],
-        queryFn: () => trackingApi.getVehiclePlayback(selectedVehicleId!, startTime, endTime),
-        enabled: !!selectedVehicleId && !selectedTripId && syncKey > 0,
-    })
+  const { data: driverVehicleData } = useQuery({
+    queryKey: ['playback-driver-vehicle', driverId],
+    queryFn: () => driversApi.getDriverCurrentVehicle(driverId!),
+    enabled: !!driverId,
+  })
 
-    const isLoadingPlayback = isLoadingTripPlayback || isLoadingVehiclePlayback
+  useEffect(() => {
+    const assignedVehicleId = driverVehicleData?.data?.id
+    if (assignedVehicleId) queueMicrotask(() => setVehicleId(String(assignedVehicleId)))
+  }, [driverVehicleData])
 
-    const movements = useMemo(() => {
-        if (selectedTripId) {
-            return tripPlaybackData?.data?.gps_points || []
-        }
-        const raw: any[] = vehiclePlaybackData?.data || []
-        return raw.map((p: any) => ({
-            lat: p.latitude,
-            lng: p.longitude,
-            speed: p.speed,
-            heading: 0,
-            timestamp: p.timestamp,
-        }))
-    }, [selectedTripId, tripPlaybackData, vehiclePlaybackData])
-    const currentMovement = useMemo(() => movements[playbackIndex], [movements, playbackIndex])
+  const { data: geofencesData } = useQuery({
+    queryKey: ['playback-geofences'],
+    queryFn: () => getGeofences({ per_page: 100 }),
+  })
+  const geofences = geofencesData?.data?.geofences ?? []
+  const selectedGeofence = geofences.find((g) => String(g.id) === geofenceId) ?? null
 
-    // Playback Loop
-    useEffect(() => {
-        let timer: NodeJS.Timeout
-        if (isPlaying && playbackIndex < movements.length - 1) {
-            timer = setTimeout(() => {
-                setPlaybackIndex((prev: number) => prev + 1)
-            }, 1000 / playbackSpeed)
-        } else if (playbackIndex >= movements.length - 1) {
-            setIsPlaying(false)
-        }
-        return () => clearTimeout(timer)
-    }, [isPlaying, playbackIndex, movements.length, playbackSpeed])
+  const { data: routesData } = useQuery({
+    queryKey: ['playback-routes', tripId],
+    queryFn: () => tripApi.getTripRoutes(tripId!),
+    enabled: !!tripId,
+  })
+  const routes = ((routesData?.data ?? []) as Record<string, unknown>[]).map((route) => ({ id: String(route.id), label: String(route.name ?? `Route ${route.id}`) }))
 
-    const progressValue = useMemo(() => {
-        if (movements.length <= 1) return [0]
-        return [(playbackIndex / (movements.length - 1)) * 100]
-    }, [playbackIndex, movements.length])
+  const visibleVehicles = useMemo(() => {
+    if (!clusterId) return vehicles
+    return vehicles.filter((v) => String(v.relationships?.cluster?.id ?? '') === clusterId)
+  }, [vehicles, clusterId])
 
-    const selectedVehicle = useMemo(() =>
-        vehicles.find((v: Vehicle) => String(v.id) === String(selectedVehicleId)),
-        [vehicles, selectedVehicleId]
+  const selectedVehicle = vehicles.find((v) => v.attributes.uuid === vehicleId || String(v.id) === vehicleId) ?? null
+  const vehicleLabel = selectedVehicle?.attributes.registration_number ?? '—'
+
+  const { movements, isLoading } = usePlaybackMovements({
+    vehicleId,
+    tripId,
+    startTime: tripId ? null : new Date(startTime).toISOString(),
+    endTime: tripId ? null : new Date(endTime).toISOString(),
+  })
+
+  const { stats, speedSegments, stops, events } = usePlaybackDerived(movements, thresholds, selectedGeofence)
+  const handlePlaybackEnd = useCallback(() => setIsPlaying(false), [])
+
+  const {
+    preparedPoints,
+    frame: playbackFrame,
+    currentIndex: playbackIndex,
+    progressPercent,
+    seekToIndex,
+    seekToPercent,
+  } = usePlaybackEngine({
+    movements,
+    isPlaying,
+    speed: playbackSpeed,
+    onPlaybackEnd: handlePlaybackEnd,
+  })
+  const currentAddress = usePlaybackAddress(playbackFrame, preparedPoints, isPlaying)
+  const filteredEvents = events.filter((e) => eventFilters[e.type])
+
+  const handleViewStreet = useCallback(() => {
+    const point = playbackFrame ?? movements[playbackIndex]
+    if (!point) return
+    if (isPlaying) setIsPlaying(false)
+    useStreetImageryStore.getState().open(
+      { lat: point.lat, lng: point.lng },
+      {
+        label: vehicleLabel,
+        subtitle: `Playback @ ${format(new Date(point.timestamp), 'hh:mm:ss a')}`,
+        sourceTimestamp: point.timestamp,
+        sourceTimestampLabel: 'Playback timestamp',
+      },
     )
+  }, [movements, playbackIndex, playbackFrame, isPlaying, vehicleLabel])
 
-    const MapController = ({ movements, currentIndex }: { movements: MovementData[], currentIndex: number }) => {
-        const map = useMap()
-        useEffect(() => {
-            if (movements.length > 0 && currentIndex === 0) {
-                const bounds = movements.map((m: MovementData) => [m.lat, m.lng] as [number, number])
-                map.fitBounds(bounds, { padding: [50, 50] })
-            }
-        }, [movements.length])
+  const activeFilterCount =
+    Object.values(vehicleStatusFilters).filter((v) => !v).length +
+    (routeId ? 1 : 0) +
+    (geofenceId ? 1 : 0) +
+    Object.values(eventFilters).filter((v) => !v).length
 
-        useEffect(() => {
-            if (movements[currentIndex]) {
-                const p = movements[currentIndex]
-                map.flyTo([p.lat, p.lng], 16)
-            }
-        }, [currentIndex, map])
+  const activeChips = [
+    ...(!vehicleStatusFilters.parked ? [{ key: 'hide-parked', label: 'Hiding Parked' }] : []),
+    ...(geofenceId ? [{ key: 'geofence', label: 'Geofence Filter' }] : []),
+    ...(routeId ? [{ key: 'route', label: 'Route Filter' }] : []),
+  ]
 
-        return null
+  const removeChip = useCallback((key: string) => {
+    if (key === 'hide-parked') setVehicleStatusFilters((prev) => ({ ...prev, parked: true }))
+    if (key === 'geofence') setGeofenceId(null)
+    if (key === 'route') setRouteId(null)
+  }, [])
+
+  const clearAllChips = useCallback(() => {
+    setVehicleStatusFilters({ moving: true, parked: true, idle: true, offline: true })
+    setGeofenceId(null)
+    setRouteId(null)
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+      setIsFullscreen(false)
+    } else {
+      containerRef.current?.requestFullscreen()
+      setIsFullscreen(true)
     }
+  }, [])
 
-    return (
-        <div className="h-screen flex overflow-hidden bg-slate-900">
-            {/* Playback Control Sidebar */}
-            <aside className="w-80 flex flex-col bg-white border-r border-slate-200 z-20 shadow-2xl shrink-0">
-                <div className="p-4 border-b border-slate-100 bg-white">
-                    <div className="flex items-center gap-3 mb-6">
-                        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full h-8 w-8">
-                            <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        <h2 className="font-black text-slate-900 tracking-tight flex items-center gap-2">
-                            <History className="w-5 h-5 text-blue-600" />
-                            Playback
-                        </h2>
-                    </div>
 
-                    <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Target Vehicle</label>
-                            <select
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={selectedVehicleId || ''}
-                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                    setSelectedVehicleId(e.target.value)
-                                    setPlaybackIndex(0)
-                                    setIsPlaying(false)
-                                }}
-                            >
-                                <option value="" disabled>Select Asset...</option>
-                                {vehicles.map((v: Vehicle) => (
-                                    <option key={v.id} value={v.id}>{v.attributes.registration_number}</option>
-                                ))}
-                            </select>
-                        </div>
+  return (
+    <div ref={containerRef} className="h-screen flex flex-col overflow-hidden bg-slate-50">
+      <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full h-8 w-8">
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <h1 className="font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <History className="w-5 h-5 text-blue-600" />
+          Playback
+        </h1>
+      </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Select Trip</label>
-                            <select
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={selectedTripId || ''}
-                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                    setSelectedTripId(e.target.value)
-                                    setPlaybackIndex(0)
-                                    setIsPlaying(false)
-                                }}
-                                disabled={!selectedVehicleId || isLoadingTrips}
-                            >
-                                <option value="" disabled>{isLoadingTrips ? 'Loading Trips...' : 'Select Trip...'}</option>
-                                {vehicleTrips.map((t: any) => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.attributes.trip_number} ({format(parseISO(t.attributes.planned_start_time), 'MMM dd')})
-                                    </option>
-                                ))}
-                                {!isLoadingTrips && vehicleTrips.length === 0 && selectedVehicleId && (
-                                    <option value="" disabled>No trips found</option>
-                                )}
-                            </select>
-                        </div>
+      <PlaybackFilterBar
+        vehicles={visibleVehicles.map((v) => ({ id: v.attributes.uuid ?? String(v.id), label: v.attributes.registration_number }))}
+        selectedVehicleId={vehicleId}
+        onVehicleChange={(id) => {
+          setVehicleId(id)
+          setTripId(null)
+          seekToIndex(0)
+        }}
+        clusters={clusters.map((c) => ({ id: String(c.id), label: c.attributes.name }))}
+        selectedClusterId={clusterId}
+        onClusterChange={setClusterId}
+        drivers={drivers.map((driver) => ({ id: String(driver.id), label: driver.attributes.full_name || `${driver.attributes.first_name} ${driver.attributes.last_name}`.trim() || `Driver ${driver.id}` }))}
+        selectedDriverId={driverId}
+        onDriverChange={setDriverId}
+        startTime={startTime}
+        endTime={endTime}
+        onStartTimeChange={setStartTime}
+        onEndTimeChange={setEndTime}
+        isRangeReadOnly={!!tripId}
+        activeFilterCount={activeFilterCount}
+        isAdvancedOpen={isAdvancedOpen}
+        onToggleAdvanced={() => setIsAdvancedOpen((v) => !v)}
+        activeChips={activeChips}
+        onRemoveChip={removeChip}
+        onClearAllChips={clearAllChips}
+      />
 
-                        <div className={cn("grid grid-cols-2 gap-3 transition-opacity", selectedTripId ? "opacity-40 pointer-events-none" : "")}>
-                            <div className="space-y-1.5 text-slate-400">
-                                <label className="text-[10px] font-black uppercase tracking-widest">Start Time</label>
-                                <div className="relative">
-                                    <Clock className="absolute left-3 top-2.5 w-3.5 h-3.5" />
-                                    <input
-                                        type="datetime-local"
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg h-9 pl-8 pr-2 text-[11px] font-bold text-slate-700 outline-none"
-                                        value={startTime}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartTime(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5 text-slate-400">
-                                <label className="text-[10px] font-black uppercase tracking-widest">End Time</label>
-                                <div className="relative">
-                                    <Clock className="absolute left-3 top-2.5 w-3.5 h-3.5" />
-                                    <input
-                                        type="datetime-local"
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg h-9 pl-8 pr-2 text-[11px] font-bold text-slate-700 outline-none"
-                                        value={endTime}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndTime(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {isVehicleError && <QueryError message="Failed to load vehicles." onRetry={refetchVehicles} />}
-                        {(isTripPlaybackError || isVehiclePlaybackError) && (
-                            <QueryError
-                                message="Failed to load playback data."
-                                onRetry={isTripPlaybackError ? refetchTripPlayback : refetchVehiclePlayback}
-                            />
-                        )}
-
-                        <Button
-                            className="w-full bg-slate-900 hover:bg-black font-black text-[10px] uppercase tracking-widest h-10 shadow-lg"
-                            disabled={!selectedVehicleId || isLoadingPlayback}
-                            onClick={() => {
-                                setPlaybackIndex(0)
-                                setIsPlaying(false)
-                                if (!selectedTripId) setSyncKey((k: number) => k + 1)
-                            }}
-                        >
-                            {isLoadingPlayback ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-3.5 h-3.5 mr-2" />}
-                            Sync Timeline
-                        </Button>
-                    </div>
-                </div>
-
-                <ScrollArea className="flex-1 bg-slate-50/50">
-                    <div className="p-4">
-                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Voyage Log Summary</div>
-                        {selectedVehicleId && movements.length > 0 ? (
-                            <div className="space-y-4">
-                                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative">
-                                    <div className="absolute left-6 top-12 bottom-12 border-l border-dashed border-slate-200" />
-                                    <div className="flex gap-4 mb-6 relative">
-                                        <div className="w-4 h-4 rounded-full bg-blue-600 border-4 border-white shadow mt-1 shrink-0" />
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Origin</p>
-                                            <p className="text-xs font-bold text-slate-900 leading-tight">
-                                                {movements[0] ? `${movements[0].lat.toFixed(4)}, ${movements[0].lng.toFixed(4)}` : 'Mission Start Point'}
-                                            </p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{movements[0] ? format(new Date(movements[0].timestamp), 'MMM dd, HH:mm') : format(new Date(startTime), 'MMM dd, HH:mm')}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4 relative">
-                                        <div className="w-4 h-4 rounded-full bg-slate-200 border-4 border-white shadow mt-1 shrink-0" />
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Destination</p>
-                                            <p className="text-xs font-bold text-slate-900 leading-tight">
-                                                {movements[movements.length - 1] ? `${movements[movements.length - 1].lat.toFixed(4)}, ${movements[movements.length - 1].lng.toFixed(4)}` : 'Mission End Point'}
-                                            </p>
-                                            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{movements[movements.length - 1] ? format(new Date(movements[movements.length - 1].timestamp), 'MMM dd, HH:mm') : format(new Date(endTime), 'MMM dd, HH:mm')}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="bg-white p-3 rounded-lg border border-slate-100">
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-1">Total Distance</div>
-                                        <div className="text-sm font-black text-slate-900">12.4 KM</div>
-                                    </div>
-                                    <div className="bg-white p-3 rounded-lg border border-slate-100">
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-1">Avg Speed</div>
-                                        <div className="text-sm font-black text-slate-900">42 KM/H</div>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-20">
-                                <History className="w-8 h-8 text-slate-200 mx-auto mb-3" />
-                                <p className="text-xs font-bold text-slate-400 px-8">Define asset and timeframe to generate telemetry history.</p>
-                            </div>
-                        )}
-                    </div>
-                </ScrollArea>
-            </aside>
-
-            {/* Map Environment Card */}
-            <div role="region" aria-label="Trip playback map" className="flex-1 relative bg-slate-200 overflow-hidden">
-                {typeof window !== 'undefined' && (
-                    <MapContainer
-                        center={[6.5244, 3.3792]}
-                        zoom={12}
-                        className="h-full w-full z-10"
-                        zoomControl={false}
-                    >
-                        <TileLayer url={TILE_URL} attribution='&copy; Mapbox' />
-                        <MapController movements={movements} currentIndex={playbackIndex} />
-
-                        {movements.length > 1 && (
-                            <Polyline
-                                positions={movements.map((m: MovementData) => [m.lat, m.lng])}
-                                color="#3b82f6"
-                                weight={4}
-                                opacity={0.6}
-                                dashArray="10, 10"
-                            />
-                        )}
-
-                        {currentMovement && (
-                            <Marker
-                                position={[currentMovement.lat, currentMovement.lng]}
-                                icon={L.divIcon({
-                                    className: 'custom-marker-wrapper',
-                                    html: `
-                                        <div class="marker-container is-active is-online">
-                                            <div class="marker-pulse"></div>
-                                            <div class="marker-base" style="transform: rotate(${currentMovement.heading || 0}deg); background: #2563eb; border-color: #fff;">
-                                                <div class="marker-icon-wrapper">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white">
-                                                        <path d="M12 19V5M5 12l7-7 7 7"/>
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `,
-                                    iconSize: [40, 40],
-                                    iconAnchor: [20, 20]
-                                })}
-                            />
-                        )}
-                    </MapContainer>
-                )}
-
-                {/* Dynamic Content Control Layer */}
-                <TooltipProvider>
-                    <div className="absolute top-6 right-6 flex flex-col gap-2">
-                        <div className="bg-white/90 backdrop-blur rounded-xl shadow-2xl border border-slate-200 p-1.5 flex flex-col gap-1">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant={showEvents ? "secondary" : "ghost"}
-                                        size="icon"
-                                        className={cn("h-10 w-10 text-blue-600", !showEvents && "text-slate-400")}
-                                        onClick={() => setShowEvents(!showEvents)}
-                                    >
-                                        <List className="w-5 h-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                    <p className="text-xs font-bold">Toggle Event Log</p>
-                                </TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-10 w-10 text-slate-500 hover:text-blue-600"
-                                        onClick={() => useUIStore.getState().toggleSidebar()}
-                                    >
-                                        <Maximize2 className="w-5 h-5" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                    <p className="text-xs font-bold">Toggle Fullscreen</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    </div>
-                </TooltipProvider>
-
-                {/* Playback OS - Fixed Bottom Module */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-4xl px-6 z-30">
-                    <Card className="shadow-2xl border-0 overflow-hidden bg-white/95 backdrop-blur-xl border-t-4 border-t-blue-600">
-                        <CardContent className="p-0">
-                            <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-1 group">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-9 w-9 rounded-full text-slate-400 hover:text-blue-600"
-                                                        onClick={() => setPlaybackIndex(Math.max(0, playbackIndex - 10))}
-                                                    >
-                                                        <Rewind className="w-5 h-5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="text-xs font-bold">Step Back</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        size="icon"
-                                                        className="h-12 w-12 rounded-full shadow-lg bg-blue-600 hover:bg-black transition-all"
-                                                        onClick={() => setIsPlaying(!isPlaying)}
-                                                        disabled={movements.length === 0}
-                                                    >
-                                                        {isPlaying ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 ml-1 fill-white" />}
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="text-xs font-bold">{isPlaying ? 'Pause' : 'Play'}</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-9 w-9 rounded-full text-slate-400 hover:text-blue-600"
-                                                        onClick={() => setPlaybackIndex(Math.min(movements.length - 1, playbackIndex + 10))}
-                                                    >
-                                                        <FastForward className="w-5 h-5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p className="text-xs font-bold">Step Forward</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-                                    <div className="h-8 w-px bg-slate-200 mx-2" />
-                                    <div className="flex gap-1 bg-white p-1 rounded-full border border-slate-100">
-                                        {[1, 2, 4, 8].map(speed => (
-                                            <button
-                                                key={speed}
-                                                onClick={() => setPlaybackSpeed(speed)}
-                                                className={cn(
-                                                    "w-10 h-7 rounded-full text-[10px] font-black transition-all",
-                                                    playbackSpeed === speed ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-900"
-                                                )}
-                                            >
-                                                {speed}X
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end">
-                                    <div className="text-xl font-black text-slate-900 leading-tight">
-                                        {currentMovement ? format(new Date(currentMovement.timestamp), 'HH:mm:ss') : '--:--:--'}
-                                    </div>
-                                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                                        Voyage Progress
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-6">
-                                <Slider
-                                    value={progressValue}
-                                    max={100}
-                                    step={0.1}
-                                    className="mb-4"
-                                    onValueChange={([val]: number[]) => {
-                                        if (movements.length === 0) return
-                                        const index = Math.floor((val / 100) * (movements.length - 1))
-                                        setPlaybackIndex(index)
-                                    }}
-                                />
-                                <div className="flex items-center justify-between text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                                    <span>T-Minus Zero</span>
-                                    <div className="flex items-center gap-4 text-slate-900">
-                                        {currentMovement && (
-                                            <>
-                                                <span className="flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" style={{ transform: `rotate(${currentMovement.heading}deg)` }} /> {currentMovement.heading}&deg;</span>
-                                                <span className="flex items-center gap-1.5 text-blue-600"><Truck className="w-3.5 h-3.5" /> {currentMovement.speed} KM/H</span>
-                                            </>
-                                        )}
-                                    </div>
-                                    <span>Destination Reached</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
-            <style jsx global>{`
-                .leaflet-container {
-                    background: #f8fafc !important;
-                }
-                .marker-container {
-                    position: relative;
-                    width: 40px;
-                    height: 40px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .marker-base {
-                    position: relative;
-                    z-index: 2;
-                    width: 32px;
-                    height: 32px;
-                    background: #1e293b;
-                    border: 2px solid white;
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                    transition: transform 0.5s ease;
-                }
-                .marker-container.is-active .marker-base {
-                    background: #2563eb;
-                    border-color: #60a5fa;
-                }
-                .marker-pulse {
-                    position: absolute;
-                    width: 40px;
-                    height: 40px;
-                    background: rgba(37, 99, 235, 0.2);
-                    border-radius: 50%;
-                    transform: scale(0);
-                    opacity: 0;
-                    z-index: 1;
-                }
-                .marker-container.is-active .marker-pulse {
-                    animation: marker-pulse 2s infinite;
-                }
-                @keyframes marker-pulse {
-                    0% { transform: scale(0.5); opacity: 0.8; }
-                    100% { transform: scale(1.5); opacity: 0; }
-                }
-                .marker-icon-wrapper {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .custom-popup .leaflet-popup-content-wrapper {
-                    border-radius: 12px;
-                    padding: 0;
-                    overflow: hidden;
-                    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-                }
-                .custom-popup .leaflet-popup-content {
-                    margin: 0;
-                }
-                .custom-popup .leaflet-popup-tip {
-                    background: white;
-                }
-            `}</style>
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">Loading telemetry…</div>
+          ) : (
+            <PlaybackMap
+              movements={movements}
+              speedSegments={speedSegments}
+              stops={stops}
+              currentIndex={playbackIndex}
+              preparedPoints={preparedPoints}
+              currentFrame={playbackFrame}
+              currentAddress={currentAddress}
+              mapStyle={mapStyle}
+              onToggleMapStyle={() => setMapStyle((s) => (s === 'standard' ? 'satellite' : 'standard'))}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )}
+          <PlaybackScrubber
+            movements={movements}
+            currentIndex={playbackIndex}
+            onIndexChange={seekToIndex}
+            isPlaying={isPlaying}
+            onTogglePlaying={() => setIsPlaying((p) => !p)}
+            speed={playbackSpeed}
+            onSpeedChange={setPlaybackSpeed}
+            currentFrame={playbackFrame}
+            progressPercent={progressPercent}
+            onProgressChange={seekToPercent}
+            onViewStreet={handleViewStreet}
+          />
+          <PlaybackBottomPanel movements={movements} events={filteredEvents} stops={stops} stats={stats} vehicleLabel={vehicleLabel} onJumpToIndex={seekToIndex} />
         </div>
-    )
+
+        <aside className="w-80 shrink-0 border-l border-slate-200 bg-white overflow-y-auto">
+          {isAdvancedOpen ? (
+            <PlaybackAdvancedFilters
+              vehicleStatusFilters={vehicleStatusFilters}
+              onVehicleStatusChange={(key, value) => setVehicleStatusFilters((prev) => ({ ...prev, [key]: value }))}
+              routes={routes}
+              selectedRouteId={routeId}
+              onRouteChange={setRouteId}
+              geofences={geofences.map((g) => ({ id: String(g.id), label: g.attributes.name }))}
+              selectedGeofenceId={geofenceId}
+              onGeofenceChange={setGeofenceId}
+              radiusKm={radiusKm}
+              onRadiusChange={setRadiusKm}
+              eventFilters={eventFilters}
+              onEventFilterChange={(key, value) => setEventFilters((prev) => ({ ...prev, [key]: value }))}
+              thresholds={thresholds}
+              onThresholdsChange={setThresholds}
+              onApply={() => setIsAdvancedOpen(false)}
+              onReset={() => {
+                setVehicleStatusFilters({ moving: true, parked: true, idle: true, offline: true })
+                setRouteId(null)
+                setGeofenceId(null)
+                setRadiusKm(5)
+                setEventFilters(DEFAULT_EVENT_FILTERS)
+                setThresholds(DEFAULT_THRESHOLDS)
+              }}
+            />
+          ) : (
+            <PlaybackSummaryPanel stats={stats} stopsCount={stops.length} events={filteredEvents} vehicleLabel={vehicleLabel} />
+          )}
+        </aside>
+      </div>
+
+      <StreetImageryPanel />
+    </div>
+  )
 }
+
+
+
+
+
+
+
+
+
+

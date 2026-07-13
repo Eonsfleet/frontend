@@ -73,7 +73,9 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             color: initialData.attributes.color || '',
             fuel_type: initialData.attributes.fuel_type || '',
             body_type: initialData.attributes.body_type || '',
-            type: initialData.attributes.type || 'Fleet',
+            type: (initialData.attributes.type && ['car', 'van', 'truck', 'bus', 'motorcycle', 'tricycle'].includes(initialData.attributes.type.toLowerCase()))
+                ? initialData.attributes.type.toLowerCase()
+                : 'car',
             status: initialData.attributes.status,
             device_id: initialData.attributes.device_id || '',
             odometer_when_join: initialData.attributes.odometer?.at_join_km || 0,
@@ -97,7 +99,7 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             color: '',
             fuel_type: 'Petrol',
             body_type: 'Sedan',
-            type: 'Fleet',
+            type: 'car',
             status: 'active',
             device_id: '',
             odometer_when_join: 0,
@@ -233,9 +235,21 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Fleet Type</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="e.g. Fleet, Subcontracted" {...field} />
-                                        </FormControl>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select fleet type" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="car">Car</SelectItem>
+                                                <SelectItem value="van">Van</SelectItem>
+                                                <SelectItem value="truck">Truck</SelectItem>
+                                                <SelectItem value="bus">Bus</SelectItem>
+                                                <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                                                <SelectItem value="tricycle">Tricycle</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                         <FormMessage />
                                     </FormItem>
                                 )}

@@ -26,8 +26,10 @@ export interface FuelExpenseMetrics {
     total_volume: number
     total_cost: number
     average_cost_per_liter: number
-    pending_count: number
-    approved_count: number
+    total_expenses: number
+    pending_approval_count: number
+    pending_count?: number
+    approved_count?: number
 }
 
 export interface FuelCardProviderType {
@@ -133,7 +135,7 @@ export interface FuelReconciliationReport {
 }
 
 export interface FuelVehicle {
-    id: number
+    id: number | string
     attributes: {
         registration_number: string
         make: string
@@ -142,6 +144,12 @@ export interface FuelVehicle {
         fuel_capacity: number
         device_imei: string | null
         device_online: boolean
+        is_online?: boolean
+        device_status?: string
+        device_connected?: boolean
+        speed?: number | string | null
+        coordinates?: { latitude?: number | string | null; longitude?: number | string | null } | null
+        odometer?: { lifetime_km?: number | string | null; today_km?: number | string | null } | null
     }
     fuel_level: {
         fuel_level_liters: number
@@ -150,6 +158,14 @@ export interface FuelVehicle {
         tank_capacity: number
         data_quality_score: number
     } | null
+    relationships?: {
+        device?: { status?: string | null } | null
+        current_location?: {
+            latitude?: number | string | null
+            longitude?: number | string | null
+            speed?: number | string | null
+        } | null
+    }
 }
 
 export interface FuelAbnormality {
@@ -176,10 +192,67 @@ export interface FuelAbnormality {
     }
 }
 
+export type FuelEconomyUnit = 'km_per_liter' | 'l_per_100km' | 'mpg'
+export type FuelMeasurementUnit = 'liters' | 'gallons'
+export type DefaultLandingPage = 'overview' | 'real_time_tracking' | 'fuel_transactions' | 'fuel_analysis' | 'fuel_alerts' | 'fuel_settings'
+export type DefaultDateRange = 'today' | 'yesterday' | 'last_7_days' | 'last_30_days' | 'this_month' | 'custom'
+export type ThresholdScope = 'all_vehicles' | 'vehicle_groups'
+
+/** Full fuel-settings resource (GET/PUT /fuel-settings). All fields optional/nullable. */
 export interface FuelSettings {
-    low_fuel_threshold_percent: number
-    low_fuel_alert_enabled: boolean
-    sensor_malfunction_alert_enabled: boolean
-    sensor_malfunction_invalid_count: number
-    alert_deduplication_hours: number
+    // Notification channels
+    alert_channel_email?: boolean | null
+    alert_channel_in_app?: boolean | null
+    alert_channel_sms?: boolean | null
+    alert_channel_webhook?: boolean | null
+    // System toggles
+    allow_bulk_fuel_transactions_import?: boolean | null
+    allow_manual_fuel_entry?: boolean | null
+    fuel_theft_detection_enabled?: boolean | null
+    // Thresholds
+    critical_fuel_threshold_percent?: number | null
+    low_fuel_threshold_percent?: number | null
+    low_fuel_alert_enabled?: boolean | null
+    refuel_full_threshold_percent?: number | null
+    refill_threshold_liters?: number | null
+    refill_threshold_percent?: number | null
+    leakage_threshold_liters?: number | null
+    leakage_threshold_percent?: number | null
+    theft_threshold_liters?: number | null
+    theft_threshold_percent?: number | null
+    threshold_scope?: ThresholdScope | null
+    threshold_vehicle_group_ids?: number[] | null
+    // Units & formatting
+    currency?: string | null
+    decimal_precision?: number | null
+    date_format?: string | null
+    timezone?: string | null
+    fuel_economy_unit?: FuelEconomyUnit | null
+    fuel_measurement_unit?: FuelMeasurementUnit | null
+    default_fuel_tank_capacity_liters?: number | null
+    // View preferences
+    default_landing_page?: DefaultLandingPage | null
+    default_date_range?: DefaultDateRange | null
+    // Idle detection
+    idle_detection_for_fuel_analysis_minutes?: number | null
+    idle_speed_threshold_kmh?: number | null
+    idle_time_threshold_minutes?: number | null
+    stationary_duration_seconds?: number | null
+    // Data refresh / summaries
+    data_refresh_interval_minutes?: number | null
+    daily_summary_enabled?: boolean | null
+    daily_summary_time?: string | null
+    quiet_hours_enabled?: boolean | null
+    quiet_hours_start?: string | null
+    quiet_hours_end?: string | null
+    // Sensor / detection tuning
+    sensor_malfunction_alert_enabled?: boolean | null
+    sensor_malfunction_invalid_count?: number | null
+    min_confidence?: number | null
+    min_fuel_difference_liters?: number | null
+    min_fuel_difference_percent?: number | null
+    max_comparison_gap_seconds?: number | null
+    idempotency_window_minutes?: number | null
+    // Legacy field kept for existing consumers
+    alert_deduplication_hours?: number | null
 }

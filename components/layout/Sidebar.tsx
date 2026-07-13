@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   Fuel,
   BarChart3,
-  CreditCard,
   Store,
   Settings,
   Lock,
@@ -77,14 +76,14 @@ const NAV_ITEMS = [
     module: "trips",
     trialAllowed: false,
   },
-  {
-    href: "/alerts",
-    label: "Alerts",
-    icon: Bell,
-    permission: null,
-    module: null,
-    trialAllowed: true,
-  },
+  // {
+  //   href: "/notifications",
+  //   label: "Alerts",
+  //   icon: Bell,
+  //   permission: null,
+  //   module: null,
+  //   trialAllowed: true,
+  // },
   {
     href: "/incidents",
     label: "Incidents",
@@ -157,14 +156,14 @@ const NAV_ITEMS = [
     module: "fuel",
     trialAllowed: false,
   },
-  {
-    href: "/ai-insights",
-    label: "AI Insights",
-    icon: Sparkles,
-    permission: null,
-    module: null,
-    trialAllowed: false,
-  },
+  // {
+  //   href: "/ai-insights",
+  //   label: "AI Insights",
+  //   icon: Sparkles,
+  //   permission: null,
+  //   module: null,
+  //   trialAllowed: false,
+  // },
   {
     href: "/camera",
     label: "Camera",
@@ -173,14 +172,14 @@ const NAV_ITEMS = [
     module: null,
     trialAllowed: false,
   },
-  {
-    href: "/messages",
-    label: "Messages",
-    icon: MessageSquare,
-    permission: null,
-    module: null,
-    trialAllowed: false,
-  },
+  // {
+  //   href: "/messages",
+  //   label: "Messages",
+  //   icon: MessageSquare,
+  //   permission: null,
+  //   module: null,
+  //   trialAllowed: false,
+  // },
   {
     href: "/documents",
     label: "Documents",
@@ -188,14 +187,6 @@ const NAV_ITEMS = [
     permission: null,
     module: "documents",
     trialAllowed: false,
-  },
-  {
-    href: "/billing",
-    label: "Billing",
-    icon: CreditCard,
-    permission: "billing:read",
-    module: null,
-    trialAllowed: true,
   },
   {
     href: "/vendors",
@@ -237,7 +228,8 @@ export default function Sidebar() {
   // not a second network request — drives the "Alerts" nav item's unread badge.
   const { data: inboxData } = useQuery({
     queryKey: ["notifications", "inbox"],
-    queryFn: () => notificationsApi.getInbox({ unread_only: true, per_page: 10 }),
+    queryFn: () =>
+      notificationsApi.getInbox({ unread_only: true, per_page: 10 }),
   });
   const unreadAlertsCount = (inboxData?.data?.notifications || []).filter(
     (n) => !n.attributes.is_read,
@@ -246,22 +238,22 @@ export default function Sidebar() {
   const { mutate: logout, isPending: isLoggingOut } = useMutation({
     mutationFn: logoutUser,
     onMutate: () => {
-      toast.loading('Signing out...', { id: 'logout' });
+      toast.loading("Signing out...", { id: "logout" });
     },
     onSuccess: () => {
-      toast.success('Signed out successfully', { id: 'logout' });
+      toast.success("Signed out successfully", { id: "logout" });
       clearAuth();
       queryClient.clear();
-      localStorage.removeItem('eonsfleet-session');
-      router.push('/login');
+      localStorage.removeItem("eonsfleet-session");
+      router.push("/login");
     },
     onError: () => {
       // Even if the API call fails, clear local session and redirect
-      toast.success('Signed out successfully', { id: 'logout' });
+      toast.success("Signed out successfully", { id: "logout" });
       clearAuth();
       queryClient.clear();
-      localStorage.removeItem('eonsfleet-session');
-      router.push('/login');
+      localStorage.removeItem("eonsfleet-session");
+      router.push("/login");
     },
   });
 
@@ -400,9 +392,7 @@ export default function Sidebar() {
                 );
               }
 
-              return (
-                <React.Fragment key={href}>{itemContent}</React.Fragment>
-              );
+              return <React.Fragment key={href}>{itemContent}</React.Fragment>;
             })}
           </div>
 
@@ -424,10 +414,11 @@ export default function Sidebar() {
                       disabled={isLoggingOut}
                       className="h-12 w-12 mx-auto flex items-center justify-center rounded-xl text-rose-400 hover:bg-rose-50 transition-all group disabled:opacity-50"
                     >
-                      {isLoggingOut
-                        ? <Loader2 className="h-5 w-5 animate-spin" />
-                        : <LogOut className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                      }
+                      {isLoggingOut ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <LogOut className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                      )}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent
@@ -444,10 +435,11 @@ export default function Sidebar() {
                   disabled={isLoggingOut}
                   className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 transition-all duration-200 group disabled:opacity-50"
                 >
-                  {isLoggingOut
-                    ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
-                    : <LogOut className="h-5 w-5 shrink-0 group-hover:scale-110 transition-transform" />
-                  }
+                  {isLoggingOut ? (
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                  ) : (
+                    <LogOut className="h-5 w-5 shrink-0 group-hover:scale-110 transition-transform" />
+                  )}
                   <span className="font-bold text-[13px] tracking-tight">
                     {isLoggingOut ? "Signing out..." : "Logout"}
                   </span>
@@ -458,7 +450,11 @@ export default function Sidebar() {
         </nav>
 
         <div className="border-t border-slate-50 p-4 space-y-3">
-          <div className={cn(isSidebarCollapsed ? "flex justify-center" : "w-full")}>
+          <div
+            className={cn(
+              isSidebarCollapsed ? "flex justify-center" : "w-full",
+            )}
+          >
             <NotificationBell showLabel={!isSidebarCollapsed} />
           </div>
 
