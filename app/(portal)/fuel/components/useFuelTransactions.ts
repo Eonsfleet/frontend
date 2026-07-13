@@ -267,16 +267,21 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
 
         if (metrics) {
             // The metrics endpoint exposes cost/volume/averages (new field names,
-            // with the legacy expense-ledger names kept as fallbacks).
-            const avgCostPerLitre = metrics.avg_cost_per_litre ?? metrics.average_cost_per_liter ?? 0
+            // with the legacy expense-ledger names kept as fallbacks). Numeric fields
+            // may arrive as strings, so coerce with Number() before doing math.
+            const toNum = (value: unknown) => {
+                const n = Number(value)
+                return Number.isFinite(n) ? n : 0
+            }
+            const avgCostPerLitre = toNum(metrics.avg_cost_per_litre ?? metrics.average_cost_per_liter)
             return {
-                totalFuelPurchasedLiters: Math.round(metrics.total_volume ?? 0),
-                totalCostNaira: Number((metrics.total_cost ?? 0).toFixed(2)),
+                totalFuelPurchasedLiters: Math.round(toNum(metrics.total_volume)),
+                totalCostNaira: Number(toNum(metrics.total_cost).toFixed(2)),
                 avgPricePerLiter: Number(avgCostPerLitre.toFixed(2)),
-                avgDistancePerLiter: Number((metrics.avg_distance_per_litre ?? 0).toFixed(2)),
+                avgDistancePerLiter: Number(toNum(metrics.avg_distance_per_litre).toFixed(2)),
                 totalTransactions,
                 totalRefills,
-                pendingApprovalCount: metrics.pending_approval_count ?? metrics.pending_count ?? 0,
+                pendingApprovalCount: toNum(metrics.pending_approval_count ?? metrics.pending_count),
             }
         }
         // Fallback: derive from the loaded rows until the metrics query resolves.

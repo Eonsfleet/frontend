@@ -374,7 +374,7 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Cost</p>
                         <p className="text-2xl font-bold text-slate-900">
-                            {m ? `₦${m.total_cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+                            {m ? `₦${Number(m.total_cost).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
                         </p>
                     </CardContent>
                 </Card>

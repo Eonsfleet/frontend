@@ -358,10 +358,15 @@ export const getCostAnalysis = async (params?: { start_date?: string; end_date?:
 
 // ── 8.7 Fuel Analytics Reports ───────────────────────────────────────────────
 
-export interface FuelConsumptionReport {
+export interface FuelConsumptionTrendPoint {
     period: string
-    total_liters: number
-    trend: Array<{ date: string; liters: number }>
+    total_fuel_liters: number
+}
+
+export interface FuelConsumptionReport {
+    total_fuel_liters: number
+    period: { start: string; end: string }
+    trend: FuelConsumptionTrendPoint[]
 }
 
 export const getFuelConsumptionReport = async (params?: { period?: string }): Promise<{ message: string; data: FuelConsumptionReport }> => {
