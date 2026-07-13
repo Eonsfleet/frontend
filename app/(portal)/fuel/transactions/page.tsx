@@ -15,7 +15,7 @@ import { useFuelTransactions, type EditableFuelExpenseStatus, type FuelTransacti
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { createFuelExpense, deleteFuelExpense, downloadFuelTransactionImportTemplate, exportFuelExpenses, getFuelVehicles, importFuelTransactions, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
+import { createFuelExpense, deleteFuelExpense, downloadFuelTransactionImportTemplate, exportFuelTransactions, getFuelVehicles, importFuelTransactions, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
 import { getDrivers } from '@/lib/api/drivers'
 import { uploadFile } from '@/lib/api/documents'
 import { extractApiError } from '@/lib/utils'
@@ -541,20 +541,22 @@ export default function FuelTransactionsPage() {
     const exportMutation = useMutation({
         mutationFn: () => {
             const exportParams = {
+                q: filters.search.trim() || undefined,
                 vehicle_id: filters.vehicleId,
                 type: filters.type && filters.type !== 'all' ? filters.type : undefined,
+                reconciliation_status: filters.reconciliationStatus && filters.reconciliationStatus !== 'all' ? filters.reconciliationStatus : undefined,
                 start_date: filters.startDate || undefined,
                 end_date: filters.endDate || undefined,
                 limit: filters.exportLimit,
             }
 
-            return exportFuelExpenses(exportParams)
+            return exportFuelTransactions(exportParams)
         },
         onSuccess: (blob) => {
-            downloadBlob(blob, `fuel-expenses-${format(new Date(), 'yyyy-MM-dd')}.csv`)
-            toast.success('Fuel expenses export downloaded.')
+            downloadBlob(blob, `fuel-transactions-${format(new Date(), 'yyyy-MM-dd')}.csv`)
+            toast.success('Fuel transactions export downloaded.')
         },
-        onError: (error) => toast.error(extractApiError(error, 'Failed to export fuel expenses.')),
+        onError: (error) => toast.error(extractApiError(error, 'Failed to export fuel transactions.')),
     })
 
     return (

@@ -66,14 +66,26 @@ export interface TransactionRow {
     fuelLevelAfter: number | null
 }
 
+export interface TxKpiTrend {
+    changePercent: number
+    trend: 'up' | 'down' | 'neutral'
+}
+
 export interface TxKpis {
     totalFuelPurchasedLiters: number
     totalCostNaira: number
     avgPricePerLiter: number
-    avgDistancePerLiter: number
     totalTransactions: number
     totalRefills: number
     pendingApprovalCount: number
+    /** Period-over-period trend per stat — undefined until the metrics query resolves. */
+    trends?: {
+        totalFuelPurchased: TxKpiTrend
+        totalCost: TxKpiTrend
+        avgPricePerLiter: TxKpiTrend
+        totalTransactions: TxKpiTrend
+        pendingApproval: TxKpiTrend
+    }
 }
 
 const DEFAULT_PAGINATION: FuelPagination = {
@@ -260,23 +272,30 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
 
     const kpis = useMemo<TxKpis>(() => {
         const metrics = metricsQuery.data?.data
-        // Transaction count isn't part of the metrics payload, so it always comes
-        // from pagination (fall back to the loaded rows before the first page lands).
-        const totalTransactions = pagination.total || rows.length
+        // Pagination/rows are only the fallback source — the metrics endpoint's own
+        // total_transactions is preferred once it's loaded.
+        const fallbackTotalTransactions = pagination.total || rows.length
         const totalRefills = rows.filter((r) => r.type === 'refill').length
 
         if (metrics) {
-            // The metrics endpoint exposes cost/volume/averages (new field names,
-            // with the legacy expense-ledger names kept as fallbacks).
-            const avgCostPerLitre = metrics.avg_cost_per_litre ?? metrics.average_cost_per_liter ?? 0
+            const toTrend = (stat: { change_percent: number; trend: 'up' | 'down' | 'neutral' }): TxKpiTrend => ({
+                changePercent: stat.change_percent,
+                trend: stat.trend,
+            })
             return {
-                totalFuelPurchasedLiters: Math.round(metrics.total_volume ?? 0),
-                totalCostNaira: Number((metrics.total_cost ?? 0).toFixed(2)),
-                avgPricePerLiter: Number(avgCostPerLitre.toFixed(2)),
-                avgDistancePerLiter: Number((metrics.avg_distance_per_litre ?? 0).toFixed(2)),
-                totalTransactions,
+                totalFuelPurchasedLiters: Math.round(metrics.total_fuel_purchased.current),
+                totalCostNaira: Number(metrics.total_cost.current.toFixed(2)),
+                avgPricePerLiter: Number(metrics.avg_price_per_litre.current.toFixed(2)),
+                totalTransactions: metrics.total_transactions.current || fallbackTotalTransactions,
                 totalRefills,
-                pendingApprovalCount: metrics.pending_approval_count ?? metrics.pending_count ?? 0,
+                pendingApprovalCount: metrics.pending_approval.current,
+                trends: {
+                    totalFuelPurchased: toTrend(metrics.total_fuel_purchased),
+                    totalCost: toTrend(metrics.total_cost),
+                    avgPricePerLiter: toTrend(metrics.avg_price_per_litre),
+                    totalTransactions: toTrend(metrics.total_transactions),
+                    pendingApproval: toTrend(metrics.pending_approval),
+                },
             }
         }
         // Fallback: derive from the loaded rows until the metrics query resolves.
@@ -288,8 +307,7 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
             totalFuelPurchasedLiters: Math.round(purchased),
             totalCostNaira: Number(cost.toFixed(2)),
             avgPricePerLiter: Number(avgPrice.toFixed(2)),
-            avgDistancePerLiter: 0,
-            totalTransactions,
+            totalTransactions: fallbackTotalTransactions,
             totalRefills,
             pendingApprovalCount: 0,
         }

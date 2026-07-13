@@ -230,6 +230,21 @@ export const getFuelTransactions = async (params?: FuelTransactionListParams): P
     return response.data
 }
 
+export interface FuelTransactionExportParams {
+    q?: string
+    vehicle_id?: number
+    type?: string
+    reconciliation_status?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+}
+
+export const exportFuelTransactions = async (params?: FuelTransactionExportParams): Promise<Blob> => {
+    const response = await apiClient.get('/fuel-transactions/export', { params, responseType: 'blob' })
+    return response.data
+}
+
 export const linkTransactionToVehicle = async (transactionId: string, vehicle_id: number): Promise<{ message: string; data: { fuel_card_transaction: FuelCardTransaction } }> => {
     const response = await apiClient.post(`/fuel-card/transactions/${transactionId}/link-vehicle`, { vehicle_id })
     return response.data
