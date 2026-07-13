@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { getFuelVehicles } from '@/lib/api/fuel'
 import { cn } from '@/lib/utils'
-import type { FuelTransactionFilters, TxType } from './useFuelTransactions'
+import type { FuelTransactionFilters, ReconciliationStatus, TxType } from './useFuelTransactions'
 
 interface TransactionFiltersProps {
     filters: FuelTransactionFilters
@@ -19,6 +19,14 @@ const TYPE_OPTIONS: Array<{ label: string; value: 'all' | TxType }> = [
     { label: 'Refill', value: 'refill' },
     { label: 'Theft', value: 'theft' },
     { label: 'Leakage', value: 'leakage' },
+]
+
+const RECONCILIATION_OPTIONS: Array<{ label: string; value: ReconciliationStatus }> = [
+    { label: 'All', value: 'all' },
+    { label: 'Reconciled', value: 'reconciled' },
+    { label: 'Unreconciled', value: 'unreconciled' },
+    { label: 'Pending', value: 'pending' },
+    { label: 'Disputed', value: 'disputed' },
 ]
 
 const SORT_OPTIONS = [
@@ -73,6 +81,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
             search: '',
             vehicleId: undefined,
             type: 'all',
+            reconciliationStatus: 'all',
             startDate: '',
             endDate: '',
             page: 1,
@@ -84,7 +93,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
     }
 
     return (
-        <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-4 shadow-none">
+        <Card className="flex flex-col rounded-2xl border-slate-100 p-4 shadow-none xl:h-full">
             <div className="flex shrink-0 items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">Filters</h2>
                 <button type="button" className="text-[12px] font-semibold text-blue-600 hover:text-blue-700" onClick={resetFilters}>
@@ -100,6 +109,20 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
                     >
                         {TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </Field>
+
+                <Field label="Reconciliation Status">
+                    <select
+                        value={filters.reconciliationStatus ?? 'all'}
+                        onChange={(event) => updateFilters({ reconciliationStatus: event.target.value as ReconciliationStatus })}
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                    >
+                        {RECONCILIATION_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
                                 {option.label}
                             </option>

@@ -15,7 +15,7 @@ import { useFuelTransactions, type EditableFuelExpenseStatus, type FuelTransacti
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { createFuelExpense, deleteFuelExpense, exportFuelExpenses, getFuelVehicles, ingestCardData, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
+import { createFuelExpense, deleteFuelExpense, downloadFuelTransactionImportTemplate, exportFuelExpenses, getFuelVehicles, importFuelTransactions, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
 import { getDrivers } from '@/lib/api/drivers'
 import { uploadFile } from '@/lib/api/documents'
 import { extractApiError } from '@/lib/utils'
@@ -282,19 +282,20 @@ function TransactionExpenseDialog({
 }
 
 function TransactionViewDialog({ row, onClose }: { row: TransactionRow | null; onClose: () => void }) {
-    const details = row ? [
+    const details: Array<[string, string]> = row ? [
         ['Vehicle', `${row.vehicle} (${row.vehicleModel})`],
-        ['Driver', row.driver],
         ['Date', `${row.date} ${row.time}`],
         ['Type', row.type],
-        ['Status', row.status.replace('_', ' ')],
+        ['Source', row.source],
         ['Volume', row.volumeLiters != null ? `${row.volumeLiters} L` : '-'],
-        ['Amount', row.amountNaira != null ? `NGN ${row.amountNaira.toLocaleString()}` : '-'],
-        ['Price / L', row.pricePerLiter != null ? `NGN ${row.pricePerLiter.toLocaleString()}` : '-'],
-        ['Payment', row.payment === 'fleet_card' ? 'Fleet Card' : 'Cash'],
-        ['Location', row.station],
-        ['Reference', row.referenceNumber || '-'],
-        ['Receipt', row.receiptUrl || '-'],
+        ['Fuel Level', row.fuelLevelBefore != null && row.fuelLevelAfter != null ? `${row.fuelLevelBefore}% → ${row.fuelLevelAfter}%` : '-'],
+        ['Odometer', row.odometerKm != null ? `${row.odometerKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km` : '-'],
+        ['Confidence', row.confidence != null ? `${Math.round(row.confidence * 100)}%` : '-'],
+        ['Location', row.lat != null && row.lng != null ? `${row.lat.toFixed(5)}, ${row.lng.toFixed(5)}` : row.station],
+        // Cost/expense fields only appear when the transaction is linked to an expense.
+        ...(row.amountNaira != null ? [['Amount', `NGN ${row.amountNaira.toLocaleString()}`] as [string, string]] : []),
+        ...(row.pricePerLiter != null ? [['Price / L', `NGN ${row.pricePerLiter.toLocaleString()}`] as [string, string]] : []),
+        ...(row.receiptUrl ? [['Receipt', row.receiptUrl] as [string, string]] : []),
     ] : []
 
     return (
@@ -374,32 +375,25 @@ function BulkEditDialog({ rows, isPending, onClose, onConfirm }: { rows: Transac
     )
 }
 
-const FUEL_TRANSACTION_TEMPLATE_ROWS = [
-    ['provider', 'external_id', 'card_number_last4', 'merchant_name', 'transaction_date', 'amount', 'volume_liters', 'currency', 'vehicle_registration', 'reference_number'],
-    ['generic_csv', 'TXN-0001', '1234', 'Total Energy Station VI', '2026-03-08', '26775', '35', 'NGN', 'LND-123-XY', 'REF-00042'],
-]
-
-function downloadFuelTransactionTemplate() {
-    const csv = FUEL_TRANSACTION_TEMPLATE_ROWS.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    downloadBlob(blob, 'fuel-transactions-import-template.csv')
-}
-
-function ImportFuelTransactionsDialog({ open, isPending, onClose, onImport }: { open: boolean; isPending?: boolean; onClose: () => void; onImport: (file: File, provider: string) => void }) {
+function ImportFuelTransactionsDialog({ open, isPending, onClose, onImport }: { open: boolean; isPending?: boolean; onClose: () => void; onImport: (file: File) => void }) {
     const [file, setFile] = useState<File | null>(null)
-    const [provider, setProvider] = useState('generic_csv')
+
+    const templateMutation = useMutation({
+        mutationFn: downloadFuelTransactionImportTemplate,
+        onSuccess: (blob) => downloadBlob(blob, 'fuel-transactions-import-template.xlsx'),
+        onError: (error) => toast.error(extractApiError(error, 'Failed to download template.')),
+    })
 
     const close = () => {
         setFile(null)
-        setProvider('generic_csv')
         onClose()
     }
 
     const selectFile = (nextFile: File | undefined) => {
         if (!nextFile) return
         const extension = nextFile.name.split('.').pop()?.toLowerCase()
-        if (!['csv', 'json'].includes(extension ?? '')) {
-            toast.error('Only CSV and JSON files are accepted.')
+        if (!['xlsx', 'xls', 'csv'].includes(extension ?? '')) {
+            toast.error('Only Excel (.xlsx/.xls) and CSV files are accepted.')
             return
         }
         setFile(nextFile)
@@ -410,55 +404,46 @@ function ImportFuelTransactionsDialog({ open, isPending, onClose, onImport }: { 
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Import Fuel Transactions</DialogTitle>
-                    <DialogDescription>Upload a CSV or JSON fuel card transaction file for ingestion.</DialogDescription>
+                    <DialogDescription>Upload a filled fuel transaction template. Column headers are matched automatically.</DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">
                     <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <p className="text-sm font-semibold text-slate-800">Start with the CSV template</p>
+                                <p className="text-sm font-semibold text-slate-800">Start with the import template</p>
                                 <p className="mt-0.5 text-[12px] text-slate-500">Use the expected columns before uploading fuel transaction data.</p>
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-2 bg-white" onClick={downloadFuelTransactionTemplate}>
-                                <Download className="h-4 w-4" /> Template
+                            <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-2 bg-white" disabled={templateMutation.isPending} onClick={() => templateMutation.mutate()}>
+                                {templateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Template
                             </Button>
                         </div>
-                    </div>
-
-                    <div>
-                        <Label>Provider</Label>
-                        <select
-                            value={provider}
-                            onChange={(event) => setProvider(event.target.value)}
-                            className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
-                        >
-                            <option value="generic_csv">Generic CSV</option>
-                            <option value="ovh">OVH</option>
-                            <option value="total">TotalEnergies</option>
-                        </select>
                     </div>
 
                     <div>
                         <Label>Transaction File</Label>
                         <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
                             <FileSpreadsheet className="h-9 w-9 text-blue-500" />
-                            <span className="text-sm font-semibold text-slate-700">{file ? file.name : 'Choose CSV or JSON file'}</span>
-                            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">CSV or JSON, max 10 MB</span>
+                            <span className="text-sm font-semibold text-slate-700">{file ? file.name : 'Choose Excel or CSV file'}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">XLSX, XLS or CSV, max 10 MB</span>
                             <input
                                 type="file"
-                                accept=".csv,.json,text/csv,application/json"
+                                accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                                 className="sr-only"
                                 disabled={isPending}
                                 onChange={(event) => selectFile(event.target.files?.[0])}
                             />
                         </label>
                     </div>
+
+                    <p className="text-[12px] text-slate-500">
+                        Rows are reconciled in the background. You’ll receive an email report when the import completes.
+                    </p>
                 </div>
 
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!file || isPending} onClick={() => file && onImport(file, provider)}>
+                    <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" disabled={!file || isPending} onClick={() => file && onImport(file)}>
                         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                         Import
                     </Button>
@@ -479,6 +464,7 @@ export default function FuelTransactionsPage() {
         search: '',
         vehicleId: undefined,
         type: 'all',
+        reconciliationStatus: 'all',
         startDate: '',
         endDate: '',
         page: 1,
@@ -488,7 +474,7 @@ export default function FuelTransactionsPage() {
         orderBy: 'desc',
     })
 
-    const { rows, kpis, pagination, isLoading, isError } = useFuelTransactions(filters)
+    const { rows, kpis, kpisLoading, pagination, isLoading, isError } = useFuelTransactions(filters)
 
     const refreshFuelTransactions = () => {
         queryClient.invalidateQueries({ queryKey: ['fuel-transactions'] })
@@ -538,16 +524,15 @@ export default function FuelTransactionsPage() {
     })
 
     const importMutation = useMutation({
-        mutationFn: ({ file, provider }: { file: File; provider: string }) => {
+        mutationFn: (file: File) => {
             const formData = new FormData()
             formData.append('file', file)
-            formData.append('provider', provider)
-            return ingestCardData(formData)
+            return importFuelTransactions(formData)
         },
         onSuccess: (response) => {
-            const created = response.data?.created ?? 0
-            const skipped = response.data?.skipped ?? 0
-            toast.success(`Fuel transactions imported. Created ${created}, skipped ${skipped}.`)
+            // Rows are reconciled per-row asynchronously; the backend emails a
+            // completion/failure report, so we confirm the upload was accepted.
+            toast.success(response.message || 'Import received. You’ll get an email report when reconciliation completes.')
             refreshFuelTransactions()
             setImportOpen(false)
         },
@@ -573,7 +558,7 @@ export default function FuelTransactionsPage() {
     })
 
     return (
-        <div className="flex h-[calc(100vh-3rem)] min-h-0 flex-col gap-5 lg:h-[calc(100vh-4rem)]">
+        <div className="flex min-h-0 flex-col gap-5 xl:h-[calc(100vh-4rem)]">
             {/* Header */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -599,24 +584,28 @@ export default function FuelTransactionsPage() {
                 <QueryError message="Failed to load fuel transactions." />
             ) : (
                 <>
-                    <TxKpiCards kpis={kpis} />
+                    <TxKpiCards kpis={kpis} isLoading={kpisLoading} />
 
-                    {/* Table + filters sidebar */}
-                    <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 xl:grid-cols-4">
-                        <div className="min-h-0 xl:col-span-3">
-                            <TransactionsTable
-                                rows={rows}
-                                isLoading={isLoading}
-                                filters={filters}
-                                pagination={pagination}
-                                onFiltersChange={setFilters}
-                                onViewRow={setViewRow}
-                                onEditRow={setEditRow}
-                                onDeleteRows={setDeleteRows}
-                                onBulkEditRows={setBulkEditRows}
-                            />
+                    {/* Table + filters sidebar.
+                        · < xl: single column, natural flow — filters first (so they're
+                          reachable), then the table capped to a scrollable height.
+                        · ≥ xl: side-by-side, both filling the fixed-height viewport column. */}
+                    <div className="grid min-h-0 grid-cols-1 items-stretch gap-4 xl:flex-1 xl:grid-cols-4">
+                        <div className="order-2 min-h-0 xl:order-1 xl:col-span-3">
+                            <div className="h-[60vh] xl:h-full">
+                                <TransactionsTable
+                                    rows={rows}
+                                    isLoading={isLoading}
+                                    filters={filters}
+                                    pagination={pagination}
+                                    onFiltersChange={setFilters}
+                                    onViewRow={setViewRow}
+                                    onDeleteRows={setDeleteRows}
+                                    onBulkEditRows={setBulkEditRows}
+                                />
+                            </div>
                         </div>
-                        <div className="min-h-0 xl:col-span-1">
+                        <div className="order-1 min-h-0 xl:order-2 xl:col-span-1">
                             <TransactionFilters filters={filters} onFiltersChange={setFilters} />
                         </div>
                     </div>
@@ -626,7 +615,7 @@ export default function FuelTransactionsPage() {
                 open={importOpen}
                 isPending={importMutation.isPending}
                 onClose={() => setImportOpen(false)}
-                onImport={(file, provider) => importMutation.mutate({ file, provider })}
+                onImport={(file) => importMutation.mutate(file)}
             />
             <TransactionExpenseDialog
                 key="create-transaction"

@@ -5,7 +5,6 @@ import {
     LayoutGrid,
     MapPin,
     Receipt,
-    BarChart3,
     Bell,
     Settings,
     type LucideIcon,
@@ -23,7 +22,7 @@ const TABS: FuelTab[] = [
     { label: 'Overview', icon: LayoutGrid, href: '/fuel' },
     { label: 'Real-time Tracking', icon: MapPin, href: '/fuel/realtime' },
     { label: 'Fuel Transactions', icon: Receipt, href: '/fuel/transactions' },
-    { label: 'Fuel Analysis', icon: BarChart3, href: '/fuel/analysis' },
+    // { label: 'Fuel Analysis', icon: BarChart3, href: '/fuel/analysis' },
     { label: 'Fuel Alerts', icon: Bell, href: '/fuel/alerts' },
     { label: 'Fuel Settings', icon: Settings, href: '/fuel/settings' },
 ]

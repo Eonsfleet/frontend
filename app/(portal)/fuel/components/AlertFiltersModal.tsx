@@ -117,12 +117,6 @@ export function AlertFiltersModal({ open, onOpenChange, value, onApply }: AlertF
                         <SelectBox defaultValue=""><option value="">All Vehicles</option></SelectBox>
                     </div>
 
-                    {/* Location */}
-                    <div>
-                        <FieldLabel>Location</FieldLabel>
-                        <SelectBox defaultValue=""><option value="">All Locations</option></SelectBox>
-                    </div>
-
                     {/* Date Range */}
                     <div className="sm:col-span-3">
                         <div className="mb-2 flex items-center gap-2">
@@ -143,12 +137,6 @@ export function AlertFiltersModal({ open, onOpenChange, value, onApply }: AlertF
                                 onChange={(event) => setDraft((d) => ({ ...d, endDate: event.target.value || undefined, date: undefined }))}
                             />
                         </div>
-                    </div>
-
-                    {/* Time Range */}
-                    <div>
-                        <FieldLabel>Time Range</FieldLabel>
-                        <SelectBox defaultValue=""><option value="">All Time</option></SelectBox>
                     </div>
                 </div>
 

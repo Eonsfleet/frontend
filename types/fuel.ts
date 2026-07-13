@@ -23,11 +23,15 @@ export interface FuelExpense {
 }
 
 export interface FuelExpenseMetrics {
-    total_volume: number
     total_cost: number
-    average_cost_per_liter: number
-    total_expenses: number
-    pending_approval_count: number
+    total_volume: number
+    avg_cost_per_litre: number
+    avg_distance_per_litre: number
+    // Legacy / expense-ledger fields — kept optional so the Expenses screen (which
+    // reads these) still type-checks against the same metrics endpoint.
+    average_cost_per_liter?: number
+    total_expenses?: number
+    pending_approval_count?: number
     pending_count?: number
     approved_count?: number
 }

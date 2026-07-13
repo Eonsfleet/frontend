@@ -81,18 +81,26 @@ export default function FuelOverviewPage() {
     efficiencyFilter,
   });
 
-  // Map markers come from theft/abnormality incidents that carry coordinates.
-  const markers = useMemo<MapMarkerPoint[]>(
-    () =>
-      theftIncidents
-        .filter((i) => i.location?.lat != null && i.location?.lng != null)
-        .map((i) => ({
-          id: i.alert_id,
-          lat: i.location.lat,
-          lng: i.location.lng,
-        })),
-    [theftIncidents],
-  );
+  // Map markers: live vehicle positions from /fuel/vehicles (colored by fuel level),
+  // plus theft/abnormality incidents that carry coordinates.
+  const markers = useMemo<MapMarkerPoint[]>(() => {
+    const vehicleMarkers: MapMarkerPoint[] = vehicles
+      .filter((v) => v.lat != null && v.lng != null)
+      .map((v) => ({
+        id: `vehicle-${v.id}`,
+        lat: v.lat as number,
+        lng: v.lng as number,
+        fuelPercent: v.fuelPercent,
+      }));
+    const incidentMarkers: MapMarkerPoint[] = theftIncidents
+      .filter((i) => i.location?.lat != null && i.location?.lng != null)
+      .map((i) => ({
+        id: `incident-${i.alert_id}`,
+        lat: i.location.lat,
+        lng: i.location.lng,
+      }));
+    return [...vehicleMarkers, ...incidentMarkers];
+  }, [vehicles, theftIncidents]);
 
   // Feature the highest-fuel online vehicle in the overlay card.
   const featured = useMemo<FeaturedVehicle | null>(() => {
