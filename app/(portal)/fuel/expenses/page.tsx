@@ -366,7 +366,7 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Volume</p>
                         <p className="text-2xl font-bold text-slate-900">
-                            {m?.total_volume != null ? Number(m.total_volume).toFixed(1) : '—'} <span className="text-sm font-medium text-slate-500">L</span>
+                            {m ? Number(m.total_fuel_purchased.current).toFixed(1) : '—'} <span className="text-sm font-medium text-slate-500">L</span>
                         </p>
                     </CardContent>
                 </Card>
@@ -374,7 +374,7 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Cost</p>
                         <p className="text-2xl font-bold text-slate-900">
-                            {m ? `₦${m.total_cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+                            {m ? `₦${m.total_cost.current.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
                         </p>
                     </CardContent>
                 </Card>
@@ -382,7 +382,7 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Avg Cost / L</p>
                         <p className="text-2xl font-bold text-slate-900">
-                            {m?.average_cost_per_liter != null ? `₦${Number(m.average_cost_per_liter).toFixed(2)}` : '—'}
+                            {m ? `₦${Number(m.avg_price_per_litre.current).toFixed(2)}` : '—'}
                         </p>
                     </CardContent>
                 </Card>
@@ -390,8 +390,8 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Pending Approval</p>
                         <div className="flex items-end gap-2">
-                            <p className="text-2xl font-bold text-amber-600">{m?.pending_count ?? m?.pending_approval_count ?? '—'}</p>
-                            {m && (m.pending_count ?? m.pending_approval_count ?? 0) > 0 && <Clock className="h-4 w-4 text-amber-500 mb-1" />}
+                            <p className="text-2xl font-bold text-amber-600">{m ? m.pending_approval.current : '—'}</p>
+                            {m && m.pending_approval.current > 0 && <Clock className="h-4 w-4 text-amber-500 mb-1" />}
                         </div>
                     </CardContent>
                 </Card>

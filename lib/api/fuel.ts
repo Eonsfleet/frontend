@@ -196,6 +196,7 @@ export interface FuelTransactionListParams {
     q?: string
     vehicle_id?: number
     type?: string
+    reconciliation_status?: string
     start_date?: string
     end_date?: string
     per_page?: number
@@ -229,6 +230,21 @@ export const getFuelTransactions = async (params?: FuelTransactionListParams): P
     return response.data
 }
 
+export interface FuelTransactionExportParams {
+    q?: string
+    vehicle_id?: number
+    type?: string
+    reconciliation_status?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+}
+
+export const exportFuelTransactions = async (params?: FuelTransactionExportParams): Promise<Blob> => {
+    const response = await apiClient.get('/fuel-transactions/export', { params, responseType: 'blob' })
+    return response.data
+}
+
 export const linkTransactionToVehicle = async (transactionId: string, vehicle_id: number): Promise<{ message: string; data: { fuel_card_transaction: FuelCardTransaction } }> => {
     const response = await apiClient.post(`/fuel-card/transactions/${transactionId}/link-vehicle`, { vehicle_id })
     return response.data
@@ -256,6 +272,23 @@ export const matchCardTransaction = async (transactionId: string, fuel_transacti
 
 export const ingestCardData = async (formData: FormData): Promise<{ message: string; data: { created: number; skipped: number } }> => {
     const response = await apiClient.post('/fuel-card/ingest', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+}
+
+// ── Fuel transaction import (Excel) ──────────────────────────────────────────
+
+// Downloads the server-managed Excel template with the expected import columns.
+export const downloadFuelTransactionImportTemplate = async (): Promise<Blob> => {
+    const response = await apiClient.get('/import/fuel-transactions/template', { responseType: 'blob' })
+    return response.data
+}
+
+// Uploads a filled import file for chunked, per-row reconciliation. Completion/
+// failure is reported by the backend via email; the response echoes queue status.
+export const importFuelTransactions = async (formData: FormData): Promise<{ message: string; data?: Record<string, unknown> }> => {
+    const response = await apiClient.post('/import/fuel-transactions', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
@@ -555,6 +588,91 @@ export const resolveFuelAlert = async (alertId: number, notes?: string): Promise
 
 export const markFuelAlertFalsePositive = async (alertId: number, notes?: string): Promise<{ message: string }> => {
     const response = await apiClient.post(`/fuel-alerts/${alertId}/false-positive`, { notes })
+    return response.data
+}
+
+// ── Fuel Alert Rules (CRUD) ──────────────────────────────────────────────────
+
+export type VehicleScope = 'all' | 'specific'
+
+export interface FuelAlertRuleCondition {
+    metric: string
+    operator: 'lte' | 'gte' | 'lt' | 'gt' | 'eq'
+    threshold_value: number
+    duration_value?: number
+    duration_unit?: 'minutes' | 'hours'
+}
+
+export interface FuelAlertRule {
+    id: number | string
+    name: string
+    alert_type: string
+    description?: string | null
+    is_active: boolean
+    condition?: FuelAlertRuleCondition | null
+    vehicle_scope?: VehicleScope
+    // Scoped to the requesting org by the backend (cross-tenant IDOR fix).
+    vehicle_ids?: number[]
+    recipient_user_ids?: number[]
+    channels?: string[]
+    created_at?: string
+    updated_at?: string
+    [key: string]: unknown
+}
+
+export interface FuelAlertRulePayload {
+    name: string
+    alert_type: string
+    description?: string | null
+    is_active?: boolean
+    condition: FuelAlertRuleCondition
+    // 'all' applies to every org vehicle; 'specific' requires vehicle_ids.
+    vehicle_scope: VehicleScope
+    vehicle_ids?: number[]
+    recipient_user_ids?: number[]
+    channels?: string[]
+}
+
+// Response shapes are read tolerantly — the rule may be returned bare or wrapped
+// as { data: { rule } } / { data: { fuel_alert_rule } } depending on the endpoint.
+export interface FuelAlertRuleResponse {
+    message?: string
+    data?: FuelAlertRule | { rule?: FuelAlertRule; fuel_alert_rule?: FuelAlertRule }
+}
+
+export interface FuelAlertRuleListResponse {
+    message?: string
+    data:
+        | FuelAlertRule[]
+        | {
+            rules?: FuelAlertRule[]
+            fuel_alert_rules?: FuelAlertRule[]
+            pagination?: FuelPagination
+        }
+}
+
+export const getFuelAlertRules = async (params?: { page?: number; per_page?: number }): Promise<FuelAlertRuleListResponse> => {
+    const response = await apiClient.get<FuelAlertRuleListResponse>('/fuel-alert-rules', { params })
+    return response.data
+}
+
+export const getFuelAlertRule = async (id: number | string): Promise<FuelAlertRuleResponse> => {
+    const response = await apiClient.get<FuelAlertRuleResponse>(`/fuel-alert-rules/${id}`)
+    return response.data
+}
+
+export const createFuelAlertRule = async (payload: FuelAlertRulePayload): Promise<FuelAlertRuleResponse> => {
+    const response = await apiClient.post<FuelAlertRuleResponse>('/fuel-alert-rules', payload)
+    return response.data
+}
+
+export const updateFuelAlertRule = async (id: number | string, payload: Partial<FuelAlertRulePayload>): Promise<FuelAlertRuleResponse> => {
+    const response = await apiClient.put<FuelAlertRuleResponse>(`/fuel-alert-rules/${id}`, payload)
+    return response.data
+}
+
+export const deleteFuelAlertRule = async (id: number | string): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/fuel-alert-rules/${id}`)
     return response.data
 }
 

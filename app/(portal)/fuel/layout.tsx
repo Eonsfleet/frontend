@@ -26,7 +26,6 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
         pathname === '/fuel' ||
         pathname === '/fuel/realtime' ||
         pathname === '/fuel/transactions' ||
-        pathname === '/fuel/analysis' ||
         pathname === '/fuel/alerts' ||
         pathname === '/fuel/settings'
 

@@ -22,14 +22,22 @@ export interface FuelExpense {
     }
 }
 
+/** A single period-over-period KPI stat, as returned by GET /fuel-expenses/metrics. */
+export interface FuelMetricStat {
+    current: number
+    previous: number
+    change_percent: number
+    trend: 'up' | 'down' | 'neutral'
+}
+
 export interface FuelExpenseMetrics {
-    total_volume: number
-    total_cost: number
-    average_cost_per_liter: number
-    total_expenses: number
-    pending_approval_count: number
-    pending_count?: number
-    approved_count?: number
+    period: { start_date: string; end_date: string }
+    previous_period: { start_date: string; end_date: string }
+    total_fuel_purchased: FuelMetricStat
+    total_cost: FuelMetricStat
+    avg_price_per_litre: FuelMetricStat
+    total_transactions: FuelMetricStat
+    pending_approval: FuelMetricStat
 }
 
 export interface FuelCardProviderType {
