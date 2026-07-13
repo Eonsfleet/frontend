@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Bell, Mail, MessageSquare, Webhook } from 'lucide-react'
+import { Check, Bell, Mail, MessageSquare, Webhook, Loader2 } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { toast } from 'sonner'
+import { createFuelAlertRule, type FuelAlertRulePayload, type VehicleScope } from '@/lib/api/fuel'
 
 interface CreateAlertRuleModalProps {
     open: boolean
@@ -14,6 +16,14 @@ interface CreateAlertRuleModalProps {
 }
 
 const STEPS = ['Rule Details', 'Conditions', 'Notifications', 'Review'] as const
+
+// Maps the notification channel display titles to the API's channel slugs.
+const CHANNEL_SLUG: Record<string, string> = {
+    'In-app Notification': 'in_app',
+    Email: 'email',
+    SMS: 'sms',
+    Webhook: 'webhook',
+}
 
 function SelectBox({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
     return (
@@ -42,14 +52,79 @@ const CHANNELS = [
 ]
 
 export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModalProps) {
+    const queryClient = useQueryClient()
     const [step, setStep] = useState(0)
     const [active, setActive] = useState(true)
     const [ruleName, setRuleName] = useState('')
+    const [alertType, setAlertType] = useState('low_fuel')
+    const [description, setDescription] = useState('')
+    const [metric, setMetric] = useState('fuel_level')
+    const [operator, setOperator] = useState<'lte' | 'gte'>('lte')
+    const [threshold, setThreshold] = useState('20')
+    const [durationValue, setDurationValue] = useState('10')
+    const [durationUnit, setDurationUnit] = useState<'minutes' | 'hours'>('minutes')
+    const [vehicleScope, setVehicleScope] = useState<VehicleScope>('all')
     const [channels, setChannels] = useState<Record<string, boolean>>({ 'In-app Notification': true })
 
-    const reset = () => { setStep(0); setActive(true); setRuleName(''); setChannels({ 'In-app Notification': true }) }
-    const close = (o: boolean) => { if (!o) reset(); onOpenChange(o) }
-    const finish = () => { toast.success('Alert created'); close(false) }
+    const reset = () => {
+        setStep(0)
+        setActive(true)
+        setRuleName('')
+        setAlertType('low_fuel')
+        setDescription('')
+        setMetric('fuel_level')
+        setOperator('lte')
+        setThreshold('20')
+        setDurationValue('10')
+        setDurationUnit('minutes')
+        setVehicleScope('all')
+        setChannels({ 'In-app Notification': true })
+    }
+
+    const buildPayload = (): FuelAlertRulePayload => ({
+        name: ruleName.trim(),
+        alert_type: alertType,
+        description: description.trim() || null,
+        is_active: active,
+        vehicle_scope: vehicleScope,
+        condition: {
+            metric,
+            operator,
+            threshold_value: Number(threshold) || 0,
+            duration_value: Number(durationValue) || 0,
+            duration_unit: durationUnit,
+        },
+        channels: Object.keys(channels)
+            .filter((title) => channels[title])
+            .map((title) => CHANNEL_SLUG[title] ?? title.toLowerCase()),
+    })
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: (payload: FuelAlertRulePayload) => createFuelAlertRule(payload),
+        onSuccess: () => {
+            toast.success('Alert rule created')
+            queryClient.invalidateQueries({ queryKey: ['fuel-alert-rules'] })
+            close(false)
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to create alert rule.')),
+    })
+
+    const close = (o: boolean) => { if (!o && !isPending) { reset(); onOpenChange(o) } else if (o) onOpenChange(o) }
+    const finish = () => {
+        if (!ruleName.trim()) {
+            toast.error('Rule name is required.')
+            setStep(0)
+            return
+        }
+        // 'specific' scope needs vehicle_ids, but there's no per-vehicle picker yet —
+        // block it with a clear message rather than sending an invalid payload.
+        if (vehicleScope === 'specific') {
+            toast.error('Selecting specific vehicles is not available yet. Choose "All Vehicles".')
+            setStep(1)
+            return
+        }
+        mutate(buildPayload())
+    }
 
     return (
         <Dialog open={open} onOpenChange={close}>
@@ -92,7 +167,7 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
                                     <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="e.g. Low Fuel Level" className="h-9 border-slate-200 text-[13px]" />
                                 </Field>
                                 <Field label="Alert Type" required>
-                                    <SelectBox defaultValue="low_fuel">
+                                    <SelectBox value={alertType} onChange={(e) => setAlertType(e.target.value)}>
                                         <option value="low_fuel">Low Fuel</option>
                                         <option value="fuel_theft">Fuel Theft</option>
                                         <option value="rapid_drop">Rapid Drop</option>
@@ -101,7 +176,7 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
                                     </SelectBox>
                                 </Field>
                                 <Field label="Description">
-                                    <textarea rows={3} placeholder="Enter rule description (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Enter rule description (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </Field>
                                 <div className="flex items-center gap-2">
                                     <Switch checked={active} onCheckedChange={setActive} />
@@ -115,28 +190,31 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
                                 <p className="text-[13px] text-slate-500">Define when this alert should be triggered.</p>
                                 <div className="flex flex-wrap items-end gap-2">
                                     <span className="pb-2 text-[13px] font-semibold text-slate-600">If</span>
-                                    <SelectBox defaultValue="fuel_level" style={{ width: 140 }}>
+                                    <SelectBox value={metric} onChange={(e) => setMetric(e.target.value)} style={{ width: 140 }}>
                                         <option value="fuel_level">Fuel Level</option>
                                         <option value="fuel_drop">Fuel Drop</option>
                                         <option value="idle_time">Idle Time</option>
                                     </SelectBox>
-                                    <SelectBox defaultValue="lte" style={{ width: 170 }}>
+                                    <SelectBox value={operator} onChange={(e) => setOperator(e.target.value as 'lte' | 'gte')} style={{ width: 170 }}>
                                         <option value="lte">is less than or equal to</option>
                                         <option value="gte">is greater than or equal to</option>
                                     </SelectBox>
-                                    <Input defaultValue="20" className="h-9 w-20 border-slate-200 text-[13px]" />
+                                    <Input value={threshold} onChange={(e) => setThreshold(e.target.value)} type="number" className="h-9 w-20 border-slate-200 text-[13px]" />
                                     <span className="pb-2 text-[13px] text-slate-500">%</span>
                                 </div>
                                 <div className="flex flex-wrap items-end gap-2">
                                     <span className="pb-2 text-[13px] font-semibold text-slate-600">For</span>
-                                    <Input defaultValue="10" className="h-9 w-20 border-slate-200 text-[13px]" />
-                                    <SelectBox defaultValue="minutes" style={{ width: 120 }}>
+                                    <Input value={durationValue} onChange={(e) => setDurationValue(e.target.value)} type="number" className="h-9 w-20 border-slate-200 text-[13px]" />
+                                    <SelectBox value={durationUnit} onChange={(e) => setDurationUnit(e.target.value as 'minutes' | 'hours')} style={{ width: 120 }}>
                                         <option value="minutes">minutes</option>
                                         <option value="hours">hours</option>
                                     </SelectBox>
                                 </div>
                                 <Field label="Apply to">
-                                    <SelectBox defaultValue="all"><option value="all">All Vehicles</option></SelectBox>
+                                    <SelectBox value={vehicleScope} onChange={(e) => setVehicleScope(e.target.value as VehicleScope)}>
+                                        <option value="all">All Vehicles</option>
+                                        <option value="specific">Specific Vehicles</option>
+                                    </SelectBox>
                                 </Field>
                             </div>
                         )}
@@ -176,6 +254,9 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
                                 <p className="text-[13px] text-slate-500">Review your alert rule before saving.</p>
                                 <dl className="space-y-2 rounded-xl border border-slate-100 p-3 text-[13px]">
                                     <div className="flex justify-between"><dt className="text-slate-400">Rule Name</dt><dd className="font-medium text-slate-700">{ruleName || '—'}</dd></div>
+                                    <div className="flex justify-between"><dt className="text-slate-400">Alert Type</dt><dd className="font-medium capitalize text-slate-700">{alertType.replaceAll('_', ' ')}</dd></div>
+                                    <div className="flex justify-between"><dt className="text-slate-400">Condition</dt><dd className="font-medium text-slate-700">{metric.replaceAll('_', ' ')} {operator === 'lte' ? '≤' : '≥'} {threshold}% for {durationValue} {durationUnit}</dd></div>
+                                    <div className="flex justify-between"><dt className="text-slate-400">Apply to</dt><dd className="font-medium text-slate-700">{vehicleScope === 'all' ? 'All Vehicles' : 'Specific Vehicles'}</dd></div>
                                     <div className="flex justify-between"><dt className="text-slate-400">Status</dt><dd className="font-medium text-slate-700">{active ? 'Active' : 'Inactive'}</dd></div>
                                     <div className="flex justify-between"><dt className="text-slate-400">Notifications</dt><dd className="font-medium text-slate-700">{Object.keys(channels).filter((k) => channels[k]).join(', ') || 'None'}</dd></div>
                                 </dl>
@@ -200,7 +281,8 @@ export function CreateAlertRuleModal({ open, onOpenChange }: CreateAlertRuleModa
                                 Next
                             </button>
                         ) : (
-                            <button type="button" onClick={finish} className="h-9 rounded-lg bg-blue-600 px-4 text-[13px] font-semibold text-white hover:bg-blue-700">
+                            <button type="button" onClick={finish} disabled={isPending} className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-4 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                                {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                                 Create Rule
                             </button>
                         )}

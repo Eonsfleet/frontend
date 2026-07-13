@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Search, FileText, Truck, CreditCard, Banknote, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Search, FileText, Truck, Eye, Pencil, Trash2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -42,21 +42,6 @@ const STATUS_CLASS: Record<TransactionRow['status'], string> = {
 }
 
 const fmtNaira = (n: number | null) => (n == null ? '-' : `NGN ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-
-function PaymentCell({ method }: { method: TransactionRow['payment'] }) {
-    if (method === 'cash') {
-        return (
-            <span className="inline-flex items-center gap-1.5 text-slate-600">
-                <Banknote className="h-4 w-4 text-emerald-500" /> Cash
-            </span>
-        )
-    }
-    return (
-        <span className="inline-flex items-center gap-1.5 text-slate-600">
-            <CreditCard className="h-4 w-4 text-blue-500" /> Fleet Card
-        </span>
-    )
-}
 
 export function TransactionsTable({
     rows,
@@ -161,7 +146,7 @@ export function TransactionsTable({
 
             {/* Table */}
             <div className="min-h-0 flex-1 overflow-auto">
-                <table className="w-full min-w-[1400px] whitespace-nowrap text-left text-[13px]">
+                <table className="w-full min-w-[1280px] whitespace-nowrap text-left text-[13px]">
                     <thead className="sticky top-0 z-10 bg-white">
                         <tr className="border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                             <th className="w-10 px-4 py-3">
@@ -185,7 +170,6 @@ export function TransactionsTable({
                             <th className="px-4 py-3">Volume (L)</th>
                             <th className="px-4 py-3">Amount</th>
                             <th className="px-4 py-3">Price / L</th>
-                            <th className="px-4 py-3">Payment Method</th>
                             <th className="px-4 py-3">Status</th>
                             <th className="px-4 py-3">Receipt</th>
                             <th className="w-28 px-4 py-3" aria-label="Actions" />
@@ -194,10 +178,10 @@ export function TransactionsTable({
                     <tbody className="divide-y divide-slate-50">
                         {isLoading ? (
                             Array.from({ length: 6 }).map((_, i) => (
-                                <tr key={i}><td colSpan={13} className="px-4 py-3"><div className="h-8 w-full animate-pulse rounded bg-slate-50" /></td></tr>
+                                <tr key={i}><td colSpan={12} className="px-4 py-3"><div className="h-8 w-full animate-pulse rounded bg-slate-50" /></td></tr>
                             ))
                         ) : rows.length === 0 ? (
-                            <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">No transactions found.</td></tr>
+                            <tr><td colSpan={12} className="px-4 py-16 text-center text-slate-400">No transactions found.</td></tr>
                         ) : (
                             rows.map((r) => {
                                 const meta = TX_TYPE_META[r.type]
@@ -247,7 +231,6 @@ export function TransactionsTable({
                                         </td>
                                         <td className="px-4 py-3 font-medium text-slate-700">{fmtNaira(r.amountNaira)}</td>
                                         <td className="px-4 py-3 text-slate-600">{r.pricePerLiter != null ? fmtNaira(r.pricePerLiter) : '-'}</td>
-                                        <td className="px-4 py-3"><PaymentCell method={r.payment} /></td>
                                         <td className="px-4 py-3">
                                             <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', STATUS_CLASS[r.status])}>{STATUS_LABEL[r.status]}</span>
                                         </td>

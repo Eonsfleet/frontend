@@ -382,7 +382,7 @@ export default function FuelExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Avg Cost / L</p>
                         <p className="text-2xl font-bold text-slate-900">
-                            {m?.average_cost_per_liter != null ? `₦${Number(m.average_cost_per_liter).toFixed(2)}` : '—'}
+                            {(m?.avg_cost_per_litre ?? m?.average_cost_per_liter) != null ? `₦${Number(m?.avg_cost_per_litre ?? m?.average_cost_per_liter).toFixed(2)}` : '—'}
                         </p>
                     </CardContent>
                 </Card>

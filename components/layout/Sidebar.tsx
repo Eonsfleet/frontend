@@ -23,7 +23,6 @@ import {
   FileBarChart,
   HardDrive,
   Sparkles,
-  Camera,
   MessageSquare,
   Plug,
 } from "lucide-react";
@@ -164,14 +163,14 @@ const NAV_ITEMS = [
   //   module: null,
   //   trialAllowed: false,
   // },
-  {
-    href: "/camera",
-    label: "Camera",
-    icon: Camera,
-    permission: null,
-    module: null,
-    trialAllowed: false,
-  },
+  // {
+  //   href: "/camera",
+  //   label: "Camera",
+  //   icon: Camera,
+  //   permission: null,
+  //   module: null,
+  //   trialAllowed: false,
+  // },
   // {
   //   href: "/messages",
   //   label: "Messages",

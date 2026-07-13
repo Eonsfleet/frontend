@@ -17,10 +17,13 @@ export type TxType = 'refill' | 'theft' | 'leakage'
 export type PaymentMethod = 'fleet_card' | 'cash'
 export type EditableFuelExpenseStatus = 'pending_approval' | 'approved' | 'rejected' | 'reimbursed'
 
+export type ReconciliationStatus = 'all' | 'reconciled' | 'unreconciled' | 'pending' | 'disputed'
+
 export interface FuelTransactionFilters {
     search: string
     vehicleId?: number
     type?: 'all' | TxType
+    reconciliationStatus?: ReconciliationStatus
     startDate?: string
     endDate?: string
     page: number
@@ -58,6 +61,7 @@ export interface TxKpis {
     totalFuelPurchasedLiters: number
     totalCostNaira: number
     avgPricePerLiter: number
+    avgDistancePerLiter: number
     totalTransactions: number
     totalRefills: number
     pendingApprovalCount: number
@@ -198,6 +202,7 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
         q: filters.search.trim() || undefined,
         vehicle_id: filters.vehicleId,
         type: filters.type && filters.type !== 'all' ? filters.type : undefined,
+        reconciliation_status: filters.reconciliationStatus && filters.reconciliationStatus !== 'all' ? filters.reconciliationStatus : undefined,
         start_date: filters.startDate || undefined,
         end_date: filters.endDate || undefined,
         per_page: filters.perPage,
@@ -221,16 +226,26 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
 
     const kpis = useMemo<TxKpis>(() => {
         const metrics = metricsQuery.data?.data
+        // Transaction count isn't part of the metrics payload, so it always comes
+        // from pagination (fall back to the loaded rows before the first page lands).
+        const totalTransactions = pagination.total || rows.length
+        const totalRefills = rows.filter((r) => r.type === 'refill').length
+
         if (metrics) {
+            // The metrics endpoint exposes cost/volume/averages (new field names,
+            // with the legacy expense-ledger names kept as fallbacks).
+            const avgCostPerLitre = metrics.avg_cost_per_litre ?? metrics.average_cost_per_liter ?? 0
             return {
                 totalFuelPurchasedLiters: Math.round(metrics.total_volume ?? 0),
                 totalCostNaira: Number((metrics.total_cost ?? 0).toFixed(2)),
-                avgPricePerLiter: Number((metrics.average_cost_per_liter ?? 0).toFixed(2)),
-                totalTransactions: metrics.total_expenses ?? 0,
-                totalRefills: metrics.total_expenses ?? 0,
+                avgPricePerLiter: Number(avgCostPerLitre.toFixed(2)),
+                avgDistancePerLiter: Number((metrics.avg_distance_per_litre ?? 0).toFixed(2)),
+                totalTransactions,
+                totalRefills,
                 pendingApprovalCount: metrics.pending_approval_count ?? metrics.pending_count ?? 0,
             }
         }
+        // Fallback: derive from the loaded rows until the metrics query resolves.
         const purchased = rows.filter((r) => (r.volumeLiters ?? 0) > 0).reduce((s, r) => s + (r.volumeLiters ?? 0), 0)
         const cost = rows.reduce((s, r) => s + (r.amountNaira ?? 0), 0)
         const priced = rows.filter((r) => r.pricePerLiter != null)
@@ -239,8 +254,9 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
             totalFuelPurchasedLiters: Math.round(purchased),
             totalCostNaira: Number(cost.toFixed(2)),
             avgPricePerLiter: Number(avgPrice.toFixed(2)),
-            totalTransactions: pagination.total || rows.length,
-            totalRefills: rows.filter((r) => r.type === 'refill').length,
+            avgDistancePerLiter: 0,
+            totalTransactions,
+            totalRefills,
             pendingApprovalCount: 0,
         }
     }, [metricsQuery.data, pagination.total, rows])
@@ -248,6 +264,9 @@ export function useFuelTransactions(filters: FuelTransactionFilters) {
     return {
         rows,
         kpis,
+        // Metrics feed the KPI stat cards from a separate query; expose its loading
+        // state so the cards can show skeletons independently of the table.
+        kpisLoading: metricsQuery.isLoading,
         pagination,
         isLoading: query.isLoading,
         isError: query.isError,

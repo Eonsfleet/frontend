@@ -106,6 +106,9 @@ export interface VehicleRow {
     online: boolean
     /** Last known address, or null when the fuel API has no position for it. */
     location: string | null
+    /** Live coordinates from /fuel/vehicles, or null when the vehicle has no fix. */
+    lat: number | null
+    lng: number | null
     status: VehicleMovement
 }
 
@@ -155,12 +158,26 @@ export interface SummaryMetrics {
     totalSavingsTrend: number
 }
 
+/** Reads a lat/lng from the coordinate shapes /fuel/vehicles may return; null when absent. */
+function readCoord(...values: Array<number | string | null | undefined>): number | null {
+    for (const value of values) {
+        if (value == null || value === '') continue
+        const number = Number(value)
+        if (Number.isFinite(number) && number !== 0) return number
+    }
+    return null
+}
+
 function mapVehicleRow(v: FuelVehicle): VehicleRow {
     const online = v.attributes.device_online
-    // The fuel API exposes no live speed/position, so movement is inferred from the
-    // device's online state: online → moving, otherwise offline. (Idle is reserved
-    // for when a speed signal becomes available.)
+    // The fuel API exposes no live speed, so movement is inferred from the device's
+    // online state: online → moving, otherwise offline. (Idle is reserved for when a
+    // speed signal becomes available.)
     const status: VehicleMovement = online ? 'moving' : 'offline'
+    const coordinates = v.attributes.coordinates
+    const currentLocation = v.relationships?.current_location
+    const lat = readCoord(coordinates?.latitude, currentLocation?.latitude)
+    const lng = readCoord(coordinates?.longitude, currentLocation?.longitude)
     return {
         id: Number(v.id),
         registration: v.attributes.registration_number,
@@ -170,6 +187,8 @@ function mapVehicleRow(v: FuelVehicle): VehicleRow {
         fuelLiters: v.fuel_level ? Number(finiteNumberOrFallback(v.fuel_level.fuel_level_liters).toFixed(1)) : null,
         online,
         location: null,
+        lat,
+        lng,
         status,
     }
 }
