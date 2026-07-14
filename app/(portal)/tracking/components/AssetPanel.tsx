@@ -11,11 +11,8 @@ import {
   Route as RouteIcon,
   MoreHorizontal,
   MapPinned,
-  Terminal,
-  Lock,
   Share2,
   FileDown,
-  Radar,
   ChevronRight,
   Crosshair,
   PlayCircle,
@@ -47,6 +44,7 @@ import { getDriverById } from "@/lib/api/drivers";
 import { getCurrentDriver } from "@/lib/api/vehicles";
 import { getActiveTripForVehicle } from "@/lib/api/trips";
 import { getDeviceById } from "@/lib/api/tracking";
+import { ShareLocationModal } from "./ShareLocationModal";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { DriverTab } from "./tabs/DriverTab";
 import { TripTab } from "./tabs/TripTab";
@@ -55,16 +53,6 @@ import { PacketStreamTab } from "./tabs/PacketStreamTab";
 
 const TAB_TRIGGER_CLASS =
   "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium text-[11px]";
-
-function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-}
 
 interface AssetPanelProps {
   isOpen: boolean;
@@ -97,6 +85,7 @@ export function AssetPanel({
 }: AssetPanelProps) {
   const router = useRouter();
   const [selectedSpeed, setSelectedSpeed] = useState<number>(1);
+  const [shareOpen, setShareOpen] = useState(false);
   const {
     activeTab,
     setActiveTab,
@@ -182,37 +171,17 @@ export function AssetPanel({
     );
   }
 
-  const handleNearbyAssets = () => {
-    if (!loc?.lat || !loc?.lng) {
-      toast.info("No current position available for this asset yet.");
-      return;
-    }
-    const nearby = vehicles
-      .filter((v) => v.id !== selectedVehicle.id && locations[v.id]?.lat && locations[v.id]?.lng)
-      .map((v) => ({
-        plate: v.attributes.registration_number,
-        distanceKm: haversineKm(loc, locations[v.id]),
-      }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, 3);
-
-    if (nearby.length === 0) {
-      toast.info("No other assets with a known position nearby.");
-      return;
-    }
-    toast.success("Nearest assets", {
-      description: nearby.map((n) => `${n.plate} — ${n.distanceKm.toFixed(1)} km`).join(" · "),
-    });
-  };
+  // Effective position for share/street-view: prefer the live WS packet, then
+  // fall back to the resolved telemetry (same convention as handleStreetView).
+  const shareLat = loc?.lat ?? resolved.lat;
+  const shareLng = loc?.lng ?? resolved.lng;
 
   const handleShareLocation = () => {
-    if (!loc?.lat || !loc?.lng) {
+    if (shareLat == null || shareLng == null) {
       toast.info("No current position available to share yet.");
       return;
     }
-    const url = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Location link copied to clipboard");
+    setShareOpen(true);
   };
 
   const handleStreetView = () => {
@@ -234,27 +203,9 @@ export function AssetPanel({
   };
 
   const moreActions = [
-    {
-      label: isMapFollowEnabled ? "Stop Focus" : "Focus",
-      icon: Crosshair,
-      onClick: () => {
-        if (isMapFollowEnabled) {
-          setMapFollowEnabled(false);
-          toast.info("Map auto-focus disabled");
-        } else {
-          setMapFollowEnabled(true);
-          onLiveTrack();
-          toast.success("Map auto-focus enabled");
-        }
-      }
-    },
-    { label: "Nearby Assets", icon: Radar, onClick: handleNearbyAssets },
     { label: "Street View", icon: Camera, onClick: handleStreetView },
-    { label: "Send Command", icon: Terminal, onClick: () => toast.info("Send Command is not yet available.") },
-    { label: "Immobilize", icon: Lock, onClick: () => toast.info("Immobilize is not yet available.") },
     { label: "Geofence", icon: MapPinned, onClick: () => router.push("/geofences") },
     { label: "Share Location", icon: Share2, onClick: handleShareLocation },
-    { label: "Download Report", icon: FileDown, onClick: () => toast.info("Download Report is not yet available.") },
   ];
 
   return (
@@ -586,6 +537,16 @@ export function AssetPanel({
             <PacketStreamTab vehicleId={String(selectedVehicle.id)} plate={plate} />
           </TabsContent>
         </Tabs>
+      )}
+
+      {shareLat != null && shareLng != null && (
+        <ShareLocationModal
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          label={plate}
+          lat={shareLat}
+          lng={shareLng}
+        />
       )}
     </div>
   );
