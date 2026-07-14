@@ -230,6 +230,21 @@ export const getFuelTransactions = async (params?: FuelTransactionListParams): P
     return response.data
 }
 
+export interface FuelTransactionExportParams {
+    q?: string
+    vehicle_id?: number
+    type?: string
+    reconciliation_status?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+}
+
+export const exportFuelTransactions = async (params?: FuelTransactionExportParams): Promise<Blob> => {
+    const response = await apiClient.get('/fuel-transactions/export', { params, responseType: 'blob' })
+    return response.data
+}
+
 export const linkTransactionToVehicle = async (transactionId: string, vehicle_id: number): Promise<{ message: string; data: { fuel_card_transaction: FuelCardTransaction } }> => {
     const response = await apiClient.post(`/fuel-card/transactions/${transactionId}/link-vehicle`, { vehicle_id })
     return response.data
@@ -583,28 +598,55 @@ export const markFuelAlertFalsePositive = async (alertId: number, notes?: string
 
 // ── Fuel Alert Rules (CRUD) ──────────────────────────────────────────────────
 
-export type VehicleScope = 'all' | 'specific'
+export type VehicleScope = 'all_vehicles' | 'specific_vehicles'
+
+export type FuelAlertType =
+    | 'low_fuel'
+    | 'refill'
+    | 'fuel_theft'
+    | 'fuel_leakage'
+    | 'sensor_malfunction'
+    | 'rapid_drop'
+
+export type FuelAlertMetric =
+    | 'fuel_level_percent'
+    | 'fuel_drop_percent'
+    | 'fuel_drop_liters'
+    | 'fuel_rise_percent'
+    | 'fuel_rise_liters'
+    | 'invalid_reading_count'
 
 export interface FuelAlertRuleCondition {
-    metric: string
+    metric: FuelAlertMetric
     operator: 'lte' | 'gte' | 'lt' | 'gt' | 'eq'
     threshold_value: number
+    // Optional — some alert types (e.g. instantaneous theft) have no duration.
     duration_value?: number
     duration_unit?: 'minutes' | 'hours'
+}
+
+export interface FuelAlertChannels {
+    in_app: boolean
+    email: boolean
+    sms: boolean
+    webhook: boolean
 }
 
 export interface FuelAlertRule {
     id: number | string
     name: string
-    alert_type: string
+    alert_type: FuelAlertType | string
     description?: string | null
     is_active: boolean
     condition?: FuelAlertRuleCondition | null
     vehicle_scope?: VehicleScope
     // Scoped to the requesting org by the backend (cross-tenant IDOR fix).
     vehicle_ids?: number[]
+    channels?: FuelAlertChannels
     recipient_user_ids?: number[]
-    channels?: string[]
+    recipient_emails?: string[]
+    recipient_phone_numbers?: string[]
+    webhook_endpoint_ids?: number[]
     created_at?: string
     updated_at?: string
     [key: string]: unknown
@@ -612,15 +654,18 @@ export interface FuelAlertRule {
 
 export interface FuelAlertRulePayload {
     name: string
-    alert_type: string
+    alert_type: FuelAlertType | string
     description?: string | null
     is_active?: boolean
     condition: FuelAlertRuleCondition
-    // 'all' applies to every org vehicle; 'specific' requires vehicle_ids.
+    // 'all_vehicles' targets every org vehicle; 'specific_vehicles' requires vehicle_ids.
     vehicle_scope: VehicleScope
     vehicle_ids?: number[]
+    channels: FuelAlertChannels
     recipient_user_ids?: number[]
-    channels?: string[]
+    recipient_emails?: string[]
+    recipient_phone_numbers?: string[]
+    webhook_endpoint_ids?: number[]
 }
 
 // Response shapes are read tolerantly — the rule may be returned bare or wrapped
@@ -670,7 +715,8 @@ export interface FuelAlertLogListParams {
     search?: string
     per_page?: number
     page?: number
-    vehicle_id?: number
+    /** Single id, or a comma-separated list for multi-vehicle filtering. */
+    vehicle_id?: number | string
     date?: string
     start_date?: string
     end_date?: string

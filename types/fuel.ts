@@ -22,18 +22,22 @@ export interface FuelExpense {
     }
 }
 
+/** A single period-over-period KPI stat, as returned by GET /fuel-expenses/metrics. */
+export interface FuelMetricStat {
+    current: number
+    previous: number
+    change_percent: number
+    trend: 'up' | 'down' | 'neutral'
+}
+
 export interface FuelExpenseMetrics {
-    total_cost: number
-    total_volume: number
-    avg_cost_per_litre: number
-    avg_distance_per_litre: number
-    // Legacy / expense-ledger fields — kept optional so the Expenses screen (which
-    // reads these) still type-checks against the same metrics endpoint.
-    average_cost_per_liter?: number
-    total_expenses?: number
-    pending_approval_count?: number
-    pending_count?: number
-    approved_count?: number
+    period: { start_date: string; end_date: string }
+    previous_period: { start_date: string; end_date: string }
+    total_fuel_purchased: FuelMetricStat
+    total_cost: FuelMetricStat
+    avg_price_per_litre: FuelMetricStat
+    total_transactions: FuelMetricStat
+    pending_approval: FuelMetricStat
 }
 
 export interface FuelCardProviderType {
@@ -138,6 +142,27 @@ export interface FuelReconciliationReport {
     }>
 }
 
+export interface FuelCapabilities {
+    supportsTankLevel: boolean
+    supportsObdLevel: boolean
+    supportsFuelConsumption: boolean
+    supportsFuelRate: boolean
+    supportsGpsFuelUsage: boolean
+    supportsGpsFuelRate: boolean
+    supportsCalculatedConsumption: boolean
+}
+
+export interface FuelWidgets {
+    showTankGauge: boolean
+    showRefuelEvents: boolean
+    showFuelDrainEvents: boolean
+    showFuelAlerts: boolean
+    showEstimatedFuelUsage: boolean
+    showTripFuelConsumption: boolean
+    showFuelEfficiency: boolean
+    showCostEstimation: boolean
+}
+
 export interface FuelVehicle {
     id: number | string
     attributes: {
@@ -152,6 +177,9 @@ export interface FuelVehicle {
         device_status?: string
         device_connected?: boolean
         speed?: number | string | null
+        fuel_source?: string | null
+        fuel_capabilities?: FuelCapabilities | null
+        fuel_widgets?: FuelWidgets | null
         coordinates?: { latitude?: number | string | null; longitude?: number | string | null } | null
         odometer?: { lifetime_km?: number | string | null; today_km?: number | string | null } | null
     }
@@ -161,6 +189,23 @@ export interface FuelVehicle {
         last_updated: string
         tank_capacity: number
         data_quality_score: number
+        record_source?: string | null
+        record_origin?: string | null
+    } | null
+    fuel_metrics?: {
+        fuel_source?: string | null
+        last_updated?: string | null
+        fuel_level_liters?: number | null
+        fuel_level_percent?: number | null
+        fuel_consumed_counted?: number | null
+    } | null
+    fuel_data?: {
+        device_has_fuel?: boolean
+        device_fuel_source?: string | null
+        has_level_reading?: boolean
+        has_live_metrics?: boolean
+        live_metric_source?: string | null
+        live_metric_updated_at?: string | null
     } | null
     relationships?: {
         device?: { status?: string | null } | null
