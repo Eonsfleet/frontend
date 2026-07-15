@@ -159,7 +159,10 @@ export const postIncidentMessage = async (
     id: string,
     data: { body: string; is_internal?: boolean }
 ): Promise<any> => {
-    const response = await apiClient.post(`/incidents/${id}/messages`, data)
+    const response = await apiClient.post(`/incidents/${id}/messages`, {
+        body: data.body,
+        is_internal: data.is_internal ?? false,
+    })
     return response.data
 }
 

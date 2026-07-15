@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { QueryError } from "@/components/shared/QueryError";
 import { OverviewHeader } from "./components/OverviewHeader";
@@ -16,10 +17,7 @@ import {
   useFuelTrends,
   type FuelOverviewRange,
 } from "./components/useFuelOverview";
-import type {
-  MapMarkerPoint,
-  FeaturedVehicle,
-} from "./components/FuelTrackingMap";
+import type { MapMarkerPoint } from "./components/FuelTrackingMap";
 import type { VehicleFilter } from "./components/VehicleListCard";
 import type { TopConsumersFilter } from "./components/TopConsumersCard";
 import type { TrendFilterOption } from "./components/TrendChartCard";
@@ -52,6 +50,7 @@ function defaultRange(): FuelOverviewRange {
 }
 
 export default function FuelOverviewPage() {
+  const router = useRouter();
   const [range] = useState<FuelOverviewRange>(defaultRange);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState<VehicleFilter>("all");
@@ -84,6 +83,7 @@ export default function FuelOverviewPage() {
   // Map markers: live vehicle positions from /fuel/vehicles (colored by fuel level),
   // plus theft/abnormality incidents that carry coordinates.
   const markers = useMemo<MapMarkerPoint[]>(() => {
+    const lastUpdated = format(new Date(), "hh:mm a");
     const vehicleMarkers: MapMarkerPoint[] = vehicles
       .filter((v) => v.lat != null && v.lng != null)
       .map((v) => ({
@@ -91,6 +91,16 @@ export default function FuelOverviewPage() {
         lat: v.lat as number,
         lng: v.lng as number,
         fuelPercent: v.fuelPercent,
+        vehicleId: v.id,
+        featured: {
+          registration: v.registration,
+          status: v.status.charAt(0).toUpperCase() + v.status.slice(1),
+          fuelPercent: v.fuelPercent,
+          fuelLiters: v.fuelLiters,
+          consumptionLph: 3.2,
+          location: v.location ?? "—",
+          lastUpdated,
+        },
       }));
     const incidentMarkers: MapMarkerPoint[] = theftIncidents
       .filter((i) => i.location?.lat != null && i.location?.lng != null)
@@ -101,24 +111,6 @@ export default function FuelOverviewPage() {
       }));
     return [...vehicleMarkers, ...incidentMarkers];
   }, [vehicles, theftIncidents]);
-
-  // Feature the highest-fuel online vehicle in the overlay card.
-  const featured = useMemo<FeaturedVehicle | null>(() => {
-    const candidate =
-      vehicles.find((v) => v.online && v.fuelPercent != null) ??
-      vehicles.find((v) => v.fuelPercent != null) ??
-      vehicles[0];
-    if (!candidate) return null;
-    return {
-      registration: candidate.registration,
-      status: candidate.online ? "Moving" : "Parked",
-      fuelPercent: candidate.fuelPercent,
-      fuelLiters: candidate.fuelLiters,
-      consumptionLph: 3.2,
-      location: "—",
-      lastUpdated: format(new Date(), "hh:mm a"),
-    };
-  }, [vehicles]);
 
   return (
     <div className="space-y-6">
@@ -136,8 +128,10 @@ export default function FuelOverviewPage() {
             <div className="md:col-span-2 lg:col-span-5">
               <RealtimeTrackingCard
                 markers={markers}
-                featured={featured}
                 vehicles={vehicles}
+                onViewVehicle={(vehicleId) =>
+                  router.push(`/vehicles/${vehicleId}`)
+                }
               />
             </div>
             <div className="md:col-span-1 lg:col-span-4">

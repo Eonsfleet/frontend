@@ -14,11 +14,13 @@ interface VehicleDetailPanelProps {
 
 const STATUS_BADGE: Record<VehicleMovement, string> = {
   moving: "bg-emerald-50 text-emerald-600",
+  parked: "bg-slate-100 text-slate-500",
   idle: "bg-amber-50 text-amber-600",
-  offline: "bg-slate-100 text-slate-500",
+  offline: "bg-rose-50 text-rose-600",
 };
 const STATUS_LABEL: Record<VehicleMovement, string> = {
   moving: "Moving",
+  parked: "Parked",
   idle: "Idle",
   offline: "Offline",
 };

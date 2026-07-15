@@ -3,8 +3,8 @@
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useMemo } from 'react'
-import { Radio } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Radio, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface MapMarkerPoint {
@@ -13,6 +13,10 @@ export interface MapMarkerPoint {
     lng: number
     /** Fuel percentage — drives marker color. */
     fuelPercent?: number | null
+    /** Vehicle id used to navigate to the detail page (null for non-vehicle markers, e.g. incidents). */
+    vehicleId?: number | null
+    /** Per-vehicle details shown in the overlay card when this marker is clicked. */
+    featured?: FeaturedVehicle | null
 }
 
 export interface FeaturedVehicle {
@@ -27,8 +31,8 @@ export interface FeaturedVehicle {
 
 interface FuelTrackingMapProps {
     markers: MapMarkerPoint[]
-    featured?: FeaturedVehicle | null
-    onViewVehicle?: () => void
+    /** Called with the clicked marker's vehicle id when "View Vehicle" is pressed. */
+    onViewVehicle?: (vehicleId: number) => void
     className?: string
 }
 
@@ -41,10 +45,29 @@ function markerColor(pct?: number | null): string {
     return '#10b981'
 }
 
-function pinIcon(color: string) {
+// Text + dot colors for the vehicle status shown in the overlay card.
+//  moving → green · parked → grey · offline → red · idle → amber
+function statusStyles(status: string): { text: string; dot: string } {
+    switch (status.toLowerCase()) {
+        case 'moving':
+            return { text: 'text-emerald-600', dot: 'bg-emerald-500' }
+        case 'parked':
+            return { text: 'text-slate-500', dot: 'bg-slate-400' }
+        case 'offline':
+            return { text: 'text-rose-600', dot: 'bg-rose-500' }
+        case 'idle':
+            return { text: 'text-amber-600', dot: 'bg-amber-500' }
+        default:
+            return { text: 'text-slate-600', dot: 'bg-slate-400' }
+    }
+}
+
+// Truck badge marker, matching the Real-time Tracking map's vehicle icon.
+function truckIcon(color: string, active: boolean) {
+    const ring = active ? 'box-shadow:0 0 0 3px rgba(37,99,235,.35);' : ''
     return L.divIcon({
-        className: 'fuel-map-pin',
-        html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:${color};transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;display:flex;align-items:center;justify-content:center"><div style="width:8px;height:8px;border-radius:50%;background:#fff;transform:rotate(45deg)"></div></div>`,
+        className: 'fuel-map-truck',
+        html: `<span style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:#fff;border:2px solid ${active ? '#2563eb' : color};font-size:16px;line-height:1;${ring}">🚚</span>`,
         iconSize: [28, 28],
         iconAnchor: [14, 28],
     })
@@ -61,18 +84,27 @@ function FitBounds({ markers }: { markers: MapMarkerPoint[] }) {
     return null
 }
 
-export function FuelTrackingMap({ markers, featured, onViewVehicle, className }: FuelTrackingMapProps) {
+export function FuelTrackingMap({ markers, onViewVehicle, className }: FuelTrackingMapProps) {
     const center = useMemo<[number, number]>(
         () => (markers[0] ? [markers[0].lat, markers[0].lng] : LAGOS),
         [markers],
     )
+
+    // The marker the user clicked; its details populate the overlay card.
+    const [selectedId, setSelectedId] = useState<MapMarkerPoint['id'] | null>(null)
+    const selected = useMemo(
+        () => markers.find((m) => m.id === selectedId) ?? null,
+        [markers, selectedId],
+    )
+    const featured = selected?.featured ?? null
 
     return (
         <div className={cn('relative h-[340px] w-full overflow-hidden rounded-xl border border-slate-200', className)}>
             <MapContainer
                 center={center}
                 zoom={12}
-                scrollWheelZoom={false}
+                scrollWheelZoom
+                touchZoom
                 zoomControl
                 className="h-full w-full"
                 style={{ background: '#e5e7eb' }}
@@ -82,7 +114,12 @@ export function FuelTrackingMap({ markers, featured, onViewVehicle, className }:
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                 />
                 {markers.map((m) => (
-                    <Marker key={m.id} position={[m.lat, m.lng]} icon={pinIcon(markerColor(m.fuelPercent))} />
+                    <Marker
+                        key={m.id}
+                        position={[m.lat, m.lng]}
+                        icon={truckIcon(markerColor(m.fuelPercent), m.id === selectedId)}
+                        eventHandlers={{ click: () => setSelectedId(m.id) }}
+                    />
                 ))}
                 <FitBounds markers={markers} />
             </MapContainer>
@@ -91,9 +128,19 @@ export function FuelTrackingMap({ markers, featured, onViewVehicle, className }:
                 <div className="pointer-events-auto absolute left-1/2 top-1/2 z-[500] w-64 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-slate-900">{featured.registration}</span>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {featured.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={cn('inline-flex items-center gap-1 text-[11px] font-semibold', statusStyles(featured.status).text)}>
+                                <span className={cn('h-1.5 w-1.5 rounded-full', statusStyles(featured.status).dot)} /> {featured.status}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedId(null)}
+                                aria-label="Close"
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="mt-3">
@@ -126,13 +173,15 @@ export function FuelTrackingMap({ markers, featured, onViewVehicle, className }:
                         </div>
                     </dl>
 
-                    <button
-                        type="button"
-                        onClick={onViewVehicle}
-                        className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700"
-                    >
-                        View Vehicle →
-                    </button>
+                    {selected?.vehicleId != null && (
+                        <button
+                            type="button"
+                            onClick={() => onViewVehicle?.(selected.vehicleId as number)}
+                            className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700"
+                        >
+                            View Vehicle →
+                        </button>
+                    )}
                 </div>
             )}
 

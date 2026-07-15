@@ -20,8 +20,9 @@ type StatusFilter = 'all' | VehicleMovement
 
 const STATUS_META: Record<VehicleMovement, { label: string; text: string; dot: string }> = {
     moving: { label: 'Moving', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+    parked: { label: 'Parked', text: 'text-slate-500', dot: 'bg-slate-400' },
     idle: { label: 'Idle', text: 'text-amber-600', dot: 'bg-amber-500' },
-    offline: { label: 'Offline', text: 'text-slate-400', dot: 'bg-slate-300' },
+    offline: { label: 'Offline', text: 'text-rose-600', dot: 'bg-rose-500' },
 }
 
 function fuelBarColor(pct: number | null): string {

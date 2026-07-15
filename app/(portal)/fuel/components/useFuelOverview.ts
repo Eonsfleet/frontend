@@ -93,7 +93,7 @@ export interface KpiViewModel {
 
 // ── Vehicle-row view-model (list, distribution, low-fuel) ─────────────────────
 
-export type VehicleMovement = 'moving' | 'idle' | 'offline'
+export type VehicleMovement = 'moving' | 'parked' | 'idle' | 'offline'
 
 export interface VehicleRow {
     id: number
@@ -168,12 +168,40 @@ function readCoord(...values: Array<number | string | null | undefined>): number
     return null
 }
 
+/** Minutes since a device's last report before we treat it as offline/stale. */
+const STALE_AFTER_MINUTES = 30
+
+/**
+ * Derives movement status from the signals the fuel API exposes:
+ *  - offline device, or a reading older than STALE_AFTER_MINUTES → 'offline'
+ *  - online + a positive speed reading                          → 'moving'
+ *  - online but not moving (speed 0/absent)                     → 'parked'
+ * Speed comes from attributes.speed or current_location.speed; last-seen from
+ * fuel_level.last_updated / fuel_data.live_metric_updated_at.
+ */
+function deriveStatus(v: FuelVehicle): VehicleMovement {
+    const online = v.attributes.device_online
+    const lastSeen =
+        v.fuel_level?.last_updated ??
+        v.fuel_metrics?.last_updated ??
+        v.fuel_data?.live_metric_updated_at ??
+        null
+    const stale = (() => {
+        if (!lastSeen) return false
+        const t = new Date(lastSeen).getTime()
+        if (Number.isNaN(t)) return false
+        return Date.now() - t > STALE_AFTER_MINUTES * 60_000
+    })()
+
+    if (!online || stale) return 'offline'
+
+    const speed = Number(v.attributes.speed ?? v.relationships?.current_location?.speed ?? 0)
+    return Number.isFinite(speed) && speed > 0 ? 'moving' : 'parked'
+}
+
 function mapVehicleRow(v: FuelVehicle): VehicleRow {
     const online = v.attributes.device_online
-    // The fuel API exposes no live speed, so movement is inferred from the device's
-    // online state: online → moving, otherwise offline. (Idle is reserved for when a
-    // speed signal becomes available.)
-    const status: VehicleMovement = online ? 'moving' : 'offline'
+    const status: VehicleMovement = deriveStatus(v)
     const coordinates = v.attributes.coordinates
     const currentLocation = v.relationships?.current_location
     const lat = readCoord(coordinates?.latitude, currentLocation?.latitude)

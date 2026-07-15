@@ -251,7 +251,7 @@ export default function NewIncidentPage() {
 
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-slate-700">Time <span className="text-rose-500">*</span></label>
-                            <Input type="time" value={form.time} onChange={e => set('time', e.target.value)} className="bg-white" />
+                            <Input type="time" value={form.time} onChange={e => { const v = e.target.value; set('time', v); if (/^\d{2}:\d{2}$/.test(v)) e.target.blur() }} className="bg-white" />
                         </div>
 
                         <div className="space-y-1.5">
