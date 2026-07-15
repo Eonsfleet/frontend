@@ -77,13 +77,14 @@ export interface AlertFilters {
     types: AlertType[]
     severities: Severity[]
     status: AlertStatus | 'all'
-    vehicleId?: number | null
+    /** Selected vehicle ids; empty = all vehicles. */
+    vehicleIds: number[]
     date?: string
     startDate?: string
     endDate?: string
 }
 
-export const EMPTY_FILTERS: AlertFilters = { types: [], severities: [], status: 'all' }
+export const EMPTY_FILTERS: AlertFilters = { types: [], severities: [], status: 'all', vehicleIds: [] }
 
 export interface AlertTrendPoint {
     label: string
@@ -220,7 +221,7 @@ export function useFuelAlerts() {
             search: search || undefined,
             page,
             per_page: 10,
-            vehicle_id: filters.vehicleId ?? undefined,
+            vehicle_id: filters.vehicleIds.length ? filters.vehicleIds.join(',') : undefined,
             date: filters.date || undefined,
             start_date: filters.startDate || undefined,
             end_date: filters.endDate || undefined,
@@ -276,6 +277,7 @@ export function useFuelAlerts() {
         filters.types.length
         + filters.severities.length
         + (filters.status !== 'all' ? 1 : 0)
+        + (filters.vehicleIds.length ? 1 : 0)
         + (filters.startDate || filters.endDate ? 1 : 0)
 
     return {

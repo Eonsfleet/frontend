@@ -103,18 +103,21 @@ export interface VehicleDetail {
     registration: string
     model: string
     status: VehicleMovement
-    fuelPercent: number
-    fuelLiters: number
-    tankCapacity: number
-    // Mocked descriptive fields (no fuel-API source):
-    driver: string
-    group: string
-    location: string
-    lastUpdated: string
-    fuelStatus: string
-    engineOn: boolean
-    speedKmh: number
-    odometerKm: number
+    fuelPercent: number | null
+    fuelLiters: number | null
+    tankCapacity: number | null
+    fuelType: string | null
+    /** Raw coordinates from the API, or null when absent (for reverse-geocoding). */
+    lat: number | null
+    lng: number | null
+    /** lat,lng string from the API coordinates, or null when absent. */
+    coordinates: string | null
+    /** Formatted fuel_level.last_updated, or null when no reading. */
+    lastUpdated: string | null
+    /** Whether the device has a fuel level reading (drives the tank gauge). */
+    hasLevelReading: boolean
+    fuelSource: string | null
+    /** Real live-fuel rows built only from fields the API actually returned. */
     liveFuel: { label: string; value: string }[]
 }
 
@@ -138,9 +141,6 @@ export interface FuelEventsPagination {
     perPage: number
 }
 
-const DRIVERS = ['John Okeke', 'Amaka Nwosu', 'Musa Bello', 'Grace Eze', 'Tunde Bakare']
-const GROUPS = ['Heavy Trucks', 'Distribution', 'Long Haul', 'Regional']
-const LOCATIONS = ['Lekki-Epe Expressway, Lagos', 'Ikeja, Lagos', 'Ojota, Lagos', 'Apapa, Lagos', 'Victoria Island, Lagos']
 type RealtimeVehicleSource = FuelVehicle
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -155,46 +155,59 @@ function capitalize(value: string): string {
     return value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : value
 }
 
-function buildDetail(v: RealtimeVehicle, raw: RealtimeVehicleSource | undefined, capacity: number): VehicleDetail {
-    const s = v.id
-    const pct = v.fuelPercent ?? 0
-    const liters = v.fuelLiters ?? 0
+/**
+ * Builds the detail-panel view-model strictly from what /fuel/vehicles returns.
+ * Fields the API does not expose (driver, group, odometer, engine hours, idle
+ * duration, consumption/flow rates) are intentionally omitted rather than mocked.
+ */
+function buildDetail(v: RealtimeVehicle, raw: RealtimeVehicleSource | undefined): VehicleDetail {
     const fuelLevel = raw ? fuelLevelFor(raw) : null
-    const lastUpdatedDate = fuelLevel?.last_updated ? new Date(fuelLevel.last_updated) : null
+    const metrics = raw?.fuel_metrics ?? null
+    const fuelData = raw?.fuel_data ?? null
+
+    const lastUpdatedRaw = metrics?.last_updated ?? fuelLevel?.last_updated ?? null
+    const lastUpdatedDate = lastUpdatedRaw ? new Date(lastUpdatedRaw) : null
     const lastUpdated =
         lastUpdatedDate && !Number.isNaN(lastUpdatedDate.getTime())
-            ? format(lastUpdatedDate, 'hh:mm:ss a')
-            : format(new Date(), 'hh:mm:ss a')
+            ? format(lastUpdatedDate, 'MMM d, yyyy hh:mm:ss a')
+            : null
+
+    const coordinates = raw?.attributes.coordinates
+    const lat = toNumber(coordinates?.latitude)
+    const lng = toNumber(coordinates?.longitude)
+
+    const capacity = fuelLevel?.tank_capacity ?? raw?.attributes.fuel_capacity ?? null
+    const fuelType = raw?.attributes.fuel_type ? capitalize(raw.attributes.fuel_type) : null
+
+    // Live-fuel rows: include only the metrics the API actually returned.
+    const liveFuel: { label: string; value: string }[] = []
+    if (v.fuelLiters != null) liveFuel.push({ label: 'Fuel Level', value: `${v.fuelLiters} L` })
+    if (fuelType) liveFuel.push({ label: 'Fuel Type', value: fuelType })
+    if (fuelLevel?.data_quality_score != null) {
+        liveFuel.push({ label: 'Data Quality', value: `${Math.round(fuelLevel.data_quality_score * 100)}%` })
+    }
+    const source = metrics?.fuel_source ?? fuelData?.device_fuel_source ?? raw?.attributes.fuel_source ?? null
+    if (source) liveFuel.push({ label: 'Fuel Source', value: source.replace(/_/g, ' ') })
+    if (metrics?.fuel_consumed_counted != null) {
+        liveFuel.push({ label: 'Fuel Consumed', value: `${Number(metrics.fuel_consumed_counted).toFixed(1)} L` })
+    }
 
     return {
         id: v.id,
         registration: v.registration,
         model: v.model,
         status: v.status,
-        fuelPercent: pct,
-        fuelLiters: liters,
+        fuelPercent: v.fuelPercent,
+        fuelLiters: v.fuelLiters,
         tankCapacity: capacity,
-        driver: DRIVERS[s % DRIVERS.length],
-        group: GROUPS[s % GROUPS.length],
-        location: LOCATIONS[s % LOCATIONS.length],
+        fuelType,
+        lat,
+        lng,
+        coordinates: lat != null && lng != null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : null,
         lastUpdated,
-        fuelStatus: pct <= 20 ? 'Low' : 'Normal',
-        engineOn: v.status !== 'offline',
-        speedKmh: Math.round(v.speedKmh),
-        odometerKm: Math.round(v.odometerKm ?? 20000 + s * 137),
-        liveFuel: [
-            { label: 'Fuel Level', value: `${liters} L` },
-            { label: 'Fuel Type', value: raw?.attributes.fuel_type ? capitalize(raw.attributes.fuel_type) : 'Unknown' },
-            {
-                label: 'Data Quality',
-                value: fuelLevel?.data_quality_score != null ? `${Math.round(fuelLevel.data_quality_score * 100)}%` : '—',
-            },
-            { label: 'Fuel Consumption', value: `${(2.4 + (s % 10) / 10).toFixed(1)} L/h` },
-            { label: 'Fuel Flow Rate', value: `${(1.8 + (s % 8) / 10).toFixed(1)} L/h` },
-            { label: 'Engine Hours', value: `${(120 + (s % 20)).toFixed(1)} Hrs` },
-            { label: 'Idle Duration', value: '01:15:20' },
-            { label: 'Last Refueled', value: format(subHours(new Date(), 24 + (s % 12)), 'MMM d, yyyy hh:mm a') },
-        ],
+        hasLevelReading: fuelData?.has_level_reading ?? fuelLevel != null,
+        fuelSource: source ? source.replace(/_/g, ' ') : null,
+        liveFuel,
     }
 }
 
@@ -385,8 +398,7 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
     const detail = useMemo<VehicleDetail | null>(() => {
         const row = vehicles.find((v) => v.id === activeId)
         if (!row) return null
-        const capacity = (selectedRaw ? fuelLevelFor(selectedRaw)?.tank_capacity : null) ?? selectedRaw?.attributes.fuel_capacity ?? 100
-        return buildDetail(row, selectedRaw, Math.round(capacity))
+        return buildDetail(row, selectedRaw)
     }, [vehicles, activeId, selectedRaw])
 
     // Real fuel-level trend → Fuel Level Trend chart. Always runs, whether or

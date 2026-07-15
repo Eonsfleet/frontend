@@ -243,9 +243,9 @@ export function TransactionsTable({
                                         <td className="px-4 py-3">
                                             {r.fuelLevelBefore != null && r.fuelLevelAfter != null ? (
                                                 <span className="inline-flex items-center gap-1 text-slate-700">
-                                                    <span className="text-slate-400">{r.fuelLevelBefore}%</span>
+                                                    <span className="text-slate-400">{Number(r.fuelLevelBefore.toFixed(3))}%</span>
                                                     <ArrowRight className="h-3 w-3 text-slate-300" />
-                                                    <span className={cn('font-medium', r.fuelLevelAfter >= r.fuelLevelBefore ? 'text-emerald-600' : 'text-rose-600')}>{r.fuelLevelAfter}%</span>
+                                                    <span className={cn('font-medium', r.fuelLevelAfter >= r.fuelLevelBefore ? 'text-emerald-600' : 'text-rose-600')}>{Number(r.fuelLevelAfter.toFixed(3))}%</span>
                                                 </span>
                                             ) : '-'}
                                         </td>
