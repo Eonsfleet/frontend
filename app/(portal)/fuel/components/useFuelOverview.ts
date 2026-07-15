@@ -297,10 +297,10 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
 
     const kpi = useMemo<KpiViewModel>(() => {
         const totalCost = (costReport?.months ?? []).reduce((s, m) => s + (m.total_cost ?? 0), 0)
-        const totalVolume = finiteNumberOrFallback(consumption?.total_liters)
+        const totalVolume = finiteNumberOrFallback(consumption?.total_fuel_liters)
         // consumption-report trend → live fuel-used sparkline (fall back to a mock walk).
         const fuelUsedSpark = consumption?.trend?.length
-            ? consumption.trend.map((t) => finiteNumberOrFallback(t.liters))
+            ? consumption.trend.map((t) => finiteNumberOrFallback(t.total_fuel_liters))
             : sparkline(1, 16, 55, 22)
         return {
             totalFuelUsedLiters: Number(totalVolume.toFixed(2)),
@@ -442,7 +442,7 @@ export interface TrendPoint {
 
 /**
  * Consumption + efficiency day series for the two analytics charts.
- *  - Consumption Trend  → /analytics/fuel/consumption-report (trend[].date/liters)
+ *  - Consumption Trend  → /analytics/fuel/consumption-report (trend[].period/total_fuel_liters)
  *  - Fuel Efficiency    → /fuel-consumptions/efficiency-graph (labels[] / efficiency_data[])
  */
 export interface FuelTrendFilters {
@@ -471,8 +471,8 @@ export function useFuelTrends(_range: FuelOverviewRange, filters: FuelTrendFilte
 
     return useMemo(() => {
         const consumption: TrendPoint[] = (consumptionQuery.data?.data.trend ?? []).map((t) => ({
-            date: formatDateOrFallback(t.date, 'MMM d'),
-            value: Number(finiteNumberOrFallback(t.liters).toFixed(1)),
+            date: formatDateOrFallback(t.period, 'MMM d'),
+            value: Number(finiteNumberOrFallback(t.total_fuel_liters).toFixed(1)),
         }))
         const g = efficiencyGraphQuery.data?.data
         const efficiency: TrendPoint[] = (g?.labels ?? []).map((label, i) => ({
