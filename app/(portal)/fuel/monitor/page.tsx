@@ -310,7 +310,7 @@ export default function LiveMonitorPage() {
         queryFn: ({ pageParam = 1 }) => api.getFuelVehicles({
             page: pageParam,
             per_page: 12,
-            search: search || undefined
+            q: search || undefined
         }),
         // Baseline REST refresh — this page previously had none at all; the WS
         // overlay (`live`, applied at render below) lowers perceived latency

@@ -593,8 +593,8 @@ export default function FuelTransactionsPage() {
                           reachable), then the table capped to a scrollable height.
                         · ≥ xl: side-by-side, both filling the fixed-height viewport column. */}
                     <div className="grid min-h-0 grid-cols-1 items-stretch gap-4 xl:flex-1 xl:grid-cols-4">
-                        <div className="order-2 min-h-0 xl:order-1 xl:col-span-3">
-                            <div className="h-[60vh] xl:h-full">
+                        <div className="order-2 min-h-0 min-w-0 xl:order-1 xl:col-span-3">
+                            <div className="h-[60vh] min-w-0 xl:h-full">
                                 <TransactionsTable
                                     rows={rows}
                                     isLoading={isLoading}

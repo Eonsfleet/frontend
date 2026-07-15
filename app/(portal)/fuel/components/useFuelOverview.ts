@@ -255,12 +255,32 @@ function appendNoReadingBand(bands: DistributionBand[], totalVehicles: number): 
     ]
 }
 
+/**
+ * Maps the Overview vehicle filter enum onto the real /fuel/vehicles query params.
+ * The API filters on two independent dimensions — vehicle_status and fuel_level —
+ * so each UI option resolves to one of them (or neither for 'all').
+ */
+function vehicleFilterParams(filter?: string): { vehicle_status?: string; fuel_level?: string } {
+    switch (filter) {
+        case 'moving':
+            return { vehicle_status: 'moving' }
+        case 'offline':
+            return { vehicle_status: 'offline' }
+        case 'low_fuel':
+            return { fuel_level: 'low' }
+        case 'unknown_fuel':
+            return { fuel_level: 'unknown' }
+        default:
+            return {}
+    }
+}
+
 export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewFilters = {}) {
     const params = { start_date: range.startDate, end_date: range.endDate }
     const vehicleParams = {
         per_page: 200,
-        search: filters.vehicleSearch?.trim() || undefined,
-        filter: filters.vehicleFilter && filters.vehicleFilter !== 'all' ? filters.vehicleFilter : undefined,
+        q: filters.vehicleSearch?.trim() || undefined,
+        ...vehicleFilterParams(filters.vehicleFilter),
     }
     const topConsumersParams = {
         filter: filters.topConsumersFilter,
@@ -451,6 +471,7 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         distribution,
         lowFuelAlerts,
         topConsumers,
+        isTopConsumersLoading: topConsumersQuery.isFetching,
         summary,
         theftIncidents: theft?.incidents ?? [],
         isLoading: consumptionQuery.isLoading || vehiclesQuery.isLoading,

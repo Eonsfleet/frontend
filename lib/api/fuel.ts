@@ -453,11 +453,19 @@ export const getTopFuelConsumers = async (params?: { filter?: string }): Promise
 
 // ── 8.5 Live Fuel Monitor ────────────────────────────────────────────────────
 
+/**
+ * Query params for GET /fuel/vehicles.
+ *  - q             free-text search (registration, make, model)
+ *  - vehicle_status device movement: 'moving' | 'parked' | 'idle' | 'offline'
+ *  - fuel_level     fuel band: 'low' | 'normal' | 'full' | 'unknown'
+ * vehicle_status and fuel_level may be combined.
+ */
 export interface FuelVehicleListParams {
     per_page?: number
     page?: number
-    search?: string
-    filter?: string
+    q?: string
+    vehicle_status?: string
+    fuel_level?: string
 }
 
 export interface FuelVehicleListResponse {

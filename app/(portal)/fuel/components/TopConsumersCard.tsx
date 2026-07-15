@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, Truck } from 'lucide-react'
+import { ChevronDown, Loader2, Truck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import type { TopConsumer } from './useFuelOverview'
 
@@ -9,6 +9,7 @@ interface TopConsumersCardProps {
     consumers: TopConsumer[]
     filter: TopConsumersFilter
     onFilterChange: (filter: TopConsumersFilter) => void
+    isLoading?: boolean
 }
 
 export type TopConsumersFilter = 'daily' | 'weekly' | 'monthly' | 'yearly'
@@ -23,7 +24,7 @@ const CONSUMER_FILTERS: Array<{ label: string; value: TopConsumersFilter }> = [
 const fmtL = (n: number) => `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`
 const fmtNaira = (n: number) => `₦${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function TopConsumersCard({ consumers, filter, onFilterChange }: TopConsumersCardProps) {
+export function TopConsumersCard({ consumers, filter, onFilterChange, isLoading }: TopConsumersCardProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const activeFilterLabel = CONSUMER_FILTERS.find((option) => option.value === filter)?.label ?? 'Daily'
 
@@ -60,7 +61,15 @@ export function TopConsumersCard({ consumers, filter, onFilterChange }: TopConsu
                 </div>
             </div>
 
-            <div className="mt-4 overflow-x-auto">
+            <div className="relative mt-4 overflow-x-auto">
+                {isLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px]">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                            Loading
+                        </span>
+                    </div>
+                )}
                 <table className="w-full min-w-[420px] text-left">
                     <thead>
                         <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">

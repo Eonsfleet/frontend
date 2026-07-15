@@ -71,7 +71,7 @@ export default function FuelRealtimePage() {
                 <>
                     {/* Main row: rail | map | detail (detail only shows once a vehicle is picked) */}
                     <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-                        <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
+                        <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
                             <RealtimeVehicleRail
                                 vehicles={vehicles}
                                 activeId={activeId}
@@ -79,11 +79,11 @@ export default function FuelRealtimePage() {
                                 isLoading={isLoading}
                             />
                         </div>
-                        <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-9'}>
+                        <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-9'}>
                             <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={handleVehicleSelect} />
                         </div>
                         {detail && (
-                            <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
+                            <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
                                 <VehicleDetailPanel detail={detail} onClose={() => {
                                     setSelectedId(null)
                                     setEventsPage(1)

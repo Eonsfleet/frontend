@@ -67,6 +67,7 @@ export default function FuelOverviewPage() {
     distribution,
     lowFuelAlerts,
     topConsumers,
+    isTopConsumersLoading,
     theftIncidents,
     isLoading,
     isError,
@@ -123,9 +124,11 @@ export default function FuelOverviewPage() {
           {/* KPI summary */}
           <KpiSection kpi={kpi} isLoading={isLoading} />
 
-          {/* Main dashboard — responsive: 1col (mobile) → 2col (md) → 12col (lg) */}
+          {/* Main dashboard — responsive:
+              1col (mobile) → 2col (md) → 12col (lg: map full row, list + distribution
+              share row 2) → 12col single row (xl: map | list | distribution) */}
           <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-12">
-            <div className="md:col-span-2 lg:col-span-5">
+            <div className="min-w-0 md:col-span-2 lg:col-span-12 xl:col-span-5">
               <RealtimeTrackingCard
                 markers={markers}
                 vehicles={vehicles}
@@ -134,7 +137,7 @@ export default function FuelOverviewPage() {
                 }
               />
             </div>
-            <div className="md:col-span-1 lg:col-span-4">
+            <div className="min-w-0 md:col-span-1 lg:col-span-7 xl:col-span-4">
               <VehicleListCard
                 vehicles={vehicles}
                 isLoading={isLoading}
@@ -144,7 +147,7 @@ export default function FuelOverviewPage() {
                 onFilterChange={setVehicleFilter}
               />
             </div>
-            <div className="flex flex-col gap-3 md:col-span-1 lg:col-span-3">
+            <div className="flex min-w-0 flex-col gap-3 md:col-span-1 lg:col-span-5 xl:col-span-3">
               <FuelDistributionCard
                 bands={distribution}
                 total={kpi.totalVehicles}
@@ -183,6 +186,7 @@ export default function FuelOverviewPage() {
               consumers={topConsumers}
               filter={topConsumersFilter}
               onFilterChange={setTopConsumersFilter}
+              isLoading={isTopConsumersLoading}
             />
           </div>
 

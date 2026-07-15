@@ -237,7 +237,7 @@ export default function FuelReconciliationPage() {
 
             {/* Summary cards */}
             {isLoadingReport ? (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[1, 2, 3].map(i => (
                         <Card key={i} className="shadow-sm border-slate-200 animate-pulse">
                             <CardContent className="p-5 h-20" />
