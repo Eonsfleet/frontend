@@ -105,6 +105,7 @@ export default function FuelRealtimePage() {
                             onFilterChange={(filter) => setLevelTrendFilter(filter as FuelLevelTrendFilter)}
                             isLoading={isFuelLevelTrendLoading}
                             formatValue={(v) => v == null ? 'No data' : `${v} ${fuelLevelTrendUnit}`}
+                            emptyMessage={activeId == null ? 'Select a vehicle to view its fuel level trend' : 'No data available for this period'}
                         />
                         <RealtimeTrendCard
                             title="Fuel Flow Rate"
@@ -117,6 +118,7 @@ export default function FuelRealtimePage() {
                             onFilterChange={(filter) => setRateTrendFilter(filter as FuelRateTrendFilter)}
                             isLoading={isFuelFlowTrendLoading}
                             formatValue={(v) => v == null ? 'No data' : `${v} ${fuelFlowTrendUnit}`}
+                            emptyMessage={activeId == null ? 'Select a vehicle to view its fuel flow rate' : 'No data available for this period'}
                         />
                         <RecentFuelEventsCard
                             events={events}

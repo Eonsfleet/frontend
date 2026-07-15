@@ -141,3 +141,13 @@
 .leaflet-bottom {
   z-index: 1 !important;
 }
+
+/* Hide scrollbars while keeping content scrollable (used for horizontally
+   scrollable tab rows and overflow panels). */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Search, SlidersHorizontal, Truck } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, SlidersHorizontal, Truck, Check } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -41,10 +41,23 @@ function fuelTextColor(pct: number | null): string {
 export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }: RealtimeVehicleRailProps) {
     const [search, setSearch] = useState('')
     const [filter, setFilter] = useState<StatusFilter>('all')
+    const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+    const filterRef = useRef<HTMLDivElement>(null)
+
+    // Close the filter dropdown on outside click.
+    useEffect(() => {
+        if (!filterMenuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterMenuOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [filterMenuOpen])
 
     const counts = useMemo(() => ({
         all: vehicles.length,
         moving: vehicles.filter((v) => v.status === 'moving').length,
+        parked: vehicles.filter((v) => v.status === 'parked').length,
         idle: vehicles.filter((v) => v.status === 'idle').length,
         offline: vehicles.filter((v) => v.status === 'offline').length,
     }), [vehicles])
@@ -61,6 +74,7 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
     const tabs: { key: StatusFilter; label: string; count: number }[] = [
         { key: 'all', label: 'All', count: counts.all },
         { key: 'moving', label: 'Moving', count: counts.moving },
+        { key: 'parked', label: 'Parked', count: counts.parked },
         { key: 'idle', label: 'Idle', count: counts.idle },
         { key: 'offline', label: 'Offline', count: counts.offline },
     ]
@@ -84,17 +98,44 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                         aria-label="Search vehicles"
                     />
                 </div>
-                <button
-                    type="button"
-                    aria-label="Filter vehicles"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors duration-200 hover:bg-slate-50"
-                >
-                    <SlidersHorizontal className="h-4 w-4" />
-                </button>
+                <div className="relative" ref={filterRef}>
+                    <button
+                        type="button"
+                        aria-label="Filter vehicles"
+                        aria-expanded={filterMenuOpen}
+                        onClick={() => setFilterMenuOpen((open) => !open)}
+                        className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-200',
+                            filter !== 'all'
+                                ? 'border-blue-200 bg-blue-50 text-blue-600'
+                                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50',
+                        )}
+                    >
+                        <SlidersHorizontal className="h-4 w-4" />
+                    </button>
+                    {filterMenuOpen && (
+                        <div className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            {tabs.map((t) => (
+                                <button
+                                    key={t.key}
+                                    type="button"
+                                    onClick={() => { setFilter(t.key); setFilterMenuOpen(false) }}
+                                    className={cn(
+                                        'flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] font-medium transition-colors hover:bg-slate-50',
+                                        filter === t.key ? 'text-blue-600' : 'text-slate-600',
+                                    )}
+                                >
+                                    <span>{t.label} ({t.count})</span>
+                                    {filter === t.key && <Check className="h-3.5 w-3.5" />}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Status tabs */}
-            <div className="mt-1 flex items-center gap-4 border-b border-slate-100">
+            {/* Status tabs — horizontally scrollable so they never overflow the rail */}
+            <div className="mt-1 flex items-center gap-4 overflow-x-auto scrollbar-hide border-b border-slate-100">
                 {tabs.map((t) => (
                     <button
                         key={t.key}
@@ -102,7 +143,7 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                         onClick={() => setFilter(t.key)}
                         aria-current={filter === t.key ? 'true' : undefined}
                         className={cn(
-                            'relative whitespace-nowrap pb-2 text-[13px] transition-colors duration-200',
+                            'relative shrink-0 whitespace-nowrap pb-2 text-[13px] transition-colors duration-200',
                             filter === t.key ? 'font-semibold text-blue-600' : 'font-medium text-slate-500 hover:text-slate-700',
                         )}
                     >

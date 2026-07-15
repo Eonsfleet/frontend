@@ -18,6 +18,8 @@ interface RealtimeTrendCardProps {
     selectedFilter?: string
     onFilterChange?: (filter: string) => void
     isLoading?: boolean
+    /** Message shown when there's no data (e.g. prompt to select a vehicle). */
+    emptyMessage?: string
 }
 
 function TrendTooltip({
@@ -40,7 +42,7 @@ function TrendTooltip({
     )
 }
 
-export function RealtimeTrendCard({ title, unit, data, color, filters, formatValue, filterOptions = [], selectedFilter, onFilterChange, isLoading }: RealtimeTrendCardProps) {
+export function RealtimeTrendCard({ title, unit, data, color, filters, formatValue, filterOptions = [], selectedFilter, onFilterChange, isLoading, emptyMessage = 'No data available for this period' }: RealtimeTrendCardProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const gradientId = `rt-trend-${title.replace(/\W/g, '')}`
     const activeFilterLabel = filterOptions.find((option) => option.value === selectedFilter)?.label
@@ -98,8 +100,8 @@ export function RealtimeTrendCard({ title, unit, data, color, filters, formatVal
                     </div>
                 )}
                 {!isLoading && data.length === 0 && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white">
-                        <span className="text-[12px] font-medium text-slate-400">No data available for this period</span>
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white px-6">
+                        <span className="text-center text-[12px] font-medium text-slate-400">{emptyMessage}</span>
                     </div>
                 )}
                 <ResponsiveContainer width="100%" height="100%">
