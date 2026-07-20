@@ -4,17 +4,18 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { FuelTrackingMap, type MapMarkerPoint, type FeaturedVehicle } from './FuelTrackingMap'
+import { FuelTrackingMap, type MapMarkerPoint } from './FuelTrackingMap'
 import type { VehicleRow } from './useFuelOverview'
 
 interface RealtimeTrackingCardProps {
     markers: MapMarkerPoint[]
-    featured: FeaturedVehicle | null
     /** For the List View tab. */
     vehicles: VehicleRow[]
+    /** Navigate to a vehicle's detail page from the map overlay. */
+    onViewVehicle?: (vehicleId: number) => void
 }
 
-export function RealtimeTrackingCard({ markers, featured, vehicles }: RealtimeTrackingCardProps) {
+export function RealtimeTrackingCard({ markers, vehicles, onViewVehicle }: RealtimeTrackingCardProps) {
     const [view, setView] = useState<'map' | 'list'>('map')
 
     return (
@@ -51,7 +52,7 @@ export function RealtimeTrackingCard({ markers, featured, vehicles }: RealtimeTr
 
             <div className="mt-4">
                 {view === 'map' ? (
-                    <FuelTrackingMap markers={markers} featured={featured} />
+                    <FuelTrackingMap markers={markers} onViewVehicle={onViewVehicle} />
                 ) : (
                     <div className="max-h-[340px] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
                         {vehicles.length === 0 && (

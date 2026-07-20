@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { BellPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { extractApiError } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import { QueryError } from '@/components/shared/QueryError'
 import { FuelTabs } from '../components/FuelTabs'
 import { AlertKpiCards } from '../components/AlertKpiCards'
@@ -100,7 +100,7 @@ export default function FuelAlertsPage() {
 
                     {/* Table + detail panel */}
                     <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
-                        <div className={selected ? 'xl:col-span-2' : 'xl:col-span-3'}>
+                        <div className={cn('min-w-0', selected ? 'xl:col-span-2' : 'xl:col-span-3')}>
                             <AlertsTable
                                 alerts={filtered}
                                 activeId={selected?.id ?? null}

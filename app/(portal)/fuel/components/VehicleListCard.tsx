@@ -42,8 +42,9 @@ function fuelTextColor(pct: number | null): string {
 
 const STATUS_META: Record<VehicleMovement, { label: string; dot: string; text: string }> = {
     moving: { label: 'Moving', dot: 'bg-emerald-500', text: 'text-emerald-600' },
+    parked: { label: 'Parked', dot: 'bg-slate-400', text: 'text-slate-500' },
     idle: { label: 'Idle', dot: 'bg-amber-500', text: 'text-amber-600' },
-    offline: { label: 'Offline', dot: 'bg-slate-300', text: 'text-slate-400' },
+    offline: { label: 'Offline', dot: 'bg-rose-500', text: 'text-rose-600' },
 }
 
 function StatusPill({ status }: { status: VehicleMovement }) {

@@ -253,7 +253,7 @@ function eventKind(value: unknown): FuelEvent['kind'] {
     return 'idle'
 }
 
-function mapFuelEvent(item: FuelEventApiItem, index: number): FuelEvent {
+function mapFuelEvent(item: FuelEventApiItem, index: number, showRegistration = true): FuelEvent {
     const attributes = asRecord(item.attributes)
     const vehicle = asRecord(asRecord(item.relationships).vehicle)
     const type = String(eventAttribute(item, 'type') ?? 'event').toLowerCase()
@@ -278,7 +278,9 @@ function mapFuelEvent(item: FuelEventApiItem, index: number): FuelEvent {
         time: timestamp && !Number.isNaN(date.getTime()) ? format(date, 'MMM d, yyyy hh:mm a') : '—',
         detail: [
             Number.isFinite(amount) ? `${amount.toFixed(1)} L` : null,
-            registration || null,
+            // Registration is only useful in the default (all-vehicles) view; once a
+            // specific vehicle is selected every event is already that vehicle's.
+            showRegistration ? registration || null : null,
         ].filter(Boolean).join(' • ') || '—',
     }
 }
@@ -441,7 +443,7 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
 
     const events = useMemo<FuelEvent[]>(() => {
         const rows = eventRows(eventsQuery.data)
-        if (rows.length > 0) return rows.map(mapFuelEvent)
+        if (rows.length > 0) return rows.map((row, i) => mapFuelEvent(row, i, activeId == null))
         return mockEvents(activeId ?? 0)
     }, [activeId, eventsQuery.data])
 
