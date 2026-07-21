@@ -25,10 +25,10 @@ interface InterpolationState {
 }
 
 /** Below this interval (ms) we treat packets as effectively simultaneous and snap. */
-const MIN_INTERVAL_MS = 1000;
+const MIN_INTERVAL_MS = 500;
 
-/** Interval interpolation is stretched to; if two packets differ more than this we still cap. */
-const MAX_INTERVAL_MS = 60_000;
+/** Keep the marker close to the newest WebSocket fix instead of replaying the full packet gap. */
+const MAX_INTERVAL_MS = 2_000;
 
 function shortestHeadingDelta(from: number, to: number): number {
   return ((to - from + 540) % 360) - 180;
@@ -58,7 +58,7 @@ export class VehicleInterpolator {
     // the interval was zero and getInterpolated returned the endpoint instantly —
     // the marker snapped to each packet with no in-between frames and looked static.
     const observedGap = sample.timestamp - existing.next.timestamp;
-    const projected = observedGap > 0 ? observedGap : MIN_INTERVAL_MS;
+    const projected = Math.min(Math.max(observedGap, MIN_INTERVAL_MS), MAX_INTERVAL_MS);
 
     this.states.set(id, {
       prev: { ...visualNow, timestamp: sample.timestamp },
