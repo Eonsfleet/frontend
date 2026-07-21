@@ -77,6 +77,10 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
   const [metadata, setMetadata] = useState<StreetImageryMetadata | null>(null);
   const [providerKind, setProviderKind] = useState<StreetImageryProviderKind | null>(null);
   const [hasMoved, setHasMoved] = useState(false);
+  // Identifies which lookup request the viewer is currently mounted for — used
+  // instead of metadata.imageId so that in-viewer navigation (which updates
+  // metadata via onPositionChange) doesn't force a remount of the viewer.
+  const [mountedRequestId, setMountedRequestId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const providerRef = useRef<StreetImageryProvider | null>(null);
@@ -128,6 +132,7 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
         setMetadata(found);
         setProviderKind(kind);
         setStatus("ready");
+        setMountedRequestId(requestId);
       } catch (e) {
         if (cancelled || !fenceRef.current.isCurrent(requestId)) return;
         console.error("[StreetImageryPanel] imagery lookup failed", e);
@@ -167,8 +172,11 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
       unsubBearing();
       unsubPosition();
     };
+    // Intentionally keyed on mountedRequestId rather than metadata — metadata
+    // also changes on in-viewer navigation (onPositionChange), and remounting
+    // then would reset the viewer's pan/look state on every step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, metadata?.imageId]);
+  }, [status, mountedRequestId]);
 
   // Tear down the active viewer whenever the panel closes, and on unmount.
   useEffect(() => {

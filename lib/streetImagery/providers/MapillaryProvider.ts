@@ -119,6 +119,9 @@ export class MapillaryProvider implements StreetImageryProvider {
     const token = process.env.NEXT_PUBLIC_MAPILLARY_TOKEN;
     if (!token) this.fail("provider-not-configured", "NEXT_PUBLIC_MAPILLARY_TOKEN is not set");
 
+    // Defensive: never stack a second viewer on top of an existing one.
+    this.unmount();
+
     try {
       const viewer = new Viewer({ accessToken: token!, container, imageId: image.imageId });
       this.viewer = viewer;

@@ -131,7 +131,7 @@ export default function PlaybackPage() {
     endTime: tripId ? null : new Date(endTime).toISOString(),
   })
 
-  const { stats, speedSegments, stops, events } = usePlaybackDerived(movements, thresholds, selectedGeofence)
+  const { stats, speedSegments, stops, gaps, events } = usePlaybackDerived(movements, thresholds, selectedGeofence)
   const handlePlaybackEnd = useCallback(() => setIsPlaying(false), [])
 
   const {
@@ -200,6 +200,31 @@ export default function PlaybackPage() {
   }, [])
 
 
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
+
+      if (event.code === 'Space') {
+        event.preventDefault()
+        setIsPlaying((playing) => !playing)
+        return
+      }
+      if (movements.length === 0) return
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        seekToIndex(Math.max(0, playbackIndex - 10))
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        seekToIndex(Math.min(movements.length - 1, playbackIndex + 10))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [movements.length, playbackIndex, seekToIndex])
   return (
     <div ref={containerRef} className="h-screen flex flex-col overflow-hidden bg-slate-50">
       <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200">
@@ -252,6 +277,8 @@ export default function PlaybackPage() {
               preparedPoints={preparedPoints}
               currentFrame={playbackFrame}
               currentAddress={currentAddress}
+              vehicleLabel={vehicleLabel}
+              isPlaying={isPlaying}
               mapStyle={mapStyle}
               onToggleMapStyle={() => setMapStyle((s) => (s === 'standard' ? 'satellite' : 'standard'))}
               isFullscreen={isFullscreen}
@@ -260,6 +287,8 @@ export default function PlaybackPage() {
           )}
           <PlaybackScrubber
             movements={movements}
+            events={filteredEvents}
+            stops={stops}
             currentIndex={playbackIndex}
             onIndexChange={seekToIndex}
             isPlaying={isPlaying}
@@ -271,10 +300,9 @@ export default function PlaybackPage() {
             onProgressChange={seekToPercent}
             onViewStreet={handleViewStreet}
           />
-          <PlaybackBottomPanel movements={movements} events={filteredEvents} stops={stops} stats={stats} vehicleLabel={vehicleLabel} onJumpToIndex={seekToIndex} />
         </div>
 
-        <aside className="w-80 shrink-0 border-l border-slate-200 bg-white overflow-y-auto">
+        <aside className="flex w-[30rem] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white">
           {isAdvancedOpen ? (
             <PlaybackAdvancedFilters
               vehicleStatusFilters={vehicleStatusFilters}
@@ -302,7 +330,18 @@ export default function PlaybackPage() {
               }}
             />
           ) : (
-            <PlaybackSummaryPanel stats={stats} stopsCount={stops.length} events={filteredEvents} vehicleLabel={vehicleLabel} />
+            <>
+              <PlaybackSummaryPanel stats={stats} stopsCount={stops.length} events={filteredEvents} vehicleLabel={vehicleLabel} />
+              <PlaybackBottomPanel
+                className="min-h-0 flex-1"
+                movements={movements}
+                events={filteredEvents}
+                stops={stops}
+                stats={stats}
+                vehicleLabel={vehicleLabel}
+                onJumpToIndex={seekToIndex}
+              />
+            </>
           )}
         </aside>
       </div>

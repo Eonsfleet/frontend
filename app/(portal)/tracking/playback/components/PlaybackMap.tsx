@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Layers, Navigation as NavigationIcon, Crosshair, Lock, Move } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, Navigation as NavigationIcon, Crosshair, Lock, Move, ZoomIn, ZoomOut } from 'lucide-react'
 import { format } from 'date-fns'
 import type { PlaybackMovement, PlaybackSpeedSegment, PlaybackStop } from '@/types'
 import type { LatLng, MapMarkerHandle } from '@/lib/map/types'
 import type { PlaybackFrame, PlaybackPreparedPoint } from '@/lib/playback/interpolation'
-import { lookAheadPoint } from '@/lib/playback/interpolation'
+import { simplifyRoutePoints, type PlaybackGap } from '@/lib/playback/route'
 import { useMapProvider } from '../../hooks/useMapProvider'
 import { useMapCameraFollow } from '../../hooks/useMapCameraFollow'
 import { MapCompatibilityBanner } from '../../components/MapCompatibilityBanner'
@@ -24,16 +24,35 @@ const SPEED_LEGEND: { bucket: string; color: string }[] = [
 
 export type PlaybackCameraMode = 'smart' | 'follow' | 'free'
 
-function positionMarkerHtml(heading: number) {
-  return `<div class="marker-container is-active"><div class="marker-pulse"></div><div class="marker-base" style="transform: rotate(${heading}deg); background: #2563eb; border-color: #fff;"><div class="marker-icon-wrapper"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-white"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div></div></div>`
+const LABELED_PIN_ICON = { iconSize: [164, 64] as [number, number], iconAnchor: [14, 58] as [number, number] }
+
+function escapeMarkerText(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]!)
 }
 
-function endpointMarkerHtml(color: string) {
-  return `<div style="width:16px;height:16px;border-radius:9999px;background:${color};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`
+function labeledPinMarkerHtml(color: string, label: string, detail: string, showDirection = false) {
+  const safeLabel = escapeMarkerText(label)
+  const safeDetail = escapeMarkerText(detail)
+  const direction = showDirection
+    ? '<div class="marker-base" style="position:absolute;left:9px;top:27px;width:10px;height:15px;transform-origin:50% 50%;"><svg width="10" height="15" viewBox="0 0 10 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 0 10 14 5 10 0 14 5 0Z" fill="#1d4ed8" stroke="white" stroke-width="1.5"/></svg></div>'
+    : ''
+  return `<div style="position:relative;width:164px;height:64px;overflow:visible;"><div style="position:absolute;left:25px;top:0;min-width:102px;padding:6px 9px;border:1px solid #e2e8f0;border-radius:8px;background:rgba(255,255,255,.97);box-shadow:0 3px 10px rgba(15,23,42,.14);font-family:Inter,ui-sans-serif,system-ui,sans-serif;line-height:1.2;"><div style="font-size:10px;font-weight:800;color:#1e3a8a;white-space:nowrap;">${safeLabel}</div><div style="margin-top:2px;font-size:9px;font-weight:700;color:#475569;white-space:nowrap;">${safeDetail}</div></div><div style="position:absolute;left:0;top:22px;width:28px;height:36px;"><svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 1C6.82 1 1 6.82 1 14c0 9.75 13 21 13 21s13-11.25 13-21C27 6.82 21.18 1 14 1Z" fill="${color}" stroke="white" stroke-width="2"/><circle cx="14" cy="14" r="5" fill="white"/><circle cx="14" cy="14" r="2.5" fill="${color}"/></svg></div>${direction}</div>`
 }
 
 function stopMarkerHtml(index: number) {
-  return `<div style="width:20px;height:20px;border-radius:9999px;background:#2563eb;color:white;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;">${index + 1}</div>`
+  return `<div style="width:22px;height:22px;border-radius:9999px;background:#1677ff;color:white;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(15,23,42,.25);">${index + 1}</div>`
+}
+
+function gapMarkerHtml(durationMs: number) {
+  const minutes = Math.round(durationMs / 60_000)
+  return `<div title="GPS gap: ${minutes} minutes" style="width:22px;height:22px;border-radius:9999px;background:#f59e0b;color:white;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(15,23,42,.25);">!</div>`
+}
+function adaptiveFollowZoom(speed: number): number {
+  const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth
+  const baseZoom = viewportWidth < 640 ? 14.5 : viewportWidth < 1024 ? 15.25 : 16
+  if (speed >= 90) return baseZoom - 1
+  if (speed >= 60) return baseZoom - 0.5
+  return baseZoom
 }
 
 function formatDuration(ms: number): string {
@@ -60,9 +79,12 @@ export interface PlaybackMapProps {
   preparedPoints?: PlaybackPreparedPoint[]
   speedSegments: PlaybackSpeedSegment[]
   stops: PlaybackStop[]
+  gaps?: PlaybackGap[]
   currentIndex: number
   currentFrame?: PlaybackFrame | null
   currentAddress?: string
+  vehicleLabel?: string
+  isPlaying?: boolean
   mapStyle: 'standard' | 'satellite'
   onToggleMapStyle: () => void
   isFullscreen: boolean
@@ -74,17 +96,21 @@ export function PlaybackMap({
   preparedPoints = [],
   speedSegments,
   stops,
+  gaps = [],
   currentIndex,
   currentFrame,
   currentAddress = 'Resolving location…',
+  vehicleLabel = 'Vehicle',
+  isPlaying = false,
   mapStyle,
   onToggleMapStyle,
   isFullscreen,
   onToggleFullscreen,
 }: PlaybackMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [cameraMode, setCameraMode] = useState<PlaybackCameraMode>('free')
+  const [cameraMode, setCameraMode] = useState<PlaybackCameraMode>('smart')
   const [recenterKey, setRecenterKey] = useState(0)
+  const [viewportKey, setViewportKey] = useState(0)
   const { provider, isReady, isFallback } = useMapProvider({
     containerRef,
     initialCenter: DEFAULT_CENTER,
@@ -111,17 +137,33 @@ export function PlaybackMap({
     return provider.onInteractionStart(() => setCameraMode('free'))
   }, [provider, isReady])
 
+  useEffect(() => {
+    const updateViewport = () => setViewportKey((key) => key + 1)
+    window.addEventListener('resize', updateViewport)
+    return () => window.removeEventListener('resize', updateViewport)
+  }, [])
+
   const cameraTickRef = useRef(0)
   useEffect(() => {
-    if (!provider || !isReady || !currentMovement || cameraMode === 'free') return
+    if (!provider || !isReady || !isPlaying || !currentMovement || cameraMode === 'free') return
     const now = performance.now()
-    if (now - cameraTickRef.current < 300) return
+    if (now - cameraTickRef.current < 250) return
     cameraTickRef.current = now
+
     const current = { lat: currentMovement.lat, lng: currentMovement.lng }
-    const ahead = currentFrame && cameraMode === 'smart' ? lookAheadPoint(preparedPoints, currentFrame.timeMs, 20) : null
-    const target = ahead ? { lat: current.lat * 0.35 + ahead.lat * 0.65, lng: current.lng * 0.35 + ahead.lng * 0.65 } : current
-    provider.flyTo(target, cameraMode === 'smart' ? 16 : 17, { durationMs: 450 })
-  }, [cameraMode, currentFrame, currentMovement, isReady, preparedPoints, provider])
+    const currentRouteIndex = Math.max(0, Math.min(currentFrame?.index ?? currentIndex, allRoutePoints.length - 1))
+    const remainingRoute = allRoutePoints.slice(currentRouteIndex + 1)
+
+    if (cameraMode === 'smart' && remainingRoute.length > 0) {
+      const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth
+      const paddingPx = viewportWidth < 640 ? 56 : viewportWidth < 1024 ? 80 : 112
+      provider.fitBounds([current, ...remainingRoute], { paddingPx, maxZoom: adaptiveFollowZoom(currentMovement.speed) + 0.5 })
+      return
+    }
+
+    const zoom = adaptiveFollowZoom(currentMovement.speed) + 0.75
+    provider.flyTo(current, zoom, { durationMs: 320 })
+  }, [allRoutePoints, cameraMode, currentFrame, currentIndex, currentMovement, isPlaying, isReady, provider, recenterKey, viewportKey])
 
   // Static speed-colored route segments stay cheap: built once per data change.
   const prevSegmentKeysRef = useRef<Set<string>>(new Set())
@@ -132,8 +174,8 @@ export function PlaybackMap({
       const key = `segment-${i}`
       provider.setPolyline(
         key,
-        segment.positions.map(([lat, lng]) => ({ lat, lng })),
-        { color: segment.color, weight: 3, opacity: 0.35 },
+        simplifyRoutePoints(segment.positions.map(([lat, lng]) => ({ lat, lng }))),
+        { color: segment.color, weight: 5, opacity: 0.95 },
       )
       keys.add(key)
     })
@@ -154,42 +196,56 @@ export function PlaybackMap({
     const current = { lat: currentMovement.lat, lng: currentMovement.lng }
     const index = Math.max(0, Math.min(currentFrame?.index ?? currentIndex, allRoutePoints.length - 1))
     const completed = [...allRoutePoints.slice(0, index + 1), current]
-    const remaining = [current, ...allRoutePoints.slice(index + 1)]
-    provider.setPolyline('playback-completed-route', completed, { color: '#2563eb', weight: 6, opacity: 0.95 })
-    provider.setPolyline('playback-remaining-route', remaining, { color: '#94a3b8', weight: 4, opacity: 0.45, dashed: true })
+    provider.setPolyline('playback-completed-route', completed, { color: '#2563eb', weight: 9, opacity: 0.18 })
+    provider.removeOverlay('playback-remaining-route')
   }, [allRoutePoints, currentFrame, currentIndex, currentMovement, isReady, provider])
 
   // Start/end endpoint markers.
   const startHandleRef = useRef<MapMarkerHandle | null>(null)
   const endHandleRef = useRef<MapMarkerHandle | null>(null)
+  const endpointProviderRef = useRef<typeof provider>(null)
   useEffect(() => {
     if (!provider || !isReady) return
+    if (endpointProviderRef.current !== provider) {
+      endpointProviderRef.current = provider
+      startHandleRef.current = null
+      endHandleRef.current = null
+    }
 
-    if (allRoutePoints[0]) {
+    const isAtRouteStart = currentMovement && allRoutePoints[0] && currentMovement.lat === allRoutePoints[0].lat && currentMovement.lng === allRoutePoints[0].lng
+    const isAtRouteEnd = currentMovement && allRoutePoints.length > 1 && currentMovement.lat === allRoutePoints[allRoutePoints.length - 1].lat && currentMovement.lng === allRoutePoints[allRoutePoints.length - 1].lng
+
+    if (allRoutePoints[0] && !isAtRouteStart) {
       const { lat, lng } = allRoutePoints[0]
+      const startSpeed = movements[0]?.speed ?? 0
+      const html = labeledPinMarkerHtml('#16a34a', vehicleLabel, `Start · ${Math.round(startSpeed)} km/h`)
       if (!startHandleRef.current) {
-        startHandleRef.current = provider.addMarker('playback-start', { lat, lng, html: endpointMarkerHtml('#22c55e'), iconSize: [16, 16], iconAnchor: [8, 8] })
-      } else startHandleRef.current.setPosition(lat, lng)
+        startHandleRef.current = provider.addMarker('playback-start', { lat, lng, html, zIndexOffset: 10, ...LABELED_PIN_ICON })
+      } else {
+        startHandleRef.current.setPosition(lat, lng)
+        startHandleRef.current.setHtml(html, LABELED_PIN_ICON)
+      }
+    } else if (startHandleRef.current) {
+      provider.removeMarker('playback-start')
+      startHandleRef.current = null
     }
 
-    if (allRoutePoints.length > 1) {
+    if (allRoutePoints.length > 1 && !isAtRouteEnd) {
       const { lat, lng } = allRoutePoints[allRoutePoints.length - 1]
+      const endSpeed = movements[movements.length - 1]?.speed ?? 0
+      const html = labeledPinMarkerHtml('#ef4444', vehicleLabel, `End · ${Math.round(endSpeed)} km/h`)
       if (!endHandleRef.current) {
-        endHandleRef.current = provider.addMarker('playback-end', { lat, lng, html: endpointMarkerHtml('#ef4444'), iconSize: [16, 16], iconAnchor: [8, 8] })
-      } else endHandleRef.current.setPosition(lat, lng)
+        endHandleRef.current = provider.addMarker('playback-end', { lat, lng, html, zIndexOffset: 10, ...LABELED_PIN_ICON })
+      } else {
+        endHandleRef.current.setPosition(lat, lng)
+        endHandleRef.current.setHtml(html, LABELED_PIN_ICON)
+      }
+    } else if (endHandleRef.current) {
+      provider.removeMarker('playback-end')
+      endHandleRef.current = null
     }
 
-    return () => {
-      if (startHandleRef.current) {
-        provider.removeMarker('playback-start')
-        startHandleRef.current = null
-      }
-      if (endHandleRef.current) {
-        provider.removeMarker('playback-end')
-        endHandleRef.current = null
-      }
-    }
-  }, [provider, isReady, allRoutePoints])
+  }, [provider, isReady, allRoutePoints, currentMovement, movements, vehicleLabel])
 
   // Stop markers.
   const prevStopKeysRef = useRef<Set<string>>(new Set())
@@ -200,7 +256,7 @@ export function PlaybackMap({
       const key = `stop-${i}`
       const existing = provider.getMarker(key)
       if (existing) existing.setPosition(stop.lat, stop.lng)
-      else provider.addMarker(key, { lat: stop.lat, lng: stop.lng, html: stopMarkerHtml(i), iconSize: [20, 20], iconAnchor: [10, 10] })
+      else provider.addMarker(key, { lat: stop.lat, lng: stop.lng, html: stopMarkerHtml(i), iconSize: [22, 22], iconAnchor: [11, 11] })
       keys.add(key)
     })
     prevStopKeysRef.current.forEach((key) => {
@@ -209,32 +265,74 @@ export function PlaybackMap({
     prevStopKeysRef.current = keys
   }, [provider, isReady, stops])
 
-  // Current playback position updates the existing marker imperatively.
-  const currentHandleRef = useRef<MapMarkerHandle | null>(null)
+  // Large telemetry gaps stay visible without affecting raw route interpolation.
+  const prevGapOverlayKeysRef = useRef<Set<string>>(new Set())
+  const prevGapMarkerKeysRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (!provider || !isReady) return
-    if (currentMovement) {
+    const overlayKeys = new Set<string>()
+    const markerKeys = new Set<string>()
+    gaps.forEach((gap, index) => {
+      const overlayKey = `playback-gap-${index}`
+      const markerKey = `playback-gap-marker-${index}`
+      provider.setPolyline(overlayKey, [gap.start, gap.end], { color: '#f59e0b', weight: 4, opacity: 0.95, dashed: true })
+      const marker = provider.getMarker(markerKey)
+      if (marker) marker.setPosition(gap.end.lat, gap.end.lng)
+      else provider.addMarker(markerKey, { lat: gap.end.lat, lng: gap.end.lng, html: gapMarkerHtml(gap.durationMs), iconSize: [22, 22], iconAnchor: [11, 11] })
+      overlayKeys.add(overlayKey)
+      markerKeys.add(markerKey)
+    })
+    prevGapOverlayKeysRef.current.forEach((key) => {
+      if (!overlayKeys.has(key)) provider.removeOverlay(key)
+    })
+    prevGapMarkerKeysRef.current.forEach((key) => {
+      if (!markerKeys.has(key)) provider.removeMarker(key)
+    })
+    prevGapOverlayKeysRef.current = overlayKeys
+    prevGapMarkerKeysRef.current = markerKeys
+  }, [gaps, provider, isReady])
+
+  // Current playback position updates the existing marker imperatively.
+  const currentHandleRef = useRef<MapMarkerHandle | null>(null)
+  const currentMarkerHtmlRef = useRef<string | null>(null)
+  const currentMarkerHtml = currentMovement ? labeledPinMarkerHtml('#1677ff', vehicleLabel, `${Math.round(currentMovement.speed)} km/h`, true) : null
+  useEffect(() => {
+    if (!provider || !isReady) return
+    if (currentMovement && currentMarkerHtml) {
       if (!currentHandleRef.current) {
         currentHandleRef.current = provider.addMarker('playback-current', {
           lat: currentMovement.lat,
           lng: currentMovement.lng,
-          html: positionMarkerHtml(currentMovement.heading),
-          iconSize: [40, 40],
-          iconAnchor: [20, 20],
+          html: currentMarkerHtml,
+          zIndexOffset: 20,
+          ...LABELED_PIN_ICON,
         })
+        currentHandleRef.current.setRotation(currentMovement.heading)
+        currentMarkerHtmlRef.current = currentMarkerHtml
       } else {
         currentHandleRef.current.setPosition(currentMovement.lat, currentMovement.lng)
+        if (currentMarkerHtmlRef.current !== currentMarkerHtml) {
+          currentHandleRef.current.setHtml(currentMarkerHtml, LABELED_PIN_ICON)
+          currentMarkerHtmlRef.current = currentMarkerHtml
+        }
         currentHandleRef.current.setRotation(currentMovement.heading)
       }
     } else if (currentHandleRef.current) {
       provider.removeMarker('playback-current')
       currentHandleRef.current = null
+      currentMarkerHtmlRef.current = null
     }
-  }, [provider, isReady, currentMovement])
+  }, [provider, isReady, currentMarkerHtml, currentMovement])
 
   const recenter = () => {
     setCameraMode('smart')
     setRecenterKey((key) => key + 1)
+  }
+
+  const zoomBy = (direction: 'in' | 'out') => {
+    setCameraMode('free')
+    if (direction === 'in') provider?.zoomIn()
+    else provider?.zoomOut()
   }
 
   return (
@@ -281,6 +379,14 @@ export function PlaybackMap({
       </div>
 
       <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
+        <div className="overflow-hidden rounded-xl bg-white shadow-lg">
+          <button type="button" onClick={() => zoomBy('in')} aria-label="Zoom in" className="flex h-10 w-10 items-center justify-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-blue-600">
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => zoomBy('out')} aria-label="Zoom out" className="flex h-10 w-10 items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-blue-600">
+            <ZoomOut className="h-4 w-4" />
+          </button>
+        </div>
         <div className="rounded-xl bg-white p-1 shadow-lg">
           {([
             ['smart', Lock],
