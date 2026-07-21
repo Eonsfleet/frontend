@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { QueryError } from "@/components/shared/QueryError";
 import { OverviewHeader } from "./components/OverviewHeader";
@@ -16,10 +17,7 @@ import {
   useFuelTrends,
   type FuelOverviewRange,
 } from "./components/useFuelOverview";
-import type {
-  MapMarkerPoint,
-  FeaturedVehicle,
-} from "./components/FuelTrackingMap";
+import type { MapMarkerPoint } from "./components/FuelTrackingMap";
 import type { VehicleFilter } from "./components/VehicleListCard";
 import type { TopConsumersFilter } from "./components/TopConsumersCard";
 import type { TrendFilterOption } from "./components/TrendChartCard";
@@ -52,6 +50,7 @@ function defaultRange(): FuelOverviewRange {
 }
 
 export default function FuelOverviewPage() {
+  const router = useRouter();
   const [range] = useState<FuelOverviewRange>(defaultRange);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState<VehicleFilter>("all");
@@ -68,6 +67,7 @@ export default function FuelOverviewPage() {
     distribution,
     lowFuelAlerts,
     topConsumers,
+    isTopConsumersLoading,
     theftIncidents,
     isLoading,
     isError,
@@ -84,6 +84,7 @@ export default function FuelOverviewPage() {
   // Map markers: live vehicle positions from /fuel/vehicles (colored by fuel level),
   // plus theft/abnormality incidents that carry coordinates.
   const markers = useMemo<MapMarkerPoint[]>(() => {
+    const lastUpdated = format(new Date(), "hh:mm a");
     const vehicleMarkers: MapMarkerPoint[] = vehicles
       .filter((v) => v.lat != null && v.lng != null)
       .map((v) => ({
@@ -91,6 +92,16 @@ export default function FuelOverviewPage() {
         lat: v.lat as number,
         lng: v.lng as number,
         fuelPercent: v.fuelPercent,
+        vehicleId: v.id,
+        featured: {
+          registration: v.registration,
+          status: v.status.charAt(0).toUpperCase() + v.status.slice(1),
+          fuelPercent: v.fuelPercent,
+          fuelLiters: v.fuelLiters,
+          consumptionLph: 3.2,
+          location: v.location ?? "—",
+          lastUpdated,
+        },
       }));
     const incidentMarkers: MapMarkerPoint[] = theftIncidents
       .filter((i) => i.location?.lat != null && i.location?.lng != null)
@@ -101,24 +112,6 @@ export default function FuelOverviewPage() {
       }));
     return [...vehicleMarkers, ...incidentMarkers];
   }, [vehicles, theftIncidents]);
-
-  // Feature the highest-fuel online vehicle in the overlay card.
-  const featured = useMemo<FeaturedVehicle | null>(() => {
-    const candidate =
-      vehicles.find((v) => v.online && v.fuelPercent != null) ??
-      vehicles.find((v) => v.fuelPercent != null) ??
-      vehicles[0];
-    if (!candidate) return null;
-    return {
-      registration: candidate.registration,
-      status: candidate.online ? "Moving" : "Parked",
-      fuelPercent: candidate.fuelPercent,
-      fuelLiters: candidate.fuelLiters,
-      consumptionLph: 3.2,
-      location: "—",
-      lastUpdated: format(new Date(), "hh:mm a"),
-    };
-  }, [vehicles]);
 
   return (
     <div className="space-y-6">
@@ -131,16 +124,20 @@ export default function FuelOverviewPage() {
           {/* KPI summary */}
           <KpiSection kpi={kpi} isLoading={isLoading} />
 
-          {/* Main dashboard — responsive: 1col (mobile) → 2col (md) → 12col (lg) */}
+          {/* Main dashboard — responsive:
+              1col (mobile) → 2col (md) → 12col (lg: map full row, list + distribution
+              share row 2) → 12col single row (xl: map | list | distribution) */}
           <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-12">
-            <div className="md:col-span-2 lg:col-span-5">
+            <div className="min-w-0 md:col-span-2 lg:col-span-12 xl:col-span-5">
               <RealtimeTrackingCard
                 markers={markers}
-                featured={featured}
                 vehicles={vehicles}
+                onViewVehicle={(vehicleId) =>
+                  router.push(`/vehicles/${vehicleId}`)
+                }
               />
             </div>
-            <div className="md:col-span-1 lg:col-span-4">
+            <div className="min-w-0 md:col-span-1 lg:col-span-7 xl:col-span-4">
               <VehicleListCard
                 vehicles={vehicles}
                 isLoading={isLoading}
@@ -150,7 +147,7 @@ export default function FuelOverviewPage() {
                 onFilterChange={setVehicleFilter}
               />
             </div>
-            <div className="flex flex-col gap-3 md:col-span-1 lg:col-span-3">
+            <div className="flex min-w-0 flex-col gap-3 md:col-span-1 lg:col-span-5 xl:col-span-3">
               <FuelDistributionCard
                 bands={distribution}
                 total={kpi.totalVehicles}
@@ -189,6 +186,7 @@ export default function FuelOverviewPage() {
               consumers={topConsumers}
               filter={topConsumersFilter}
               onFilterChange={setTopConsumersFilter}
+              isLoading={isTopConsumersLoading}
             />
           </div>
 

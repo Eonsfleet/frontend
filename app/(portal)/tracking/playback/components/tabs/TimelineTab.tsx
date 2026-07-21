@@ -1,8 +1,8 @@
 'use client'
 
 import { format } from 'date-fns'
-import { Flag, AlertTriangle, MapPin } from 'lucide-react'
-import type { PlaybackEvent, PlaybackEventType, PlaybackMovement } from '@/types'
+import type { PlaybackEvent, PlaybackEventType, PlaybackMovement, PlaybackStop } from '@/types'
+import { coordinateLabel, PlaybackEventFeed, type PlaybackFeedEntry } from './PlaybackEventFeed'
 
 const EVENT_LABELS: Record<PlaybackEventType, string> = {
   overspeed: 'Overspeed',
@@ -12,55 +12,93 @@ const EVENT_LABELS: Record<PlaybackEventType, string> = {
   geofence_exit: 'Geofence Exit',
 }
 
-interface TimelineEntry {
-  key: string
-  icon: typeof Flag
-  label: string
+type TimelineFeedEntry = PlaybackFeedEntry & {
   timestamp: string
-  lat: number
-  lng: number
   index: number
 }
 
-export function buildTimelineEntries(movements: PlaybackMovement[], events: PlaybackEvent[]): TimelineEntry[] {
-  const entries: TimelineEntry[] = []
-  if (movements[0]) {
-    entries.push({ key: 'start', icon: Flag, label: 'Playback Started', timestamp: movements[0].timestamp, lat: movements[0].lat, lng: movements[0].lng, index: 0 })
-  }
-  events.forEach((e, i) => {
-    entries.push({ key: `event-${i}`, icon: AlertTriangle, label: EVENT_LABELS[e.type], timestamp: e.timestamp, lat: e.lat, lng: e.lng, index: e.startIndex })
-  })
-  if (movements.length > 1) {
-    const last = movements[movements.length - 1]
-    entries.push({ key: 'end', icon: Flag, label: 'Playback Ended', timestamp: last.timestamp, lat: last.lat, lng: last.lng, index: movements.length - 1 })
-  }
-  return entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+function eventTone(type: PlaybackEventType): PlaybackFeedEntry['tone'] {
+  if (type === 'harsh_braking') return 'red'
+  if (type === 'harsh_acceleration' || type === 'overspeed') return 'orange'
+  return 'blue'
 }
 
-export function TimelineTab({ movements, events, onJumpToIndex }: { movements: PlaybackMovement[]; events: PlaybackEvent[]; onJumpToIndex?: (index: number) => void }) {
-  const entries = buildTimelineEntries(movements, events)
-  if (entries.length === 0) {
-    return <p className="text-[10px] font-bold text-slate-400 p-4">No timeline data for this window.</p>
+export function buildTimelineEntries(movements: PlaybackMovement[], events: PlaybackEvent[], stops: PlaybackStop[] = []): TimelineFeedEntry[] {
+  const entries: TimelineFeedEntry[] = []
+  const first = movements[0]
+
+  if (first) {
+    entries.push({
+      id: 'start',
+      timestamp: first.timestamp,
+      time: format(new Date(first.timestamp), 'hh:mm:ss a'),
+      title: 'Playback Started',
+      details: [`Position: ${coordinateLabel(first.lat, first.lng)}`],
+      tone: 'green',
+      index: 0,
+    })
   }
-  return (
-    <div className="divide-y divide-slate-100">
-      {entries.map((entry) => (
-        <button
-          key={entry.key}
-          type="button"
-          onClick={() => onJumpToIndex?.(entry.index)}
-          className="flex w-full items-center gap-3 py-2.5 px-1 text-left hover:bg-slate-50"
-        >
-          <entry.icon className="h-4 w-4 text-blue-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-900">{entry.label}</p>
-            <p className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> {entry.lat.toFixed(4)}, {entry.lng.toFixed(4)}
-            </p>
-          </div>
-          <span className="text-[10px] font-bold text-slate-400">{format(new Date(entry.timestamp), 'hh:mm:ss a')}</span>
-        </button>
-      ))}
-    </div>
-  )
+
+  const movingIndex = movements.findIndex((movement, index) => index > 0 && movement.speed > 0)
+  if (movingIndex > 0) {
+    const movement = movements[movingIndex]
+    entries.push({
+      id: 'moving',
+      timestamp: movement.timestamp,
+      time: format(new Date(movement.timestamp), 'hh:mm:ss a'),
+      title: 'Vehicle Moving',
+      details: [`Speed: ${Math.round(movement.speed)} km/h`, `Position: ${coordinateLabel(movement.lat, movement.lng)}`],
+      tone: 'blue',
+      index: movingIndex,
+    })
+  }
+
+  events.forEach((event, index) => {
+    entries.push({
+      id: `event-${index}`,
+      timestamp: event.timestamp,
+      time: format(new Date(event.timestamp), 'hh:mm:ss a'),
+      title: EVENT_LABELS[event.type],
+      details: [...(event.peakSpeed != null ? [`Speed: ${Math.round(event.peakSpeed)} km/h`] : []), `Position: ${coordinateLabel(event.lat, event.lng)}`],
+      tone: eventTone(event.type),
+      index: event.startIndex,
+    })
+  })
+
+  stops.forEach((stop, index) => {
+    entries.push({
+      id: `stop-${index}`,
+      timestamp: stop.startTimestamp,
+      time: format(new Date(stop.startTimestamp), 'hh:mm:ss a'),
+      title: 'Stop',
+      details: [`Duration: ${Math.round(stop.durationMinutes)}m`, `Position: ${coordinateLabel(stop.lat, stop.lng)}`],
+      tone: 'blue',
+      badge: `${Math.round(stop.durationMinutes)}m`,
+      index: stop.startIndex,
+    })
+  })
+
+  if (movements.length > 1) {
+    const last = movements[movements.length - 1]
+    entries.push({
+      id: 'end',
+      timestamp: last.timestamp,
+      time: format(new Date(last.timestamp), 'hh:mm:ss a'),
+      title: 'Playback Ended',
+      details: [`Position: ${coordinateLabel(last.lat, last.lng)}`],
+      tone: 'red',
+      index: movements.length - 1,
+    })
+  }
+
+  return entries.sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
+}
+
+export function TimelineTab({ movements, events, stops, onJumpToIndex }: { movements: PlaybackMovement[]; events: PlaybackEvent[]; stops: PlaybackStop[]; onJumpToIndex?: (index: number) => void }) {
+  const entries = buildTimelineEntries(movements, events, stops).map((entry) => ({
+    ...entry,
+    onSelect: onJumpToIndex ? () => onJumpToIndex(entry.index) : undefined,
+  }))
+
+  return <PlaybackEventFeed entries={entries} emptyMessage="No timeline data for this window." />
 }

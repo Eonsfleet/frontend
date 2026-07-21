@@ -1,6 +1,5 @@
 'use client'
 
-import { History } from 'lucide-react'
 import type { PlaybackEvent, PlaybackEventType, PlaybackStats } from '@/types'
 
 export interface PlaybackSummaryPanelProps {
@@ -41,7 +40,7 @@ export function PlaybackSummaryPanel({ stats, stopsCount, events, vehicleLabel }
   const topEvents = Object.entries(eventCounts).sort((a, b) => b[1] - a[1])
 
   return (
-    <div className="p-4 space-y-6 overflow-y-auto">
+    <div className="shrink-0 space-y-6 p-4">
       <section>
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Duration" value={formatDuration(stats.durationMinutes)} />
@@ -79,15 +78,6 @@ export function PlaybackSummaryPanel({ stats, stopsCount, events, vehicleLabel }
         </div>
       </section>
 
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recent Playbacks</h4>
-        </div>
-        <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl">
-          <History className="h-6 w-6 text-slate-200 mx-auto mb-2" />
-          <p className="text-[10px] font-bold text-slate-400">No recent playbacks yet</p>
-        </div>
-      </section>
     </div>
   )
 }

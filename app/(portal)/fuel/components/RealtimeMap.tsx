@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { RealtimeVehicle } from './useFuelRealtime'
 
@@ -40,21 +40,39 @@ function badgeIcon(pct: number | null, active: boolean, showFuelLevel: boolean) 
     })
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
+/**
+ * Fits the map to the vehicle set — but only when that set actually changes
+ * (a vehicle is added/removed), not on every 10s live refresh. `signature` is a
+ * stable string of the vehicle ids, so a poll that only moves positions slightly
+ * won't retrigger the fit and re-animate the zoom.
+ */
+function FitBounds({ points, signature }: { points: [number, number][]; signature: string }) {
     const map = useMap()
+    const lastFitted = useRef<string | null>(null)
     useEffect(() => {
         if (points.length === 0) return
+        if (lastFitted.current === signature) return
+        lastFitted.current = signature
         map.fitBounds(L.latLngBounds(points), { padding: [56, 56], maxZoom: 13 })
-    }, [points, map])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [signature, map])
     return null
 }
 
-function ActiveVehicleFocus({ position }: { position: [number, number] | null }) {
+/**
+ * Flies to the selected vehicle once per selection. Keyed on `activeId` (a number)
+ * rather than a freshly-allocated position array, so live refreshes don't restart
+ * the flyTo mid-flight (which caused the endless "zooming but never settling").
+ */
+function ActiveVehicleFocus({ activeId, positionRef }: { activeId: number | null; positionRef: React.MutableRefObject<[number, number] | null> }) {
     const map = useMap()
     useEffect(() => {
+        if (activeId == null) return
+        const position = positionRef.current
         if (!position) return
         map.flyTo(position, Math.max(map.getZoom(), 13), { duration: 0.45 })
-    }, [position, map])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeId, map])
     return null
 }
 
@@ -75,14 +93,23 @@ export function RealtimeMap({ vehicles, activeId, onSelect }: RealtimeMapProps) 
     const [layer, setLayer] = useState<LayerKey>('Map')
     const [showFuelLevel, setShowFuelLevel] = useState(true)
     const points = useMemo(() => vehicles.map(positionFor), [vehicles])
-    const activePosition = useMemo(() => {
+    // Stable identity of the vehicle set: changes only when vehicles are added/removed,
+    // not when a live poll nudges their positions — so FitBounds doesn't re-fire each tick.
+    const signature = useMemo(
+        () => vehicles.map((v) => v.id).sort((a, b) => a - b).join(','),
+        [vehicles],
+    )
+    // Latest position of the active vehicle, held in a ref so the focus effect can read it
+    // without depending on it (which would restart the flyTo on every refresh).
+    const activePositionRef = useRef<[number, number] | null>(null)
+    activePositionRef.current = useMemo(() => {
         const vehicle = vehicles.find((v) => v.id === activeId)
         return vehicle ? positionFor(vehicle) : null
     }, [activeId, vehicles])
 
     return (
         <div className="relative h-full min-h-[380px] w-full overflow-hidden rounded-2xl border border-slate-100">
-            <MapContainer center={LAGOS} zoom={12} scrollWheelZoom={false} zoomControl={false} className="h-full w-full" style={{ background: '#e5e7eb' }}>
+            <MapContainer center={LAGOS} zoom={12} scrollWheelZoom touchZoom zoomControl={false} className="h-full w-full" style={{ background: '#e5e7eb' }}>
                 <TileLayer url={LAYERS[layer]} attribution="&copy; OpenStreetMap" />
                 {vehicles.map((v) => (
                     <Marker
@@ -92,8 +119,8 @@ export function RealtimeMap({ vehicles, activeId, onSelect }: RealtimeMapProps) 
                         eventHandlers={{ click: () => onSelect(v.id) }}
                     />
                 ))}
-                <FitBounds points={points} />
-                <ActiveVehicleFocus position={activePosition} />
+                <FitBounds points={points} signature={signature} />
+                <ActiveVehicleFocus activeId={activeId} positionRef={activePositionRef} />
             </MapContainer>
 
             {/* Layer toggle */}

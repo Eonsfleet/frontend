@@ -833,11 +833,11 @@ function ConversationPanel({
 
     const queryClient = useQueryClient()
 
-    const { mutate: send, isPending } = useMutation({
-        mutationFn: () => postIncidentMessage(incidentId, { body, is_internal: isInternal }),
-        onMutate: async () => {
-            const optimisticBody = body
-            const optimisticInternal = isInternal
+    const { mutate: send, isPending } = useMutation<any, unknown, { body: string; is_internal: boolean }, { previous: unknown }>({
+        mutationFn: (vars) => postIncidentMessage(incidentId, vars),
+        onMutate: async (vars) => {
+            const optimisticBody = vars.body
+            const optimisticInternal = vars.is_internal
             await queryClient.cancelQueries({ queryKey: ['incident-conversation', incidentId] })
             const previous = queryClient.getQueryData(['incident-conversation', incidentId])
             queryClient.setQueryData(['incident-conversation', incidentId], (current: IncidentConversationCache | undefined) => {
@@ -961,7 +961,7 @@ function ConversationPanel({
                         placeholder="Write a message…"
                         value={body}
                         onChange={e => setBody(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body.trim()) send(undefined) }}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body.trim()) send({ body: body.trim(), is_internal: isInternal }) }}
                         className="resize-none min-h-[72px] bg-white"
                     />
                     <div className="flex items-center justify-between">
@@ -976,7 +976,7 @@ function ConversationPanel({
                                 <Lock className="h-3 w-3" />Internal note (staff only)
                             </span>
                         </label>
-                        <Button size="sm" onClick={() => send(undefined)} disabled={isPending || !body.trim()} className="text-xs">
+                        <Button size="sm" onClick={() => send({ body: body.trim(), is_internal: isInternal })} disabled={isPending || !body.trim()} className="text-xs">
                             {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
                             Send
                         </Button>

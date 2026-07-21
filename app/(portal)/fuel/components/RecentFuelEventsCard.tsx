@@ -1,7 +1,8 @@
 'use client'
 
-import { FuelIcon, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Timer, type LucideIcon } from 'lucide-react'
+import { FuelIcon, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Timer, Info, type LucideIcon } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { FuelEvent, FuelEventsPagination } from './useFuelRealtime'
 
@@ -31,9 +32,25 @@ export function RecentFuelEventsCard({ events, isLoading, isRefreshing, paginati
         <Card className="flex h-[292px] min-h-0 flex-col rounded-2xl border-slate-100 p-5 shadow-none">
             <div className="flex shrink-0 items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-slate-900">Recent Fuel Events</h2>
-                {isRefreshing && (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-label="Refreshing events" />
-                )}
+                <div className="flex items-center gap-2">
+                    {isRefreshing && (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-label="Refreshing events" />
+                    )}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                className="text-slate-400 transition-colors hover:text-slate-600"
+                                aria-label="About recent fuel events"
+                            >
+                                <Info className="h-4 w-4" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-56 text-center">
+                            Shows all recent fuel events by default. Select a vehicle to see only that vehicle&apos;s events.
+                        </TooltipContent>
+                    </Tooltip>
+                </div>
             </div>
 
             <ul className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">

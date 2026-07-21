@@ -1,7 +1,7 @@
 import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import { createFakeMapProvider } from '../helpers/fakeMapProvider'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { createFakeMapProvider, getFakeMapProvider } from '../helpers/fakeMapProvider'
 
 vi.mock('@/lib/map/MapProviderFactory', () => ({
   createMapProvider: vi.fn(async () => createFakeMapProvider()),
@@ -62,5 +62,63 @@ describe('PlaybackMap', () => {
       />,
     )
     expect(screen.getByRole('button', { name: /traffic/i })).toBeDisabled()
+  })
+  it('follows the active vehicle with an adaptive driving zoom by default', async () => {
+    render(
+      <PlaybackMap
+        movements={movements}
+        speedSegments={speedSegments}
+        stops={[]}
+        currentIndex={0}
+        preparedPoints={movements.map((movement, index) => ({ ...movement, timeMs: new Date(movement.timestamp).getTime(), cumulativeDistanceKm: index }))}
+        isPlaying={true}
+        mapStyle="standard"
+        onToggleMapStyle={vi.fn()}
+        isFullscreen={false}
+        onToggleFullscreen={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(getFakeMapProvider().fitBounds).toHaveBeenCalledWith(
+      [{ lat: 6.5, lng: 3.4 }, { lat: 6.51, lng: 3.41 }],
+      expect.objectContaining({ paddingPx: expect.any(Number), maxZoom: expect.any(Number) }),
+    ))
+  })
+
+  it('provides manual zoom controls', async () => {
+    render(
+      <PlaybackMap
+        movements={movements}
+        speedSegments={speedSegments}
+        stops={[]}
+        currentIndex={0}
+        mapStyle="standard"
+        onToggleMapStyle={vi.fn()}
+        isFullscreen={false}
+        onToggleFullscreen={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(getFakeMapProvider().mount).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: /zoom in/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zoom out/i }))
+    expect(getFakeMapProvider().zoomIn).toHaveBeenCalledOnce()
+    expect(getFakeMapProvider().zoomOut).toHaveBeenCalledOnce()
+  })
+  it('fits the full route before playback begins', async () => {
+    render(
+      <PlaybackMap
+        movements={movements}
+        speedSegments={speedSegments}
+        stops={[]}
+        currentIndex={0}
+        mapStyle="standard"
+        onToggleMapStyle={vi.fn()}
+        isFullscreen={false}
+        onToggleFullscreen={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(getFakeMapProvider().fitBounds).toHaveBeenCalledWith(
+      [{ lat: 6.5, lng: 3.4 }, { lat: 6.51, lng: 3.41 }],
+      expect.objectContaining({ maxZoom: 14 }),
+    ))
   })
 })

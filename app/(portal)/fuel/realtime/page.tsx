@@ -71,7 +71,7 @@ export default function FuelRealtimePage() {
                 <>
                     {/* Main row: rail | map | detail (detail only shows once a vehicle is picked) */}
                     <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-                        <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
+                        <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
                             <RealtimeVehicleRail
                                 vehicles={vehicles}
                                 activeId={activeId}
@@ -79,11 +79,11 @@ export default function FuelRealtimePage() {
                                 isLoading={isLoading}
                             />
                         </div>
-                        <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-9'}>
+                        <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-9'}>
                             <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={handleVehicleSelect} />
                         </div>
                         {detail && (
-                            <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] lg:col-span-3">
+                            <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
                                 <VehicleDetailPanel detail={detail} onClose={() => {
                                     setSelectedId(null)
                                     setEventsPage(1)
@@ -105,6 +105,7 @@ export default function FuelRealtimePage() {
                             onFilterChange={(filter) => setLevelTrendFilter(filter as FuelLevelTrendFilter)}
                             isLoading={isFuelLevelTrendLoading}
                             formatValue={(v) => v == null ? 'No data' : `${v} ${fuelLevelTrendUnit}`}
+                            emptyMessage={activeId == null ? 'Select a vehicle to view its fuel level trend' : 'No data available for this period'}
                         />
                         <RealtimeTrendCard
                             title="Fuel Flow Rate"
@@ -117,6 +118,7 @@ export default function FuelRealtimePage() {
                             onFilterChange={(filter) => setRateTrendFilter(filter as FuelRateTrendFilter)}
                             isLoading={isFuelFlowTrendLoading}
                             formatValue={(v) => v == null ? 'No data' : `${v} ${fuelFlowTrendUnit}`}
+                            emptyMessage={activeId == null ? 'Select a vehicle to view its fuel flow rate' : 'No data available for this period'}
                         />
                         <RecentFuelEventsCard
                             events={events}

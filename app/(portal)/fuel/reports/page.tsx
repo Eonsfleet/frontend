@@ -323,7 +323,7 @@ function CostAnalysisTab() {
                     {report && !isLoading && (
                         <div className="space-y-5">
                             {/* Summary KPIs */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Spend</p>
                                     <p className="text-xl font-bold text-slate-900">

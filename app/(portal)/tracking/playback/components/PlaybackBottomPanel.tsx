@@ -9,8 +9,10 @@ import { SpeedTab } from './tabs/SpeedTab'
 import { AltitudeTab } from './tabs/AltitudeTab'
 import { FuelTab } from './tabs/FuelTab'
 import { VehiclesTab } from './tabs/VehiclesTab'
+import { cn } from '@/lib/utils'
 
 export interface PlaybackBottomPanelProps {
+  className?: string
   movements: PlaybackMovement[]
   events: PlaybackEvent[]
   stops: PlaybackStop[]
@@ -19,10 +21,10 @@ export interface PlaybackBottomPanelProps {
   onJumpToIndex?: (index: number) => void
 }
 
-export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLabel, onJumpToIndex }: PlaybackBottomPanelProps) {
+export function PlaybackBottomPanel({ className, movements, events, stops, stats, vehicleLabel, onJumpToIndex }: PlaybackBottomPanelProps) {
   return (
-    <Tabs defaultValue="timeline" className="bg-white border-t border-slate-200">
-      <TabsList className="h-11 w-full justify-start gap-4 rounded-none bg-transparent p-0 px-4 border-b border-slate-100">
+    <Tabs defaultValue="timeline" className={cn('flex flex-col bg-white border-t border-slate-200', className)}>
+      <TabsList className="h-11 w-full shrink-0 justify-start gap-4 overflow-x-auto rounded-none bg-transparent p-0 px-4 border-b border-slate-100">
         <TabsTrigger value="timeline">Timeline</TabsTrigger>
         <TabsTrigger value="events">Events</TabsTrigger>
         <TabsTrigger value="stops">Stops</TabsTrigger>
@@ -31,9 +33,9 @@ export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLa
         <TabsTrigger value="fuel">Fuel</TabsTrigger>
         <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
       </TabsList>
-      <div className="p-4 max-h-64 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <TabsContent value="timeline" className="m-0">
-          <TimelineTab movements={movements} events={events} onJumpToIndex={onJumpToIndex} />
+          <TimelineTab movements={movements} events={events} stops={stops} onJumpToIndex={onJumpToIndex} />
         </TabsContent>
         <TabsContent value="events" className="m-0">
           <EventsTab events={events} onJumpToIndex={onJumpToIndex} />
@@ -45,10 +47,10 @@ export function PlaybackBottomPanel({ movements, events, stops, stats, vehicleLa
           <SpeedTab movements={movements} events={events} />
         </TabsContent>
         <TabsContent value="altitude" className="m-0">
-          <AltitudeTab />
+          <AltitudeTab movements={movements} />
         </TabsContent>
         <TabsContent value="fuel" className="m-0">
-          <FuelTab />
+          <FuelTab movements={movements} />
         </TabsContent>
         <TabsContent value="vehicles" className="m-0">
           <VehiclesTab vehicleLabel={vehicleLabel} stats={stats} />
