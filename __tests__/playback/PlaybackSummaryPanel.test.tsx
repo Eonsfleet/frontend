@@ -50,7 +50,7 @@ describe('PlaybackSummaryPanel', () => {
     expect(screen.getByText('ABC-123-XD')).toBeInTheDocument()
   })
 
-  it('shows an empty state for Recent Playbacks', () => {
+  it('does not render the removed Recent Playbacks section', () => {
     render(
       <PlaybackSummaryPanel
         stats={{ durationMinutes: 0, distanceKm: 0, avgSpeed: 0, maxSpeed: 0 }}
@@ -59,6 +59,6 @@ describe('PlaybackSummaryPanel', () => {
         vehicleLabel="ABC-123-XD"
       />,
     )
-    expect(screen.getByText(/no recent playbacks yet/i)).toBeInTheDocument()
+    expect(screen.queryByText(/recent playbacks/i)).not.toBeInTheDocument()
   })
 })

@@ -1,12 +1,21 @@
 'use client'
 
-import { Fuel } from 'lucide-react'
+import { format } from 'date-fns'
+import type { PlaybackMovement } from '@/types'
+import { coordinateLabel, PlaybackEventFeed } from './PlaybackEventFeed'
 
-export function FuelTab() {
-  return (
-    <div className="text-center py-10">
-      <Fuel className="h-6 w-6 text-slate-200 mx-auto mb-2" />
-      <p className="text-[10px] font-bold text-slate-400">Fuel data isn't available for this device yet.</p>
-    </div>
-  )
+export function FuelTab({ movements }: { movements: PlaybackMovement[] }) {
+  const readings = movements.filter((movement, index, all) => (
+    movement.fuel_level_percent != null
+    && (index === 0 || index === all.length - 1 || Math.round(movement.fuel_level_percent) !== Math.round(all[index - 1].fuel_level_percent ?? movement.fuel_level_percent))
+  ))
+  const entries = readings.map((movement) => ({
+    id: `fuel-${movement.id}`,
+    time: format(new Date(movement.timestamp), 'hh:mm:ss a'),
+    title: 'Fuel level',
+    details: [`Remaining: ${Math.round(movement.fuel_level_percent!)}%`, `Position: ${coordinateLabel(movement.lat, movement.lng)}`],
+    tone: 'green' as const,
+  }))
+
+  return <PlaybackEventFeed entries={entries} emptyMessage="Fuel data isn't available for this device yet." />
 }

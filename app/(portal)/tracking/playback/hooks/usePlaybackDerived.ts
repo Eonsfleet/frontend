@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { detectPlaybackGaps } from '@/lib/playback/route'
 import type { Geofence, PlaybackMovement } from '@/types'
 import {
   computePlaybackStats,
@@ -20,6 +21,7 @@ export function usePlaybackDerived(
   const stats = useMemo(() => computePlaybackStats(movements), [movements])
   const speedSegments = useMemo(() => buildSpeedSegments(movements), [movements])
   const stops = useMemo(() => detectStops(movements, thresholds), [movements, thresholds])
+  const gaps = useMemo(() => detectPlaybackGaps(movements), [movements])
   const drivingEvents = useMemo(() => detectEvents(movements, thresholds), [movements, thresholds])
   const geofenceEvents = useMemo(
     () => (geofence ? filterMovementsByGeofence(movements, geofence) : []),
@@ -30,5 +32,5 @@ export function usePlaybackDerived(
     [drivingEvents, geofenceEvents],
   )
 
-  return { stats, speedSegments, stops, events }
+  return { stats, speedSegments, stops, gaps, events }
 }
