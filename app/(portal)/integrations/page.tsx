@@ -300,14 +300,7 @@ function StatusCard() {
                     <span className="text-slate-500">API Version</span>
                     <span className="font-medium text-slate-900">v1</span>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                    <span className="text-slate-500">Uptime (30 days)</span>
-                    <span className="font-medium text-emerald-600">99.98%</span>
-                </div>
             </div>
-            <Button variant="ghost" className="mt-5 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                View Status Page <ExternalLink className="ml-2 h-3.5 w-3.5" />
-            </Button>
         </section>
     )
 }
