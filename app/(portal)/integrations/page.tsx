@@ -31,17 +31,14 @@ import {
     FileText,
     Filter,
     Headphones,
-    ListChecks,
     MoreVertical,
     Pause,
     Plus,
     RefreshCw,
-    RotateCcw,
     Send,
-    Settings,
     ShieldCheck,
     Trash2,
-    Webhook,
+    Webhook as WebhookIcon,
     Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -52,8 +49,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
+import { WebhookFormDialog2 } from '@/components/integrations/WebhookFormDialog2'
+import type { Webhook } from '@/types'
 
 type IntegrationTab = 'api' | 'webhooks'
+type WebhookDialogState = { mode: 'create' | 'edit' | 'duplicate'; webhook: Webhook | null } | null
 
 const resources = [
     {
@@ -79,54 +79,6 @@ const resources = [
         description: 'View real-time status',
         icon: CheckCircle2,
         className: 'bg-emerald-50 text-emerald-600',
-    },
-]
-
-const webhookEndpoints = [
-    {
-        name: 'Primary Production',
-        url: 'https://api.acmelogistics.com/webhooks/eonsfleet',
-        active: true,
-        events: '18 events',
-        lastDelivery: 'May 16, 2024 10:28 AM',
-        deliveryStatus: '200 OK',
-        successRate: 99.2,
-    },
-    {
-        name: 'Analytics Service',
-        url: 'https://analytics.acmelogistics.com/hook/eonsfleet',
-        active: true,
-        events: '12 events',
-        lastDelivery: 'May 16, 2024 10:27 AM',
-        deliveryStatus: '200 OK',
-        successRate: 98.9,
-    },
-    {
-        name: 'Backup Endpoint',
-        url: 'https://backup.acmelogistics.com/webhook',
-        active: true,
-        events: '15 events',
-        lastDelivery: 'May 16, 2024 10:21 AM',
-        deliveryStatus: '200 OK',
-        successRate: 97.8,
-    },
-    {
-        name: 'Staging Endpoint',
-        url: 'https://staging.acmelogistics.com/webhook',
-        active: false,
-        events: '8 events',
-        lastDelivery: 'May 15, 2024 09:14 PM',
-        deliveryStatus: '-',
-        successRate: 0,
-    },
-    {
-        name: 'Local Development',
-        url: 'http://localhost:3000/webhook/eonsfleet',
-        active: false,
-        events: '2 events',
-        lastDelivery: 'May 12, 2024 04:32 PM',
-        deliveryStatus: '-',
-        successRate: 0,
     },
 ]
 
@@ -686,45 +638,120 @@ function WebhookMetricCard({ title, value, subtitle, icon: Icon, tone }: { title
     )
 }
 
-function WebhookSecretCard({ className }: { className?: string } = {}) {
+function WebhookSecretCard({ webhook, className }: { webhook: Webhook | undefined; className?: string }) {
+    const queryClient = useQueryClient()
+    const [revealed, setRevealed] = useState(false)
+
+    const regenerateMutation = useMutation({
+        mutationFn: () => api.regenerateWebhookSecret(String(webhook!.id)),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            setRevealed(true)
+            toast.success('Secret regenerated — copy it now, it will not be shown again')
+        },
+        onError: () => toast.error('Failed to regenerate secret'),
+    })
+
+    if (!webhook) {
+        return (
+            <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
+                <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
+                <p className="mt-2 text-sm text-slate-500">Select a webhook to view its signing secret.</p>
+            </section>
+        )
+    }
+
     return (
-        <section className="rounded-2xl bg-white p-5 w-full col-span-4 min-h-max">
+        <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
             <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
-            <p className="mt-1 text-sm text-slate-500">Use this secret to verify webhook signatures from EonsFleet.</p>
+            <p className="mt-1 text-sm text-slate-500">For &quot;{webhook.name ?? webhook.url}&quot; — verify signatures using this secret.</p>
             <div className="mt-4 flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">whsec_**********************7a3f</p>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100">
-                    <Eye className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100">
-                    <Copy className="h-4 w-4" />
-                </Button>
+                <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">
+                    {revealed && webhook.secret_key ? webhook.secret_key : 'whsec_••••••••••••••••••••••••'}
+                </p>
+                {revealed && webhook.secret_key && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100" onClick={() => {
+                        navigator.clipboard.writeText(webhook.secret_key!)
+                        toast.info('Copied to clipboard')
+                    }}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
+                )}
             </div>
-            <Button variant="ghost" className="mt-4 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
+            <Button
+                variant="ghost"
+                disabled={regenerateMutation.isPending}
+                className="mt-4 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                onClick={() => regenerateMutation.mutate()}
+            >
                 <RefreshCw className="mr-2 h-4 w-4" /> Rotate Secret
             </Button>
         </section>
     )
 }
-function WebhooksTable() {
+function WebhooksTable({
+    onSelectSecret,
+    onOpenDialog,
+}: {
+    onSelectSecret: (webhook: Webhook) => void
+    onOpenDialog: (state: WebhookDialogState) => void
+}) {
+    const queryClient = useQueryClient()
     const [openMenu, setOpenMenu] = useState<string | null>(null)
-    const actionItems = [
-        { label: 'View Details', icon: Eye },
-        { label: 'Edit Webhook', icon: Edit3 },
-        { label: 'Manage Events', icon: ListChecks },
-        { label: 'Test Webhook', icon: Send },
-        { label: 'View Deliveries', icon: FileText },
-        { label: 'Regenerate Secret', icon: RotateCcw },
-        { label: 'Duplicate Webhook', icon: Copy },
-        { label: 'Pause Webhook', icon: Pause },
-        { label: 'Delete Webhook', icon: Trash2, danger: true },
+
+    const { data, isLoading } = useQuery({ queryKey: ['webhooks'], queryFn: api.getWebhooks })
+    const webhooks = data?.data.webhooks ?? []
+
+    const deleteMutation = useMutation({
+        mutationFn: api.deleteWebhook,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            toast.success('Webhook deleted')
+        },
+        onError: () => toast.error('Failed to delete webhook'),
+    })
+
+    const testMutation = useMutation({
+        mutationFn: api.testWebhook,
+        onSuccess: () => toast.success('Test event sent'),
+        onError: () => toast.error('Test delivery failed to send'),
+    })
+
+    const pauseMutation = useMutation({
+        mutationFn: ({ id, status }: { id: string; status: 'active' | 'inactive' }) => api.updateWebhook(id, { status }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            toast.success('Webhook status updated')
+        },
+        onError: () => toast.error('Failed to update webhook status'),
+    })
+
+    const actionsFor = (webhook: Webhook) => [
+        { label: 'Edit Webhook', icon: Edit3, onClick: () => onOpenDialog({ mode: 'edit', webhook }) },
+        { label: 'Test Webhook', icon: Send, onClick: () => testMutation.mutate(String(webhook.id)) },
+        { label: 'Duplicate Webhook', icon: Copy, onClick: () => onOpenDialog({ mode: 'duplicate', webhook }) },
+        {
+            label: webhook.status === 'active' ? 'Pause Webhook' : 'Activate Webhook',
+            icon: Pause,
+            onClick: () => pauseMutation.mutate({ id: String(webhook.id), status: webhook.status === 'active' ? 'inactive' : 'active' }),
+        },
+        {
+            label: 'Delete Webhook',
+            icon: Trash2,
+            danger: true,
+            onClick: () => {
+                if (confirm('Delete this webhook endpoint?')) deleteMutation.mutate(String(webhook.id))
+            },
+        },
     ]
 
     return (
         <section className="relative rounded-2xl bg-white p-5 xl:col-span-8">
-            <div>
-                <h2 className="text-base font-bold text-slate-900">Your Webhooks</h2>
-                <p className="mt-1 text-sm text-slate-500">Manage your webhook endpoints and configurations.</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-base font-bold text-slate-900">Your Webhooks</h2>
+                    <p className="mt-1 text-sm text-slate-500">Manage your webhook endpoints and configurations.</p>
+                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[840px] text-left text-sm">
@@ -739,60 +766,67 @@ function WebhooksTable() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {webhookEndpoints.map((endpoint) => (
-                            <tr className="text-slate-600 transition hover:bg-slate-50/70" key={endpoint.name}>
-                                <td className="px-3 py-4">
-                                    <p className="font-medium text-slate-900">{endpoint.name}</p>
-                                    <p className="mt-1 text-xs text-slate-500">{endpoint.url}</p>
-                                </td>
-                                <td className="px-3 py-4">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', endpoint.active ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
-                                        {endpoint.active ? 'Active' : 'Inactive'}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-4">{endpoint.events}</td>
-                                <td className="px-3 py-4">
-                                    <p>{endpoint.lastDelivery}</p>
-                                    <p className={cn('mt-1 text-xs', endpoint.active ? 'text-emerald-600' : 'text-slate-400')}>{endpoint.deliveryStatus}</p>
-                                </td>
-                                <td className="px-3 py-4">
-                                    <p className="font-medium text-slate-700">{endpoint.successRate}%</p>
-                                    <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
-                                        <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${endpoint.successRate}%` }} />
-                                    </div>
-                                </td>
-                                <td className="relative px-3 py-4 text-right">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500"><Settings className="h-4 w-4" /></Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-lg text-slate-400"
-                                        onClick={() => setOpenMenu(openMenu === endpoint.name ? null : endpoint.name)}
-                                    >
-                                        <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                    {openMenu === endpoint.name && (
-                                        <div className="absolute right-3 top-12 z-20 w-56 rounded-2xl bg-white p-2 text-sm">
-                                            {actionItems.map(({ label, icon: Icon, danger }) => (
-                                                <button
-                                                    className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-slate-50', danger ? 'text-rose-600' : 'text-slate-700')}
-                                                    key={label}
-                                                    onClick={() => setOpenMenu(null)}
-                                                    type="button"
-                                                >
-                                                    <Icon className="h-4 w-4" /> {label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
+                        {isLoading ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : webhooks.length === 0 ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No webhooks registered yet.</td></tr>
+                        ) : (
+                            webhooks.map((webhook) => (
+                                <tr className="cursor-pointer text-slate-600 transition hover:bg-slate-50/70" key={webhook.id} onClick={() => onSelectSecret(webhook)}>
+                                    <td className="px-3 py-4">
+                                        <p className="font-medium text-slate-900">{webhook.name ?? 'Unnamed Endpoint'}</p>
+                                        <p className="mt-1 text-xs text-slate-500">{webhook.url}</p>
+                                    </td>
+                                    <td className="px-3 py-4">
+                                        <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', webhook.status === 'active' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
+                                            {webhook.status === 'active' ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </td>
+                                    <td className="px-3 py-4">{webhook.events.length} events</td>
+                                    <td className="px-3 py-4">
+                                        <p>{webhook.last_delivery_at ? new Date(webhook.last_delivery_at).toLocaleString() : 'Never'}</p>
+                                        {webhook.last_delivery_status && (
+                                            <p className={cn('mt-1 text-xs', webhook.last_delivery_status === 'delivered' ? 'text-emerald-600' : 'text-rose-600')}>{webhook.last_delivery_status}</p>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-4">
+                                        <p className="font-medium text-slate-700">{webhook.success_rate_30d != null ? `${webhook.success_rate_30d}%` : '—'}</p>
+                                        {webhook.success_rate_30d != null && (
+                                            <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
+                                                <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${webhook.success_rate_30d}%` }} />
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="relative px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-lg text-slate-400"
+                                            onClick={() => setOpenMenu(openMenu === String(webhook.id) ? null : String(webhook.id))}
+                                        >
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                        {openMenu === String(webhook.id) && (
+                                            <div className="absolute right-3 top-12 z-20 w-56 rounded-2xl bg-white p-2 text-sm shadow-lg">
+                                                {actionsFor(webhook).map(({ label, icon: Icon, danger, onClick }) => (
+                                                    <button
+                                                        className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-slate-50', danger ? 'text-rose-600' : 'text-slate-700')}
+                                                        key={label}
+                                                        onClick={() => { setOpenMenu(null); onClick(); }}
+                                                        type="button"
+                                                    >
+                                                        <Icon className="h-4 w-4" /> {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
-            <a className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700" href="#">View All Webhooks</a>
-
         </section>
     )
 }
@@ -921,23 +955,68 @@ function ApiTabContent() {
     )
 }
 
-function WebhooksTabContent() {
+function WebhooksTabContent({
+    dialogState,
+    onOpenDialog,
+    newSecret,
+    onSecretIssued,
+}: {
+    dialogState: WebhookDialogState
+    onOpenDialog: (state: WebhookDialogState) => void
+    newSecret: string | null
+    onSecretIssued: (secret: string) => void
+}) {
+    const [selectedWebhook, setSelectedWebhook] = useState<Webhook | undefined>(undefined)
+    const { data } = useQuery({ queryKey: ['webhooks-stats'], queryFn: api.getWebhookStats })
+    const stats = data?.data
+
     return (
         <>
             <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                <WebhookMetricCard title="Total Webhooks" value="5" subtitle="Active endpoints" icon={Webhook} tone="bg-violet-50 text-violet-600" />
-                <WebhookMetricCard title="Successful Deliveries (30D)" value="24,781" subtitle="98.7% success rate" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" />
-                <WebhookMetricCard title="Failed Deliveries (30D)" value="312" subtitle="1.3% failure rate" icon={AlertTriangle} tone="bg-orange-50 text-orange-600" />
-                <WebhookMetricCard title="Events Delivered (30D)" value="25,093" subtitle="+18% vs previous 30 days" icon={RefreshCw} tone="bg-blue-50 text-blue-600" />
-                <WebhookMetricCard title="Avg. Response Time" value="142 ms" subtitle="-12% vs previous 30 days" icon={Clock3} tone="bg-indigo-50 text-indigo-600" />
+                <WebhookMetricCard title="Total Webhooks" value={String(stats?.total_webhooks ?? 0)} subtitle={`${stats?.active_webhooks ?? 0} active`} icon={WebhookIcon} tone="bg-violet-50 text-violet-600" />
+                <WebhookMetricCard title="Successful Deliveries (30D)" value={(stats?.successful_deliveries_30d ?? 0).toLocaleString()} subtitle={stats?.success_rate_30d != null ? `${stats.success_rate_30d}% success rate` : '—'} icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" />
+                <WebhookMetricCard title="Failed Deliveries (30D)" value={(stats?.failed_deliveries_30d ?? 0).toLocaleString()} subtitle={stats && stats.deliveries_30d > 0 ? `${(100 - (stats.success_rate_30d ?? 100)).toFixed(1)}% failure rate` : '—'} icon={AlertTriangle} tone="bg-orange-50 text-orange-600" />
+                <WebhookMetricCard title="Events Delivered (30D)" value={(stats?.deliveries_30d ?? 0).toLocaleString()} subtitle="Delivery attempts" icon={RefreshCw} tone="bg-blue-50 text-blue-600" />
+                <WebhookMetricCard title="Avg. Response Time" value={stats?.avg_response_time_ms != null ? `${Math.round(stats.avg_response_time_ms)} ms` : '—'} subtitle="30-day average" icon={Clock3} tone="bg-indigo-50 text-indigo-600" />
             </section>
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><WebhooksTable /><WebhookSecretCard className="xl:col-span-4 h-fit" /></section>
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+                <WebhooksTable onSelectSecret={setSelectedWebhook} onOpenDialog={onOpenDialog} />
+                <WebhookSecretCard webhook={selectedWebhook} className="h-fit xl:col-span-4" />
+            </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><RecentDeliveriesTable /><WebhookGuideCard /></section>
+
+            <WebhookFormDialog2
+                open={dialogState !== null}
+                onOpenChange={(open) => !open && onOpenDialog(null)}
+                editing={dialogState?.mode === 'edit' ? dialogState.webhook : null}
+                duplicateFrom={dialogState?.mode === 'duplicate' ? dialogState.webhook : null}
+                onSecretIssued={onSecretIssued}
+            />
+
+            <Dialog open={newSecret !== null} onOpenChange={(open) => !open && onSecretIssued('')}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Webhook secret</DialogTitle>
+                        <DialogDescription>Save this now — it won&apos;t be shown again.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
+                        <code className="flex-1 truncate font-mono text-sm text-emerald-400">{newSecret}</code>
+                        <button onClick={() => { navigator.clipboard.writeText(newSecret ?? ''); toast.info('Copied'); }} className="text-slate-400 hover:text-white">
+                            <Copy className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <DialogFooter>
+                        <Button className="w-full bg-slate-900" onClick={() => onSecretIssued('')}>I have saved the secret</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }
 export default function IntegrationsPage() {
     const [activeTab, setActiveTab] = useState<IntegrationTab>('webhooks')
+    const [dialogState, setDialogState] = useState<WebhookDialogState>(null)
+    const [newSecret, setNewSecret] = useState<string | null>(null)
     const isWebhooks = activeTab === 'webhooks'
 
     return (
@@ -953,7 +1032,10 @@ export default function IntegrationsPage() {
                         </p>
                     </div>
                     {isWebhooks && (
-                        <Button className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">
+                        <Button
+                            className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+                            onClick={() => setDialogState({ mode: 'create', webhook: null })}
+                        >
                             <Plus className="mr-2 h-4 w-4" /> Add Webhook
                         </Button>
                     )}
@@ -961,7 +1043,16 @@ export default function IntegrationsPage() {
                 <IntegrationTabs activeTab={activeTab} onTabChange={setActiveTab} />
             </div>
 
-            {isWebhooks ? <WebhooksTabContent /> : <ApiTabContent />}
+            {isWebhooks ? (
+                <WebhooksTabContent
+                    dialogState={dialogState}
+                    onOpenDialog={setDialogState}
+                    newSecret={newSecret || null}
+                    onSecretIssued={(secret) => setNewSecret(secret || null)}
+                />
+            ) : (
+                <ApiTabContent />
+            )}
         </div>
     )
 }

@@ -149,12 +149,12 @@ export const getWebhooks = async (): Promise<{ data: { webhooks: Webhook[] } }> 
     return response.data
 }
 
-export const createWebhook = async (data: { url: string, events: string[], description?: string }): Promise<{ data: Webhook }> => {
+export const createWebhook = async (data: { url: string, events: string[], name?: string, description?: string }): Promise<{ data: Webhook }> => {
     const response = await apiClient.post<{ data: Webhook }>('/webhooks', data)
     return response.data
 }
 
-export const updateWebhook = async (id: string, data: { url?: string, events?: string[], description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
+export const updateWebhook = async (id: string, data: { url?: string, events?: string[], name?: string, description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
     const response = await apiClient.put<{ data: Webhook }>(`/webhooks/${id}`, data)
     return response.data
 }
