@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     Area,
@@ -932,7 +933,17 @@ function WebhooksTabContent({
     )
 }
 export default function IntegrationsPage() {
-    const [activeTab, setActiveTab] = useState<IntegrationTab>('webhooks')
+    return (
+        <Suspense fallback={null}>
+            <IntegrationsPageContent />
+        </Suspense>
+    )
+}
+
+function IntegrationsPageContent() {
+    const searchParams = useSearchParams()
+    const initialTab = searchParams.get('tab') === 'api' ? 'api' : 'webhooks'
+    const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab)
     const [dialogState, setDialogState] = useState<WebhookDialogState>(null)
     const [newSecret, setNewSecret] = useState<string | null>(null)
     const isWebhooks = activeTab === 'webhooks'

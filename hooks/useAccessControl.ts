@@ -7,8 +7,6 @@ export const OWNER_RESTRICTED_PATHS = [
     '/settings/users',
     '/settings/notifications',
     '/settings/roles',
-    '/settings/webhooks',
-    '/settings/api-keys',
     '/integrations',
 ]
 
