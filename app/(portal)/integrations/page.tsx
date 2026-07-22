@@ -79,18 +79,6 @@ const resources = [
     },
 ]
 
-const eventSubscriptions = [
-    { name: 'All Events', count: '0', checked: false },
-    { name: 'Vehicle Events', count: '6 events', checked: true },
-    { name: 'Location Updates', count: '2 events', checked: true },
-    { name: 'Trip Events', count: '5 events', checked: false },
-    { name: 'Geofence Events', count: '3 events', checked: false },
-    { name: 'Fuel Events', count: '4 events', checked: false },
-    { name: 'Alert Events', count: '6 events', checked: false },
-    { name: 'Device Events', count: '2 events', checked: false },
-    { name: 'Maintenance Events', count: '2 events', checked: false },
-    { name: 'Driver Events', count: '3 events', checked: false },
-]
 const webhookGuide = [
     { title: 'Webhook Documentation', description: 'Learn how webhooks work', icon: FileText },
     { title: 'Verify Webhook Signatures', description: 'Validate requests from EonsFleet', icon: ShieldCheck },
@@ -779,34 +767,6 @@ function WebhooksTable({
         </section>
     )
 }
-function EventSubscriptionsCard() {
-    return (
-        <section className="rounded-2xl bg-white p-5 xl:col-span-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <h2 className="text-base font-bold text-slate-900">Event Subscriptions</h2>
-                    <p className="mt-1 text-sm text-slate-500">Manage which events you want to receive.</p>
-                </div>
-                <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                    <Edit3 className="mr-2 h-4 w-4" /> Manage
-                </Button>
-            </div>
-            <div className="mt-5 divide-y divide-slate-100">
-                {eventSubscriptions.map((event) => (
-                    <label className="flex cursor-pointer items-center gap-3 py-3" key={event.name}>
-                        <input checked={event.checked} readOnly type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-blue-600" />
-                        <span className="flex-1 text-sm font-medium text-slate-700">{event.name}</span>
-                        <span className="text-xs text-slate-400">{event.count}</span>
-                    </label>
-                ))}
-            </div>
-            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
-                View All Events <ChevronRight className="ml-1 h-4 w-4" />
-            </a>
-        </section>
-    )
-}
-
 function WebhookGuideCard() {
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-4">
