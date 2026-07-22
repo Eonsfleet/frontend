@@ -55,20 +55,6 @@ import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDi
 
 type IntegrationTab = 'api' | 'webhooks'
 
-const trendData = [
-    { label: 'Apr 17', requests: 37, success: 88, response: 92 },
-    { label: 'Apr 20', requests: 44, success: 91, response: 101 },
-    { label: 'Apr 23', requests: 36, success: 90, response: 88 },
-    { label: 'Apr 26', requests: 43, success: 94, response: 98 },
-    { label: 'Apr 29', requests: 53, success: 93, response: 119 },
-    { label: 'May 1', requests: 42, success: 94, response: 101 },
-    { label: 'May 4', requests: 37, success: 89, response: 96 },
-    { label: 'May 7', requests: 43, success: 90, response: 105 },
-    { label: 'May 10', requests: 39, success: 91, response: 93 },
-    { label: 'May 13', requests: 52, success: 87, response: 111 },
-    { label: 'May 15', requests: 45, success: 90, response: 104 },
-]
-
 const resources = [
     {
         title: 'API Documentation',
@@ -239,23 +225,27 @@ function MetricCard({
     delta,
     dataKey,
     stroke,
+    data,
 }: {
     title: string
     value: string
     delta: string
-    dataKey: 'requests' | 'success' | 'response'
+    dataKey: 'requests' | 'success_rate' | 'avg_response_time_ms'
     stroke: string
+    data: { label: string; requests: number; success_rate: number | null; avg_response_time_ms: number | null }[]
 }) {
     return (
         <section className="rounded-2xl bg-white p-5">
             <p className="text-[13px] font-medium text-slate-500">{title}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-            <p className="mt-2 text-xs font-medium text-slate-400">
-                <span className="text-emerald-600">{delta}</span> vs previous 30 days
-            </p>
+            {delta && (
+                <p className="mt-2 text-xs font-medium text-slate-400">
+                    <span className="text-emerald-600">{delta}</span> vs previous 30 days
+                </p>
+            )}
             <div className="mt-3 h-24">
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData} margin={{ left: -24, right: 0, top: 8, bottom: 0 }}>
+                    <AreaChart data={data} margin={{ left: -24, right: 0, top: 8, bottom: 0 }}>
                         <defs>
                             <linearGradient id={`${dataKey}-fill`} x1="0" x2="0" y1="0" y2="1">
                                 <stop offset="0%" stopColor={stroke} stopOpacity={0.18} />
@@ -323,10 +313,12 @@ function StatusCard() {
 }
 
 function RateLimitCard() {
-    const usageData = [
-        { name: 'Used', value: 54 },
-        { name: 'Remaining', value: 46 },
-    ]
+    const { data } = useQuery({ queryKey: ['rate-limit'], queryFn: api.getRateLimit, refetchInterval: 15000 })
+    const limit = data?.data.limit ?? 0
+    const used = data?.data.used ?? 0
+    const remaining = data?.data.remaining ?? 0
+    const usedPct = limit > 0 ? Math.round((used / limit) * 100) : 0
+    const usageData = [{ name: 'Used', value: used }, { name: 'Remaining', value: Math.max(0, remaining) }]
 
     return (
         <section className="rounded-2xl bg-white p-5">
@@ -353,22 +345,22 @@ function RateLimitCard() {
                         </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-2xl font-bold text-slate-900">54%</span>
+                        <span className="text-2xl font-bold text-slate-900">{usedPct}%</span>
                         <span className="text-xs font-medium text-slate-500">Used</span>
                     </div>
                 </div>
                 <div className="space-y-3 text-sm">
                     <div>
                         <p className="text-xs text-slate-400">Limit</p>
-                        <p className="font-medium text-slate-900">1,000</p>
+                        <p className="font-medium text-slate-900">{limit.toLocaleString()}</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400">Used</p>
-                        <p className="font-medium text-slate-900">542</p>
+                        <p className="font-medium text-slate-900">{used.toLocaleString()}</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400">Remaining</p>
-                        <p className="font-medium text-slate-900">458</p>
+                        <p className="font-medium text-slate-900">{remaining.toLocaleString()}</p>
                     </div>
                 </div>
             </div>
@@ -907,13 +899,27 @@ function RecentDeliveriesTable() {
 }
 
 function ApiTabContent() {
+    const { data: summaryData } = useQuery({ queryKey: ['api-usage-summary'], queryFn: () => api.getApiUsageSummary(30) })
+    const days = summaryData?.data.days ?? []
+    const chartData = days.map((d) => ({
+        label: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        requests: d.requests,
+        success_rate: d.success_rate ?? 0,
+        avg_response_time_ms: d.avg_response_time_ms ?? 0,
+    }))
+
+    const totalRequests = days.reduce((sum, d) => sum + d.requests, 0)
+    const daysWithData = days.filter((d) => d.requests > 0)
+    const avgSuccessRate = daysWithData.length > 0 ? daysWithData.reduce((sum, d) => sum + (d.success_rate ?? 0), 0) / daysWithData.length : 0
+    const avgResponseTime = daysWithData.length > 0 ? daysWithData.reduce((sum, d) => sum + (d.avg_response_time_ms ?? 0), 0) / daysWithData.length : 0
+
     return (
         <>
             <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-5">
                 <StatusCard />
-                <MetricCard title="Requests (30 Days)" value="58,243" delta="+18%" dataKey="requests" stroke="#3b82f6" />
-                <MetricCard title="Success Rate (30 Days)" value="98.6%" delta="+2.1%" dataKey="success" stroke="#10b981" />
-                <MetricCard title="Average Response Time" value="142 ms" delta="-12%" dataKey="response" stroke="#8b5cf6" />
+                <MetricCard title="Requests (30 Days)" value={totalRequests.toLocaleString()} delta="" dataKey="requests" stroke="#3b82f6" data={chartData} />
+                <MetricCard title="Success Rate (30 Days)" value={`${avgSuccessRate.toFixed(1)}%`} delta="" dataKey="success_rate" stroke="#10b981" data={chartData} />
+                <MetricCard title="Average Response Time" value={`${Math.round(avgResponseTime)} ms`} delta="" dataKey="avg_response_time_ms" stroke="#8b5cf6" data={chartData} />
                 <RateLimitCard />
             </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><CredentialsCard /><QuickStartCard /></section>
