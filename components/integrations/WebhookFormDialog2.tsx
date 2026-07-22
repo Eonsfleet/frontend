@@ -9,15 +9,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import type { Webhook } from '@/types'
+import { EventMultiSelect, type EventCategory } from './EventMultiSelect'
 
-const EVENT_CATEGORIES = [
+const EVENT_CATEGORIES: EventCategory[] = [
     { title: 'Trips', events: [
         { id: 'trip.started', label: 'Trip Started' },
         { id: 'trip.completed', label: 'Trip Completed' },
         { id: 'trip.assigned', label: 'Trip Assigned' },
+    ] },
+    { title: 'Location', events: [
+        { id: 'location.updated', label: 'Location Updated' },
+    ] },
+    { title: 'Fuel', events: [
+        { id: 'fuel_alert_rule.triggered', label: 'Fuel Alert Triggered', disabled: true, disabledNote: 'Configured per rule under Fuel → Alert Rules, not here' },
     ] },
     { title: 'Incidents', events: [
         { id: 'incidents.created', label: 'Incident Created' },
@@ -29,7 +35,7 @@ const EVENT_CATEGORIES = [
         { id: 'maintenance.completed', label: 'Maintenance Completed' },
     ] },
     { title: 'Geofencing', events: [{ id: 'geofence.alert', label: 'Geofence Alert' }] },
-    { title: 'System', events: [{ id: 'device.status_changed', label: 'Device Status Changed' }] },
+    { title: 'Device', events: [{ id: 'device.status_changed', label: 'Device Status Changed' }] },
 ]
 
 type FormState = { name: string; url: string; description: string; events: string[]; status: 'active' | 'inactive' }
@@ -111,13 +117,6 @@ function WebhookFormBody({
         onError: () => toast.error('Failed to update webhook'),
     })
 
-    const toggleEvent = (eventId: string) => {
-        setForm((prev) => ({
-            ...prev,
-            events: prev.events.includes(eventId) ? prev.events.filter((id) => id !== eventId) : [...prev.events, eventId],
-        }))
-    }
-
     const isSaving = createMutation.isPending || updateMutation.isPending
     const title = editing ? 'Edit Webhook Endpoint' : duplicateFrom ? 'Duplicate Webhook Endpoint' : 'Register Webhook Endpoint'
 
@@ -152,30 +151,9 @@ function WebhookFormBody({
                         </div>
                     )}
                 </div>
-                <div className="space-y-4 border-t pt-4">
+                <div className="space-y-2 border-t pt-4">
                     <Label className="text-sm font-bold text-slate-900">Event Subscriptions</Label>
-                    <div className="grid gap-6">
-                        {EVENT_CATEGORIES.map((category) => (
-                            <div key={category.title} className="space-y-2.5">
-                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{category.title}</h4>
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    {category.events.map((event) => (
-                                        <div
-                                            key={event.id}
-                                            className={cn('flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 transition hover:bg-slate-50', form.events.includes(event.id) ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200')}
-                                            onClick={() => toggleEvent(event.id)}
-                                        >
-                                            <input type="checkbox" checked={form.events.includes(event.id)} readOnly className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600" />
-                                            <div>
-                                                <p className="text-sm font-medium text-slate-900">{event.label}</p>
-                                                <p className="font-mono text-[10px] text-slate-500">{event.id}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <EventMultiSelect categories={EVENT_CATEGORIES} value={form.events} onChange={(events) => setForm({ ...form, events })} />
                 </div>
             </div>
             <DialogFooter className="border-t bg-slate-50 p-4">
