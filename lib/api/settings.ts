@@ -194,8 +194,15 @@ export const getApiUsageSummary = async (days: number = 30): Promise<{ data: { d
     return response.data
 }
 
-export const getApiUsageLogs = async (params?: { page?: number; per_page?: number; status_code?: number }): Promise<{ data: { logs: ApiUsageLog[]; pagination: Paginated<ApiUsageLog>['pagination'] } }> => {
-    const response = await apiClient.get<{ data: { logs: ApiUsageLog[]; pagination: Paginated<ApiUsageLog>['pagination'] } }>('/api-usage/logs', { params })
+export interface ApiUsageLogsPagination {
+    current_page: number
+    per_page: number
+    total: number
+    last_page: number
+}
+
+export const getApiUsageLogs = async (params?: { page?: number; per_page?: number; status_code?: number }): Promise<{ data: { logs: ApiUsageLog[]; pagination: ApiUsageLogsPagination } }> => {
+    const response = await apiClient.get<{ data: { logs: ApiUsageLog[]; pagination: ApiUsageLogsPagination } }>('/api-usage/logs', { params })
     return response.data
 }
 

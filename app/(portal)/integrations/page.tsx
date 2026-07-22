@@ -69,59 +69,6 @@ const trendData = [
     { label: 'May 15', requests: 45, success: 90, response: 104 },
 ]
 
-const requestLogs = [
-    {
-        time: 'May 16, 2024 10:28:34 AM',
-        method: 'GET',
-        endpoint: '/v1/vehicles',
-        description: 'List all vehicles',
-        status: '200',
-        responseTime: '124 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:28:12 AM',
-        method: 'GET',
-        endpoint: '/v1/drivers',
-        description: 'List all drivers',
-        status: '200',
-        responseTime: '98 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:27:58 AM',
-        method: 'POST',
-        endpoint: '/v1/login',
-        description: 'User login',
-        status: '200',
-        responseTime: '211 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:27:30 AM',
-        method: 'GET',
-        endpoint: '/v1/trips',
-        description: 'List trips',
-        status: '429',
-        responseTime: '67 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'Axios/1.6.8',
-    },
-    {
-        time: 'May 16, 2024 10:26:48 AM',
-        method: 'GET',
-        endpoint: '/v1/locations/recent',
-        description: 'Recent locations',
-        status: '200',
-        responseTime: '156 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-]
-
 const resources = [
     {
         title: 'API Documentation',
@@ -621,6 +568,15 @@ function QuickStartCard() {
 }
 
 function LogsTable() {
+    const [page, setPage] = useState(1)
+    const { data, isLoading } = useQuery({
+        queryKey: ['api-usage-logs', page],
+        queryFn: () => api.getApiUsageLogs({ page, per_page: 15 }),
+    })
+
+    const logs = data?.data.logs ?? []
+    const pagination = data?.data.pagination
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-9">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -628,79 +584,68 @@ function LogsTable() {
                     <h2 className="text-base font-bold text-slate-900">API Request Logs</h2>
                     <p className="mt-1 text-sm text-slate-500">Monitor and analyze API requests to your account.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        May 9, 2024 - May 16, 2024 <Calendar className="ml-2 h-3.5 w-3.5 text-slate-400" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        All Endpoints <ChevronDown className="ml-2 h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        All Statuses <ChevronDown className="ml-2 h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        <Filter className="mr-2 h-3.5 w-3.5" /> Filters
-                    </Button>
-                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[960px] text-left text-sm">
                     <thead className="text-xs font-medium text-slate-400">
                         <tr>
-                            <th className="w-8 py-3" />
-                            <th className="px-3 py-3">Time (WAT)</th>
+                            <th className="px-3 py-3">Time</th>
                             <th className="px-3 py-3">Method</th>
                             <th className="px-3 py-3">Endpoint</th>
                             <th className="px-3 py-3">Status</th>
                             <th className="px-3 py-3">Response Time</th>
                             <th className="px-3 py-3">IP Address</th>
                             <th className="px-3 py-3">User Agent</th>
-                            <th className="px-3 py-3" />
-                            <th className="px-3 py-3" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {requestLogs.map((log) => (
-                            <tr className="text-slate-600 transition hover:bg-slate-50/70" key={`${log.time}-${log.endpoint}`}>
-                                <td className="py-3"><ChevronRight className="h-4 w-4 text-slate-400" /></td>
-                                <td className="px-3 py-3 whitespace-nowrap">{log.time}</td>
-                                <td className="px-3 py-3">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.method === 'POST' ? 'bg-blue-50 text-blue-700 hover:bg-blue-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
-                                        {log.method}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-3">
-                                    <p className="font-medium text-slate-900">{log.endpoint}</p>
-                                    <p className="text-xs text-slate-400">{log.description}</p>
-                                </td>
-                                <td className="px-3 py-3">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.status === '429' ? 'bg-orange-50 text-orange-700 hover:bg-orange-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
-                                        {log.status}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-3">{log.responseTime}</td>
-                                <td className="px-3 py-3">{log.ipAddress}</td>
-                                <td className="px-3 py-3">{log.userAgent}</td>
-                                <td className="px-3 py-3"><Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">View</Button></td>
-                                <td className="px-3 py-3"><MoreVertical className="h-5 w-5 text-slate-400" /></td>
-                            </tr>
-                        ))}
+                        {isLoading ? (
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : logs.length === 0 ? (
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">No API requests logged yet.</td></tr>
+                        ) : (
+                            logs.map((log) => {
+                                const isError = (log.status_code ?? 0) >= 400
+                                return (
+                                    <tr className="text-slate-600 transition hover:bg-slate-50/70" key={log.id}>
+                                        <td className="px-3 py-3 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                                        <td className="px-3 py-3">
+                                            <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.method === 'POST' ? 'bg-blue-50 text-blue-700 hover:bg-blue-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
+                                                {log.method}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <p className="font-medium text-slate-900">{log.endpoint}</p>
+                                            <p className="text-xs text-slate-400">{log.description}</p>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', isError ? 'bg-orange-50 text-orange-700 hover:bg-orange-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
+                                                {log.status_code ?? '—'}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-3 py-3">{log.duration_ms != null ? `${log.duration_ms} ms` : '—'}</td>
+                                        <td className="px-3 py-3">{log.ip_address ?? '—'}</td>
+                                        <td className="px-3 py-3">{log.user_agent ?? '—'}</td>
+                                    </tr>
+                                )
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
-            <div className="flex flex-col gap-4 pt-4 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-                <p>Showing 1 to 5 of 127 entries</p>
-                <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50"><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button className="h-8 w-8 rounded-lg bg-blue-600 p-0 text-sm font-medium text-white hover:bg-blue-700">1</Button>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">2</Button>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">3</Button>
-                    <span className="px-1 text-slate-400">...</span>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">26</Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50"><ChevronRight className="h-4 w-4" /></Button>
-                    <Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600">5 / page <ChevronDown className="ml-2 h-3.5 w-3.5" /></Button>
+            {pagination && pagination.last_page > 1 && (
+                <div className="flex items-center justify-between pt-4 text-sm text-slate-500">
+                    <p>Page {pagination.current_page} of {pagination.last_page} ({pagination.total} total)</p>
+                    <div className="flex items-center gap-1.5">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50" disabled={page >= pagination.last_page} onClick={() => setPage((p) => p + 1)}>
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
         </section>
     )
 }
