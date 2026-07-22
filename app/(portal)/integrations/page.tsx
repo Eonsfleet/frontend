@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     Area,
     AreaChart,
@@ -43,9 +44,14 @@ import {
     Webhook,
     Zap,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import * as api from '@/lib/api/settings'
+import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
 
 type IntegrationTab = 'api' | 'webhooks'
 
@@ -61,21 +67,6 @@ const trendData = [
     { label: 'May 10', requests: 39, success: 91, response: 93 },
     { label: 'May 13', requests: 52, success: 87, response: 111 },
     { label: 'May 15', requests: 45, success: 90, response: 104 },
-]
-
-const credentials = [
-    {
-        name: 'Production Key',
-        key: 'ef_**********************7a3f',
-        created: 'May 10, 2024',
-        lastUsed: 'May 16, 2024 10:28 AM',
-    },
-    {
-        name: 'Development Key',
-        key: 'ef_**********************b9d2',
-        created: 'Apr 28, 2024',
-        lastUsed: 'May 15, 2024 04:45 PM',
-    },
 ]
 
 const requestLogs = [
@@ -439,6 +430,42 @@ function RateLimitCard() {
 }
 
 function CredentialsCard() {
+    const queryClient = useQueryClient()
+    const [isGenerateOpen, setIsGenerateOpen] = useState(false)
+    const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set())
+    const [rotatedKey, setRotatedKey] = useState<string | null>(null)
+
+    const { data, isLoading } = useQuery({ queryKey: ['api-keys'], queryFn: api.getApiKeys })
+
+    const revokeMutation = useMutation({
+        mutationFn: api.revokeApiKey,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+            toast.success('API key revoked')
+        },
+        onError: () => toast.error('Failed to revoke API key'),
+    })
+
+    const rotateMutation = useMutation({
+        mutationFn: (id: string) => api.rotateApiKey(id),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+            setRotatedKey(res.data.new_key.api_key)
+            toast.success('API key rotated — the old key still works until you revoke it')
+        },
+        onError: () => toast.error('Failed to rotate API key'),
+    })
+
+    const toggleReveal = (id: string) => {
+        setRevealedIds((prev) => {
+            const next = new Set(prev)
+            next.has(id) ? next.delete(id) : next.add(id)
+            return next
+        })
+    }
+
+    const keys = data?.data ?? []
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -446,44 +473,115 @@ function CredentialsCard() {
                     <h2 className="text-base font-bold text-slate-900">API Credentials</h2>
                     <p className="mt-1 text-sm text-slate-500">Use your API keys to authenticate requests to the EonsFleet API.</p>
                 </div>
-                <Button variant="ghost" className="h-9 w-fit rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
+                <Button
+                    variant="ghost"
+                    className="h-9 w-fit rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    onClick={() => setIsGenerateOpen(true)}
+                >
                     <Plus className="mr-2 h-4 w-4" /> Generate Key
                 </Button>
             </div>
-            <div className="mt-5 divide-y divide-slate-100">
-                {credentials.map((credential) => (
-                    <div className="grid gap-4 py-4 md:grid-cols-[1.7fr_0.7fr_1fr_auto]" key={credential.name}>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <p className="font-medium text-slate-900">{credential.name}</p>
-                                <Badge className="rounded-md bg-emerald-50 px-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
-                                    Active
-                                </Badge>
+            {isLoading ? (
+                <div className="mt-5 space-y-4">
+                    {[0, 1].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                </div>
+            ) : keys.length === 0 ? (
+                <p className="mt-6 text-sm text-slate-500">No API keys yet. Generate one to start calling the EonsFleet API.</p>
+            ) : (
+                <div className="mt-5 divide-y divide-slate-100">
+                    {keys.map((key) => {
+                        const revealed = revealedIds.has(key.id)
+                        return (
+                            <div className="grid gap-4 py-4 md:grid-cols-[1.7fr_0.7fr_1fr_auto]" key={key.id}>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-medium text-slate-900">{key.key_name}</p>
+                                        <Badge className={cn('rounded-md px-2 text-[11px] font-medium', key.is_active && !key.is_expired && !key.is_revoked ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
+                                            {key.is_revoked ? 'Revoked' : key.is_expired ? 'Expired' : key.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-2">
+                                        <p className="font-mono text-sm text-slate-700">{revealed ? key.prefix : `${key.prefix.slice(0, 8)}${'*'.repeat(16)}`}</p>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100" onClick={() => toggleReveal(key.id)}>
+                                            {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(key.prefix)
+                                                toast.info('Copied to clipboard')
+                                            }}
+                                        >
+                                            <Copy className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="text-sm">
+                                    <p className="text-xs font-medium text-slate-400">Created</p>
+                                    <p className="mt-1 text-slate-600">{new Date(key.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-sm">
+                                    <p className="text-xs font-medium text-slate-400">Last Used</p>
+                                    <p className="mt-1 text-slate-600">{key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never'}</p>
+                                </div>
+                                <div className="flex items-center justify-self-end gap-2 self-center">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-slate-600 hover:bg-slate-50"
+                                        disabled={key.is_revoked || rotateMutation.isPending}
+                                        onClick={() => rotateMutation.mutate(key.id)}
+                                    >
+                                        Rotate
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                        disabled={key.is_revoked || revokeMutation.isPending}
+                                        onClick={() => revokeMutation.mutate(key.id)}
+                                    >
+                                        Revoke
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="mt-3 flex items-center gap-2">
-                                <p className="font-mono text-sm text-slate-700">{credential.key}</p>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100">
-                                    <EyeOff className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100">
-                                    <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="text-sm">
-                            <p className="text-xs font-medium text-slate-400">Created</p>
-                            <p className="mt-1 text-slate-600">{credential.created}</p>
-                        </div>
-                        <div className="text-sm">
-                            <p className="text-xs font-medium text-slate-400">Last Used</p>
-                            <p className="mt-1 text-slate-600">{credential.lastUsed}</p>
-                        </div>
-                        <Button variant="ghost" size="icon" className="self-center justify-self-end text-slate-500 hover:bg-slate-50">
-                            <MoreVertical className="h-5 w-5" />
+                        )
+                    })}
+                </div>
+            )}
+            <GenerateApiKeyDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
+
+            <Dialog open={rotatedKey !== null} onOpenChange={(open) => !open && setRotatedKey(null)}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Key rotated</DialogTitle>
+                        <DialogDescription>
+                            Copy the new key now — <strong className="text-rose-600">it won&apos;t be shown again.</strong> The old key keeps working until you revoke it.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="relative flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-sm break-all text-slate-800">
+                        <p className="pr-10">{rotatedKey}</p>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                            onClick={() => {
+                                navigator.clipboard.writeText(rotatedKey ?? '')
+                                toast.info('Copied to clipboard')
+                            }}
+                        >
+                            <Copy className="h-4 w-4" />
                         </Button>
                     </div>
-                ))}
-            </div>
+                    <DialogFooter>
+                        <Button className="w-full rounded-lg bg-blue-600 hover:bg-blue-700" onClick={() => setRotatedKey(null)}>
+                            I have stored it securely
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </section>
     )
 }
