@@ -435,7 +435,7 @@ function QuickStartCard() {
                     <p><span className="mr-4 text-slate-500">4</span><span className="text-blue-300">--header</span> <span className="text-green-300">&quot;Accept: application/json&quot;</span></p>
                 </div>
             </div>
-            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
+            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer">
                 View API Documentation <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </a>
         </section>
@@ -534,7 +534,7 @@ function ResourcesPanel() {
                     {resources.map((resource) => {
                         const ResourceIcon = resource.icon
                         return (
-                            <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="#" key={resource.title}>
+                            <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer" key={resource.title}>
                                 <span className={cn('grid h-9 w-9 place-items-center rounded-lg', resource.className)}>
                                     <ResourceIcon className="h-5 w-5" />
                                 </span>
@@ -942,7 +942,7 @@ export default function IntegrationsPage() {
 
 function IntegrationsPageContent() {
     const searchParams = useSearchParams()
-    const initialTab = searchParams.get('tab') === 'api' ? 'api' : 'webhooks'
+    const initialTab = searchParams.get('tab') === 'webhooks' ? 'webhooks' : 'api'
     const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab)
     const [dialogState, setDialogState] = useState<WebhookDialogState>(null)
     const [newSecret, setNewSecret] = useState<string | null>(null)
