@@ -1,6 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     Area,
     AreaChart,
@@ -15,9 +17,7 @@ import {
 } from 'recharts'
 import {
     AlertTriangle,
-    Calendar,
     CheckCircle2,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Clock3,
@@ -28,108 +28,30 @@ import {
     EyeOff,
     FileJson,
     FileText,
-    Filter,
     Headphones,
-    ListChecks,
     MoreVertical,
     Pause,
     Plus,
     RefreshCw,
-    RotateCcw,
     Send,
-    Settings,
     ShieldCheck,
     Trash2,
-    Webhook,
+    Webhook as WebhookIcon,
     Zap,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import * as api from '@/lib/api/settings'
+import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
+import { WebhookFormDialog2 } from '@/components/integrations/WebhookFormDialog2'
+import type { Webhook } from '@/types'
 
 type IntegrationTab = 'api' | 'webhooks'
-
-const trendData = [
-    { label: 'Apr 17', requests: 37, success: 88, response: 92 },
-    { label: 'Apr 20', requests: 44, success: 91, response: 101 },
-    { label: 'Apr 23', requests: 36, success: 90, response: 88 },
-    { label: 'Apr 26', requests: 43, success: 94, response: 98 },
-    { label: 'Apr 29', requests: 53, success: 93, response: 119 },
-    { label: 'May 1', requests: 42, success: 94, response: 101 },
-    { label: 'May 4', requests: 37, success: 89, response: 96 },
-    { label: 'May 7', requests: 43, success: 90, response: 105 },
-    { label: 'May 10', requests: 39, success: 91, response: 93 },
-    { label: 'May 13', requests: 52, success: 87, response: 111 },
-    { label: 'May 15', requests: 45, success: 90, response: 104 },
-]
-
-const credentials = [
-    {
-        name: 'Production Key',
-        key: 'ef_**********************7a3f',
-        created: 'May 10, 2024',
-        lastUsed: 'May 16, 2024 10:28 AM',
-    },
-    {
-        name: 'Development Key',
-        key: 'ef_**********************b9d2',
-        created: 'Apr 28, 2024',
-        lastUsed: 'May 15, 2024 04:45 PM',
-    },
-]
-
-const requestLogs = [
-    {
-        time: 'May 16, 2024 10:28:34 AM',
-        method: 'GET',
-        endpoint: '/v1/vehicles',
-        description: 'List all vehicles',
-        status: '200',
-        responseTime: '124 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:28:12 AM',
-        method: 'GET',
-        endpoint: '/v1/drivers',
-        description: 'List all drivers',
-        status: '200',
-        responseTime: '98 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:27:58 AM',
-        method: 'POST',
-        endpoint: '/v1/login',
-        description: 'User login',
-        status: '200',
-        responseTime: '211 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-    {
-        time: 'May 16, 2024 10:27:30 AM',
-        method: 'GET',
-        endpoint: '/v1/trips',
-        description: 'List trips',
-        status: '429',
-        responseTime: '67 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'Axios/1.6.8',
-    },
-    {
-        time: 'May 16, 2024 10:26:48 AM',
-        method: 'GET',
-        endpoint: '/v1/locations/recent',
-        description: 'Recent locations',
-        status: '200',
-        responseTime: '156 ms',
-        ipAddress: '197.210.22.45',
-        userAgent: 'PostmanRuntime/7.36.1',
-    },
-]
+type WebhookDialogState = { mode: 'create' | 'edit' | 'duplicate'; webhook: Webhook | null } | null
 
 const resources = [
     {
@@ -155,114 +77,6 @@ const resources = [
         description: 'View real-time status',
         icon: CheckCircle2,
         className: 'bg-emerald-50 text-emerald-600',
-    },
-]
-
-const webhookEndpoints = [
-    {
-        name: 'Primary Production',
-        url: 'https://api.acmelogistics.com/webhooks/eonsfleet',
-        active: true,
-        events: '18 events',
-        lastDelivery: 'May 16, 2024 10:28 AM',
-        deliveryStatus: '200 OK',
-        successRate: 99.2,
-    },
-    {
-        name: 'Analytics Service',
-        url: 'https://analytics.acmelogistics.com/hook/eonsfleet',
-        active: true,
-        events: '12 events',
-        lastDelivery: 'May 16, 2024 10:27 AM',
-        deliveryStatus: '200 OK',
-        successRate: 98.9,
-    },
-    {
-        name: 'Backup Endpoint',
-        url: 'https://backup.acmelogistics.com/webhook',
-        active: true,
-        events: '15 events',
-        lastDelivery: 'May 16, 2024 10:21 AM',
-        deliveryStatus: '200 OK',
-        successRate: 97.8,
-    },
-    {
-        name: 'Staging Endpoint',
-        url: 'https://staging.acmelogistics.com/webhook',
-        active: false,
-        events: '8 events',
-        lastDelivery: 'May 15, 2024 09:14 PM',
-        deliveryStatus: '-',
-        successRate: 0,
-    },
-    {
-        name: 'Local Development',
-        url: 'http://localhost:3000/webhook/eonsfleet',
-        active: false,
-        events: '2 events',
-        lastDelivery: 'May 12, 2024 04:32 PM',
-        deliveryStatus: '-',
-        successRate: 0,
-    },
-]
-
-const eventSubscriptions = [
-    { name: 'All Events', count: '0', checked: false },
-    { name: 'Vehicle Events', count: '6 events', checked: true },
-    { name: 'Location Updates', count: '2 events', checked: true },
-    { name: 'Trip Events', count: '5 events', checked: false },
-    { name: 'Geofence Events', count: '3 events', checked: false },
-    { name: 'Fuel Events', count: '4 events', checked: false },
-    { name: 'Alert Events', count: '6 events', checked: false },
-    { name: 'Device Events', count: '2 events', checked: false },
-    { name: 'Maintenance Events', count: '2 events', checked: false },
-    { name: 'Driver Events', count: '3 events', checked: false },
-]
-const deliveryLogs = [
-    {
-        time: 'May 16, 2024 10:28:34 AM',
-        event: 'vehicle.moving',
-        description: 'Vehicle started moving',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '112 ms',
-    },
-    {
-        time: 'May 16, 2024 10:28:21 AM',
-        event: 'location.update',
-        description: 'Location updated',
-        endpoint: 'Analytics Service',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '95 ms',
-    },
-    {
-        time: 'May 16, 2024 10:27:58 AM',
-        event: 'fuel.level.low',
-        description: 'Fuel level below 15%',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '128 ms',
-    },
-    {
-        time: 'May 16, 2024 10:27:43 AM',
-        event: 'geofence.enter',
-        description: 'Entered "Lagos Depot"',
-        endpoint: 'Backup Endpoint',
-        status: 'Failed',
-        response: '500 Internal Server Error',
-        duration: '-',
-    },
-    {
-        time: 'May 16, 2024 10:27:30 AM',
-        event: 'trip.started',
-        description: 'Trip started',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '103 ms',
     },
 ]
 
@@ -301,23 +115,27 @@ function MetricCard({
     delta,
     dataKey,
     stroke,
+    data,
 }: {
     title: string
     value: string
     delta: string
-    dataKey: 'requests' | 'success' | 'response'
+    dataKey: 'requests' | 'success_rate' | 'avg_response_time_ms'
     stroke: string
+    data: { label: string; requests: number; success_rate: number | null; avg_response_time_ms: number | null }[]
 }) {
     return (
         <section className="rounded-2xl bg-white p-5">
             <p className="text-[13px] font-medium text-slate-500">{title}</p>
             <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-            <p className="mt-2 text-xs font-medium text-slate-400">
-                <span className="text-emerald-600">{delta}</span> vs previous 30 days
-            </p>
+            {delta && (
+                <p className="mt-2 text-xs font-medium text-slate-400">
+                    <span className="text-emerald-600">{delta}</span> vs previous 30 days
+                </p>
+            )}
             <div className="mt-3 h-24">
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData} margin={{ left: -24, right: 0, top: 8, bottom: 0 }}>
+                    <AreaChart data={data} margin={{ left: -24, right: 0, top: 8, bottom: 0 }}>
                         <defs>
                             <linearGradient id={`${dataKey}-fill`} x1="0" x2="0" y1="0" y2="1">
                                 <stop offset="0%" stopColor={stroke} stopOpacity={0.18} />
@@ -372,23 +190,18 @@ function StatusCard() {
                     <span className="text-slate-500">API Version</span>
                     <span className="font-medium text-slate-900">v1</span>
                 </div>
-                <div className="flex items-center justify-between gap-4">
-                    <span className="text-slate-500">Uptime (30 days)</span>
-                    <span className="font-medium text-emerald-600">99.98%</span>
-                </div>
             </div>
-            <Button variant="ghost" className="mt-5 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                View Status Page <ExternalLink className="ml-2 h-3.5 w-3.5" />
-            </Button>
         </section>
     )
 }
 
 function RateLimitCard() {
-    const usageData = [
-        { name: 'Used', value: 54 },
-        { name: 'Remaining', value: 46 },
-    ]
+    const { data } = useQuery({ queryKey: ['rate-limit'], queryFn: api.getRateLimit, refetchInterval: 15000 })
+    const limit = data?.data.limit ?? 0
+    const used = data?.data.used ?? 0
+    const remaining = data?.data.remaining ?? 0
+    const usedPct = limit > 0 ? Math.round((used / limit) * 100) : 0
+    const usageData = [{ name: 'Used', value: used }, { name: 'Remaining', value: Math.max(0, remaining) }]
 
     return (
         <section className="rounded-2xl bg-white p-5">
@@ -415,22 +228,22 @@ function RateLimitCard() {
                         </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-2xl font-bold text-slate-900">54%</span>
+                        <span className="text-2xl font-bold text-slate-900">{usedPct}%</span>
                         <span className="text-xs font-medium text-slate-500">Used</span>
                     </div>
                 </div>
                 <div className="space-y-3 text-sm">
                     <div>
                         <p className="text-xs text-slate-400">Limit</p>
-                        <p className="font-medium text-slate-900">1,000</p>
+                        <p className="font-medium text-slate-900">{limit.toLocaleString()}</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400">Used</p>
-                        <p className="font-medium text-slate-900">542</p>
+                        <p className="font-medium text-slate-900">{used.toLocaleString()}</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-400">Remaining</p>
-                        <p className="font-medium text-slate-900">458</p>
+                        <p className="font-medium text-slate-900">{remaining.toLocaleString()}</p>
                     </div>
                 </div>
             </div>
@@ -439,6 +252,42 @@ function RateLimitCard() {
 }
 
 function CredentialsCard() {
+    const queryClient = useQueryClient()
+    const [isGenerateOpen, setIsGenerateOpen] = useState(false)
+    const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set())
+    const [rotatedKey, setRotatedKey] = useState<string | null>(null)
+
+    const { data, isLoading } = useQuery({ queryKey: ['api-keys'], queryFn: api.getApiKeys })
+
+    const revokeMutation = useMutation({
+        mutationFn: api.revokeApiKey,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+            toast.success('API key revoked')
+        },
+        onError: () => toast.error('Failed to revoke API key'),
+    })
+
+    const rotateMutation = useMutation({
+        mutationFn: (id: string) => api.rotateApiKey(id),
+        onSuccess: (res) => {
+            queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+            setRotatedKey(res.data.new_key.api_key)
+            toast.success('API key rotated — the old key still works until you revoke it')
+        },
+        onError: () => toast.error('Failed to rotate API key'),
+    })
+
+    const toggleReveal = (id: string) => {
+        setRevealedIds((prev) => {
+            const next = new Set(prev)
+            next.has(id) ? next.delete(id) : next.add(id)
+            return next
+        })
+    }
+
+    const keys = data?.data ?? []
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -446,59 +295,181 @@ function CredentialsCard() {
                     <h2 className="text-base font-bold text-slate-900">API Credentials</h2>
                     <p className="mt-1 text-sm text-slate-500">Use your API keys to authenticate requests to the EonsFleet API.</p>
                 </div>
-                <Button variant="ghost" className="h-9 w-fit rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
+                <Button
+                    variant="ghost"
+                    className="h-9 w-fit rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    onClick={() => setIsGenerateOpen(true)}
+                >
                     <Plus className="mr-2 h-4 w-4" /> Generate Key
                 </Button>
             </div>
-            <div className="mt-5 divide-y divide-slate-100">
-                {credentials.map((credential) => (
-                    <div className="grid gap-4 py-4 md:grid-cols-[1.7fr_0.7fr_1fr_auto]" key={credential.name}>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <p className="font-medium text-slate-900">{credential.name}</p>
-                                <Badge className="rounded-md bg-emerald-50 px-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
-                                    Active
-                                </Badge>
+            {isLoading ? (
+                <div className="mt-5 space-y-4">
+                    {[0, 1].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                </div>
+            ) : keys.length === 0 ? (
+                <p className="mt-6 text-sm text-slate-500">No API keys yet. Generate one to start calling the EonsFleet API.</p>
+            ) : (
+                <div className="mt-5 divide-y divide-slate-100">
+                    {keys.map((key) => {
+                        const revealed = revealedIds.has(key.id)
+                        return (
+                            <div className="grid gap-4 py-4 md:grid-cols-[1.7fr_0.7fr_1fr_auto]" key={key.id}>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-medium text-slate-900">{key.key_name}</p>
+                                        <Badge className={cn('rounded-md px-2 text-[11px] font-medium', key.is_active && !key.is_expired && !key.is_revoked ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
+                                            {key.is_revoked ? 'Revoked' : key.is_expired ? 'Expired' : key.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-2">
+                                        <p className="font-mono text-sm text-slate-700">{revealed ? key.prefix : `${key.prefix.slice(0, 8)}${'*'.repeat(16)}`}</p>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100" onClick={() => toggleReveal(key.id)}>
+                                            {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(key.prefix)
+                                                toast.info('Copied to clipboard')
+                                            }}
+                                        >
+                                            <Copy className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="text-sm">
+                                    <p className="text-xs font-medium text-slate-400">Created</p>
+                                    <p className="mt-1 text-slate-600">{new Date(key.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-sm">
+                                    <p className="text-xs font-medium text-slate-400">Last Used</p>
+                                    <p className="mt-1 text-slate-600">{key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never'}</p>
+                                </div>
+                                <div className="flex items-center justify-self-end gap-2 self-center">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-slate-600 hover:bg-slate-50"
+                                        disabled={key.is_revoked || rotateMutation.isPending}
+                                        onClick={() => rotateMutation.mutate(key.id)}
+                                    >
+                                        Rotate
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                        disabled={key.is_revoked || revokeMutation.isPending}
+                                        onClick={() => revokeMutation.mutate(key.id)}
+                                    >
+                                        Revoke
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="mt-3 flex items-center gap-2">
-                                <p className="font-mono text-sm text-slate-700">{credential.key}</p>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100">
-                                    <EyeOff className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100">
-                                    <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="text-sm">
-                            <p className="text-xs font-medium text-slate-400">Created</p>
-                            <p className="mt-1 text-slate-600">{credential.created}</p>
-                        </div>
-                        <div className="text-sm">
-                            <p className="text-xs font-medium text-slate-400">Last Used</p>
-                            <p className="mt-1 text-slate-600">{credential.lastUsed}</p>
-                        </div>
-                        <Button variant="ghost" size="icon" className="self-center justify-self-end text-slate-500 hover:bg-slate-50">
-                            <MoreVertical className="h-5 w-5" />
+                        )
+                    })}
+                </div>
+            )}
+            <GenerateApiKeyDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
+
+            <Dialog open={rotatedKey !== null} onOpenChange={(open) => !open && setRotatedKey(null)}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Key rotated</DialogTitle>
+                        <DialogDescription>
+                            Copy the new key now — <strong className="text-rose-600">it won&apos;t be shown again.</strong> The old key keeps working until you revoke it.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="relative flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 p-3 font-mono text-sm break-all text-slate-800">
+                        <p className="pr-10">{rotatedKey}</p>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                            onClick={() => {
+                                navigator.clipboard.writeText(rotatedKey ?? '')
+                                toast.info('Copied to clipboard')
+                            }}
+                        >
+                            <Copy className="h-4 w-4" />
                         </Button>
                     </div>
-                ))}
-            </div>
+                    <DialogFooter>
+                        <Button className="w-full rounded-lg bg-blue-600 hover:bg-blue-700" onClick={() => setRotatedKey(null)}>
+                            I have stored it securely
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </section>
     )
 }
 
+const QUICK_START_SNIPPETS: Record<string, string> = {
+    cURL: `curl --request GET \\
+  https://api.eonsfleet.com/v1/vehicles \\
+  --header "Authorization: Bearer ef_****************7a3f" \\
+  --header "Accept: application/json"`,
+    JavaScript: `const response = await fetch('https://api.eonsfleet.com/v1/vehicles', {
+  headers: {
+    Authorization: 'Bearer ef_****************7a3f',
+    Accept: 'application/json',
+  },
+})
+const vehicles = await response.json()`,
+    Python: `import requests
+
+response = requests.get(
+    "https://api.eonsfleet.com/v1/vehicles",
+    headers={
+        "Authorization": "Bearer ef_****************7a3f",
+        "Accept": "application/json",
+    },
+)
+vehicles = response.json()`,
+    PHP: `$ch = curl_init('https://api.eonsfleet.com/v1/vehicles');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer ef_****************7a3f',
+    'Accept: application/json',
+]);
+$vehicles = json_decode(curl_exec($ch), true);`,
+    Go: `req, _ := http.NewRequest("GET", "https://api.eonsfleet.com/v1/vehicles", nil)
+req.Header.Set("Authorization", "Bearer ef_****************7a3f")
+req.Header.Set("Accept", "application/json")
+resp, _ := http.DefaultClient.Do(req)
+defer resp.Body.Close()`,
+}
+
+function highlightSnippetLine(line: string, key: number): React.ReactNode {
+    const parts = line.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g)
+    return (
+        <p key={key}>
+            <span className="mr-4 text-slate-500">{key + 1}</span>
+            {parts.map((part, i) => (/^["'].*["']$/.test(part) ? <span key={i} className="text-green-300">{part}</span> : <span key={i}>{part}</span>))}
+        </p>
+    )
+}
+
 function QuickStartCard() {
+    const languages = Object.keys(QUICK_START_SNIPPETS)
+    const [activeLang, setActiveLang] = useState(languages[0])
+    const lines = QUICK_START_SNIPPETS[activeLang].split('\n')
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-5">
             <h2 className="text-base font-bold text-slate-900">Quick Start</h2>
             <p className="mt-1 text-sm text-slate-500">Make your first API request in minutes.</p>
             <div className="mt-5 overflow-hidden rounded-2xl bg-slate-950 text-white">
                 <div className="flex overflow-x-auto text-xs font-medium text-slate-300">
-                    {['cURL', 'JavaScript', 'Python', 'PHP', 'Go'].map((tabName, tabIndex) => (
+                    {languages.map((tabName) => (
                         <button
-                            className={cn('px-5 py-3 transition hover:bg-white/5', tabIndex === 0 && 'border-b-2 border-blue-500 text-white')}
+                            className={cn('px-5 py-3 transition hover:bg-white/5', activeLang === tabName && 'border-b-2 border-blue-500 text-white')}
                             key={tabName}
+                            onClick={() => setActiveLang(tabName)}
                             type="button"
                         >
                             {tabName}
@@ -506,16 +477,19 @@ function QuickStartCard() {
                     ))}
                 </div>
                 <div className="relative overflow-x-auto p-5 font-mono text-xs leading-6 sm:text-sm">
-                    <Button className="absolute right-4 top-4 h-8 rounded-md bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/20">
+                    <Button
+                        className="absolute right-4 top-4 h-8 rounded-md bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/20"
+                        onClick={() => {
+                            navigator.clipboard.writeText(QUICK_START_SNIPPETS[activeLang])
+                            toast.info('Copied to clipboard')
+                        }}
+                    >
                         <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
                     </Button>
-                    <p><span className="mr-4 text-slate-500">1</span><span className="text-cyan-300">curl</span> <span className="text-blue-300">--request</span> GET \</p>
-                    <p><span className="mr-4 text-slate-500">2</span>https://api.eonsfleet.com/v1/vehicles \</p>
-                    <p><span className="mr-4 text-slate-500">3</span><span className="text-blue-300">--header</span> <span className="text-green-300">&quot;Authorization: Bearer ef_****************7a3f&quot;</span> \</p>
-                    <p><span className="mr-4 text-slate-500">4</span><span className="text-blue-300">--header</span> <span className="text-green-300">&quot;Accept: application/json&quot;</span></p>
+                    {lines.map((line, i) => highlightSnippetLine(line, i))}
                 </div>
             </div>
-            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
+            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer">
                 View API Documentation <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </a>
         </section>
@@ -523,6 +497,15 @@ function QuickStartCard() {
 }
 
 function LogsTable() {
+    const [page, setPage] = useState(1)
+    const { data, isLoading } = useQuery({
+        queryKey: ['api-usage-logs', page],
+        queryFn: () => api.getApiUsageLogs({ page, per_page: 15 }),
+    })
+
+    const logs = data?.data.logs ?? []
+    const pagination = data?.data.pagination
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-9">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -530,79 +513,68 @@ function LogsTable() {
                     <h2 className="text-base font-bold text-slate-900">API Request Logs</h2>
                     <p className="mt-1 text-sm text-slate-500">Monitor and analyze API requests to your account.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        May 9, 2024 - May 16, 2024 <Calendar className="ml-2 h-3.5 w-3.5 text-slate-400" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        All Endpoints <ChevronDown className="ml-2 h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        All Statuses <ChevronDown className="ml-2 h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        <Filter className="mr-2 h-3.5 w-3.5" /> Filters
-                    </Button>
-                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[960px] text-left text-sm">
                     <thead className="text-xs font-medium text-slate-400">
                         <tr>
-                            <th className="w-8 py-3" />
-                            <th className="px-3 py-3">Time (WAT)</th>
+                            <th className="px-3 py-3">Time</th>
                             <th className="px-3 py-3">Method</th>
                             <th className="px-3 py-3">Endpoint</th>
                             <th className="px-3 py-3">Status</th>
                             <th className="px-3 py-3">Response Time</th>
                             <th className="px-3 py-3">IP Address</th>
                             <th className="px-3 py-3">User Agent</th>
-                            <th className="px-3 py-3" />
-                            <th className="px-3 py-3" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {requestLogs.map((log) => (
-                            <tr className="text-slate-600 transition hover:bg-slate-50/70" key={`${log.time}-${log.endpoint}`}>
-                                <td className="py-3"><ChevronRight className="h-4 w-4 text-slate-400" /></td>
-                                <td className="px-3 py-3 whitespace-nowrap">{log.time}</td>
-                                <td className="px-3 py-3">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.method === 'POST' ? 'bg-blue-50 text-blue-700 hover:bg-blue-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
-                                        {log.method}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-3">
-                                    <p className="font-medium text-slate-900">{log.endpoint}</p>
-                                    <p className="text-xs text-slate-400">{log.description}</p>
-                                </td>
-                                <td className="px-3 py-3">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.status === '429' ? 'bg-orange-50 text-orange-700 hover:bg-orange-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
-                                        {log.status}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-3">{log.responseTime}</td>
-                                <td className="px-3 py-3">{log.ipAddress}</td>
-                                <td className="px-3 py-3">{log.userAgent}</td>
-                                <td className="px-3 py-3"><Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">View</Button></td>
-                                <td className="px-3 py-3"><MoreVertical className="h-5 w-5 text-slate-400" /></td>
-                            </tr>
-                        ))}
+                        {isLoading ? (
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : logs.length === 0 ? (
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">No API requests logged yet.</td></tr>
+                        ) : (
+                            logs.map((log) => {
+                                const isError = (log.status_code ?? 0) >= 400
+                                return (
+                                    <tr className="text-slate-600 transition hover:bg-slate-50/70" key={log.id}>
+                                        <td className="px-3 py-3 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
+                                        <td className="px-3 py-3">
+                                            <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', log.method === 'POST' ? 'bg-blue-50 text-blue-700 hover:bg-blue-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
+                                                {log.method}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <p className="font-medium text-slate-900">{log.endpoint}</p>
+                                            <p className="text-xs text-slate-400">{log.description}</p>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', isError ? 'bg-orange-50 text-orange-700 hover:bg-orange-50' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}>
+                                                {log.status_code ?? '—'}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-3 py-3">{log.duration_ms != null ? `${log.duration_ms} ms` : '—'}</td>
+                                        <td className="px-3 py-3">{log.ip_address ?? '—'}</td>
+                                        <td className="px-3 py-3">{log.user_agent ?? '—'}</td>
+                                    </tr>
+                                )
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
-            <div className="flex flex-col gap-4 pt-4 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-                <p>Showing 1 to 5 of 127 entries</p>
-                <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50"><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button className="h-8 w-8 rounded-lg bg-blue-600 p-0 text-sm font-medium text-white hover:bg-blue-700">1</Button>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">2</Button>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">3</Button>
-                    <span className="px-1 text-slate-400">...</span>
-                    <Button variant="ghost" className="h-8 w-8 rounded-lg p-0 text-sm font-medium text-slate-600">26</Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50"><ChevronRight className="h-4 w-4" /></Button>
-                    <Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600">5 / page <ChevronDown className="ml-2 h-3.5 w-3.5" /></Button>
+            {pagination && pagination.last_page > 1 && (
+                <div className="flex items-center justify-between pt-4 text-sm text-slate-500">
+                    <p>Page {pagination.current_page} of {pagination.last_page} ({pagination.total} total)</p>
+                    <div className="flex items-center gap-1.5">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50" disabled={page >= pagination.last_page} onClick={() => setPage((p) => p + 1)}>
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
         </section>
     )
 }
@@ -616,7 +588,7 @@ function ResourcesPanel() {
                     {resources.map((resource) => {
                         const ResourceIcon = resource.icon
                         return (
-                            <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="#" key={resource.title}>
+                            <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer" key={resource.title}>
                                 <span className={cn('grid h-9 w-9 place-items-center rounded-lg', resource.className)}>
                                     <ResourceIcon className="h-5 w-5" />
                                 </span>
@@ -658,45 +630,120 @@ function WebhookMetricCard({ title, value, subtitle, icon: Icon, tone }: { title
     )
 }
 
-function WebhookSecretCard({ className }: { className?: string } = {}) {
+function WebhookSecretCard({ webhook, className }: { webhook: Webhook | undefined; className?: string }) {
+    const queryClient = useQueryClient()
+    const [revealed, setRevealed] = useState(false)
+
+    const regenerateMutation = useMutation({
+        mutationFn: () => api.regenerateWebhookSecret(String(webhook!.id)),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            setRevealed(true)
+            toast.success('Secret regenerated — copy it now, it will not be shown again')
+        },
+        onError: () => toast.error('Failed to regenerate secret'),
+    })
+
+    if (!webhook) {
+        return (
+            <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
+                <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
+                <p className="mt-2 text-sm text-slate-500">Select a webhook to view its signing secret.</p>
+            </section>
+        )
+    }
+
     return (
-        <section className="rounded-2xl bg-white p-5 w-full col-span-4 min-h-max">
+        <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
             <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
-            <p className="mt-1 text-sm text-slate-500">Use this secret to verify webhook signatures from EonsFleet.</p>
+            <p className="mt-1 text-sm text-slate-500">For &quot;{webhook.name ?? webhook.url}&quot; — verify signatures using this secret.</p>
             <div className="mt-4 flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">whsec_**********************7a3f</p>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100">
-                    <Eye className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100">
-                    <Copy className="h-4 w-4" />
-                </Button>
+                <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">
+                    {revealed && webhook.secret_key ? webhook.secret_key : 'whsec_••••••••••••••••••••••••'}
+                </p>
+                {revealed && webhook.secret_key && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100" onClick={() => {
+                        navigator.clipboard.writeText(webhook.secret_key!)
+                        toast.info('Copied to clipboard')
+                    }}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
+                )}
             </div>
-            <Button variant="ghost" className="mt-4 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
+            <Button
+                variant="ghost"
+                disabled={regenerateMutation.isPending}
+                className="mt-4 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                onClick={() => regenerateMutation.mutate()}
+            >
                 <RefreshCw className="mr-2 h-4 w-4" /> Rotate Secret
             </Button>
         </section>
     )
 }
-function WebhooksTable() {
+function WebhooksTable({
+    onSelectSecret,
+    onOpenDialog,
+}: {
+    onSelectSecret: (webhook: Webhook) => void
+    onOpenDialog: (state: WebhookDialogState) => void
+}) {
+    const queryClient = useQueryClient()
     const [openMenu, setOpenMenu] = useState<string | null>(null)
-    const actionItems = [
-        { label: 'View Details', icon: Eye },
-        { label: 'Edit Webhook', icon: Edit3 },
-        { label: 'Manage Events', icon: ListChecks },
-        { label: 'Test Webhook', icon: Send },
-        { label: 'View Deliveries', icon: FileText },
-        { label: 'Regenerate Secret', icon: RotateCcw },
-        { label: 'Duplicate Webhook', icon: Copy },
-        { label: 'Pause Webhook', icon: Pause },
-        { label: 'Delete Webhook', icon: Trash2, danger: true },
+
+    const { data, isLoading } = useQuery({ queryKey: ['webhooks'], queryFn: api.getWebhooks })
+    const webhooks = data?.data.webhooks ?? []
+
+    const deleteMutation = useMutation({
+        mutationFn: api.deleteWebhook,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            toast.success('Webhook deleted')
+        },
+        onError: () => toast.error('Failed to delete webhook'),
+    })
+
+    const testMutation = useMutation({
+        mutationFn: api.testWebhook,
+        onSuccess: () => toast.success('Test event sent'),
+        onError: () => toast.error('Test delivery failed to send'),
+    })
+
+    const pauseMutation = useMutation({
+        mutationFn: ({ id, status }: { id: string; status: 'active' | 'inactive' }) => api.updateWebhook(id, { status }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhooks'] })
+            toast.success('Webhook status updated')
+        },
+        onError: () => toast.error('Failed to update webhook status'),
+    })
+
+    const actionsFor = (webhook: Webhook) => [
+        { label: 'Edit Webhook', icon: Edit3, onClick: () => onOpenDialog({ mode: 'edit', webhook }) },
+        { label: 'Test Webhook', icon: Send, onClick: () => testMutation.mutate(String(webhook.id)) },
+        { label: 'Duplicate Webhook', icon: Copy, onClick: () => onOpenDialog({ mode: 'duplicate', webhook }) },
+        {
+            label: webhook.status === 'active' ? 'Pause Webhook' : 'Activate Webhook',
+            icon: Pause,
+            onClick: () => pauseMutation.mutate({ id: String(webhook.id), status: webhook.status === 'active' ? 'inactive' : 'active' }),
+        },
+        {
+            label: 'Delete Webhook',
+            icon: Trash2,
+            danger: true,
+            onClick: () => {
+                if (confirm('Delete this webhook endpoint?')) deleteMutation.mutate(String(webhook.id))
+            },
+        },
     ]
 
     return (
         <section className="relative rounded-2xl bg-white p-5 xl:col-span-8">
-            <div>
-                <h2 className="text-base font-bold text-slate-900">Your Webhooks</h2>
-                <p className="mt-1 text-sm text-slate-500">Manage your webhook endpoints and configurations.</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-base font-bold text-slate-900">Your Webhooks</h2>
+                    <p className="mt-1 text-sm text-slate-500">Manage your webhook endpoints and configurations.</p>
+                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[840px] text-left text-sm">
@@ -711,91 +758,70 @@ function WebhooksTable() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {webhookEndpoints.map((endpoint) => (
-                            <tr className="text-slate-600 transition hover:bg-slate-50/70" key={endpoint.name}>
-                                <td className="px-3 py-4">
-                                    <p className="font-medium text-slate-900">{endpoint.name}</p>
-                                    <p className="mt-1 text-xs text-slate-500">{endpoint.url}</p>
-                                </td>
-                                <td className="px-3 py-4">
-                                    <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', endpoint.active ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
-                                        {endpoint.active ? 'Active' : 'Inactive'}
-                                    </Badge>
-                                </td>
-                                <td className="px-3 py-4">{endpoint.events}</td>
-                                <td className="px-3 py-4">
-                                    <p>{endpoint.lastDelivery}</p>
-                                    <p className={cn('mt-1 text-xs', endpoint.active ? 'text-emerald-600' : 'text-slate-400')}>{endpoint.deliveryStatus}</p>
-                                </td>
-                                <td className="px-3 py-4">
-                                    <p className="font-medium text-slate-700">{endpoint.successRate}%</p>
-                                    <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
-                                        <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${endpoint.successRate}%` }} />
-                                    </div>
-                                </td>
-                                <td className="relative px-3 py-4 text-right">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500"><Settings className="h-4 w-4" /></Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-lg text-slate-400"
-                                        onClick={() => setOpenMenu(openMenu === endpoint.name ? null : endpoint.name)}
-                                    >
-                                        <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                    {openMenu === endpoint.name && (
-                                        <div className="absolute right-3 top-12 z-20 w-56 rounded-2xl bg-white p-2 text-sm">
-                                            {actionItems.map(({ label, icon: Icon, danger }) => (
-                                                <button
-                                                    className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-slate-50', danger ? 'text-rose-600' : 'text-slate-700')}
-                                                    key={label}
-                                                    onClick={() => setOpenMenu(null)}
-                                                    type="button"
-                                                >
-                                                    <Icon className="h-4 w-4" /> {label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
+                        {isLoading ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : webhooks.length === 0 ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No webhooks registered yet.</td></tr>
+                        ) : (
+                            webhooks.map((webhook) => (
+                                <tr className="cursor-pointer text-slate-600 transition hover:bg-slate-50/70" key={webhook.id} onClick={() => onSelectSecret(webhook)}>
+                                    <td className="px-3 py-4">
+                                        <p className="font-medium text-slate-900">{webhook.name ?? 'Unnamed Endpoint'}</p>
+                                        <p className="mt-1 text-xs text-slate-500">{webhook.url}</p>
+                                    </td>
+                                    <td className="px-3 py-4">
+                                        <Badge className={cn('rounded-md px-2 py-1 text-[11px] font-medium', webhook.status === 'active' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-500 hover:bg-slate-100')}>
+                                            {webhook.status === 'active' ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </td>
+                                    <td className="px-3 py-4">{webhook.events.length} events</td>
+                                    <td className="px-3 py-4">
+                                        <p>{webhook.last_delivery_at ? new Date(webhook.last_delivery_at).toLocaleString() : 'Never'}</p>
+                                        {webhook.last_delivery_status && (
+                                            <p className={cn('mt-1 text-xs', webhook.last_delivery_status === 'delivered' ? 'text-emerald-600' : 'text-rose-600')}>{webhook.last_delivery_status}</p>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-4">
+                                        <p className="font-medium text-slate-700">{webhook.success_rate_30d != null ? `${webhook.success_rate_30d}%` : '—'}</p>
+                                        {webhook.success_rate_30d != null && (
+                                            <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
+                                                <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${webhook.success_rate_30d}%` }} />
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="relative px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-lg text-slate-400"
+                                            onClick={() => setOpenMenu(openMenu === String(webhook.id) ? null : String(webhook.id))}
+                                        >
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                        {openMenu === String(webhook.id) && (
+                                            <div className="absolute right-3 top-12 z-20 w-56 rounded-2xl bg-white p-2 text-sm shadow-lg">
+                                                {actionsFor(webhook).map(({ label, icon: Icon, danger, onClick }) => (
+                                                    <button
+                                                        className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-slate-50', danger ? 'text-rose-600' : 'text-slate-700')}
+                                                        key={label}
+                                                        onClick={() => { setOpenMenu(null); onClick(); }}
+                                                        type="button"
+                                                    >
+                                                        <Icon className="h-4 w-4" /> {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
-            <a className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700" href="#">View All Webhooks</a>
-
         </section>
     )
 }
-function EventSubscriptionsCard() {
-    return (
-        <section className="rounded-2xl bg-white p-5 xl:col-span-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <h2 className="text-base font-bold text-slate-900">Event Subscriptions</h2>
-                    <p className="mt-1 text-sm text-slate-500">Manage which events you want to receive.</p>
-                </div>
-                <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                    <Edit3 className="mr-2 h-4 w-4" /> Manage
-                </Button>
-            </div>
-            <div className="mt-5 divide-y divide-slate-100">
-                {eventSubscriptions.map((event) => (
-                    <label className="flex cursor-pointer items-center gap-3 py-3" key={event.name}>
-                        <input checked={event.checked} readOnly type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-blue-600" />
-                        <span className="flex-1 text-sm font-medium text-slate-700">{event.name}</span>
-                        <span className="text-xs text-slate-400">{event.count}</span>
-                    </label>
-                ))}
-            </div>
-            <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
-                View All Events <ChevronRight className="ml-1 h-4 w-4" />
-            </a>
-        </section>
-    )
-}
-
 function WebhookGuideCard() {
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-4">
@@ -822,6 +848,14 @@ function WebhookGuideCard() {
     )
 }
 function RecentDeliveriesTable() {
+    const [page, setPage] = useState(1)
+    const { data, isLoading } = useQuery({
+        queryKey: ['webhook-deliveries-all', page],
+        queryFn: () => api.getOrgWebhookDeliveries({ page, per_page: 10 }),
+    })
+
+    const deliveries = data?.data.deliveries ?? []
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -829,48 +863,63 @@ function RecentDeliveriesTable() {
                     <h2 className="text-base font-bold text-slate-900">Recent Deliveries</h2>
                     <p className="mt-1 text-sm text-slate-500">Monitor the delivery status of your webhook events.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">All Statuses <ChevronDown className="ml-2 h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">May 9, 2024 - May 16, 2024 <Calendar className="ml-2 h-3.5 w-3.5 text-slate-400" /></Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100"><Filter className="mr-2 h-3.5 w-3.5" /> Filters</Button>
-                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
                     <thead className="text-xs font-medium text-slate-400">
-                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th><th className="px-3 py-3 text-right">Actions</th></tr>
+                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {deliveryLogs.map((delivery) => {
-                            const isFailed = delivery.status === 'Failed'
-                            return (
-                                <tr className="text-slate-600 transition hover:bg-slate-50/70" key={`${delivery.time}-${delivery.event}`}>
-                                    <td className="px-3 py-4 whitespace-nowrap">{delivery.time}</td>
-                                    <td className="px-3 py-4"><p className="font-medium text-slate-900">{delivery.event}</p><p className="text-xs text-slate-400">{delivery.description}</p></td>
-                                    <td className="px-3 py-4">{delivery.endpoint}</td>
-                                    <td className={cn('px-3 py-4 font-medium', isFailed ? 'text-rose-600' : 'text-emerald-600')}>{isFailed ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³' : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“'} {delivery.status}</td>
-                                    <td className={cn('px-3 py-4', isFailed ? 'text-slate-700' : 'text-emerald-600')}>{delivery.response}</td>
-                                    <td className="px-3 py-4">{delivery.duration}</td>
-                                    <td className="px-3 py-4 text-right"><Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">{isFailed ? 'View Details' : 'View'}</Button><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400"><MoreVertical className="h-4 w-4" /></Button></td>
-                                </tr>
-                            )
-                        })}
+                        {isLoading ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : deliveries.length === 0 ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No deliveries yet.</td></tr>
+                        ) : (
+                            deliveries.map((delivery) => {
+                                const isFailed = delivery.status === 'failed'
+                                return (
+                                    <tr className="text-slate-600 transition hover:bg-slate-50/70" key={delivery.id}>
+                                        <td className="px-3 py-4 whitespace-nowrap">{new Date(delivery.created_at).toLocaleString()}</td>
+                                        <td className="px-3 py-4"><p className="font-medium text-slate-900">{delivery.event_type}</p></td>
+                                        <td className="px-3 py-4">{delivery.endpoint?.name ?? delivery.endpoint?.url ?? '—'}</td>
+                                        <td className={cn('px-3 py-4 font-medium', isFailed ? 'text-rose-600' : 'text-emerald-600')}>
+                                            {isFailed ? '✕' : '✓'} {delivery.status}
+                                        </td>
+                                        <td className={cn('px-3 py-4', isFailed ? 'text-slate-700' : 'text-emerald-600')}>{delivery.response_code ?? '—'}</td>
+                                        <td className="px-3 py-4">{delivery.duration_ms != null ? `${delivery.duration_ms} ms` : '—'}</td>
+                                    </tr>
+                                )
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
-            <a className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700" href="#">View All Deliveries</a>
         </section>
     )
 }
 
 function ApiTabContent() {
+    const { data: summaryData } = useQuery({ queryKey: ['api-usage-summary'], queryFn: () => api.getApiUsageSummary(30) })
+    const days = summaryData?.data.days ?? []
+    const chartData = days.map((d) => ({
+        label: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        requests: d.requests,
+        success_rate: d.success_rate ?? 0,
+        avg_response_time_ms: d.avg_response_time_ms ?? 0,
+    }))
+
+    const totalRequests = days.reduce((sum, d) => sum + d.requests, 0)
+    const daysWithData = days.filter((d) => d.requests > 0)
+    const avgSuccessRate = daysWithData.length > 0 ? daysWithData.reduce((sum, d) => sum + (d.success_rate ?? 0), 0) / daysWithData.length : 0
+    const avgResponseTime = daysWithData.length > 0 ? daysWithData.reduce((sum, d) => sum + (d.avg_response_time_ms ?? 0), 0) / daysWithData.length : 0
+
     return (
         <>
             <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-5">
                 <StatusCard />
-                <MetricCard title="Requests (30 Days)" value="58,243" delta="+18%" dataKey="requests" stroke="#3b82f6" />
-                <MetricCard title="Success Rate (30 Days)" value="98.6%" delta="+2.1%" dataKey="success" stroke="#10b981" />
-                <MetricCard title="Average Response Time" value="142 ms" delta="-12%" dataKey="response" stroke="#8b5cf6" />
+                <MetricCard title="Requests (30 Days)" value={totalRequests.toLocaleString()} delta="" dataKey="requests" stroke="#3b82f6" data={chartData} />
+                <MetricCard title="Success Rate (30 Days)" value={`${avgSuccessRate.toFixed(1)}%`} delta="" dataKey="success_rate" stroke="#10b981" data={chartData} />
+                <MetricCard title="Average Response Time" value={`${Math.round(avgResponseTime)} ms`} delta="" dataKey="avg_response_time_ms" stroke="#8b5cf6" data={chartData} />
                 <RateLimitCard />
             </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><CredentialsCard /><QuickStartCard /></section>
@@ -879,23 +928,78 @@ function ApiTabContent() {
     )
 }
 
-function WebhooksTabContent() {
+function WebhooksTabContent({
+    dialogState,
+    onOpenDialog,
+    newSecret,
+    onSecretIssued,
+}: {
+    dialogState: WebhookDialogState
+    onOpenDialog: (state: WebhookDialogState) => void
+    newSecret: string | null
+    onSecretIssued: (secret: string) => void
+}) {
+    const [selectedWebhook, setSelectedWebhook] = useState<Webhook | undefined>(undefined)
+    const { data } = useQuery({ queryKey: ['webhooks-stats'], queryFn: api.getWebhookStats })
+    const stats = data?.data
+
     return (
         <>
             <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                <WebhookMetricCard title="Total Webhooks" value="5" subtitle="Active endpoints" icon={Webhook} tone="bg-violet-50 text-violet-600" />
-                <WebhookMetricCard title="Successful Deliveries (30D)" value="24,781" subtitle="98.7% success rate" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" />
-                <WebhookMetricCard title="Failed Deliveries (30D)" value="312" subtitle="1.3% failure rate" icon={AlertTriangle} tone="bg-orange-50 text-orange-600" />
-                <WebhookMetricCard title="Events Delivered (30D)" value="25,093" subtitle="+18% vs previous 30 days" icon={RefreshCw} tone="bg-blue-50 text-blue-600" />
-                <WebhookMetricCard title="Avg. Response Time" value="142 ms" subtitle="-12% vs previous 30 days" icon={Clock3} tone="bg-indigo-50 text-indigo-600" />
+                <WebhookMetricCard title="Total Webhooks" value={String(stats?.total_webhooks ?? 0)} subtitle={`${stats?.active_webhooks ?? 0} active`} icon={WebhookIcon} tone="bg-violet-50 text-violet-600" />
+                <WebhookMetricCard title="Successful Deliveries (30D)" value={(stats?.successful_deliveries_30d ?? 0).toLocaleString()} subtitle={stats?.success_rate_30d != null ? `${stats.success_rate_30d}% success rate` : '—'} icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" />
+                <WebhookMetricCard title="Failed Deliveries (30D)" value={(stats?.failed_deliveries_30d ?? 0).toLocaleString()} subtitle={stats && stats.deliveries_30d > 0 ? `${(100 - (stats.success_rate_30d ?? 100)).toFixed(1)}% failure rate` : '—'} icon={AlertTriangle} tone="bg-orange-50 text-orange-600" />
+                <WebhookMetricCard title="Events Delivered (30D)" value={(stats?.deliveries_30d ?? 0).toLocaleString()} subtitle="Delivery attempts" icon={RefreshCw} tone="bg-blue-50 text-blue-600" />
+                <WebhookMetricCard title="Avg. Response Time" value={stats?.avg_response_time_ms != null ? `${Math.round(stats.avg_response_time_ms)} ms` : '—'} subtitle="30-day average" icon={Clock3} tone="bg-indigo-50 text-indigo-600" />
             </section>
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><WebhooksTable /><WebhookSecretCard className="xl:col-span-4 h-fit" /></section>
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+                <WebhooksTable onSelectSecret={setSelectedWebhook} onOpenDialog={onOpenDialog} />
+                <WebhookSecretCard webhook={selectedWebhook} className="h-fit xl:col-span-4" />
+            </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><RecentDeliveriesTable /><WebhookGuideCard /></section>
+
+            <WebhookFormDialog2
+                open={dialogState !== null}
+                onOpenChange={(open) => !open && onOpenDialog(null)}
+                editing={dialogState?.mode === 'edit' ? dialogState.webhook : null}
+                duplicateFrom={dialogState?.mode === 'duplicate' ? dialogState.webhook : null}
+                onSecretIssued={onSecretIssued}
+            />
+
+            <Dialog open={newSecret !== null} onOpenChange={(open) => !open && onSecretIssued('')}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Webhook secret</DialogTitle>
+                        <DialogDescription>Save this now — it won&apos;t be shown again.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
+                        <code className="flex-1 truncate font-mono text-sm text-emerald-400">{newSecret}</code>
+                        <button onClick={() => { navigator.clipboard.writeText(newSecret ?? ''); toast.info('Copied'); }} className="text-slate-400 hover:text-white">
+                            <Copy className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <DialogFooter>
+                        <Button className="w-full bg-slate-900" onClick={() => onSecretIssued('')}>I have saved the secret</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }
 export default function IntegrationsPage() {
-    const [activeTab, setActiveTab] = useState<IntegrationTab>('webhooks')
+    return (
+        <Suspense fallback={null}>
+            <IntegrationsPageContent />
+        </Suspense>
+    )
+}
+
+function IntegrationsPageContent() {
+    const searchParams = useSearchParams()
+    const initialTab = searchParams.get('tab') === 'webhooks' ? 'webhooks' : 'api'
+    const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab)
+    const [dialogState, setDialogState] = useState<WebhookDialogState>(null)
+    const [newSecret, setNewSecret] = useState<string | null>(null)
     const isWebhooks = activeTab === 'webhooks'
 
     return (
@@ -911,7 +1015,10 @@ export default function IntegrationsPage() {
                         </p>
                     </div>
                     {isWebhooks && (
-                        <Button className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">
+                        <Button
+                            className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+                            onClick={() => setDialogState({ mode: 'create', webhook: null })}
+                        >
                             <Plus className="mr-2 h-4 w-4" /> Add Webhook
                         </Button>
                     )}
@@ -919,7 +1026,16 @@ export default function IntegrationsPage() {
                 <IntegrationTabs activeTab={activeTab} onTabChange={setActiveTab} />
             </div>
 
-            {isWebhooks ? <WebhooksTabContent /> : <ApiTabContent />}
+            {isWebhooks ? (
+                <WebhooksTabContent
+                    dialogState={dialogState}
+                    onOpenDialog={setDialogState}
+                    newSecret={newSecret || null}
+                    onSecretIssued={(secret) => setNewSecret(secret || null)}
+                />
+            ) : (
+                <ApiTabContent />
+            )}
         </div>
     )
 }

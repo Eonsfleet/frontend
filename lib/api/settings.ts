@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery } from '@/types'
+import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery, WebhookStats, ApiUsageDay, ApiUsageLog, RateLimitStatus } from '@/types'
 
 // Organizations
 export const getOrganization = async (id: number | string): Promise<{ data: Organization }> => {
@@ -49,7 +49,13 @@ export const requestResetPassword = async (email: string): Promise<{ message: st
 // API Keys
 export interface ApiKey {
     id: string
-    name: string
+    key_name: string
+    prefix: string
+    key_type: 'live' | 'test'
+    is_active: boolean
+    is_expired: boolean
+    is_revoked: boolean
+    usage_count: number
     last_used_at: string | null
     expires_at: string | null
     created_at: string
@@ -72,6 +78,14 @@ export const generateApiKey = async (data: {
 
 export const revokeApiKey = async (id: string): Promise<{ message: string }> => {
     const response = await apiClient.delete<{ message: string }>(`/api-keys/${id}`)
+    return response.data
+}
+
+export const rotateApiKey = async (id: string, data?: { name?: string; expires_in_days?: number; revoke_old?: boolean }): Promise<{
+    message: string
+    data: { new_key: { id: string; api_key: string; prefix: string; expires_at: string | null }; old_key: { id: string; prefix: string; status: string; message: string } }
+}> => {
+    const response = await apiClient.post(`/api-keys/${id}/rotate`, data ?? {})
     return response.data
 }
 
@@ -135,12 +149,12 @@ export const getWebhooks = async (): Promise<{ data: { webhooks: Webhook[] } }> 
     return response.data
 }
 
-export const createWebhook = async (data: { url: string, events: string[], description?: string }): Promise<{ data: Webhook }> => {
+export const createWebhook = async (data: { url: string, events: string[], name?: string, description?: string }): Promise<{ data: Webhook }> => {
     const response = await apiClient.post<{ data: Webhook }>('/webhooks', data)
     return response.data
 }
 
-export const updateWebhook = async (id: string, data: { url?: string, events?: string[], description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
+export const updateWebhook = async (id: string, data: { url?: string, events?: string[], name?: string, description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
     const response = await apiClient.put<{ data: Webhook }>(`/webhooks/${id}`, data)
     return response.data
 }
@@ -156,6 +170,44 @@ export const testWebhook = async (id: string): Promise<{ message: string }> => {
 
 export const getWebhookDeliveries = async (id: string): Promise<{ data: { deliveries: WebhookDelivery[] } }> => {
     const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[] } }>(`/webhooks/${id}/deliveries`)
+    return response.data
+}
+
+export const getWebhookStats = async (): Promise<{ data: WebhookStats }> => {
+    const response = await apiClient.get<{ data: WebhookStats }>('/webhooks/stats')
+    return response.data
+}
+
+export const getOrgWebhookDeliveries = async (params?: { page?: number; per_page?: number; status?: string }): Promise<{ data: { deliveries: WebhookDelivery[]; pagination: Paginated<WebhookDelivery>['pagination'] } }> => {
+    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[]; pagination: Paginated<WebhookDelivery>['pagination'] } }>('/webhooks/deliveries', { params })
+    return response.data
+}
+
+export const regenerateWebhookSecret = async (id: string): Promise<{ message: string; data: Webhook }> => {
+    const response = await apiClient.post<{ message: string; data: Webhook }>(`/webhooks/${id}/regenerate-secret`)
+    return response.data
+}
+
+// API Usage
+export const getApiUsageSummary = async (days: number = 30): Promise<{ data: { days: ApiUsageDay[] } }> => {
+    const response = await apiClient.get<{ data: { days: ApiUsageDay[] } }>('/api-usage/summary', { params: { days } })
+    return response.data
+}
+
+export interface ApiUsageLogsPagination {
+    current_page: number
+    per_page: number
+    total: number
+    last_page: number
+}
+
+export const getApiUsageLogs = async (params?: { page?: number; per_page?: number; status_code?: number }): Promise<{ data: { logs: ApiUsageLog[]; pagination: ApiUsageLogsPagination } }> => {
+    const response = await apiClient.get<{ data: { logs: ApiUsageLog[]; pagination: ApiUsageLogsPagination } }>('/api-usage/logs', { params })
+    return response.data
+}
+
+export const getRateLimit = async (): Promise<{ data: RateLimitStatus }> => {
+    const response = await apiClient.get<{ data: RateLimitStatus }>('/rate-limit')
     return response.data
 }
 
