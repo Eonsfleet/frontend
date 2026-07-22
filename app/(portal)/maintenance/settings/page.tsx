@@ -113,11 +113,11 @@ export default function MaintenanceSettingsPage() {
                                         <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Cost Threshold (₦)</Label>
                                         <div className="relative">
                                             <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">₦</span>
-                                            <Input 
+                                            <Input
                                                 type="number"
                                                 value={form.cost_threshold}
                                                 onChange={(e) => setForm(f => ({ ...f, cost_threshold: parseFloat(e.target.value) }))}
-                                                className="h-14 pl-12 rounded-[18px] border-slate-100 bg-slate-50 font-black text-sm px-6 focus:ring-[#0055FF]"
+                                                className="h-14 rounded-[18px] border-slate-100 bg-slate-50 font-black text-sm pl-14 pr-6 focus:ring-[#0055FF]"
                                                 placeholder="100,000"
                                             />
                                         </div>

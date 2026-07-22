@@ -2,12 +2,19 @@ import apiClient from './client'
 import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery } from '@/types'
 
 // Organizations
+export interface UpdateOrganizationPayload {
+    name?: string
+    subdomain?: string
+    domain?: string
+    logo?: string | null
+}
+
 export const getOrganization = async (id: number | string): Promise<{ data: Organization }> => {
     const response = await apiClient.get<{ data: Organization }>(`/organizations/${id}`)
     return response.data
 }
 
-export const updateOrganization = async (id: number | string, data: any): Promise<{ message: string, data: Organization }> => {
+export const updateOrganization = async (id: number | string, data: UpdateOrganizationPayload): Promise<{ message: string, data: Organization }> => {
     const response = await apiClient.put<{ message: string, data: Organization }>(`/organizations/${id}`, data)
     return response.data
 }
