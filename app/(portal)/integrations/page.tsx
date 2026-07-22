@@ -16,9 +16,7 @@ import {
 } from 'recharts'
 import {
     AlertTriangle,
-    Calendar,
     CheckCircle2,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Clock3,
@@ -29,7 +27,6 @@ import {
     EyeOff,
     FileJson,
     FileText,
-    Filter,
     Headphones,
     MoreVertical,
     Pause,
@@ -94,54 +91,6 @@ const eventSubscriptions = [
     { name: 'Maintenance Events', count: '2 events', checked: false },
     { name: 'Driver Events', count: '3 events', checked: false },
 ]
-const deliveryLogs = [
-    {
-        time: 'May 16, 2024 10:28:34 AM',
-        event: 'vehicle.moving',
-        description: 'Vehicle started moving',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '112 ms',
-    },
-    {
-        time: 'May 16, 2024 10:28:21 AM',
-        event: 'location.update',
-        description: 'Location updated',
-        endpoint: 'Analytics Service',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '95 ms',
-    },
-    {
-        time: 'May 16, 2024 10:27:58 AM',
-        event: 'fuel.level.low',
-        description: 'Fuel level below 15%',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '128 ms',
-    },
-    {
-        time: 'May 16, 2024 10:27:43 AM',
-        event: 'geofence.enter',
-        description: 'Entered "Lagos Depot"',
-        endpoint: 'Backup Endpoint',
-        status: 'Failed',
-        response: '500 Internal Server Error',
-        duration: '-',
-    },
-    {
-        time: 'May 16, 2024 10:27:30 AM',
-        event: 'trip.started',
-        description: 'Trip started',
-        endpoint: 'Primary Production',
-        status: 'Delivered',
-        response: '200 OK',
-        duration: '103 ms',
-    },
-]
-
 const webhookGuide = [
     { title: 'Webhook Documentation', description: 'Learn how webhooks work', icon: FileText },
     { title: 'Verify Webhook Signatures', description: 'Validate requests from EonsFleet', icon: ShieldCheck },
@@ -884,6 +833,14 @@ function WebhookGuideCard() {
     )
 }
 function RecentDeliveriesTable() {
+    const [page, setPage] = useState(1)
+    const { data, isLoading } = useQuery({
+        queryKey: ['webhook-deliveries-all', page],
+        queryFn: () => api.getOrgWebhookDeliveries({ page, per_page: 10 }),
+    })
+
+    const deliveries = data?.data.deliveries ?? []
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -891,36 +848,37 @@ function RecentDeliveriesTable() {
                     <h2 className="text-base font-bold text-slate-900">Recent Deliveries</h2>
                     <p className="mt-1 text-sm text-slate-500">Monitor the delivery status of your webhook events.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">All Statuses <ChevronDown className="ml-2 h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">May 9, 2024 - May 16, 2024 <Calendar className="ml-2 h-3.5 w-3.5 text-slate-400" /></Button>
-                    <Button variant="ghost" className="h-9 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100"><Filter className="mr-2 h-3.5 w-3.5" /> Filters</Button>
-                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
                     <thead className="text-xs font-medium text-slate-400">
-                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th><th className="px-3 py-3 text-right">Actions</th></tr>
+                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {deliveryLogs.map((delivery) => {
-                            const isFailed = delivery.status === 'Failed'
-                            return (
-                                <tr className="text-slate-600 transition hover:bg-slate-50/70" key={`${delivery.time}-${delivery.event}`}>
-                                    <td className="px-3 py-4 whitespace-nowrap">{delivery.time}</td>
-                                    <td className="px-3 py-4"><p className="font-medium text-slate-900">{delivery.event}</p><p className="text-xs text-slate-400">{delivery.description}</p></td>
-                                    <td className="px-3 py-4">{delivery.endpoint}</td>
-                                    <td className={cn('px-3 py-4 font-medium', isFailed ? 'text-rose-600' : 'text-emerald-600')}>{isFailed ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³' : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“'} {delivery.status}</td>
-                                    <td className={cn('px-3 py-4', isFailed ? 'text-slate-700' : 'text-emerald-600')}>{delivery.response}</td>
-                                    <td className="px-3 py-4">{delivery.duration}</td>
-                                    <td className="px-3 py-4 text-right"><Button variant="ghost" className="h-8 rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100">{isFailed ? 'View Details' : 'View'}</Button><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400"><MoreVertical className="h-4 w-4" /></Button></td>
-                                </tr>
-                            )
-                        })}
+                        {isLoading ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : deliveries.length === 0 ? (
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No deliveries yet.</td></tr>
+                        ) : (
+                            deliveries.map((delivery) => {
+                                const isFailed = delivery.status === 'failed'
+                                return (
+                                    <tr className="text-slate-600 transition hover:bg-slate-50/70" key={delivery.id}>
+                                        <td className="px-3 py-4 whitespace-nowrap">{new Date(delivery.created_at).toLocaleString()}</td>
+                                        <td className="px-3 py-4"><p className="font-medium text-slate-900">{delivery.event_type}</p></td>
+                                        <td className="px-3 py-4">{delivery.endpoint?.name ?? delivery.endpoint?.url ?? '—'}</td>
+                                        <td className={cn('px-3 py-4 font-medium', isFailed ? 'text-rose-600' : 'text-emerald-600')}>
+                                            {isFailed ? '✕' : '✓'} {delivery.status}
+                                        </td>
+                                        <td className={cn('px-3 py-4', isFailed ? 'text-slate-700' : 'text-emerald-600')}>{delivery.response_code ?? '—'}</td>
+                                        <td className="px-3 py-4">{delivery.duration_ms != null ? `${delivery.duration_ms} ms` : '—'}</td>
+                                    </tr>
+                                )
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
-            <a className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-700" href="#">View All Deliveries</a>
         </section>
     )
 }
