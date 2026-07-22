@@ -408,17 +408,68 @@ function CredentialsCard() {
     )
 }
 
+const QUICK_START_SNIPPETS: Record<string, string> = {
+    cURL: `curl --request GET \\
+  https://api.eonsfleet.com/v1/vehicles \\
+  --header "Authorization: Bearer ef_****************7a3f" \\
+  --header "Accept: application/json"`,
+    JavaScript: `const response = await fetch('https://api.eonsfleet.com/v1/vehicles', {
+  headers: {
+    Authorization: 'Bearer ef_****************7a3f',
+    Accept: 'application/json',
+  },
+})
+const vehicles = await response.json()`,
+    Python: `import requests
+
+response = requests.get(
+    "https://api.eonsfleet.com/v1/vehicles",
+    headers={
+        "Authorization": "Bearer ef_****************7a3f",
+        "Accept": "application/json",
+    },
+)
+vehicles = response.json()`,
+    PHP: `$ch = curl_init('https://api.eonsfleet.com/v1/vehicles');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Bearer ef_****************7a3f',
+    'Accept: application/json',
+]);
+$vehicles = json_decode(curl_exec($ch), true);`,
+    Go: `req, _ := http.NewRequest("GET", "https://api.eonsfleet.com/v1/vehicles", nil)
+req.Header.Set("Authorization", "Bearer ef_****************7a3f")
+req.Header.Set("Accept", "application/json")
+resp, _ := http.DefaultClient.Do(req)
+defer resp.Body.Close()`,
+}
+
+function highlightSnippetLine(line: string, key: number): React.ReactNode {
+    const parts = line.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g)
+    return (
+        <p key={key}>
+            <span className="mr-4 text-slate-500">{key + 1}</span>
+            {parts.map((part, i) => (/^["'].*["']$/.test(part) ? <span key={i} className="text-green-300">{part}</span> : <span key={i}>{part}</span>))}
+        </p>
+    )
+}
+
 function QuickStartCard() {
+    const languages = Object.keys(QUICK_START_SNIPPETS)
+    const [activeLang, setActiveLang] = useState(languages[0])
+    const lines = QUICK_START_SNIPPETS[activeLang].split('\n')
+
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-5">
             <h2 className="text-base font-bold text-slate-900">Quick Start</h2>
             <p className="mt-1 text-sm text-slate-500">Make your first API request in minutes.</p>
             <div className="mt-5 overflow-hidden rounded-2xl bg-slate-950 text-white">
                 <div className="flex overflow-x-auto text-xs font-medium text-slate-300">
-                    {['cURL', 'JavaScript', 'Python', 'PHP', 'Go'].map((tabName, tabIndex) => (
+                    {languages.map((tabName) => (
                         <button
-                            className={cn('px-5 py-3 transition hover:bg-white/5', tabIndex === 0 && 'border-b-2 border-blue-500 text-white')}
+                            className={cn('px-5 py-3 transition hover:bg-white/5', activeLang === tabName && 'border-b-2 border-blue-500 text-white')}
                             key={tabName}
+                            onClick={() => setActiveLang(tabName)}
                             type="button"
                         >
                             {tabName}
@@ -426,13 +477,16 @@ function QuickStartCard() {
                     ))}
                 </div>
                 <div className="relative overflow-x-auto p-5 font-mono text-xs leading-6 sm:text-sm">
-                    <Button className="absolute right-4 top-4 h-8 rounded-md bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/20">
+                    <Button
+                        className="absolute right-4 top-4 h-8 rounded-md bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/20"
+                        onClick={() => {
+                            navigator.clipboard.writeText(QUICK_START_SNIPPETS[activeLang])
+                            toast.info('Copied to clipboard')
+                        }}
+                    >
                         <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
                     </Button>
-                    <p><span className="mr-4 text-slate-500">1</span><span className="text-cyan-300">curl</span> <span className="text-blue-300">--request</span> GET \</p>
-                    <p><span className="mr-4 text-slate-500">2</span>https://api.eonsfleet.com/v1/vehicles \</p>
-                    <p><span className="mr-4 text-slate-500">3</span><span className="text-blue-300">--header</span> <span className="text-green-300">&quot;Authorization: Bearer ef_****************7a3f&quot;</span> \</p>
-                    <p><span className="mr-4 text-slate-500">4</span><span className="text-blue-300">--header</span> <span className="text-green-300">&quot;Accept: application/json&quot;</span></p>
+                    {lines.map((line, i) => highlightSnippetLine(line, i))}
                 </div>
             </div>
             <a className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer">
