@@ -120,7 +120,7 @@ export default function TrackingMap({
     let frameId: number;
 
     const tick = () => {
-      const now = performance.now();
+      const now = Date.now();
       const openPopupId = selectedIdRef.current;
       markerRefs.current.forEach((handle, id) => {
         if (id === openPopupId && handle.isPopupOpen()) return;

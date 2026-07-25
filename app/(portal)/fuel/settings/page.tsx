@@ -41,7 +41,7 @@ export default function FuelSettingsPage() {
     const [syncedAt, setSyncedAt] = useState(0)
     if (data?.data && dataUpdatedAt !== syncedAt) {
         setSyncedAt(dataUpdatedAt)
-        setForm(apiToForm(data.data))
+        setForm(apiToForm(data.data.fuel_settings))
     }
 
     const { mutate: save, isPending: isSaving } = useMutation({
@@ -60,7 +60,7 @@ export default function FuelSettingsPage() {
 
     // Reset restores the last-saved server values (or defaults if unavailable).
     const handleReset = () => {
-        setForm(data?.data ? apiToForm(data.data) : DEFAULT_FUEL_SETTINGS)
+        setForm(data?.data ? apiToForm(data.data.fuel_settings) : DEFAULT_FUEL_SETTINGS)
         toast.success('Settings reset')
     }
 

@@ -7,8 +7,7 @@ export const OWNER_RESTRICTED_PATHS = [
     '/settings/users',
     '/settings/notifications',
     '/settings/roles',
-    '/settings/webhooks',
-    '/settings/api-keys',
+    '/integrations',
 ]
 
 /** Routes accessible to users whose free trial has expired and have no active subscription */

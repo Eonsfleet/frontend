@@ -426,9 +426,11 @@ export interface FuelEfficiencyGraph {
     average_efficiency_km_per_liter: number
 }
 
+// The unified /fuel-consumptions endpoint wraps each view's payload as
+// { data: { view, filter, data: <payload> } } — unwrap the inner `data`.
 export const getFuelEfficiencyGraph = async (params?: { filter?: string }): Promise<{ message: string; data: FuelEfficiencyGraph }> => {
-    const response = await apiClient.get('/fuel-consumptions/efficiency-graph', { params })
-    return response.data
+    const response = await apiClient.get('/fuel-consumptions', { params: { ...params, view: 'efficiency' } })
+    return { message: response.data.message, data: response.data.data.data }
 }
 
 export interface TopFuelConsumer {
@@ -447,8 +449,8 @@ export interface TopFuelConsumersResponse {
 }
 
 export const getTopFuelConsumers = async (params?: { filter?: string }): Promise<{ message: string; data: TopFuelConsumersResponse }> => {
-    const response = await apiClient.get('/fuel-consumptions/top-consumers', { params })
-    return response.data
+    const response = await apiClient.get('/fuel-consumptions', { params: { ...params, view: 'top_consumers' } })
+    return { message: response.data.message, data: response.data.data.data }
 }
 
 // ── 8.5 Live Fuel Monitor ────────────────────────────────────────────────────
@@ -781,12 +783,20 @@ export const getFuelAlertLogs = async (params?: FuelAlertLogListParams): Promise
 
 // ── 8.7 Settings ─────────────────────────────────────────────────────────────
 
-export const getFuelSettings = async (): Promise<{ data: FuelSettings }> => {
+// Sections mirror fuel_settings but grouped by UI area; kept untyped here since
+// the flat fuel_settings object is the single source of truth this app maps from.
+export interface FuelSettingsResource {
+    has_custom_settings: boolean
+    fuel_settings: FuelSettings
+    sections?: Record<string, unknown>
+}
+
+export const getFuelSettings = async (): Promise<{ data: FuelSettingsResource }> => {
     const response = await apiClient.get('/fuel-settings')
     return response.data
 }
 
-export const updateFuelSettings = async (payload: Partial<FuelSettings>): Promise<{ message: string; data: FuelSettings }> => {
+export const updateFuelSettings = async (payload: Partial<FuelSettings>): Promise<{ message: string; data: FuelSettingsResource }> => {
     const response = await apiClient.put('/fuel-settings', payload)
     return response.data
 }
