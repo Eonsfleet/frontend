@@ -47,6 +47,7 @@ export interface WorkflowHistoryEntry {
 
 export interface Webhook {
     id: string | number
+    name: string | null
     url: string
     description: string | null
     events: string[]
@@ -54,8 +55,21 @@ export interface Webhook {
     secret_key?: string
     failure_count: number
     last_failure_at: string | null
+    last_delivery_at: string | null
+    last_delivery_status: 'pending' | 'delivered' | 'failed' | 'retrying' | null
+    success_rate_30d: number | null
     created_at: string
     updated_at?: string
+}
+
+export interface WebhookStats {
+    total_webhooks: number
+    active_webhooks: number
+    deliveries_30d: number
+    successful_deliveries_30d: number
+    failed_deliveries_30d: number
+    success_rate_30d: number | null
+    avg_response_time_ms: number | null
 }
 
 export interface WebhookDelivery {
@@ -65,7 +79,34 @@ export interface WebhookDelivery {
     response_body: string | null
     payload: Record<string, unknown>
     duration_ms: number
+    status?: 'pending' | 'delivered' | 'failed' | 'retrying'
     created_at: string
+    endpoint?: { id: string | number; name: string | null; url: string }
+}
+
+export interface ApiUsageDay {
+    date: string
+    requests: number
+    success_rate: number | null
+    avg_response_time_ms: number | null
+}
+
+export interface ApiUsageLog {
+    id: string | number
+    method: string
+    endpoint: string
+    description: string
+    status_code: number | null
+    duration_ms: number | null
+    ip_address: string | null
+    user_agent: string | null
+    created_at: string
+}
+
+export interface RateLimitStatus {
+    limit: number
+    used: number
+    remaining: number
 }
 
 export interface NotificationGroup {
