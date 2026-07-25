@@ -11,14 +11,22 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/settings'
+import { useUploadFile } from '@/lib/hooks/useUpdateUser'
 import { toast } from 'sonner'
 import { Loader2, Building, Globe, Phone, Upload } from 'lucide-react'
 import { QueryError } from '@/components/shared/QueryError'
 
+const DOMAIN_REGEX = /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/
+
 const orgSchema = z.object({
     name: z.string().min(2, 'Organization name is required'),
     subdomain: z.string().min(3).regex(/^[a-z0-9-]+$/, 'Lower-case letters, numbers, and hyphens only'),
-    domain: z.string().optional(),
+    domain: z
+        .string()
+        .optional()
+        .refine((value) => !value || DOMAIN_REGEX.test(value), {
+            message: 'Enter a valid domain, e.g. app.yourcompany.com',
+        }),
 })
 
 type OrgFormValues = z.infer<typeof orgSchema>
@@ -28,28 +36,29 @@ export default function OrganizationSettingsPage() {
     const queryClient = useQueryClient()
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const [logoUrl, setLogoUrl] = React.useState<string | null>(null)
+    const [logoDirty, setLogoDirty] = React.useState(false)
+    const uploadFileMutation = useUploadFile()
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
-                e.target.value = ''
-                return
-            }
-            toast.promise(
-                new Promise((resolve) => {
-                    setTimeout(() => {
-                        setLogoUrl(URL.createObjectURL(file))
-                        resolve(true)
-                    }, 1500)
-                }),
-                {
-                    loading: 'Uploading new logo...',
-                    success: 'Logo updated successfully',
-                    error: 'Failed to upload image'
-                }
-            )
+        if (!file) return
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image too large', { description: 'Maximum file size is 5 MB.' })
+            e.target.value = ''
+            return
+        }
+
+        const uploadToast = toast.loading('Uploading new logo...')
+        try {
+            const uploadResponse = await uploadFileMutation.mutateAsync({ file, folder: 'logo' })
+            setLogoUrl(uploadResponse.data.file.url)
+            setLogoDirty(true)
+            toast.success('Logo uploaded — save to apply changes', { id: uploadToast })
+        } catch {
+            toast.dismiss(uploadToast)
+        } finally {
+            e.target.value = ''
         }
     }
 
@@ -80,14 +89,16 @@ export default function OrganizationSettingsPage() {
                 subdomain: attr.subdomain || '',
                 domain: attr.custom_domain || '',
             })
-            if (attr.logo) setLogoUrl(attr.logo)
+            setLogoUrl(attr.logo || null)
+            setLogoDirty(false)
         }
     }, [orgData, reset])
 
     const { mutate: updateOrg, isPending } = useMutation({
-        mutationFn: (data: OrgFormValues) => api.updateOrganization(currentOrg!.id, data),
+        mutationFn: (data: OrgFormValues) => api.updateOrganization(currentOrg!.id, { ...data, logo: logoUrl }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['settings-organization'] })
+            setLogoDirty(false)
             toast.success('Organization settings updated successfully')
         },
         onError: () => {
@@ -97,6 +108,12 @@ export default function OrganizationSettingsPage() {
 
     const onSubmit = (data: OrgFormValues) => {
         updateOrg(data)
+    }
+
+    const handleDiscard = () => {
+        reset()
+        setLogoUrl(orgData?.data?.attributes?.logo || null)
+        setLogoDirty(false)
     }
 
     if (isLoading) {
@@ -170,6 +187,7 @@ export default function OrganizationSettingsPage() {
                                         <Globe className="w-3.5 h-3.5 text-slate-400" /> Custom Domain
                                     </Label>
                                     <Input id="domain" {...register('domain')} placeholder="e.g., app.yourcompany.com" className="max-w-md" disabled={!isAdmin} />
+                                    {errors.domain && <p className="text-xs text-red-500 mt-1">{errors.domain.message}</p>}
                                     <p className="text-[11px] text-indigo-600 flex items-center font-medium mt-1">Requires 'Enterprise' plan DNS configuration.</p>
                                 </div>
 
@@ -195,10 +213,10 @@ export default function OrganizationSettingsPage() {
                     </CardContent>
                     {isAdmin && (
                         <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 flex justify-end gap-3 rounded-b-xl">
-                            <Button variant="outline" type="button" onClick={() => reset()} disabled={!isDirty || isPending}>
+                            <Button variant="outline" type="button" onClick={handleDiscard} disabled={(!isDirty && !logoDirty) || isPending}>
                                 Discard Changes
                             </Button>
-                            <Button type="submit" disabled={!isDirty || isPending}>
+                            <Button type="submit" disabled={(!isDirty && !logoDirty) || isPending}>
                                 {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                 Save Preferences
                             </Button>
