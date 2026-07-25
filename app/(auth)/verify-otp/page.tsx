@@ -24,7 +24,7 @@ function VerifyOtpContent() {
     onSuccess: (data) => {
       toast.success(data.message || "OTP Verified");
       router.push(
-        `/reset-password?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`,
+        `/reset-password?email=${encodeURIComponent(email)}&token=${encodeURIComponent(data.data.token)}`,
       );
     },
     onError: (err: any) => {
