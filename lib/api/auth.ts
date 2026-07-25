@@ -33,11 +33,19 @@ export const requestPasswordReset = async (data: {
   return response.data;
 };
 
+export interface VerifyOtpResponse {
+  message: string;
+  data: {
+    verified: boolean;
+    token: string;
+  };
+}
+
 export const verifyOtp = async (data: {
   email: string;
   code: string;
   type?: "password_reset" | "registration";
-}): Promise<{ message: string }> => {
+}): Promise<VerifyOtpResponse> => {
   const response = await apiClient.post("/auth/otp/verify", data);
   return response.data;
 };
@@ -45,6 +53,6 @@ export const verifyOtp = async (data: {
 export const resetPassword = async (
   data: Record<string, string>,
 ): Promise<{ message: string }> => {
-  const response = await apiClient.put("/auth/password/set", data);
+  const response = await apiClient.post("/auth/password/set", data);
   return response.data;
 };
