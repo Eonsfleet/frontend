@@ -1,11 +1,12 @@
 "use client";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import { resetPassword } from "@/lib/api/auth";
 import { extractApiError } from "@/lib/utils";
 
@@ -25,7 +26,10 @@ function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
-  const otp = searchParams.get("otp") || "";
+  const token = searchParams.get("token") || "";
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -48,16 +52,16 @@ function ResetPasswordContent() {
   });
 
   const onSubmit = (data: ResetPasswordForm) => {
-    if (!email || !otp) {
+    if (!email || !token) {
       toast.error("Missing required recovery tokens. Please restart process.");
       router.push("/forgot-password");
       return;
     }
     mutate({
       email,
-      otp: `reset_${otp}`,
+      token: token,
       password: data.password,
-      password_confirmation: data.password_confirmation,
+      confirm_password: data.password_confirmation,
     });
   };
 
@@ -80,12 +84,27 @@ function ResetPasswordContent() {
             <label className="text-sm font-medium leading-none text-slate-900">
               New Password
             </label>
-            <input
-              type="password"
-              {...register("password")}
-              className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent mt-1.5 transition-shadow"
-              placeholder="••••••••"
-            />
+            <div className="relative mt-1.5">
+              <input
+                type={showPassword ? "text" : "password"}
+                {...register("password")}
+                className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 pr-10 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {errors.password && (
               <p className="text-xs text-red-500 mt-1.5 font-medium">
                 {errors.password.message}
@@ -97,12 +116,29 @@ function ResetPasswordContent() {
             <label className="text-sm font-medium leading-none text-slate-900">
               Confirm Password
             </label>
-            <input
-              type="password"
-              {...register("password_confirmation")}
-              className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent mt-1.5 transition-shadow"
-              placeholder="••••••••"
-            />
+            <div className="relative mt-1.5">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                {...register("password_confirmation")}
+                className="flex h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 pr-10 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                tabIndex={-1}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+                aria-label={
+                  showConfirmPassword ? "Hide password" : "Show password"
+                }
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {errors.password_confirmation && (
               <p className="text-xs text-red-500 mt-1.5 font-medium">
                 {errors.password_confirmation.message}
