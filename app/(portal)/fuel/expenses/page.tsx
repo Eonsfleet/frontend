@@ -37,6 +37,7 @@ import { extractApiError } from "@/lib/utils";
 import { QueryError } from "@/components/shared/QueryError";
 import { useAuthStore } from "@/store/authStore";
 import { PAGE_SIZE_DEFAULT, PAGE_SIZE_DROPDOWN } from "@/lib/config";
+import { FuelTabs } from "../components/FuelTabs";
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -528,10 +529,12 @@ export default function FuelExpensesPage() {
             className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
             onClick={() => setLogOpen(true)}
           >
-            <Plus className="mr-2 h-4 w-4" /> Log Expense
+            <Plus className="mr-2 h-4 w-4" /> Add Transaction
           </Button>
         </div>
       </div>
+
+      <FuelTabs active="Fuel Expenses" />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
