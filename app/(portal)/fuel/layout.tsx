@@ -13,7 +13,6 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
 
     const navItems = [
         { name: 'Overview', href: '/fuel', icon: LayoutDashboard },
-        { name: 'Expenses', href: '/fuel/expenses', icon: Fuel },
         // { name: 'Card Management', href: '/fuel/cards', icon: CreditCard },
         { name: 'Reconciliation', href: '/fuel/reconciliation', icon: GitCompare },
         { name: 'Reports', href: '/fuel/reports', icon: BarChart3 },
@@ -26,6 +25,7 @@ export default function FuelLayout({ children }: { children: React.ReactNode }) 
         pathname === '/fuel' ||
         pathname === '/fuel/realtime' ||
         pathname === '/fuel/transactions' ||
+        pathname === '/fuel/expenses' ||
         pathname === '/fuel/alerts' ||
         pathname === '/fuel/settings'
 

@@ -55,7 +55,7 @@ export function VehicleListItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-bold text-slate-900 truncate">
+          <h4 className="text-xs font-bold text-slate-900 truncate uppercase">
             {vehicle.attributes.registration_number}
           </h4>
           <span className={cn("text-[11px] font-semibold shrink-0", statusCfg.text)}>{statusCfg.label}</span>

@@ -19,6 +19,8 @@ import { MapCompatibilityBanner } from "./components/MapCompatibilityBanner";
 interface TrackingMapProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   filteredVehicles: any[];
+  /** Vehicle uuids matching the sidebar search text, or null when search is empty. Highlights pins without hiding the rest. */
+  searchMatchIds?: Set<string> | null;
   locations: Record<string, any>;
   selectedVehicle: any;
   setSelectedVehicle: (v: any) => void;
@@ -41,6 +43,7 @@ const PLAYBACK_GHOST_ICON = { iconSize: [36, 36] as [number, number], iconAnchor
 export default function TrackingMap({
   containerRef,
   filteredVehicles,
+  searchMatchIds = null,
   locations,
   selectedVehicle,
   setSelectedVehicle,
@@ -181,7 +184,7 @@ export default function TrackingMap({
     if (isReplayMode && currentPlayback) {
       const html = buildMarkerHtml({
         heading: currentPlayback.heading || 0,
-        state: { statusKey: "moving", pulse: true, greyed: false, scale: 1, zIndexOffset: 0 },
+        state: { statusKey: "moving", pulse: true, greyed: false, scale: 1, zIndexOffset: 0, highlighted: false },
       });
       if (!ghostHandleRef.current) {
         ghostHandleRef.current = provider.addMarker("playback-ghost", {
@@ -306,10 +309,12 @@ export default function TrackingMap({
                 if (!v || !loc) return null;
                 const isSelected = selectedVehicle?.attributes?.uuid === c.id;
                 const hasAlarm = alarmState[c.id] === true;
+                const isHighlighted = searchMatchIds?.has(c.id) ?? false;
                 const markerState = getMarkerState(
                   { status: loc.status, is_online: loc.is_online, speed: loc.speed },
                   isSelected,
                   hasAlarm,
+                  isHighlighted,
                 );
 
                 return (

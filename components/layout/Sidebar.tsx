@@ -25,6 +25,7 @@ import {
   Sparkles,
   MessageSquare,
   Plug,
+  CreditCard,
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -194,6 +195,14 @@ const NAV_ITEMS = [
     permission: "vendors:read",
     module: "vendors",
     trialAllowed: false,
+  },
+  {
+    href: "/subscription",
+    label: "Subscription",
+    icon: CreditCard,
+    permission: null,
+    module: null,
+    trialAllowed: true,
   },
   {
     href: "/settings",
