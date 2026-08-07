@@ -27,24 +27,30 @@ import { TrackingTopBar } from "./components/TrackingTopBar";
 import { MapZoomControl } from "./components/MapZoomControl";
 import { MapExtraControls } from "./components/MapExtraControls";
 import { MapLegend } from "./components/MapLegend";
-import { FilterPanelDrawer, FilterState, initialFilterState } from "./components/FilterPanelDrawer";
+import {
+  FilterPanelDrawer,
+  FilterState,
+  initialFilterState,
+} from "./components/FilterPanelDrawer";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { StreetImageryPanel } from "./components/StreetImageryPanel";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { cn, normalizeTelemetry } from "@/lib/utils";
 import { matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
 export default function TrackingPage() {
   const queryClient = useQueryClient();
-  const isAssetListCollapsed = useTrackingUiStore((s) => s.isAssetListCollapsed);
-  const [searchQuery, setSearchQuery] = useState("");
+  const isAssetListCollapsed = useTrackingUiStore(
+    (s) => s.isAssetListCollapsed,
+  );
   const [locationSearch, setLocationSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
+    null,
+  );
   // The view-mode toggle UI (All Assets / Active Trips) was removed from the map
   // toolbar per design feedback; "focused" is currently unreachable, but the
   // underlying Active Trips code path in TrackingSidebar is left intact in case
@@ -103,25 +109,35 @@ export default function TrackingPage() {
 
   const vehicles = useMemo(() => vehicleData ?? [], [vehicleData]);
   const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData]);
-  const clusters = useMemo(() => clustersData?.data?.clusters || [], [clustersData]);
-  const geofences = useMemo(() => geofencesData?.data?.geofences || [], [geofencesData]);
+  const clusters = useMemo(
+    () => clustersData?.data?.clusters || [],
+    [clustersData],
+  );
+  const geofences = useMemo(
+    () => geofencesData?.data?.geofences || [],
+    [geofencesData],
+  );
 
-  const { locations, setLocations, interpolator, alarmState, trails } = useVehicleLocations({
-    vehicles,
-    token,
-    organization,
-    subscribePrivate,
-    selectedVehicleId,
-  });
+  const { locations, setLocations, interpolator, alarmState, trails } =
+    useVehicleLocations({
+      vehicles,
+      token,
+      organization,
+      subscribePrivate,
+      selectedVehicleId,
+    });
 
   const selectedVehicle = useMemo(
     () =>
-      vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(selectedVehicleId)) || null,
+      vehicles.find(
+        (v: Vehicle) =>
+          String(v.attributes?.uuid) === String(selectedVehicleId),
+      ) || null,
     [vehicles, selectedVehicleId],
   );
 
   const selectedTrail = useMemo(
-    () => (selectedVehicleId ? trails[selectedVehicleId] ?? [] : []),
+    () => (selectedVehicleId ? (trails[selectedVehicleId] ?? []) : []),
     [trails, selectedVehicleId],
   );
 
@@ -130,7 +146,9 @@ export default function TrackingPage() {
   // mobile variants, toggled with CSS breakpoints, not conditional mounting), and
   // BottomCards needs the same live-resolved telemetry, so all three consume this
   // single subscription instead of each opening their own.
-  const selectedLoc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
+  const selectedLoc = selectedVehicle
+    ? locations[selectedVehicle.attributes.uuid]
+    : null;
   const selectedVehicleSnapshot = useMemo(
     () => buildVehicleSnapshot(selectedVehicle, selectedLoc),
     [selectedVehicle, selectedLoc],
@@ -155,7 +173,9 @@ export default function TrackingPage() {
     if (!normalized) return;
     setLocations((prev) => {
       const prevEntry = prev[selectedVehicleId];
-      const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+      const prevUpdateMs = prevEntry?.lastUpdate
+        ? new Date(prevEntry.lastUpdate).getTime()
+        : 0;
       const pktTs = normalized.timestamp_utc || normalized.gps_datetime;
       const pktUpdateMs = pktTs ? new Date(pktTs).getTime() : Date.now();
       // Never let an older per-vehicle packet clobber a fresher fleet-channel one.
@@ -167,7 +187,10 @@ export default function TrackingPage() {
           ...normalized,
           statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
           lastUpdate: pktTs ?? prevEntry?.lastUpdate,
-          lastPacket: normalized.last_packet_received_at ?? pktTs ?? prevEntry?.lastPacket,
+          lastPacket:
+            normalized.last_packet_received_at ??
+            pktTs ??
+            prevEntry?.lastPacket,
           fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
           fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
           raw: normalized,
@@ -176,20 +199,15 @@ export default function TrackingPage() {
     });
   }, [rawTelemetry, selectedVehicleId, setLocations]);
 
-  const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
-
-  // Sync sidebar search query with drawer search
-  useEffect(() => {
-    if (searchQuery !== filters.search) {
-      setFilters((prev) => ({ ...prev, search: searchQuery }));
-    }
-  }, [searchQuery]);
-
-  useEffect(() => {
-    if (filters.search !== searchQuery) {
-      setSearchQuery(filters.search);
-    }
-  }, [filters.search]);
+  // Single source of truth for the search text — both the sidebar input and
+  // the filter drawer read/write filters.search directly. (Previously this was
+  // mirrored into a separate searchQuery state via two useEffects syncing each
+  // way, which was fragile and could cascade into a render loop.)
+  const setSearchQuery = useCallback((value: string) => {
+    setFilters((prev) =>
+      prev.search === value ? prev : { ...prev, search: value },
+    );
+  }, []);
 
   // Sync sidebar statusFilter with drawer status checkboxes
   const handleStatusFilterChange = useCallback((newStatus: StatusFilter) => {
@@ -252,216 +270,269 @@ export default function TrackingPage() {
   }, [filters]);
 
   // Geographical Distance Calculator (Haversine Formula)
-  const getDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Earth radius in km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
-        Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // distance in km
-  }, []);
+  const getDistance = useCallback(
+    (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; // Earth radius in km
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) *
+          Math.cos(lat2 * (Math.PI / 180)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // distance in km
+    },
+    [],
+  );
 
   // Geofence Inclusion Check
-  const isVehicleInGeofence = useCallback((lat: number, lng: number, geofence: any) => {
-    const { type, coordinates, radius } = geofence.attributes || {};
-    if (!coordinates) return false;
+  const isVehicleInGeofence = useCallback(
+    (lat: number, lng: number, geofence: any) => {
+      const { type, coordinates, radius } = geofence.attributes || {};
+      if (!coordinates) return false;
 
-    if (type === "circle") {
-      const centerLat = coordinates.lat ?? coordinates.latitude;
-      const centerLng = coordinates.lng ?? coordinates.longitude;
-      if (centerLat == null || centerLng == null) return false;
-      const dist = getDistance(lat, lng, centerLat, centerLng) * 1000; // to meters
-      return dist <= (radius ?? 500);
-    } else if (type === "polygon") {
-      let vertices: [number, number][] = [];
-      if (coordinates.type === "Polygon" && Array.isArray(coordinates.coordinates)) {
-        vertices = coordinates.coordinates[0].map(([lg, lt]: [number, number]) => [lt, lg]);
-      } else if (Array.isArray(coordinates)) {
-        vertices = coordinates.map((p: any) => {
-          if (Array.isArray(p)) {
-            return [p[1], p[0]] as [number, number];
-          }
-          return [p.lat ?? p.latitude, p.lng ?? p.longitude] as [number, number];
+      if (type === "circle") {
+        const centerLat = coordinates.lat ?? coordinates.latitude;
+        const centerLng = coordinates.lng ?? coordinates.longitude;
+        if (centerLat == null || centerLng == null) return false;
+        const dist = getDistance(lat, lng, centerLat, centerLng) * 1000; // to meters
+        return dist <= (radius ?? 500);
+      } else if (type === "polygon") {
+        let vertices: [number, number][] = [];
+        if (
+          coordinates.type === "Polygon" &&
+          Array.isArray(coordinates.coordinates)
+        ) {
+          vertices = coordinates.coordinates[0].map(
+            ([lg, lt]: [number, number]) => [lt, lg],
+          );
+        } else if (Array.isArray(coordinates)) {
+          vertices = coordinates.map((p: any) => {
+            if (Array.isArray(p)) {
+              return [p[1], p[0]] as [number, number];
+            }
+            return [p.lat ?? p.latitude, p.lng ?? p.longitude] as [
+              number,
+              number,
+            ];
+          });
+        }
+
+        if (vertices.length === 0) return false;
+
+        let inside = false;
+        for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+          const xi = vertices[i][0],
+            yi = vertices[i][1];
+          const xj = vertices[j][0],
+            yj = vertices[j][1];
+          const intersect =
+            yi > lng !== yj > lng &&
+            lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+      return false;
+    },
+    [getDistance],
+  );
+
+  // Everything except the search query — shared by the sidebar list (search
+  // narrows further, below) and the map (search never hides pins; it only
+  // highlights matches, see searchMatchIds), so status/group/etc. filters stay
+  // in effect for the map while free-text search doesn't affect what's plotted.
+  const applyNonSearchFilters = useCallback(
+    (vehiclesToFilter: Vehicle[]) => {
+      let result = vehiclesToFilter;
+
+      // 2. Group/Cluster filter
+      if (filters.group !== "all") {
+        result = result.filter((v: Vehicle) => {
+          const clusterId = String(v.relationships?.cluster?.id || "");
+          return String(filters.group) === clusterId;
         });
       }
 
-      if (vertices.length === 0) return false;
-
-      let inside = false;
-      for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
-        const xi = vertices[i][0], yi = vertices[i][1];
-        const xj = vertices[j][0], yj = vertices[j][1];
-        const intersect = yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
-        if (intersect) inside = !inside;
+      // 3. Status filter — resolve each vehicle through the SAME canonical status
+      // logic the sidebar cards / panels / markers use (matchesStatusBucket →
+      // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
+      // label disagrees with the status shown on its card. "all" is the full set of
+      // buckets, so only actually-narrowed filters run this pass.
+      const ALL_STATUS_BUCKETS = ["moving", "idle", "stopped", "offline"];
+      const isNarrowed =
+        filters.statuses.length > 0 &&
+        !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
+      if (isNarrowed) {
+        result = result.filter((v: Vehicle) => {
+          const loc = locations[v.attributes.uuid];
+          const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
+          const input = {
+            status: loc?.status,
+            is_online: isOnline,
+            speed: loc?.speed,
+          };
+          const hasAlarm = alarmState[v.attributes.uuid] === true;
+          return filters.statuses.some((bucket) =>
+            matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
+          );
+        });
       }
-      return inside;
-    }
-    return false;
-  }, [getDistance]);
 
-  const filteredVehicles = useMemo(() => {
-    let result = vehicles;
-
-    // 1. Search Query
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      result = result.filter((v: Vehicle) => {
-        const currentDriver = v.relationships?.current_driver;
-        const driverName = Array.isArray(currentDriver) ? undefined : currentDriver?.name;
-        const imei = v.relationships?.device?.imei ?? v.relationships?.device?.data?.imei;
-        const deviceSerial = v.relationships?.device?.serial_number;
-        const haystack = [
-          v.attributes.registration_number,
-          v.attributes.make,
-          v.attributes.model,
-          driverName,
-          imei,
-          deviceSerial,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(q);
-      });
-    }
-
-    // 2. Group/Cluster filter
-    if (filters.group !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const clusterId = String(v.relationships?.cluster?.id || "");
-        return String(filters.group) === clusterId;
-      });
-    }
-
-    // 3. Status filter — resolve each vehicle through the SAME canonical status
-    // logic the sidebar cards / panels / markers use (matchesStatusBucket →
-    // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
-    // label disagrees with the status shown on its card. "all" is the full set of
-    // buckets, so only actually-narrowed filters run this pass.
-    const ALL_STATUS_BUCKETS = ["moving", "idle", "stopped", "offline"];
-    const isNarrowed =
-      filters.statuses.length > 0 &&
-      !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
-    if (isNarrowed) {
-      result = result.filter((v: Vehicle) => {
-        const loc = locations[v.attributes.uuid];
-        const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
-        const input = { status: loc?.status, is_online: isOnline, speed: loc?.speed };
-        const hasAlarm = alarmState[v.attributes.uuid] === true;
-        return filters.statuses.some((bucket) =>
-          matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
-        );
-      });
-    }
-
-    // 4. Location & Radius filter
-    if (filters.locationType === "radius" && filters.locationCoords) {
-      const { latitude: centerLat, longitude: centerLng } = filters.locationCoords;
-      result = result.filter((v: Vehicle) => {
-        const loc = locations[v.attributes.uuid];
-        if (!loc?.lat || !loc?.lng) return false;
-        const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
-        return dist <= filters.radiusKm;
-      });
-    }
-
-    // 5. Geofence filter
-    if (filters.geofenceId !== "all") {
-      const selectedGeofence = geofences.find((g) => String(g.id) === filters.geofenceId);
-      if (selectedGeofence) {
+      // 4. Location & Radius filter
+      if (filters.locationType === "radius" && filters.locationCoords) {
+        const { latitude: centerLat, longitude: centerLng } =
+          filters.locationCoords;
         result = result.filter((v: Vehicle) => {
           const loc = locations[v.attributes.uuid];
           if (!loc?.lat || !loc?.lng) return false;
-          return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
+          const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
+          return dist <= filters.radiusKm;
         });
       }
-    }
 
-    // 6. Vehicle Type
-    if (filters.vehicleType !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const t = (v.attributes.body_type || v.attributes.type || "").toLowerCase();
-        return t === filters.vehicleType.toLowerCase();
-      });
-    }
+      // 5. Geofence filter
+      if (filters.geofenceId !== "all") {
+        const selectedGeofence = geofences.find(
+          (g) => String(g.id) === filters.geofenceId,
+        );
+        if (selectedGeofence) {
+          result = result.filter((v: Vehicle) => {
+            const loc = locations[v.attributes.uuid];
+            if (!loc?.lat || !loc?.lng) return false;
+            return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
+          });
+        }
+      }
 
-    // 7. Vehicle Make
-    if (filters.vehicleMake !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const m = (v.attributes.make || "").toLowerCase();
-        return m === filters.vehicleMake.toLowerCase();
-      });
-    }
-
-    // 8. Vehicle Model
-    if (filters.vehicleModel !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const md = (v.attributes.model || "").toLowerCase();
-        return md === filters.vehicleModel.toLowerCase();
-      });
-    }
-
-    // 9. Vehicle Year From
-    if (filters.vehicleYearFrom) {
-      const yearLimit = parseInt(filters.vehicleYearFrom, 10);
-      if (!isNaN(yearLimit)) {
+      // 6. Vehicle Type
+      if (filters.vehicleType !== "all") {
         result = result.filter((v: Vehicle) => {
-          const y = parseInt(String(v.attributes.year), 10);
-          return !isNaN(y) && y >= yearLimit;
+          const t = (
+            v.attributes.body_type ||
+            v.attributes.type ||
+            ""
+          ).toLowerCase();
+          return t === filters.vehicleType.toLowerCase();
         });
       }
-    }
 
-    // 10. Speed Range
-    // 10. Speed Range
-    if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
-      result = result.filter((v: Vehicle) => {
-        const loc = locations[v.attributes.uuid];
-        const speed = loc?.speed ?? 0;
-        return speed >= filters.speedRange[0] && speed <= filters.speedRange[1];
-      });
-    }
+      // 7. Vehicle Make
+      if (filters.vehicleMake !== "all") {
+        result = result.filter((v: Vehicle) => {
+          const m = (v.attributes.make || "").toLowerCase();
+          return m === filters.vehicleMake.toLowerCase();
+        });
+      }
 
-    // 11. Engine Status
-    if (filters.engineStatus !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const loc = locations[v.attributes.uuid];
-        const isIgnitionOn = loc?.ignition === "on" || loc?.ignition === "1" || loc?.ignition === true;
-        if (filters.engineStatus === "on") return isIgnitionOn;
-        if (filters.engineStatus === "off") return !isIgnitionOn;
-        return true;
-      });
-    }
+      // 8. Vehicle Model
+      if (filters.vehicleModel !== "all") {
+        result = result.filter((v: Vehicle) => {
+          const md = (v.attributes.model || "").toLowerCase();
+          return md === filters.vehicleModel.toLowerCase();
+        });
+      }
 
-    // 12. Fuel Level
-    if (filters.fuelLevel !== "all") {
-      result = result.filter((v: Vehicle) => {
-        const loc = locations[v.attributes.uuid];
-        const fuel = loc?.fuel_level_percent ?? 0;
-        if (filters.fuelLevel === "low") return fuel < 20;
-        if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
-        if (filters.fuelLevel === "high") return fuel > 70;
-        return true;
-      });
-    }
+      // 9. Vehicle Year From
+      if (filters.vehicleYearFrom) {
+        const yearLimit = parseInt(filters.vehicleYearFrom, 10);
+        if (!isNaN(yearLimit)) {
+          result = result.filter((v: Vehicle) => {
+            const y = parseInt(String(v.attributes.year), 10);
+            return !isNaN(y) && y >= yearLimit;
+          });
+        }
+      }
 
-    return result;
-  }, [vehicles, filters, locations, alarmState, geofences, getDistance, isVehicleInGeofence]);
+      // 10. Speed Range
+      // 10. Speed Range
+      if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
+        result = result.filter((v: Vehicle) => {
+          const loc = locations[v.attributes.uuid];
+          const speed = loc?.speed ?? 0;
+          return (
+            speed >= filters.speedRange[0] && speed <= filters.speedRange[1]
+          );
+        });
+      }
 
-  // Clear selection if the selected vehicle is not in the filtered results
+      // 11. Engine Status
+      if (filters.engineStatus !== "all") {
+        result = result.filter((v: Vehicle) => {
+          const loc = locations[v.attributes.uuid];
+          const isIgnitionOn =
+            loc?.ignition === "on" ||
+            loc?.ignition === "1" ||
+            loc?.ignition === true;
+          if (filters.engineStatus === "on") return isIgnitionOn;
+          if (filters.engineStatus === "off") return !isIgnitionOn;
+          return true;
+        });
+      }
+
+      // 12. Fuel Level
+      if (filters.fuelLevel !== "all") {
+        result = result.filter((v: Vehicle) => {
+          const loc = locations[v.attributes.uuid];
+          const fuel = loc?.fuel_level_percent ?? 0;
+          if (filters.fuelLevel === "low") return fuel < 20;
+          if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
+          if (filters.fuelLevel === "high") return fuel > 70;
+          return true;
+        });
+      }
+
+      return result;
+    },
+    [
+      filters,
+      locations,
+      alarmState,
+      geofences,
+      getDistance,
+      isVehicleInGeofence,
+    ],
+  );
+
+  // Map pins: every filter except search, so typing in the sidebar search box
+  // never hides pins — only the sidebar list narrows.
+  const mapVehicles = useMemo(
+    () => applyNonSearchFilters(vehicles),
+    [vehicles, applyNonSearchFilters],
+  );
+
+  // Sidebar list: map-filtered set further narrowed by the registration search.
+  const filteredVehicles = useMemo(() => {
+    if (!filters.search) return mapVehicles;
+    const q = filters.search.trim().toLowerCase();
+    return mapVehicles.filter((v: Vehicle) =>
+      (v.attributes.registration_number ?? "").toLowerCase().includes(q),
+    );
+  }, [mapVehicles, filters.search]);
+
+  // Vehicles matching the search text, so the map can highlight them without
+  // removing the rest of the fleet's pins.
+  const searchMatchIds = useMemo(() => {
+    if (!filters.search) return null;
+    return new Set(filteredVehicles.map((v: Vehicle) => v.attributes.uuid));
+  }, [filteredVehicles, filters.search]);
+
+  // Clear selection if the selected vehicle drops out of the map-visible set
+  // (status/group/etc. filters) — deliberately NOT keyed on filteredVehicles,
+  // since search narrows only the sidebar list and shouldn't deselect a pin
+  // that's still plotted on the map.
   useEffect(() => {
     if (
       selectedVehicleId &&
-      !filteredVehicles.find((v: Vehicle) => String(v.attributes.uuid) === String(selectedVehicleId))
+      !mapVehicles.find(
+        (v: Vehicle) => String(v.attributes.uuid) === String(selectedVehicleId),
+      )
     ) {
       setSelectedVehicleId(null);
     }
-  }, [filteredVehicles, selectedVehicleId]);
+  }, [mapVehicles, selectedVehicleId]);
 
   const ongoingTripsData = useMemo(() => {
     return ongoingTrips.map((trip: Trip) => {
@@ -471,7 +542,11 @@ export default function TrackingPage() {
         trip.attributes?.vehicleId ||
         trip.attributes?.vehicle_id;
       const fleetVehicle = bestVehicleId
-        ? vehicles.find((v: Vehicle) => String(v.attributes?.uuid) === String(bestVehicleId) || String(v.id) === String(bestVehicleId))
+        ? vehicles.find(
+            (v: Vehicle) =>
+              String(v.attributes?.uuid) === String(bestVehicleId) ||
+              String(v.id) === String(bestVehicleId),
+          )
         : null;
       return {
         ...trip,
@@ -480,7 +555,8 @@ export default function TrackingPage() {
           relVehicle?.registration_number ||
           "N/A",
         vehicleId: bestVehicleId ? String(bestVehicleId) : null,
-        startTime: trip.attributes.planned_start_time || trip.attributes?.created_at,
+        startTime:
+          trip.attributes.planned_start_time || trip.attributes?.created_at,
         endTime: trip.attributes.planned_end_time || new Date().toISOString(),
       };
     });
@@ -532,7 +608,9 @@ export default function TrackingPage() {
   }, [locationSearch, vehicles, locations, mapInstance.provider]);
 
   const handleLiveTrack = useCallback(() => {
-    const loc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
+    const loc = selectedVehicle
+      ? locations[selectedVehicle.attributes.uuid]
+      : null;
     if (loc?.lat && loc?.lng) {
       mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 18);
     }
@@ -556,7 +634,9 @@ export default function TrackingPage() {
 
   const handlePlayback = useCallback(() => {
     if (!selectedVehicleId) return;
-    const trip = ongoingTripsData.find((t) => t.vehicleId === selectedVehicleId);
+    const trip = ongoingTripsData.find(
+      (t) => t.vehicleId === selectedVehicleId,
+    );
     navigateToPlayback(selectedVehicleId, trip?.id ?? null);
   }, [ongoingTripsData, selectedVehicleId, navigateToPlayback]);
 
@@ -585,7 +665,9 @@ export default function TrackingPage() {
         <div
           className={cn(
             "hidden lg:block row-start-1 row-span-2",
-            isAssetListCollapsed ? "overflow-visible" : "border-r border-slate-200 overflow-hidden",
+            isAssetListCollapsed
+              ? "overflow-visible"
+              : "border-r border-slate-200 overflow-hidden",
           )}
         >
           <TrackingSidebar
@@ -598,7 +680,7 @@ export default function TrackingPage() {
             isLoadingVehicles={isLoadingVehicles}
             statusFilter={statusFilter}
             setStatusFilter={handleStatusFilterChange}
-            searchQuery={searchQuery}
+            searchQuery={filters.search}
             setSearchQuery={setSearchQuery}
             ongoingTripsCount={ongoingTrips.length}
             ongoingTripsData={ongoingTripsData}
@@ -607,7 +689,9 @@ export default function TrackingPage() {
             alarmState={alarmState}
             isFilterActive={isFilterActive}
             onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
-            onRefresh={() => queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })}
+            onRefresh={() =>
+              queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })
+            }
             viewType={filters.viewType}
             clusters={clusters}
           />
@@ -617,10 +701,13 @@ export default function TrackingPage() {
           <MapInstanceProvider value={mapInstance}>
             <TrackingMap
               containerRef={mapContainerRef}
-              filteredVehicles={filteredVehicles}
+              filteredVehicles={mapVehicles}
+              searchMatchIds={searchMatchIds}
               locations={locations}
               selectedVehicle={selectedVehicle}
-              setSelectedVehicle={(v) => setSelectedVehicleId(v?.attributes.uuid ?? null)}
+              setSelectedVehicle={(v) =>
+                setSelectedVehicleId(v?.attributes.uuid ?? null)
+              }
               showTraffic={showTraffic}
               trail={selectedTrail}
               getVehicleIcon={getVehicleIcon}
@@ -679,7 +766,11 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
+            hasActiveAlarm={
+              selectedVehicle
+                ? alarmState[selectedVehicle.attributes.uuid] === true
+                : false
+            }
           />
         </div>
 
@@ -690,7 +781,9 @@ export default function TrackingPage() {
                 selectedVehicle={selectedVehicle}
                 resolved={resolvedTelemetry}
                 loc={selectedLoc}
-                hasActiveAlarm={alarmState[selectedVehicle.attributes.uuid] === true}
+                hasActiveAlarm={
+                  alarmState[selectedVehicle.attributes.uuid] === true
+                }
               />
             </div>
           </div>
@@ -710,7 +803,11 @@ export default function TrackingPage() {
             onLiveTrack={handleLiveTrack}
             onPlayback={handlePlayback}
             resolved={resolvedTelemetry}
-            hasActiveAlarm={selectedVehicle ? alarmState[selectedVehicle.attributes.uuid] === true : false}
+            hasActiveAlarm={
+              selectedVehicle
+                ? alarmState[selectedVehicle.attributes.uuid] === true
+                : false
+            }
           />
         </div>
 
@@ -724,7 +821,7 @@ export default function TrackingPage() {
           isLoadingVehicles={isLoadingVehicles}
           statusFilter={statusFilter}
           setStatusFilter={handleStatusFilterChange}
-          searchQuery={searchQuery}
+          searchQuery={filters.search}
           setSearchQuery={setSearchQuery}
           isFilterActive={isFilterActive}
           onOpenFilterDrawer={() => setFilterDrawerOpen(true)}

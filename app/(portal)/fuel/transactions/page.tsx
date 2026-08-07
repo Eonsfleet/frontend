@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Upload, Plus, AlertTriangle, ImageUp, Download, FileSpreadsheet } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Loader2, Upload, GitCompare, AlertTriangle, ImageUp, Download, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,7 +16,7 @@ import { useFuelTransactions, type EditableFuelExpenseStatus, type FuelTransacti
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { createFuelExpense, deleteFuelExpense, downloadFuelTransactionImportTemplate, exportFuelTransactions, getFuelVehicles, importFuelTransactions, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
+import { deleteFuelExpense, downloadFuelTransactionImportTemplate, exportFuelTransactions, getFuelVehicles, importFuelTransactions, updateFuelExpense, type CreateFuelExpensePayload } from '@/lib/api/fuel'
 import { getDrivers } from '@/lib/api/drivers'
 import { uploadFile } from '@/lib/api/documents'
 import { extractApiError } from '@/lib/utils'
@@ -453,8 +454,8 @@ function ImportFuelTransactionsDialog({ open, isPending, onClose, onImport }: { 
     )
 }
 export default function FuelTransactionsPage() {
+    const router = useRouter()
     const queryClient = useQueryClient()
-    const [createOpen, setCreateOpen] = useState(false)
     const [importOpen, setImportOpen] = useState(false)
     const [viewRow, setViewRow] = useState<TransactionRow | null>(null)
     const [editRow, setEditRow] = useState<TransactionRow | null>(null)
@@ -480,16 +481,6 @@ export default function FuelTransactionsPage() {
         queryClient.invalidateQueries({ queryKey: ['fuel-transactions'] })
         queryClient.invalidateQueries({ queryKey: ['fuel-expense-metrics'] })
     }
-
-    const createMutation = useMutation({
-        mutationFn: (form: ExpenseForm) => createFuelExpense(formToPayload(form)),
-        onSuccess: () => {
-            toast.success('Fuel expense created.')
-            refreshFuelTransactions()
-            setCreateOpen(false)
-        },
-        onError: (error) => toast.error(extractApiError(error, 'Failed to create fuel expense.')),
-    })
 
     const editMutation = useMutation({
         mutationFn: ({ row, form }: { row: TransactionRow; form: ExpenseForm }) => updateFuelExpense(row.id, formToPayload(form)),
@@ -574,8 +565,8 @@ export default function FuelTransactionsPage() {
                     <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>
                         {exportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
                     </Button>
-                    <Button size="sm" className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4" /> Add Transaction
+                    <Button size="sm" className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => router.push('/fuel/reconciliation')}>
+                        <GitCompare className="h-4 w-4" /> Reconciliation
                     </Button>
                 </div>
             </div>
@@ -618,14 +609,6 @@ export default function FuelTransactionsPage() {
                 isPending={importMutation.isPending}
                 onClose={() => setImportOpen(false)}
                 onImport={(file) => importMutation.mutate(file)}
-            />
-            <TransactionExpenseDialog
-                key="create-transaction"
-                open={createOpen}
-                mode="create"
-                isPending={createMutation.isPending}
-                onOpenChange={setCreateOpen}
-                onSubmit={(form) => createMutation.mutate(form)}
             />
             <TransactionExpenseDialog
                 key={editRow?.id ?? 'edit-transaction'}

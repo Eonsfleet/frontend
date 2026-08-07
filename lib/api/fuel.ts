@@ -482,6 +482,16 @@ export const getFuelVehicles = async (params?: FuelVehicleListParams): Promise<F
     return response.data
 }
 
+/**
+ * Real-time Tracking tab only: fuel-equipped vehicles via the general vehicle
+ * listing endpoint (GET /vehicles?has_fuel=true) rather than /fuel/vehicles.
+ * Same response shape (fuel_level/fuel_metrics/fuel_data included per vehicle).
+ */
+export const getFuelVehiclesRealtime = async (params?: Omit<FuelVehicleListParams, 'vehicle_status' | 'fuel_level'>): Promise<FuelVehicleListResponse> => {
+    const response = await apiClient.get<FuelVehicleListResponse>('/vehicles', { params: { ...params, has_fuel: true } })
+    return response.data
+}
+
 export const getVehicleCurrentFuel = async (vehicleId: string | number): Promise<{ data: { vehicle: FuelVehicle['attributes'] & { id: number; device_has_fuel: boolean }; fuel_level: FuelVehicle['fuel_level'] } }> => {
     const response = await apiClient.get(`/fuel/vehicles/${vehicleId}/current`)
     return response.data

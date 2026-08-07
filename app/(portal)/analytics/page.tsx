@@ -750,7 +750,7 @@ function OverviewInner() {
                           key={i}
                           className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
                         >
-                          <td className="px-4 py-2.5 font-bold text-slate-800">
+                          <td className="px-4 py-2.5 font-bold text-slate-800 uppercase">
                             {item.registration_number ??
                               item.vehicle ??
                               item.plate ??

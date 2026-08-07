@@ -99,6 +99,7 @@ function VehicleMarkerImpl({
       markerState.pulse,
       markerState.greyed,
       markerState.scale,
+      markerState.highlighted,
     ],
   );
 
