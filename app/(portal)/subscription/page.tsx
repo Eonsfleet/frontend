@@ -14,6 +14,7 @@ import { SubscriptionStatusBadge, BillingGroupStatusBadge } from '@/components/s
 import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
 import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
 import { EmptyState } from '@/components/shared/subscription/EmptyState'
+import { KpiTile } from '@/components/shared/subscription/KpiTile'
 import * as api from '@/lib/api/billing-groups'
 
 const ACTIVITY_ICON: Record<string, React.ElementType> = {
@@ -83,7 +84,7 @@ export default function SubscriptionOverviewPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <SubscriptionStatusBadge status={overview.status} />
-                    <Button asChild size="sm" className="h-9 gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+                    <Button asChild size="sm" className="h-9 gap-2 bg-blue-600 text-white hover:bg-blue-700">
                         <Link href={primaryAction.href}>
                             {primaryAction.label} <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
@@ -99,71 +100,46 @@ export default function SubscriptionOverviewPage() {
             )}
 
             {/* Summary cards (spec 7.2) */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <Layers className="h-3.5 w-3.5 text-indigo-500" /> Current Plan
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xl font-bold text-slate-900">{overview.plan.name}</p>
-                        <p className="mt-0.5 text-xs capitalize text-slate-400">{overview.plan.billingCycle.toLowerCase()} billing</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <PackagePlus className="h-3.5 w-3.5 text-indigo-500" /> Billable Assets
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xl font-bold text-slate-900">{overview.billableAssets.total.toLocaleString()} active assets</p>
-                        <p className="mt-0.5 text-xs text-slate-400">{overview.billableAssets.billingGroupCount} billing group{overview.billableAssets.billingGroupCount === 1 ? '' : 's'}</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <CalendarClock className="h-3.5 w-3.5 text-indigo-500" /> Nearest Renewal
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {overview.nearestRenewal ? (
-                            <>
-                                <BillingDateDisplay date={overview.nearestRenewal.date} className="text-base font-bold text-slate-900" />
-                                <MoneyDisplay value={overview.nearestRenewal.amount} className="mt-1 block text-xs text-slate-500" />
-                            </>
-                        ) : (
-                            <p className="text-sm text-slate-400">No upcoming renewal</p>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Outstanding Balance
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <MoneyDisplay value={overview.outstandingBalance.amount} className="block text-xl font-bold text-slate-900" />
-                        <p className="mt-0.5 text-xs text-slate-400">
-                            {overview.outstandingBalance.overdueInvoiceCount > 0
-                                ? `${overview.outstandingBalance.overdueInvoiceCount} overdue invoice${overview.outstandingBalance.overdueInvoiceCount === 1 ? '' : 's'}`
-                                : 'No overdue invoices'}
-                        </p>
-                    </CardContent>
-                </Card>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+                <KpiTile
+                    icon={Layers}
+                    color="blue"
+                    label="Current Plan"
+                    value={overview.plan.name}
+                    caption={`${overview.plan.billingCycle === 'MONTHLY' ? 'Monthly' : 'Annual'} billing`}
+                />
+                <KpiTile
+                    icon={PackagePlus}
+                    color="purple"
+                    label="Billable Assets"
+                    value={`${overview.billableAssets.total.toLocaleString()} assets`}
+                    caption={`${overview.billableAssets.billingGroupCount} billing group${overview.billableAssets.billingGroupCount === 1 ? '' : 's'}`}
+                />
+                <KpiTile
+                    icon={CalendarClock}
+                    color="amber"
+                    label="Nearest Renewal"
+                    value={overview.nearestRenewal ? <BillingDateDisplay date={overview.nearestRenewal.date} /> : 'None'}
+                    caption={overview.nearestRenewal ? <MoneyDisplay value={overview.nearestRenewal.amount} /> : undefined}
+                />
+                <KpiTile
+                    icon={Wallet}
+                    color={overview.outstandingBalance.overdueInvoiceCount > 0 ? 'rose' : 'emerald'}
+                    label="Outstanding Balance"
+                    value={<MoneyDisplay value={overview.outstandingBalance.amount} />}
+                    caption={
+                        overview.outstandingBalance.overdueInvoiceCount > 0
+                            ? `${overview.outstandingBalance.overdueInvoiceCount} overdue invoice${overview.outstandingBalance.overdueInvoiceCount === 1 ? '' : 's'}`
+                            : 'No overdue invoices'
+                    }
+                />
             </div>
 
             {/* Billing breakdown (spec 7.3) — the UI must not imply a single renewal date. */}
             <Card className="border-slate-200 shadow-sm overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/70 py-3.5">
                     <CardTitle className="text-[13px] font-semibold text-slate-700">Billing Groups</CardTitle>
-                    <Button variant="link" asChild className="h-auto p-0 text-xs font-semibold text-indigo-600">
+                    <Button variant="link" asChild className="h-auto p-0 text-xs font-semibold text-blue-600">
                         <Link href="/subscription/billing-groups" className="flex items-center gap-1">
                             View all <ArrowUpRight className="h-3 w-3" />
                         </Link>
@@ -226,7 +202,7 @@ export default function SubscriptionOverviewPage() {
                             key={notice.id}
                             className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
                                 notice.severity === 'critical'
-                                    ? 'border-red-200 bg-red-50 text-red-800'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-800'
                                     : notice.severity === 'warning'
                                       ? 'border-amber-200 bg-amber-50 text-amber-800'
                                       : 'border-blue-200 bg-blue-50 text-blue-800'

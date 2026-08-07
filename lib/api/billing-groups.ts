@@ -23,8 +23,14 @@ import type {
     PlanOption,
     PocOverview,
     PocAsset,
+    ManualAssetInput,
     Money,
 } from '@/types/subscription'
+
+// Assets added via manual entry or import land here, on top of the seeded
+// eligible-assets list, so both wizards (Add Assets and POC asset selection)
+// see them immediately without a page reload.
+let extraEligibleAssets: EligibleAsset[] = []
 
 function delay<T>(value: T, ms = 400): Promise<T> {
     return new Promise((resolve) => setTimeout(() => resolve(value), ms))
@@ -166,13 +172,59 @@ export const getBillingGroupDetail = async (id: string): Promise<BillingGroupDet
 
 // ─── Add assets flow (spec section 9) ─────────────────────────────────────────
 
+const SEED_ELIGIBLE_ASSETS: EligibleAsset[] = [
+    { id: 2001, assetType: 'Vehicle', label: 'Vehicle 2001', registrationNumber: 'LND-201', hasDevice: true, vehicleType: 'Truck', onboardingDate: '2026-07-01', location: 'Lagos', eligible: true, ineligibleReason: null },
+    { id: 2002, assetType: 'Vehicle', label: 'Vehicle 2002', registrationNumber: 'LND-202', hasDevice: true, vehicleType: 'Van', onboardingDate: '2026-07-02', location: 'Lagos', eligible: true, ineligibleReason: null },
+    { id: 2003, assetType: 'Vehicle', label: 'Vehicle 2003', registrationNumber: 'LND-203', hasDevice: false, vehicleType: 'Truck', onboardingDate: '2026-07-03', location: 'Abuja', eligible: false, ineligibleReason: 'No tracking device installed.' },
+    { id: 1, assetType: 'Vehicle', label: 'Vehicle 1', registrationNumber: 'ABC-100', hasDevice: true, vehicleType: 'Truck', onboardingDate: '2026-01-28', location: 'Lagos', eligible: false, ineligibleReason: 'Already billed under July 2026 onboarding.' },
+]
+
 export const getEligibleAssets = async (): Promise<EligibleAsset[]> => {
-    return delay([
-        { id: 2001, assetType: 'Vehicle', label: 'Vehicle 2001', registrationNumber: 'LND-201', hasDevice: true, vehicleType: 'Truck', onboardingDate: '2026-07-01', location: 'Lagos', eligible: true, ineligibleReason: null },
-        { id: 2002, assetType: 'Vehicle', label: 'Vehicle 2002', registrationNumber: 'LND-202', hasDevice: true, vehicleType: 'Van', onboardingDate: '2026-07-02', location: 'Lagos', eligible: true, ineligibleReason: null },
-        { id: 2003, assetType: 'Vehicle', label: 'Vehicle 2003', registrationNumber: 'LND-203', hasDevice: false, vehicleType: 'Truck', onboardingDate: '2026-07-03', location: 'Abuja', eligible: false, ineligibleReason: 'No tracking device installed.' },
-        { id: 1, assetType: 'Vehicle', label: 'Vehicle 1', registrationNumber: 'ABC-100', hasDevice: true, vehicleType: 'Truck', onboardingDate: '2026-01-28', location: 'Lagos', eligible: false, ineligibleReason: 'Already billed under July 2026 onboarding.' },
-    ])
+    return delay([...SEED_ELIGIBLE_ASSETS, ...extraEligibleAssets])
+}
+
+// Manual add / import both feed the same eligible-assets pool — an asset
+// added this way is unbilled by definition, so it's immediately selectable
+// in the Add Assets and POC conversion wizards.
+export const addManualAsset = async (input: ManualAssetInput): Promise<EligibleAsset> => {
+    const asset: EligibleAsset = {
+        id: Date.now(),
+        assetType: input.assetType,
+        label: input.label,
+        registrationNumber: input.registrationNumber,
+        hasDevice: false,
+        vehicleType: input.vehicleType || null,
+        onboardingDate: new Date().toISOString().slice(0, 10),
+        location: null,
+        eligible: true,
+        ineligibleReason: null,
+    }
+    extraEligibleAssets = [...extraEligibleAssets, asset]
+    return delay(asset, 500)
+}
+
+export interface ImportAssetsResult {
+    importedCount: number
+}
+
+export const importEligibleAssets = async (file: File): Promise<ImportAssetsResult> => {
+    // Mock: real integration would upload `file` and let the backend parse +
+    // validate rows, returning newly created eligible assets.
+    const importedCount = 5
+    const imported: EligibleAsset[] = Array.from({ length: importedCount }, (_, i) => ({
+        id: Date.now() + i,
+        assetType: 'Vehicle',
+        label: `Imported Vehicle ${i + 1}`,
+        registrationNumber: `IMP-${100 + i}`,
+        hasDevice: false,
+        vehicleType: 'Truck',
+        onboardingDate: new Date().toISOString().slice(0, 10),
+        location: null,
+        eligible: true,
+        ineligibleReason: null,
+    }))
+    extraEligibleAssets = [...extraEligibleAssets, ...imported]
+    return delay({ importedCount }, 1200)
 }
 
 export const previewBillingGroup = async (input: {

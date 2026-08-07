@@ -57,7 +57,7 @@ function PlanChangeDialog({ plan, onClose }: { plan: PlanOption | null; onClose:
                         <Label>Note (optional)</Label>
                         <textarea
                             rows={3}
-                            className="w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                         />
@@ -163,12 +163,12 @@ export default function SubscriptionPlanPage() {
                 ) : (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {planOptions?.map((plan) => (
-                            <Card key={plan.id} className={cn('flex flex-col border-slate-200 shadow-sm', plan.isCurrent && 'border-indigo-300 ring-1 ring-indigo-100')}>
+                            <Card key={plan.id} className={cn('flex flex-col border-slate-200 shadow-sm', plan.isCurrent && 'border-blue-300 ring-1 ring-blue-100')}>
                                 <CardContent className="flex flex-1 flex-col gap-4 p-5">
                                     <div>
                                         <div className="flex items-center gap-1.5">
                                             <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
-                                            {plan.isCurrent && <Sparkles className="h-4 w-4 text-indigo-500" />}
+                                            {plan.isCurrent && <Sparkles className="h-4 w-4 text-blue-500" />}
                                         </div>
                                         {plan.pricePerAsset ? (
                                             <p className="mt-1 text-sm text-slate-500"><MoneyDisplay value={plan.pricePerAsset} className="font-bold text-slate-800" /> / asset</p>
@@ -188,7 +188,7 @@ export default function SubscriptionPlanPage() {
                                         size="sm"
                                         disabled={plan.isCurrent}
                                         variant={plan.isCurrent ? 'outline' : 'default'}
-                                        className={cn('w-full', !plan.isCurrent && 'bg-indigo-600 text-white hover:bg-indigo-700')}
+                                        className={cn('w-full', !plan.isCurrent && 'bg-blue-600 text-white hover:bg-blue-700')}
                                         onClick={() => {
                                             if (plan.cta === 'Contact sales') {
                                                 toast.info('Reach out to your account manager to discuss custom pricing.')

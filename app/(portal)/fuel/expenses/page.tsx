@@ -315,7 +315,7 @@ function LogExpenseDialog({
               <Label>Vehicle</Label>
               <select
                 {...register("vehicle_id")}
-                className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select vehicle...</option>
                 {vehiclesData?.data?.map((v) => (
@@ -408,7 +408,7 @@ function LogExpenseDialog({
             </Button>
             <Button
               type="submit"
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-blue-600 hover:bg-blue-700"
               disabled={isPending}
             >
               {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{" "}
@@ -526,7 +526,7 @@ export default function FuelExpensesPage() {
           </Button>
           <Button
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
             onClick={() => setLogOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Transaction
@@ -609,7 +609,7 @@ export default function FuelExpensesPage() {
                 Status
               </Label>
               <select
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
@@ -739,7 +739,7 @@ export default function FuelExpensesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">
+                        <div className="font-bold text-slate-900 uppercase">
                           {exp.relationships.vehicle?.registration_number ??
                             "Unknown"}
                         </div>
@@ -774,7 +774,7 @@ export default function FuelExpensesPage() {
                           <div className="flex items-center justify-end gap-2">
                             <Button
                               size="sm"
-                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                              className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                               onClick={() => handleApprove(exp.id)}
                               disabled={isApproving}
                             >

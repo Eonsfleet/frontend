@@ -27,7 +27,7 @@ export default function SubscriptionLayout({ children }: { children: React.React
                 <aside className="w-full lg:w-60 shrink-0 border-r border-slate-200 bg-white lg:h-[calc(100vh-64px)] overflow-y-auto">
                     <div className="p-5">
                         <div className="mb-7 flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                                 <Layers className="h-4.5 w-4.5" />
                             </div>
                             <div>
@@ -45,10 +45,10 @@ export default function SubscriptionLayout({ children }: { children: React.React
                                         key={item.name}
                                         href={item.href}
                                         className={`group flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-medium transition-all lg:whitespace-normal
-                                            ${isActive ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                                            ${isActive ? 'bg-blue-50 font-semibold text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
                                         `}
                                     >
-                                        <item.icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-indigo-500' : 'text-slate-400 group-hover:text-slate-500'}`} />
+                                        <item.icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-500'}`} />
                                         {item.name}
                                     </Link>
                                 )

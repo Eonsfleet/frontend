@@ -12,16 +12,14 @@ interface EmptyStateProps {
 // Every empty state must explain what is missing and the next action (spec section 6.5).
 export function EmptyState({ icon: Icon, title, description, actionLabel, onAction }: EmptyStateProps) {
     return (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-                <Icon className="h-5 w-5 text-slate-400" />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <Icon className="h-8 w-8 text-slate-300" />
             </div>
-            <div>
-                <p className="text-sm font-semibold text-slate-700">{title}</p>
-                <p className="mx-auto mt-1 max-w-sm text-xs text-slate-400">{description}</p>
-            </div>
+            <h3 className="mb-1 text-base font-bold text-slate-900">{title}</h3>
+            <p className="mb-6 max-w-xs text-sm text-slate-500">{description}</p>
             {actionLabel && onAction && (
-                <Button size="sm" onClick={onAction} className="mt-1">
+                <Button className="bg-blue-600 text-white hover:bg-blue-700" onClick={onAction}>
                     {actionLabel}
                 </Button>
             )}

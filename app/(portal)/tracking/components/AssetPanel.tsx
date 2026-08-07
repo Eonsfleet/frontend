@@ -38,7 +38,10 @@ import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
-import { useTrackingUiStore, type TrackingDetailTab } from "@/store/trackingUiStore";
+import {
+  useTrackingUiStore,
+  type TrackingDetailTab,
+} from "@/store/trackingUiStore";
 import { useStreetImageryStore } from "@/store/streetImageryStore";
 import { getDriverById } from "@/lib/api/drivers";
 import { getCurrentDriver } from "@/lib/api/vehicles";
@@ -102,13 +105,15 @@ export function AssetPanel({
   // /vehicles/{id}/current-driver correctly filters to deassigned_date IS NULL —
   // use it as the source of truth for which driver is current, then still fetch
   // the full profile by id for the Driver tab's fields.
-  const { data: currentDriverData, isLoading: isLoadingCurrentDriver } = useQuery({
-    queryKey: ["current-driver", selectedVehicle?.id],
-    queryFn: () => getCurrentDriver(selectedVehicle!.id),
-    enabled: isOpen && !!selectedVehicle && activeTab === "driver",
-  });
+  const { data: currentDriverData, isLoading: isLoadingCurrentDriver } =
+    useQuery({
+      queryKey: ["current-driver", selectedVehicle?.id],
+      queryFn: () => getCurrentDriver(selectedVehicle!.id),
+      enabled: isOpen && !!selectedVehicle && activeTab === "driver",
+    });
   const driverId = currentDriverData?.data?.relationships?.driver?.id ?? null;
-  const assignedDate = currentDriverData?.data?.attributes?.assigned_date ?? null;
+  const assignedDate =
+    currentDriverData?.data?.attributes?.assigned_date ?? null;
 
   const { data: driverData, isLoading: isLoadingDriverProfile } = useQuery({
     queryKey: ["driver", driverId],
@@ -127,7 +132,9 @@ export function AssetPanel({
   // online status, linked hardware model) — distinct from /tracker/{imei}
   // (getDeviceStatus), which only returns GPS telemetry and never included
   // firmware/sim/model fields the Device tab was reading from it.
-  const deviceRecordId = selectedVehicle?.relationships?.device?.id ?? selectedVehicle?.relationships?.device?.data?.id;
+  const deviceRecordId =
+    selectedVehicle?.relationships?.device?.id ??
+    selectedVehicle?.relationships?.device?.data?.id;
   const { data: deviceInfoData } = useQuery({
     queryKey: ["device-info", deviceRecordId],
     queryFn: () => getDeviceById(deviceRecordId),
@@ -204,7 +211,11 @@ export function AssetPanel({
 
   const moreActions = [
     { label: "Street View", icon: Camera, onClick: handleStreetView },
-    { label: "Geofence", icon: MapPinned, onClick: () => router.push("/geofences") },
+    {
+      label: "Geofence",
+      icon: MapPinned,
+      onClick: () => router.push("/geofences"),
+    },
     { label: "Share Location", icon: Share2, onClick: handleShareLocation },
   ];
 
@@ -249,10 +260,13 @@ export function AssetPanel({
           </div>
 
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-slate-900 truncate">
-              {selectedVehicle.attributes.make} {selectedVehicle.attributes.model}
+            <h2 className="text-sm font-bold text-slate-900 truncate uppercase">
+              {selectedVehicle.attributes.make}{" "}
+              {selectedVehicle.attributes.model}
             </h2>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">{plate}</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">
+              {plate}
+            </p>
             <span
               className={cn(
                 "mt-1.5 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border",
@@ -283,10 +297,15 @@ export function AssetPanel({
             "flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-xl border text-[10px] font-bold transition-all duration-200",
             isMapFollowEnabled
               ? "border-blue-500 text-blue-600 bg-blue-50/30 shadow-[0_0_10px_rgba(59,130,246,0.05)] font-black"
-              : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50 hover:border-slate-300"
+              : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50 hover:border-slate-300",
           )}
         >
-          <Crosshair className={cn("h-4 w-4", isMapFollowEnabled ? "text-blue-600" : "text-slate-400")} />
+          <Crosshair
+            className={cn(
+              "h-4 w-4",
+              isMapFollowEnabled ? "text-blue-600" : "text-slate-400",
+            )}
+          />
           <span>{isMapFollowEnabled ? "Stop Focus" : "Live Track"}</span>
         </button>
 
@@ -307,10 +326,15 @@ export function AssetPanel({
             "flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-xl border text-[10px] font-bold transition-all duration-200",
             activeTab === "history"
               ? "border-blue-500 text-blue-600 bg-blue-50/30 shadow-[0_0_10px_rgba(59,130,246,0.05)] font-black"
-              : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50 hover:border-slate-300"
+              : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50 hover:border-slate-300",
           )}
         >
-          <RouteIcon className={cn("h-4 w-4", activeTab === "history" ? "text-blue-600" : "text-slate-400")} />
+          <RouteIcon
+            className={cn(
+              "h-4 w-4",
+              activeTab === "history" ? "text-blue-600" : "text-slate-400",
+            )}
+          />
           <span>Route History</span>
         </button>
 
@@ -338,8 +362,12 @@ export function AssetPanel({
           {/* Route History Header */}
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Route History</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">View historical routes and movements of this vehicle.</p>
+              <h3 className="text-sm font-bold text-slate-900">
+                Route History
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                View historical routes and movements of this vehicle.
+              </p>
             </div>
             <button
               onClick={() => setActiveTab("details")}
@@ -365,19 +393,31 @@ export function AssetPanel({
           <div className="grid grid-cols-4 gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3 mx-6 mb-4 text-center shrink-0">
             <div>
               <div className="text-xs font-extrabold text-slate-800">4</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Trips</div>
+              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                Trips
+              </div>
             </div>
             <div>
-              <div className="text-xs font-extrabold text-slate-800">182 km</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Distance</div>
+              <div className="text-xs font-extrabold text-slate-800">
+                182 km
+              </div>
+              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                Distance
+              </div>
             </div>
             <div>
-              <div className="text-xs font-extrabold text-slate-800">6h 45m</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Duration</div>
+              <div className="text-xs font-extrabold text-slate-800">
+                6h 45m
+              </div>
+              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                Duration
+              </div>
             </div>
             <div>
               <div className="text-xs font-extrabold text-slate-800">8</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Stops</div>
+              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                Stops
+              </div>
             </div>
           </div>
 
@@ -425,28 +465,45 @@ export function AssetPanel({
                   end: "Ikeja, Lagos",
                 },
               ].map((tripItem) => (
-                <div key={tripItem.id} className="flex items-start gap-4 relative pl-1">
+                <div
+                  key={tripItem.id}
+                  className="flex items-start gap-4 relative pl-1"
+                >
                   <div className="relative flex items-center justify-center w-5 h-5 rounded-full border border-slate-200 bg-white z-10 shrink-0 mt-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   </div>
                   <div className="flex-1 min-w-0 bg-white rounded-xl p-3 border border-slate-100 hover:bg-slate-50/50 hover:border-slate-200 transition-all duration-200 flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{tripItem.time}</span>
-                        <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-wider">Completed</span>
+                        <span className="text-xs font-bold text-slate-800">
+                          {tripItem.time}
+                        </span>
+                        <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-wider">
+                          Completed
+                        </span>
                       </div>
                       <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                        {tripItem.duration} • {tripItem.distance} • {tripItem.stops} {tripItem.stops === 1 ? "stop" : "stops"}
+                        {tripItem.duration} • {tripItem.distance} •{" "}
+                        {tripItem.stops}{" "}
+                        {tripItem.stops === 1 ? "stop" : "stops"}
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-50">
                         <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Start</span>
-                          <span className="text-[10px] font-semibold text-slate-700 truncate block">{tripItem.start}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                            Start
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-700 truncate block">
+                            {tripItem.start}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">End</span>
-                          <span className="text-[10px] font-semibold text-slate-700 truncate block">{tripItem.end}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block">
+                            End
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-700 truncate block">
+                            {tripItem.end}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -458,38 +515,53 @@ export function AssetPanel({
                             <ChevronDown className="h-4 w-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1">
-                          <DropdownMenuItem 
-                            onClick={() => toast.success("Focusing trip on map")}
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1"
+                        >
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toast.success("Focusing trip on map")
+                            }
                             className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <MapPinned className="h-3.5 w-3.5 text-slate-400" />
                             <span>Show on Map</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => toast.success("Exporting trip data...")}
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toast.success("Exporting trip data...")
+                            }
                             className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <FileDown className="h-3.5 w-3.5 text-slate-400" />
                             <span>Export Trip</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => toast.success("Copied shareable trip link to clipboard")}
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toast.success(
+                                "Copied shareable trip link to clipboard",
+                              )
+                            }
                             className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <Share2 className="h-3.5 w-3.5 text-slate-400" />
                             <span>Share Trip</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => toast.success("Preparing PDF report...")}
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toast.success("Preparing PDF report...")
+                            }
                             className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <FileDown className="h-3.5 w-3.5 text-slate-400" />
                             <span>Download Report</span>
                           </DropdownMenuItem>
                           <div className="h-px bg-slate-100 my-1" />
-                          <DropdownMenuItem 
-                            onClick={() => toast.error("Trip deletion is not available.")}
+                          <DropdownMenuItem
+                            onClick={() =>
+                              toast.error("Trip deletion is not available.")
+                            }
                             className="flex items-center gap-2 px-2.5 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <Trash2 className="h-3.5 w-3.5 text-rose-500" />
@@ -511,30 +583,60 @@ export function AssetPanel({
           className="flex-1 flex flex-col min-h-0"
         >
           <TabsList className="bg-transparent h-11 w-full justify-start gap-4 rounded-none p-0 px-4 border-b border-slate-100 overflow-x-auto scrollbar-hide shrink-0">
-            <TabsTrigger value="details" className={TAB_TRIGGER_CLASS}>Details</TabsTrigger>
-            <TabsTrigger value="driver" className={TAB_TRIGGER_CLASS}>Driver</TabsTrigger>
-            <TabsTrigger value="trip" className={TAB_TRIGGER_CLASS}>Trip</TabsTrigger>
-            <TabsTrigger value="device" className={TAB_TRIGGER_CLASS}>Device</TabsTrigger>
-            <TabsTrigger value="packets" className={TAB_TRIGGER_CLASS}>Live IoT</TabsTrigger>
+            <TabsTrigger value="details" className={TAB_TRIGGER_CLASS}>
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="driver" className={TAB_TRIGGER_CLASS}>
+              Driver
+            </TabsTrigger>
+            <TabsTrigger value="trip" className={TAB_TRIGGER_CLASS}>
+              Trip
+            </TabsTrigger>
+            <TabsTrigger value="device" className={TAB_TRIGGER_CLASS}>
+              Device
+            </TabsTrigger>
+            <TabsTrigger value="packets" className={TAB_TRIGGER_CLASS}>
+              Live IoT
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="details" className="flex-1 overflow-y-auto p-4 m-0">
+          <TabsContent
+            value="details"
+            className="flex-1 overflow-y-auto p-4 m-0"
+          >
             <DetailsTab
               resolved={resolved}
               todayKm={selectedVehicle.attributes?.odometer?.today_km ?? null}
             />
           </TabsContent>
-          <TabsContent value="driver" className="flex-1 overflow-y-auto p-4 m-0">
-            <DriverTab driver={driverData?.data ?? null} isLoading={isLoadingDriver} assignedDate={assignedDate} />
+          <TabsContent
+            value="driver"
+            className="flex-1 overflow-y-auto p-4 m-0"
+          >
+            <DriverTab
+              driver={driverData?.data ?? null}
+              isLoading={isLoadingDriver}
+              assignedDate={assignedDate}
+            />
           </TabsContent>
           <TabsContent value="trip" className="flex-1 overflow-y-auto p-4 m-0">
             <TripTab trip={tripData} isLoading={isLoadingTrip} />
           </TabsContent>
-          <TabsContent value="device" className="flex-1 overflow-y-auto p-4 m-0">
-            <DeviceTab device={selectedVehicle.relationships?.device} resolved={resolved} deviceInfoData={deviceInfoData} />
+          <TabsContent
+            value="device"
+            className="flex-1 overflow-y-auto p-4 m-0"
+          >
+            <DeviceTab
+              device={selectedVehicle.relationships?.device}
+              resolved={resolved}
+              deviceInfoData={deviceInfoData}
+            />
           </TabsContent>
           <TabsContent value="packets" className="flex-1 min-h-0 m-0">
-            <PacketStreamTab vehicleId={String(selectedVehicle.id)} plate={plate} />
+            <PacketStreamTab
+              vehicleId={String(selectedVehicle.id)}
+              plate={plate}
+            />
           </TabsContent>
         </Tabs>
       )}

@@ -43,7 +43,7 @@ export default function BillingGroupsPage() {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Billing Groups</h1>
                     <p className="mt-1 text-sm text-slate-500">Each production asset belongs to a billing group with its own renewal date.</p>
                 </div>
-                <Button asChild size="sm" className="h-9 gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+                <Button asChild size="sm" className="h-9 gap-2 bg-blue-600 text-white hover:bg-blue-700">
                     <Link href="/subscription/billing-groups/add-assets">
                         <PackagePlus className="h-4 w-4" /> Add Assets
                     </Link>

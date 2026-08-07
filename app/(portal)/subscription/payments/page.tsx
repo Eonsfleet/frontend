@@ -53,7 +53,7 @@ export default function SubscriptionPaymentsPage() {
                                         <tr key={payment.id} className="hover:bg-slate-50/50">
                                             <td className="px-5 py-4 font-medium text-slate-800">{payment.reference}</td>
                                             <td className="px-5 py-4">
-                                                <Link href={`/subscription/invoices/${payment.invoiceNumber}`} className="text-indigo-600 hover:underline">
+                                                <Link href={`/subscription/invoices/${payment.invoiceNumber}`} className="text-blue-600 hover:underline">
                                                     {payment.invoiceNumber}
                                                 </Link>
                                             </td>

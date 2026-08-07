@@ -24,20 +24,24 @@ export interface MarkerState {
   greyed: boolean;
   scale: number;
   zIndexOffset: number;
+  /** Matches the sidebar search text — visually emphasized without hiding other pins */
+  highlighted: boolean;
 }
 
 export function getMarkerState(
   normalized: { status?: string | null; is_online?: boolean | null; speed?: number | null } | null | undefined,
   isSelected: boolean,
   hasActiveAlarm = false,
+  isHighlighted = false,
 ): MarkerState {
   const statusKey = resolveStatusKey(normalized, hasActiveAlarm);
   return {
     statusKey,
     pulse: statusKey === "moving" || statusKey === "alarm",
     greyed: statusKey === "offline",
-    scale: isSelected ? 1.15 : 1,
-    zIndexOffset: isSelected ? 1000 : 0,
+    scale: isSelected ? 1.15 : isHighlighted ? 1.1 : 1,
+    zIndexOffset: isSelected ? 1000 : isHighlighted ? 500 : 0,
+    highlighted: isHighlighted,
   };
 }
 
@@ -66,7 +70,11 @@ export function buildMarkerHtml(params: {
       </svg>
     `;
 
-    const borderClass = isSelected ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-100/80";
+    const borderClass = isSelected
+      ? "border-blue-500 ring-2 ring-blue-500/20"
+      : state.highlighted
+        ? "border-amber-500 ring-2 ring-amber-400/30"
+        : "border-slate-100/80";
 
     return `
       <div class="custom-tracking-marker flex items-center" style="width: 220px; height: 45px; pointer-events: none; transform: translate3d(0,0,0);">

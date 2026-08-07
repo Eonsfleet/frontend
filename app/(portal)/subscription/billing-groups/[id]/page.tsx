@@ -72,7 +72,7 @@ function ScheduleRemovalDialog({
         <Dialog open={!!asset} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className={isImmediate ? 'flex items-center gap-2 text-red-700' : undefined}>
+                    <DialogTitle className={isImmediate ? 'flex items-center gap-2 text-rose-700' : undefined}>
                         {isImmediate && <AlertTriangle className="h-5 w-5" />}
                         {isImmediate ? 'Remove Immediately' : 'Schedule Removal'}
                     </DialogTitle>
@@ -93,7 +93,7 @@ function ScheduleRemovalDialog({
                         <Label>Reason</Label>
                         <textarea
                             rows={3}
-                            className="w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-full resize-none rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="e.g. Vehicle decommissioned"
@@ -102,7 +102,7 @@ function ScheduleRemovalDialog({
                     {isOwner && (
                         <button
                             type="button"
-                            className="text-xs font-medium text-slate-400 underline-offset-2 hover:text-red-600 hover:underline"
+                            className="text-xs font-medium text-slate-400 underline-offset-2 hover:text-rose-600 hover:underline"
                             onClick={() => setMode(isImmediate ? 'schedule' : 'immediate')}
                         >
                             {isImmediate ? 'Schedule for period end instead' : 'Remove immediately instead (skips remaining paid period)'}
@@ -218,7 +218,7 @@ export default function BillingGroupDetailPage() {
                                         <tr key={asset.id} className="hover:bg-slate-50/50">
                                             <td className="px-5 py-3.5">
                                                 <div className="flex items-center gap-2 font-medium text-slate-800">
-                                                    {asset.assetType === 'Vehicle' ? <Car className="h-3.5 w-3.5 text-indigo-500" /> : <Cpu className="h-3.5 w-3.5 text-violet-500" />}
+                                                    {asset.assetType === 'Vehicle' ? <Car className="h-3.5 w-3.5 text-blue-500" /> : <Cpu className="h-3.5 w-3.5 text-purple-500" />}
                                                     {asset.label}
                                                 </div>
                                             </td>
@@ -230,7 +230,7 @@ export default function BillingGroupDetailPage() {
                                             <td className="px-5 py-3.5">{asset.removalDate ? <BillingDateDisplay date={asset.removalDate} /> : <span className="text-slate-400">—</span>}</td>
                                             <td className="px-5 py-3.5 text-right">
                                                 {asset.status === 'active' && (
-                                                    <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-500 hover:text-red-600" onClick={() => setRemovalAsset(asset)}>
+                                                    <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-500 hover:text-rose-600" onClick={() => setRemovalAsset(asset)}>
                                                         <PackageMinus className="h-3.5 w-3.5" /> Schedule removal
                                                     </Button>
                                                 )}

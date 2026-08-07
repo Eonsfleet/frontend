@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { QueryError } from '@/components/shared/QueryError'
 import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
 import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
+import { AddAssetActions } from '@/components/shared/subscription/AddAssetActions'
 import { extractApiError, cn } from '@/lib/utils'
 import * as api from '@/lib/api/billing-groups'
 import type { BillingCycle } from '@/types/subscription'
@@ -32,7 +33,7 @@ function StepIndicator({ current }: { current: number }) {
                     <div
                         className={cn(
                             'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold',
-                            i < current ? 'bg-emerald-100 text-emerald-700' : i === current ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400',
+                            i < current ? 'bg-emerald-100 text-emerald-700' : i === current ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400',
                         )}
                     >
                         {i < current ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
@@ -109,10 +110,15 @@ export default function AddAssetsPage() {
             {step === 'Select Assets' && (
                 <Card className="border-slate-200 shadow-sm">
                     <CardContent className="space-y-4 p-5">
-                        <div className="relative max-w-xs">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input placeholder="Search vehicle, registration..." className="h-9 pl-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="relative max-w-xs flex-1">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input placeholder="Search vehicle, registration..." className="h-9 pl-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+                            </div>
+                            <AddAssetActions />
                         </div>
+
+                        <p className="text-xs text-slate-400">Already-billed assets are excluded automatically. Import a file or add one manually if it isn&apos;t listed below.</p>
 
                         {isAssetsError ? (
                             <QueryError message="Failed to load eligible assets." onRetry={refetch} />
@@ -133,11 +139,11 @@ export default function AddAssetsPage() {
                                             disabled={!asset.eligible}
                                             onCheckedChange={() => toggleAsset(asset.id)}
                                         />
-                                        {asset.assetType === 'Vehicle' ? <Car className="h-4 w-4 text-indigo-500" /> : <Cpu className="h-4 w-4 text-violet-500" />}
+                                        {asset.assetType === 'Vehicle' ? <Car className="h-4 w-4 text-blue-500" /> : <Cpu className="h-4 w-4 text-purple-500" />}
                                         <div className="min-w-0 flex-1">
                                             <p className="font-medium text-slate-800">{asset.label} <span className="font-normal text-slate-400">&middot; {asset.registrationNumber}</span></p>
                                             {!asset.eligible && (
-                                                <p className="mt-0.5 flex items-center gap-1 text-xs text-red-500">
+                                                <p className="mt-0.5 flex items-center gap-1 text-xs text-rose-500">
                                                     <AlertTriangle className="h-3 w-3" /> {asset.ineligibleReason}
                                                 </p>
                                             )}
@@ -218,7 +224,7 @@ export default function AddAssetsPage() {
                                 <Row label="Billing start" value={<BillingDateDisplay date={previewQuery.data.billingStart} />} />
                                 <Row label="Next renewal" value={<BillingDateDisplay date={previewQuery.data.nextRenewal} />} />
 
-                                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 text-xs text-indigo-800">
+                                <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-800">
                                     These assets will form a new billing group with their own renewal date.
                                 </div>
                             </div>

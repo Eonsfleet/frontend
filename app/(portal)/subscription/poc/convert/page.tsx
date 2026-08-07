@@ -5,13 +5,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Car } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Car, Cpu, AlertTriangle, Search } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { cn, extractApiError } from '@/lib/utils'
+import { QueryError } from '@/components/shared/QueryError'
 import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
 import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
+import { AddAssetActions } from '@/components/shared/subscription/AddAssetActions'
 import * as api from '@/lib/api/billing-groups'
 import type { BillingCycle } from '@/types/subscription'
 import { format } from 'date-fns'
@@ -26,7 +29,7 @@ function StepIndicator({ current }: { current: number }) {
                     <div
                         className={cn(
                             'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold',
-                            i < current ? 'bg-emerald-100 text-emerald-700' : i === current ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400',
+                            i < current ? 'bg-emerald-100 text-emerald-700' : i === current ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400',
                         )}
                     >
                         {i < current ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
@@ -43,6 +46,7 @@ export default function ConvertPocPage() {
     const [stepIndex, setStepIndex] = useState(0)
     const [planId, setPlanId] = useState<string | null>(null)
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('MONTHLY')
+    const [search, setSearch] = useState('')
     const [selectedIds, setSelectedIds] = useState<number[]>([])
     const [result, setResult] = useState<api.ConvertPocResult | null>(null)
 
@@ -54,11 +58,20 @@ export default function ConvertPocPage() {
         queryFn: api.getPlanOptions,
     })
 
-    const { data: pocAssets, isLoading: isAssetsLoading } = useQuery({
-        queryKey: ['poc-assets'],
-        queryFn: api.getPocAssets,
+    // Same eligibility pool as the Add Assets wizard: already-billed assets are
+    // excluded automatically, and users can import or manually add new ones.
+    const { data: assets, isLoading: isAssetsLoading, isError: isAssetsError, refetch: refetchAssets } = useQuery({
+        queryKey: ['eligible-assets'],
+        queryFn: api.getEligibleAssets,
         enabled: step === 'Select Assets',
     })
+
+    const filteredAssets = useMemo(() => {
+        if (!assets) return []
+        if (!search.trim()) return assets
+        const q = search.trim().toLowerCase()
+        return assets.filter((a) => a.label.toLowerCase().includes(q) || a.registrationNumber?.toLowerCase().includes(q))
+    }, [assets, search])
 
     const previewQuery = useQuery({
         queryKey: ['convert-preview', selectedIds, billingCycle],
@@ -99,7 +112,9 @@ export default function ConvertPocPage() {
                             <Row label="Billing group" value={result.billingGroupId} />
                             <Row label="Invoice" value={result.invoiceNumber} />
                         </div>
-                        <Button onClick={() => router.push('/subscription')}>Go to Subscription Overview</Button>
+                        <Button className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => router.push('/subscription')}>
+                            Go to Subscription Overview
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
@@ -133,7 +148,7 @@ export default function ConvertPocPage() {
                                         onClick={() => setPlanId(plan.id)}
                                         className={cn(
                                             'rounded-lg border p-4 text-left transition-colors',
-                                            planId === plan.id ? 'border-indigo-400 bg-indigo-50/60 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300',
+                                            planId === plan.id ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-100' : 'border-slate-200 hover:border-slate-300',
                                         )}
                                     >
                                         <p className="font-bold text-slate-900">{plan.name}</p>
@@ -161,7 +176,7 @@ export default function ConvertPocPage() {
                                     onClick={() => setBillingCycle(cycle)}
                                     className={cn(
                                         'rounded-lg border p-4 text-left transition-colors',
-                                        billingCycle === cycle ? 'border-indigo-400 bg-indigo-50/60 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300',
+                                        billingCycle === cycle ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-100' : 'border-slate-200 hover:border-slate-300',
                                     )}
                                 >
                                     <p className="font-bold capitalize text-slate-900">{cycle.toLowerCase()}</p>
@@ -176,25 +191,64 @@ export default function ConvertPocPage() {
                 </Card>
             )}
 
+            {/* Select Assets — mirrors the Add Assets wizard: already-billed assets are
+                excluded automatically; users import a file or add manually for anything
+                not yet in the eligible list. */}
             {step === 'Select Assets' && (
                 <Card className="border-slate-200 shadow-sm">
                     <CardContent className="space-y-4 p-5">
-                        {isAssetsLoading ? (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="relative max-w-xs flex-1">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input placeholder="Search vehicle, registration..." className="h-9 pl-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+                            </div>
+                            <AddAssetActions />
+                        </div>
+
+                        <p className="text-xs text-slate-400">Already-billed assets are excluded automatically. Import a file or add one manually if it isn&apos;t listed below.</p>
+
+                        {isAssetsError ? (
+                            <QueryError message="Failed to load eligible assets." onRetry={refetchAssets} />
+                        ) : isAssetsLoading ? (
                             <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
                         ) : (
                             <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                                {pocAssets?.map((asset) => (
-                                    <label key={asset.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm hover:bg-slate-50">
-                                        <Checkbox checked={selectedIds.includes(asset.id)} onCheckedChange={() => toggleAsset(asset.id)} />
-                                        <Car className="h-4 w-4 text-indigo-500" />
-                                        <span className="font-medium text-slate-800">{asset.label} <span className="font-normal text-slate-400">&middot; {asset.registrationNumber}</span></span>
+                                {filteredAssets.map((asset) => (
+                                    <label
+                                        key={asset.id}
+                                        className={cn(
+                                            'flex items-center gap-3 px-4 py-3 text-sm',
+                                            asset.eligible ? 'cursor-pointer hover:bg-slate-50' : 'cursor-not-allowed opacity-60',
+                                        )}
+                                    >
+                                        <Checkbox
+                                            checked={selectedIds.includes(asset.id)}
+                                            disabled={!asset.eligible}
+                                            onCheckedChange={() => toggleAsset(asset.id)}
+                                        />
+                                        {asset.assetType === 'Vehicle' ? <Car className="h-4 w-4 text-blue-500" /> : <Cpu className="h-4 w-4 text-purple-500" />}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-slate-800">{asset.label} <span className="font-normal text-slate-400">&middot; {asset.registrationNumber}</span></p>
+                                            {!asset.eligible && (
+                                                <p className="mt-0.5 flex items-center gap-1 text-xs text-rose-500">
+                                                    <AlertTriangle className="h-3 w-3" /> {asset.ineligibleReason}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <span className="text-xs text-slate-400">{asset.vehicleType}</span>
                                     </label>
                                 ))}
+                                {filteredAssets.length === 0 && (
+                                    <p className="px-4 py-8 text-center text-sm text-slate-400">No assets match your search.</p>
+                                )}
                             </div>
                         )}
+
                         <div className="flex items-center justify-between border-t border-slate-100 pt-4">
                             <Button variant="outline" size="sm" onClick={goBack}>Back</Button>
-                            <Button size="sm" disabled={selectedIds.length === 0} onClick={goNext} className="gap-1.5">Continue <ArrowRight className="h-3.5 w-3.5" /></Button>
+                            <Button size="sm" disabled={selectedIds.length === 0} onClick={goNext} className="gap-1.5">
+                                Continue <ArrowRight className="h-3.5 w-3.5" />
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>

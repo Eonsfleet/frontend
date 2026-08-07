@@ -141,7 +141,7 @@ export default function SubscriptionInvoiceDetailPage() {
                 {invoice.payable && (
                     <Button
                         size="sm"
-                        className="gap-2 bg-indigo-600 text-white hover:bg-indigo-700"
+                        className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
                         disabled={payMutation.isPending || verifying}
                         onClick={() => payMutation.mutate()}
                     >

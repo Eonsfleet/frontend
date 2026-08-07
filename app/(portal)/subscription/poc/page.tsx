@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { QueryError } from '@/components/shared/QueryError'
 import { EmptyState } from '@/components/shared/subscription/EmptyState'
 import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
+import { KpiTile } from '@/components/shared/subscription/KpiTile'
 import * as api from '@/lib/api/billing-groups'
 
 export default function PocOverviewPage() {
@@ -49,14 +50,14 @@ export default function PocOverviewPage() {
             </div>
 
             {isExpired ? (
-                <Card className="border-red-200 bg-red-50 shadow-sm">
+                <Card className="border-rose-200 bg-rose-50 shadow-sm">
                     <CardContent className="p-6">
-                        <h2 className="text-lg font-bold text-red-900">Your POC has ended</h2>
-                        <p className="mt-1 text-sm text-red-700">
+                        <h2 className="text-lg font-bold text-rose-900">Your POC has ended</h2>
+                        <p className="mt-1 text-sm text-rose-700">
                             The evaluation period ended on <BillingDateDisplay date={poc.endDate} className="inline font-semibold" />. Your data has been retained.
                             Convert to Production or contact your EonsFleet account manager.
                         </p>
-                        <Button asChild size="sm" className="mt-4 bg-red-600 text-white hover:bg-red-700">
+                        <Button asChild size="sm" className="mt-4 bg-blue-600 text-white hover:bg-blue-700">
                             <Link href="/subscription/poc/convert">Convert to Production</Link>
                         </Button>
                     </CardContent>
@@ -69,7 +70,7 @@ export default function PocOverviewPage() {
                             Convert to Production to continue using EonsFleet after this date.
                         </p>
                         <div className="flex shrink-0 gap-2">
-                            <Button asChild size="sm" className="bg-amber-600 text-white hover:bg-amber-700">
+                            <Button asChild size="sm" className="bg-blue-600 text-white hover:bg-blue-700">
                                 <Link href="/subscription/poc/convert">View Production plans</Link>
                             </Button>
                             <Button variant="outline" size="sm">Contact account manager</Button>
@@ -78,40 +79,17 @@ export default function PocOverviewPage() {
                 </Card>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <CalendarClock className="h-3.5 w-3.5 text-indigo-500" /> Days Remaining
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent><p className="text-xl font-bold text-slate-900">{Math.max(poc.daysRemaining, 0)} days</p></CardContent>
-                </Card>
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <Car className="h-3.5 w-3.5 text-indigo-500" /> Assets Used
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xl font-bold text-slate-900">{poc.assetsUsed} of {poc.assetLimit}</p>
-                        {limitReached && <p className="mt-1 text-xs font-medium text-amber-600">You have reached the approved limit of {poc.assetLimit} assets.</p>}
-                    </CardContent>
-                </Card>
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">POC End Date</CardTitle>
-                    </CardHeader>
-                    <CardContent><BillingDateDisplay date={poc.endDate} className="text-base font-bold text-slate-900" /></CardContent>
-                </Card>
-                <Card className="border-slate-200 shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            <User className="h-3.5 w-3.5 text-indigo-500" /> Account Manager
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent><p className="text-base font-bold text-slate-900">{poc.accountManager ?? 'Not assigned'}</p></CardContent>
-                </Card>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+                <KpiTile icon={CalendarClock} color="blue" label="Days Remaining" value={`${Math.max(poc.daysRemaining, 0)} days`} />
+                <KpiTile
+                    icon={Car}
+                    color={limitReached ? 'amber' : 'purple'}
+                    label="Assets Used"
+                    value={`${poc.assetsUsed} of ${poc.assetLimit}`}
+                    caption={limitReached ? `You have reached the approved limit of ${poc.assetLimit} assets.` : undefined}
+                />
+                <KpiTile icon={CalendarClock} color="amber" label="POC End Date" value={<BillingDateDisplay date={poc.endDate} />} />
+                <KpiTile icon={User} color="blue" label="Account Manager" value={poc.accountManager ?? 'Not assigned'} />
             </div>
 
             <Card className="overflow-hidden border-slate-200 shadow-sm">
@@ -151,7 +129,7 @@ export default function PocOverviewPage() {
             </Card>
 
             <div className="flex justify-end">
-                <Button asChild className="gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+                <Button asChild className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
                     <Link href="/subscription/poc/convert">Convert to Production <ArrowRight className="h-4 w-4" /></Link>
                 </Button>
             </div>

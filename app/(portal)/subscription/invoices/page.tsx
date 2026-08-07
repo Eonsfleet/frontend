@@ -96,7 +96,7 @@ export default function SubscriptionInvoicesPage() {
                                                         <Link href={`/subscription/invoices/${invoice.id}`}><Eye className="h-3.5 w-3.5" /> View</Link>
                                                     </Button>
                                                     {invoice.payable && (
-                                                        <Button asChild size="sm" className="h-7 gap-1 bg-indigo-600 text-xs text-white hover:bg-indigo-700">
+                                                        <Button asChild size="sm" className="h-7 gap-1 bg-blue-600 text-xs text-white hover:bg-blue-700">
                                                             <Link href={`/subscription/invoices/${invoice.id}`}><CreditCard className="h-3.5 w-3.5" /> Pay</Link>
                                                         </Button>
                                                     )}

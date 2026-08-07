@@ -169,7 +169,17 @@ export const getVehiclesBatched = async (params: ListVehiclesParams = {}): Promi
         currentPage++
     } while (currentPage <= lastPage)
 
-    return allVehicles
+    // Pages can overlap when the backend's result set shifts between requests
+    // (e.g. a vehicle updated mid-fetch reorders pages), which duplicates a
+    // record across two pages — dedupe by id so callers never see the same
+    // vehicle twice (React keys, uuid-keyed maps, etc. all assume uniqueness).
+    const seen = new Set<string>()
+    return allVehicles.filter((v) => {
+        const key = String(v.id)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+    })
 }
 
 export const getVehiclesLocationsBatched = async (params: { page?: number; per_page?: number } = {}): Promise<VehicleLocation[]> => {

@@ -252,3 +252,10 @@ export interface PocAsset {
     activatedDate: string
     status: 'active' | 'inactive'
 }
+
+export interface ManualAssetInput {
+    assetType: 'Vehicle' | 'Device'
+    label: string
+    registrationNumber: string
+    vehicleType: string
+}

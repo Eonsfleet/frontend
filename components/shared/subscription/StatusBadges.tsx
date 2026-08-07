@@ -7,22 +7,21 @@ import type {
     PaymentStatus,
 } from '@/types/subscription'
 
-type BadgeTone = 'slate' | 'emerald' | 'amber' | 'red' | 'blue' | 'violet'
+type BadgeTone = 'slate' | 'emerald' | 'amber' | 'rose' | 'blue'
 
 const TONE_CLASSES: Record<BadgeTone, string> = {
-    slate: 'bg-slate-100 text-slate-600 border-slate-200',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    amber: 'bg-amber-50 text-amber-700 border-amber-100',
-    red: 'bg-red-50 text-red-600 border-red-100',
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-    violet: 'bg-violet-50 text-violet-700 border-violet-100',
+    slate: 'bg-slate-100 text-slate-500 border-slate-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    rose: 'bg-rose-50 text-rose-700 border-rose-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
 function TextBadge({ label, tone, className }: { label: string; tone: BadgeTone; className?: string }) {
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap',
+                'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap',
                 TONE_CLASSES[tone],
                 className,
             )}
@@ -37,9 +36,9 @@ const SUBSCRIPTION_STATUS_CONFIG: Record<SubscriptionStatus, { label: string; to
     PENDING_ACTIVATION: { label: 'Pending Activation', tone: 'blue' },
     ACTIVE: { label: 'Active', tone: 'emerald' },
     PAST_DUE: { label: 'Past Due', tone: 'amber' },
-    SUSPENDED: { label: 'Suspended', tone: 'red' },
+    SUSPENDED: { label: 'Suspended', tone: 'rose' },
     CANCELLED: { label: 'Cancelled', tone: 'slate' },
-    EXPIRED: { label: 'Expired', tone: 'red' },
+    EXPIRED: { label: 'Expired', tone: 'rose' },
 }
 
 export function SubscriptionStatusBadge({ status, className }: { status: SubscriptionStatus; className?: string }) {
@@ -52,8 +51,8 @@ const POC_STATUS_CONFIG: Record<PocStatus, { label: string; tone: BadgeTone }> =
     PENDING_APPROVAL: { label: 'Pending Approval', tone: 'amber' },
     SCHEDULED: { label: 'Scheduled', tone: 'blue' },
     ACTIVE: { label: 'Active', tone: 'emerald' },
-    EXPIRED: { label: 'Expired', tone: 'red' },
-    CONVERTED: { label: 'Converted', tone: 'violet' },
+    EXPIRED: { label: 'Expired', tone: 'rose' },
+    CONVERTED: { label: 'Converted', tone: 'blue' },
     CANCELLED: { label: 'Cancelled', tone: 'slate' },
 }
 
@@ -66,7 +65,7 @@ const BILLING_GROUP_STATUS_CONFIG: Record<BillingGroupStatus, { label: string; t
     PENDING: { label: 'Pending', tone: 'slate' },
     ACTIVE: { label: 'Active', tone: 'emerald' },
     PAST_DUE: { label: 'Past Due', tone: 'amber' },
-    SUSPENDED: { label: 'Suspended', tone: 'red' },
+    SUSPENDED: { label: 'Suspended', tone: 'rose' },
     CANCELLED: { label: 'Cancelled', tone: 'slate' },
     COMPLETED: { label: 'Completed', tone: 'blue' },
 }
@@ -81,7 +80,7 @@ const INVOICE_STATUS_CONFIG: Record<InvoiceStatus, { label: string; tone: BadgeT
     ISSUED: { label: 'Issued', tone: 'blue' },
     PARTIALLY_PAID: { label: 'Partially Paid', tone: 'amber' },
     PAID: { label: 'Paid', tone: 'emerald' },
-    OVERDUE: { label: 'Overdue', tone: 'red' },
+    OVERDUE: { label: 'Overdue', tone: 'rose' },
     VOID: { label: 'Void', tone: 'slate' },
     CANCELLED: { label: 'Cancelled', tone: 'slate' },
 }
@@ -95,10 +94,10 @@ const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, { label: string; tone: BadgeT
     PENDING: { label: 'Pending', tone: 'slate' },
     PROCESSING: { label: 'Processing', tone: 'blue' },
     SUCCESSFUL: { label: 'Successful', tone: 'emerald' },
-    FAILED: { label: 'Failed', tone: 'red' },
+    FAILED: { label: 'Failed', tone: 'rose' },
     CANCELLED: { label: 'Cancelled', tone: 'slate' },
-    REFUNDED: { label: 'Refunded', tone: 'violet' },
-    PARTIALLY_REFUNDED: { label: 'Partially Refunded', tone: 'violet' },
+    REFUNDED: { label: 'Refunded', tone: 'amber' },
+    PARTIALLY_REFUNDED: { label: 'Partially Refunded', tone: 'amber' },
 }
 
 export function PaymentStatusBadge({ status, className }: { status: PaymentStatus; className?: string }) {

@@ -17,7 +17,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format, subHours } from 'date-fns'
-import { getFuelEvents, getFuelLevelTrend, getFuelRateTrend, getFuelVehicles, type FuelEventApiItem, type FuelLevelTrendFilter, type FuelLevelTrendPoint, type FuelRateTrendFilter } from '@/lib/api/fuel'
+import { getFuelEvents, getFuelLevelTrend, getFuelRateTrend, getFuelVehiclesRealtime, type FuelEventApiItem, type FuelLevelTrendFilter, type FuelLevelTrendPoint, type FuelRateTrendFilter } from '@/lib/api/fuel'
 import type { FuelVehicle } from '@/types/fuel'
 import type { VehicleMovement } from './useFuelOverview'
 import { useFuelLiveSync, type FuelLiveOverride } from './useFuelLiveSync'
@@ -336,7 +336,7 @@ function vehicleRows(payload: unknown): RealtimeVehicleSource[] {
     return []
 }
 
-function vehiclePagination(payload: Awaited<ReturnType<typeof getFuelVehicles>>) {
+function vehiclePagination(payload: Awaited<ReturnType<typeof getFuelVehiclesRealtime>>) {
     const pagination = payload.data.pagination as unknown as Record<string, unknown>
     return {
         current: Number(pagination.current ?? pagination.current_page ?? 1),
@@ -346,12 +346,12 @@ function vehiclePagination(payload: Awaited<ReturnType<typeof getFuelVehicles>>)
 
 async function getAllFuelRealtimeVehicles(): Promise<FuelVehicle[]> {
     const perPage = 100
-    const firstPage = await getFuelVehicles({ page: 1, per_page: perPage })
+    const firstPage = await getFuelVehiclesRealtime({ page: 1, per_page: perPage })
     const vehicles = [...vehicleRows(firstPage)]
     const { lastPage } = vehiclePagination(firstPage)
 
     for (let page = 2; page <= lastPage; page += 1) {
-        const response = await getFuelVehicles({ page, per_page: perPage })
+        const response = await getFuelVehiclesRealtime({ page, per_page: perPage })
         vehicles.push(...vehicleRows(response))
     }
 
@@ -465,6 +465,5 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
         isEventsLoading: eventsQuery.isLoading && !eventsQuery.data,
         isEventsRefreshing: eventsQuery.isFetching && !!eventsQuery.data,
         isLoading: vehiclesQuery.isLoading,
-        isError: vehiclesQuery.isError,
     }
 }
