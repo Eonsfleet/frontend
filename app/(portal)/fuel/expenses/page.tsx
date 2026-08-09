@@ -9,6 +9,8 @@ import {
   Loader2,
   Plus,
   Download,
+  Upload,
+  FileSpreadsheet,
   Search,
   AlertCircle,
   CheckCircle2,
@@ -19,6 +21,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -421,6 +424,149 @@ function LogExpenseDialog({
   );
 }
 
+// ── Import dialog ────────────────────────────────────────────────────────────
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function ImportFuelTransactionsDialog({
+  open,
+  isPending,
+  onClose,
+  onImport,
+}: {
+  open: boolean;
+  isPending?: boolean;
+  onClose: () => void;
+  onImport: (file: File) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+
+  const templateMutation = useMutation({
+    mutationFn: api.downloadFuelTransactionImportTemplate,
+    onSuccess: (blob) =>
+      downloadBlob(blob, "fuel-transactions-import-template.xlsx"),
+    onError: (error) =>
+      toast.error(extractApiError(error, "Failed to download template.")),
+  });
+
+  const close = () => {
+    setFile(null);
+    onClose();
+  };
+
+  const selectFile = (nextFile: File | undefined) => {
+    if (!nextFile) return;
+    const extension = nextFile.name.split(".").pop()?.toLowerCase();
+    if (!["xlsx", "xls", "csv"].includes(extension ?? "")) {
+      toast.error("Only Excel (.xlsx/.xls) and CSV files are accepted.");
+      return;
+    }
+    setFile(nextFile);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) close();
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Import Fuel Expenses</DialogTitle>
+          <DialogDescription>
+            Upload a filled fuel expense template. Column headers are matched
+            automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  Start with the import template
+                </p>
+                <p className="mt-0.5 text-[12px] text-slate-500">
+                  Use the expected columns before uploading fuel expense data.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-2 bg-white"
+                disabled={templateMutation.isPending}
+                onClick={() => templateMutation.mutate()}
+              >
+                {templateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}{" "}
+                Template
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <Label>Expense File</Label>
+            <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+              <FileSpreadsheet className="h-9 w-9 text-blue-500" />
+              <span className="text-sm font-semibold text-slate-700">
+                {file ? file.name : "Choose Excel or CSV file"}
+              </span>
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                XLSX, XLS or CSV, max 10 MB
+              </span>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="sr-only"
+                disabled={isPending}
+                onChange={(event) => selectFile(event.target.files?.[0])}
+              />
+            </label>
+          </div>
+
+          <p className="text-[12px] text-slate-500">
+            Rows are reconciled in the background. You’ll receive an email
+            report when the import completes.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={close}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="bg-blue-600 text-white hover:bg-blue-700"
+            disabled={!file || isPending}
+            onClick={() => file && onImport(file)}
+          >
+            {isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            Import
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page Component ──────────────────────────────────────────────────────
 
 export default function FuelExpensesPage() {
@@ -432,6 +578,7 @@ export default function FuelExpensesPage() {
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [
@@ -462,6 +609,27 @@ export default function FuelExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
     },
     onError: (err) => toast.error(extractApiError(err)),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.importFuelTransactions(formData);
+    },
+    onSuccess: (response) => {
+      toast.success(
+        response.message ||
+          "Import received. You’ll get an email report when reconciliation completes.",
+      );
+      queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
+      setImportOpen(false);
+    },
+    onError: (error) =>
+      toast.error(
+        extractApiError(error, "Failed to import fuel transactions."),
+      ),
   });
 
   const handleExport = async () => {
@@ -516,6 +684,20 @@ export default function FuelExpensesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={importMutation.isPending}
+            onClick={() => setImportOpen(true)}
+            className="shadow-sm"
+          >
+            {importMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}{" "}
+            Import
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -813,6 +995,12 @@ export default function FuelExpensesPage() {
 
       <LogExpenseDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RejectDialog expenseId={rejectId} onClose={() => setRejectId(null)} />
+      <ImportFuelTransactionsDialog
+        open={importOpen}
+        isPending={importMutation.isPending}
+        onClose={() => setImportOpen(false)}
+        onImport={(file) => importMutation.mutate(file)}
+      />
     </div>
   );
 }

@@ -29,6 +29,11 @@ export const getDevices = async (params?: any): Promise<{ data: { devices: any[]
     return res.data
 }
 
+export const exportDevices = async (params?: { status?: 'online' | 'offline' }): Promise<Blob> => {
+    const res = await apiClient.get('/devices/export', { params, responseType: 'blob' })
+    return res.data
+}
+
 /**
  * Device hardware record (IMEI, phone number, online status, linked hardware
  * model) — distinct from getDeviceStatus, which hits /tracker/{imei} and only
