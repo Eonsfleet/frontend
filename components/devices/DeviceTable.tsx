@@ -220,7 +220,7 @@ export function DeviceTable({
           return (
             <div className="flex items-center gap-2">
               <Truck className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-sm text-slate-900">
+              <span className="text-sm text-slate-900 uppercase">
                 {vehicle.attributes.registration_number}
               </span>
             </div>
