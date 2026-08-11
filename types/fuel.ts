@@ -11,6 +11,7 @@ export interface FuelExpense {
         amount: number
         currency: string
         purchase_from: string | null
+        receipt_url?: string | null
         reference_number: string | null
         status: FuelExpenseStatus
         reconciliation_status?: FuelReconciliationStatus

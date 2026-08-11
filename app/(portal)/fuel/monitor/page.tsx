@@ -58,6 +58,10 @@ import {
   useFuelLiveSync,
   type FuelLiveOverride,
 } from "../components/useFuelLiveSync";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
 
 function FuelGauge({
   percent,
@@ -235,7 +239,11 @@ function VehicleDetailDialog({
           <DialogTitle className="flex items-center gap-2">
             <span>Vehicle Fuel Status:</span>
             <span className="text-emerald-600 uppercase">
-              {vehicle?.attributes?.registration_number}
+              {vehicle
+                ? formatVehicleRegistration(
+                    vehicle.attributes.registration_number,
+                  )
+                : ""}
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -782,10 +790,13 @@ export default function LiveMonitorPage() {
                       <FuelLevelBadge percent={level} />
                     </div>
                     <CardTitle className="text-sm font-bold text-slate-900 mt-1 uppercase">
-                      {v.attributes.registration_number}
+                      {formatVehicleRegistration(v.attributes.registration_number)}
                     </CardTitle>
                     <p className="text-xs text-slate-400">
-                      {v.attributes.make} {v.attributes.model}
+                      {formatVehicleMakeModel(
+                        v.attributes.make,
+                        v.attributes.model,
+                      )}
                     </p>
                   </CardHeader>
                   <CardContent className="px-4 pb-4 pt-3 space-y-3">

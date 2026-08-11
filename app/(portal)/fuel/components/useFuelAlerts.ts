@@ -11,10 +11,11 @@ import {
     markFuelAlertFalsePositive,
     type FuelAlertLogApiItem,
 } from '@/lib/api/fuel'
+import { formatVehicleMakeModel, formatVehicleRegistration } from './formatVehicleText'
 
 export type AlertType = 'low_fuel' | 'fuel_theft' | 'rapid_drop' | 'unauthorized_drain' | 'sensor_error' | 'refill'
 export type Severity = 'critical' | 'warning' | 'info'
-export type AlertStatus = 'new' | 'acknowledged' | 'investigating' | 'resolved'
+export type AlertStatus = 'new' | 'acknowledged' | 'investigating' | 'resolved' | 'false_positive'
 
 export interface FuelAlertRow {
     id: string
@@ -40,28 +41,30 @@ export interface FuelAlertRow {
     lastUpdated: string
     lat: number
     lng: number
+    hasLocation: boolean
 }
 
 export const TYPE_META: Record<AlertType, { label: string; badge: string }> = {
     low_fuel: { label: 'Low Fuel', badge: 'bg-amber-50 text-amber-600' },
     fuel_theft: { label: 'Fuel Theft', badge: 'bg-rose-50 text-rose-600' },
-    rapid_drop: { label: 'Rapid Drop', badge: 'bg-purple-50 text-purple-600' },
-    unauthorized_drain: { label: 'Unauthorized Drain', badge: 'bg-purple-50 text-purple-600' },
+    rapid_drop: { label: 'Rapid Drop', badge: 'bg-sky-50 text-[#0055FF]' },
+    unauthorized_drain: { label: 'Unauthorized Drain', badge: 'bg-sky-50 text-[#0055FF]' },
     sensor_error: { label: 'Sensor Error', badge: 'bg-emerald-50 text-emerald-600' },
-    refill: { label: 'Refill', badge: 'bg-blue-50 text-blue-600' },
+    refill: { label: 'Refill', badge: 'bg-blue-50 text-[#0055FF]' },
 }
 
 export const SEVERITY_META: Record<Severity, { label: string; badge: string }> = {
     critical: { label: 'Critical', badge: 'bg-rose-50 text-rose-600' },
     warning: { label: 'Warning', badge: 'bg-amber-50 text-amber-600' },
-    info: { label: 'Info', badge: 'bg-blue-50 text-blue-600' },
+    info: { label: 'Info', badge: 'bg-blue-50 text-[#0055FF]' },
 }
 
 export const STATUS_META: Record<AlertStatus, { label: string; badge: string }> = {
     new: { label: 'New', badge: 'bg-rose-50 text-rose-600' },
-    acknowledged: { label: 'Acknowledged', badge: 'bg-blue-50 text-blue-600' },
-    investigating: { label: 'Investigating', badge: 'bg-purple-50 text-purple-600' },
+    acknowledged: { label: 'Acknowledged', badge: 'bg-blue-50 text-[#0055FF]' },
+    investigating: { label: 'Investigating', badge: 'bg-sky-50 text-[#0055FF]' },
     resolved: { label: 'Resolved', badge: 'bg-emerald-50 text-emerald-600' },
+    false_positive: { label: 'False Positive', badge: 'bg-slate-100 text-slate-600' },
 }
 
 export interface AlertKpis {
@@ -129,6 +132,7 @@ function normalizeStatus(value: unknown): AlertStatus {
     if (status === 'acknowledged') return 'acknowledged'
     if (status === 'investigating') return 'investigating'
     if (status === 'resolved') return 'resolved'
+    if (status === 'false_positive' || status === 'false-positive') return 'false_positive'
     return 'new'
 }
 
@@ -168,6 +172,8 @@ function mapAlertLog(item: FuelAlertLogApiItem, index: number): FuelAlertRow {
     const detailTimeline = asRecord(detail.timeline)
     const vehicle = asRecord(item.vehicle ?? table.vehicle ?? detail.vehicle ?? relationships.vehicle)
     const location = asRecord(item.location ?? table.location ?? detail.location ?? attributes.location)
+    const rawLat = location.lat ?? location.latitude
+    const rawLng = location.lng ?? location.longitude
     const type = normalizeType(tableType.key ?? item.type ?? attributes.type ?? attributes.alert_type)
     const severity = normalizeSeverity(tableSeverity.key ?? item.severity ?? attributes.severity)
     const status = normalizeStatus(tableStatus.key ?? item.status ?? attributes.status)
@@ -179,13 +185,18 @@ function mapAlertLog(item: FuelAlertLogApiItem, index: number): FuelAlertRow {
     const fuelLiters = asNumber(detailFuelLevel.liters ?? attributes.fuel_liters ?? attributes.fuel_level_liters ?? attributes.current_fuel_level)
 
     const vehicleIdRaw = vehicle.id ?? attributes.vehicle_id ?? item.vehicle_id
+    const formattedModel =
+        String(vehicle.label ?? vehicle.name ?? '').trim()
+        || formatVehicleMakeModel(vehicle.make ?? attributes.make, vehicle.model ?? attributes.model)
+        || '—'
+
     return {
         id: String(table.id ?? item.id ?? attributes.id ?? index),
         vehicleId: vehicleIdRaw != null && Number.isFinite(Number(vehicleIdRaw)) ? Number(vehicleIdRaw) : null,
         title: String(tableAlert.title ?? item.title ?? attributes.title ?? titleFor(type)),
         description: String(tableAlert.description ?? item.message ?? item.description ?? attributes.message ?? attributes.description ?? titleFor(type)),
-        vehicle: String(vehicle.registration_number ?? attributes.registration_number ?? '—'),
-        model: String(vehicle.label ?? vehicle.name ?? (`${String(vehicle.make ?? attributes.make ?? '')} ${String(vehicle.model ?? attributes.model ?? '')}`.trim() || '—')),
+        vehicle: formatVehicleRegistration(vehicle.registration_number ?? attributes.registration_number ?? '—'),
+        model: formattedModel,
         type,
         severity,
         time: String(tableTime.time ?? (hasDate ? format(date, 'hh:mm a') : '—')),
@@ -199,8 +210,9 @@ function mapAlertLog(item: FuelAlertLogApiItem, index: number): FuelAlertRow {
         fuelCapacity: asNumber(detailMetrics.fuel_capacity_liters ?? attributes.fuel_capacity ?? attributes.tank_capacity, 100),
         consumptionLph: asNumber(detailMetrics.fuel_consumption_lph ?? attributes.consumption_lph ?? attributes.fuel_rate, 0),
         lastUpdated: String(detailTimeline.last_updated ?? (hasDate ? format(date, 'hh:mm a, MMM d, yyyy') : '—')),
-        lat: asNumber(location.lat ?? location.latitude, 6.5244),
-        lng: asNumber(location.lng ?? location.longitude, 3.3792),
+        lat: asNumber(rawLat, 6.5244),
+        lng: asNumber(rawLng, 3.3792),
+        hasLocation: rawLat != null && rawLng != null,
     }
 }
 
@@ -336,4 +348,3 @@ export function useAlertFuelTrend(alert: FuelAlertRow | null): { points: AlertTr
         return { points, isLoading: query.isFetching }
     }, [query.data, query.isFetching])
 }
-

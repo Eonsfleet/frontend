@@ -80,21 +80,22 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
     ]
 
     return (
-        <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-4 shadow-none">
+        <Card className="flex h-full flex-col overflow-hidden rounded-2xl border-0 bg-white p-0 shadow-none">
+            <div className="bg-slate-50/70 px-4 py-3">
             <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">
                     Vehicles <span className="text-slate-400">({vehicles.length})</span>
                 </h2>
             </div>
 
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2">
                 <div className="relative flex-1">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search vehicle..."
-                        className="h-9 border-slate-200 bg-slate-50 pl-8 text-sm"
+                        className="h-9 border-0 bg-slate-50 pl-8 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
                         aria-label="Search vehicles"
                     />
                 </div>
@@ -107,14 +108,14 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                         className={cn(
                             'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-200',
                             filter !== 'all'
-                                ? 'border-blue-200 bg-blue-50 text-blue-600'
-                                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50',
+                                ? 'border-0 bg-blue-50 text-[#0055FF]'
+                                : 'border-0 bg-white text-slate-500 hover:bg-slate-50',
                         )}
                     >
                         <SlidersHorizontal className="h-4 w-4" />
                     </button>
                     {filterMenuOpen && (
-                        <div className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg bg-white py-1 shadow-lg">
                             {tabs.map((t) => (
                                 <button
                                     key={t.key}
@@ -122,7 +123,7 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                                     onClick={() => { setFilter(t.key); setFilterMenuOpen(false) }}
                                     className={cn(
                                         'flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] font-medium transition-colors hover:bg-slate-50',
-                                        filter === t.key ? 'text-blue-600' : 'text-slate-600',
+                                        filter === t.key ? 'text-[#0055FF]' : 'text-slate-600',
                                     )}
                                 >
                                     <span>{t.label} ({t.count})</span>
@@ -135,7 +136,7 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
             </div>
 
             {/* Status tabs — horizontally scrollable so they never overflow the rail */}
-            <div className="mt-1 flex items-center gap-4 overflow-x-auto scrollbar-hide border-b border-slate-100">
+            <div className="mt-2 flex items-center gap-2 overflow-x-auto scrollbar-hide">
                 {tabs.map((t) => (
                     <button
                         key={t.key}
@@ -143,18 +144,17 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                         onClick={() => setFilter(t.key)}
                         aria-current={filter === t.key ? 'true' : undefined}
                         className={cn(
-                            'relative shrink-0 whitespace-nowrap pb-2 text-[13px] transition-colors duration-200',
-                            filter === t.key ? 'font-semibold text-blue-600' : 'font-medium text-slate-500 hover:text-slate-700',
+                            'shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[12px] transition-colors duration-200',
+                            filter === t.key ? 'bg-[#0055FF] font-semibold text-white' : 'font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700',
                         )}
                     >
                         {t.label} ({t.count})
-                        {filter === t.key && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-blue-600" />}
                     </button>
                 ))}
             </div>
+            </div>
 
-            {/* Rows */}
-            <div className="-mx-1 mt-0.5 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
+            <div className="fuel-record-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
                 {isLoading ? (
                     Array.from({ length: 6 }).map((_, i) => (
                         <div key={i} className="flex items-center gap-3 px-2 py-2.5">
@@ -177,9 +177,9 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                                 type="button"
                                 onClick={() => onSelect(v.id)}
                                 className={cn(
-                                    'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-200',
+                                    'flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors duration-200',
                                     active
-                                        ? 'border-l-2 border-blue-600 bg-blue-50/60'
+                                        ? 'border-l-2 border-[#0055FF] bg-blue-50/60'
                                         : 'border-l-2 border-transparent hover:bg-slate-50',
                                 )}
                             >

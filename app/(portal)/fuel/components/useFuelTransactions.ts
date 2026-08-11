@@ -17,6 +17,10 @@ import {
   type FuelPagination,
   type FuelTransactionApiItem,
 } from "@/lib/api/fuel";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "./formatVehicleText";
 
 export type TxType = "refill" | "theft" | "leakage";
 export type PaymentMethod = "fleet_card" | "cash";
@@ -314,19 +318,22 @@ function mapRow(item: FuelTransactionApiItem): TransactionRow {
     date: occurredAt ? formatDatePart(occurredAt, "MMM d, yyyy") : "-",
     time: occurredAt ? formatDatePart(occurredAt, "hh:mm a") : "-",
     occurredAt,
-    vehicle: readString(
-      vehicle,
-      ["registration_number", "registration", "name"],
+    vehicle: formatVehicleRegistration(
       readString(
-        attributes,
-        ["registration_number", "vehicle_registration"],
-        "-",
+        vehicle,
+        ["registration_number", "registration", "name"],
+        readString(
+          attributes,
+          ["registration_number", "vehicle_registration"],
+          "-",
+        ),
       ),
     ),
     vehicleModel:
-      [readString(vehicle, ["make"], ""), readString(vehicle, ["model"], "")]
-        .filter(Boolean)
-        .join(" ") || "-",
+      formatVehicleMakeModel(
+        readString(vehicle, ["make"], ""),
+        readString(vehicle, ["model"], ""),
+      ) || "-",
     vehicleId,
     type,
     source,

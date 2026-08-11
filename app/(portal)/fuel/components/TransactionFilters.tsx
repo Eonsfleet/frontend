@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { getFuelVehicles } from '@/lib/api/fuel'
 import { cn } from '@/lib/utils'
 import type { FuelTransactionFilters, ReconciliationStatus, TxType } from './useFuelTransactions'
+import { formatVehicleMakeModel, formatVehicleRegistration } from './formatVehicleText'
 
 interface TransactionFiltersProps {
     filters: FuelTransactionFilters
@@ -58,8 +59,8 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
         return (vehiclesQuery.data?.data.vehicles ?? [])
             .map((vehicle) => ({
                 id: Number(vehicle.id),
-                label: vehicle.attributes.registration_number,
-                meta: `${vehicle.attributes.make} ${vehicle.attributes.model}`.trim(),
+                label: formatVehicleRegistration(vehicle.attributes.registration_number),
+                meta: formatVehicleMakeModel(vehicle.attributes.make, vehicle.attributes.model),
             }))
             .filter((vehicle) => {
                 if (!q) return true
@@ -138,7 +139,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                             onClick={() => setIsVehicleOpen((open) => !open)}
                         >
                             <span className="min-w-0 truncate">
-                                {selectedVehicle?.attributes.registration_number ?? 'All vehicles'}
+                                {selectedVehicle ? formatVehicleRegistration(selectedVehicle.attributes.registration_number) : 'All vehicles'}
                             </span>
                             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
                         </button>

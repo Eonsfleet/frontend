@@ -19,6 +19,11 @@ import {
   Clock,
   ReceiptText,
   Truck,
+  SlidersHorizontal,
+  MoreHorizontal,
+  Link2Off,
+  Trash2,
+  ExternalLink,
 } from "lucide-react";
 import {
   Dialog,
@@ -29,6 +34,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/lib/api/fuel";
 import { getVehicles } from "@/lib/api/vehicles";
@@ -43,6 +62,10 @@ import { QueryError } from "@/components/shared/QueryError";
 import { useAuthStore } from "@/store/authStore";
 import { PAGE_SIZE_DEFAULT, PAGE_SIZE_DROPDOWN } from "@/lib/config";
 import { FuelTabs } from "../components/FuelTabs";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -283,6 +306,55 @@ function RejectDialog({
   );
 }
 
+function DeleteExpenseDialog({
+  expense,
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  expense: FuelExpense | null;
+  isPending?: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={!!expense} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-rose-500" />
+            Delete Expense
+          </DialogTitle>
+          <DialogDescription>
+            This will permanently delete{" "}
+            {expense?.attributes.reference_number || `EXP-${expense?.id}`} from
+            the fuel expense ledger.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-0 bg-slate-100 shadow-none"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isPending}
+            onClick={onConfirm}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Log Expense dialog ───────────────────────────────────────────────────────
 
 const logSchema = z.object({
@@ -365,8 +437,13 @@ function LogExpenseDialog({
                 <option value="">Select vehicle...</option>
                 {vehiclesData?.data?.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.attributes.registration_number} — {v.attributes.make}{" "}
-                    {v.attributes.model}
+                    {formatVehicleRegistration(
+                      v.attributes.registration_number,
+                    )}{" "}
+                    — {formatVehicleMakeModel(
+                      v.attributes.make,
+                      v.attributes.model,
+                    )}
                   </option>
                 ))}
               </select>
@@ -621,8 +698,10 @@ export default function FuelExpensesPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
+  const [deleteExpense, setDeleteExpense] = useState<FuelExpense | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [
@@ -646,14 +725,56 @@ export default function FuelExpensesPage() {
     queryFn: () => api.getFuelExpenseMetrics(),
   });
 
+  const activeFilterCount = [
+    search,
+    statusFilter,
+    reconciliationFilter,
+    startDate,
+    endDate,
+  ].filter(Boolean).length;
+
+  const refreshFuelExpenses = () => {
+    queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
+    queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setReconciliationFilter("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
+
   const { mutate: handleApprove, isPending: isApproving } = useMutation({
     mutationFn: (id: string | number) => api.approveFuelExpense(id),
     onSuccess: () => {
       toast.success("Expense approved.");
-      queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
+      refreshFuelExpenses();
     },
     onError: (err) => toast.error(extractApiError(err)),
+  });
+
+  const { mutate: handleUnlink, isPending: isUnlinking } = useMutation({
+    mutationFn: (id: string | number) => api.unlinkExpenseTransaction(id),
+    onSuccess: () => {
+      toast.success("Matched transaction unlinked.");
+      refreshFuelExpenses();
+    },
+    onError: (err) =>
+      toast.error(extractApiError(err, "Failed to unlink transaction.")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (expense: FuelExpense) => api.deleteFuelExpense(expense.id),
+    onSuccess: () => {
+      toast.success("Expense deleted.");
+      refreshFuelExpenses();
+      setDeleteExpense(null);
+    },
+    onError: (err) =>
+      toast.error(extractApiError(err, "Failed to delete expense.")),
   });
 
   const importMutation = useMutation({
@@ -730,6 +851,20 @@ export default function FuelExpensesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -815,107 +950,6 @@ export default function FuelExpensesPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Filters */}
-      <Card className="border-0 shadow-none">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search vehicle, driver, reference..."
-                className="pl-9 bg-slate-50 border-0 shadow-none h-9 focus-visible:border-0 focus-visible:ring-0"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                Status
-              </Label>
-              <select
-                className="w-full h-9 bg-slate-50 rounded-md px-3 text-sm focus:outline-none"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All Statuses</option>
-                <option value="pending_approval">Pending</option>
-                <option value="flagged_for_review">Review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="reimbursed">Reimbursed</option>
-              </select>
-            </div>
-            <div className="w-44">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                Reconciliation
-              </Label>
-              <select
-                className="w-full h-9 bg-slate-50 rounded-md px-3 text-sm focus:outline-none"
-                value={reconciliationFilter}
-                onChange={(e) => {
-                  setReconciliationFilter(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All Records</option>
-                <option value="matched">Matched</option>
-                <option value="flagged_variance">Variance</option>
-                <option value="unmatched">Unmatched</option>
-              </select>
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                From
-              </Label>
-              <Input
-                type="date"
-                className="h-9 bg-slate-50 border-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                To
-              </Label>
-              <Input
-                type="date"
-                className="h-9 bg-slate-50 border-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            {(search ||
-              statusFilter ||
-              reconciliationFilter ||
-              startDate ||
-              endDate) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 text-slate-500 hover:text-slate-900"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("");
-                  setReconciliationFilter("");
-                  setStartDate("");
-                  setEndDate("");
-                  setPage(1);
-                }}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card className="border-0 shadow-none">
         <CardContent className="p-0">
@@ -1016,12 +1050,18 @@ export default function FuelExpensesPage() {
                             </div>
                             <div>
                               <div className="font-bold text-slate-900 uppercase">
-                                {vehicle?.registration_number ?? "Unknown"}
+                                {vehicle
+                                  ? formatVehicleRegistration(
+                                      vehicle.registration_number,
+                                    )
+                                  : "UNKNOWN"}
                               </div>
                               <div className="text-[11px] text-slate-400 font-medium">
                                 {vehicle
-                                  ? `${vehicle.make} ${vehicle.model}`.trim() ||
-                                    "No model"
+                                  ? formatVehicleMakeModel(
+                                      vehicle.make,
+                                      vehicle.model,
+                                    ) || "No model"
                                   : "No vehicle details"}
                               </div>
                             </div>
@@ -1064,37 +1104,76 @@ export default function FuelExpensesPage() {
                           <StatusBadge status={exp.attributes.status} />
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {["pending_approval", "flagged_for_review"].includes(
-                            exp.attributes.status,
-                          ) ? (
-                            <div className="flex items-center justify-end gap-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
+                                type="button"
+                                variant="ghost"
                                 size="sm"
-                                className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-none"
-                                onClick={() => handleApprove(exp.id)}
-                                disabled={isApproving}
+                                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                                aria-label={`Open actions for expense ${exp.attributes.reference_number || exp.id}`}
                               >
-                                Approve
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 border-0 bg-rose-50 text-rose-600 shadow-none hover:bg-rose-100"
-                                onClick={() => setRejectId(exp.id)}
-                              >
-                                Reject
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-slate-400"
-                              disabled
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 border-0 shadow-lg"
                             >
-                              Finalized
-                            </Button>
-                          )}
+                              {["pending_approval", "flagged_for_review"].includes(
+                                exp.attributes.status,
+                              ) && (
+                                <>
+                                  <DropdownMenuItem
+                                    disabled={isApproving}
+                                    onSelect={() => handleApprove(exp.id)}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    Approve expense
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => setRejectId(exp.id)}
+                                  >
+                                    <XCircle className="h-4 w-4 text-rose-600" />
+                                    Reject expense
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              {exp.attributes.receipt_url && (
+                                <DropdownMenuItem asChild>
+                                  <a
+                                    href={exp.attributes.receipt_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <ExternalLink className="h-4 w-4 text-blue-600" />
+                                    Open receipt
+                                  </a>
+                                </DropdownMenuItem>
+                              )}
+                              {exp.relationships.fuel_transaction && (
+                                <DropdownMenuItem
+                                  disabled={isUnlinking}
+                                  onSelect={() => handleUnlink(exp.id)}
+                                >
+                                  <Link2Off className="h-4 w-4 text-amber-600" />
+                                  Unlink transaction
+                                </DropdownMenuItem>
+                              )}
+                              {(exp.attributes.receipt_url ||
+                                exp.relationships.fuel_transaction) && (
+                                <DropdownMenuSeparator />
+                              )}
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => setDeleteExpense(exp)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete expense
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     );
@@ -1108,8 +1187,131 @@ export default function FuelExpensesPage() {
         </CardContent>
       </Card>
 
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent
+          side="right"
+          className="w-full border-0 p-0 shadow-none sm:max-w-md"
+        >
+          <SheetHeader className="px-5 pt-5 text-left">
+            <SheetTitle>Fuel Expense Filters</SheetTitle>
+            <SheetDescription>
+              Refine the expense ledger by status, reconciliation, date, and
+              search terms.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-4">
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Search
+              </Label>
+              <div className="relative mt-1.5">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search vehicle, driver, reference..."
+                  className="h-9 border-0 bg-slate-50 pl-9 shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Status
+              </Label>
+              <select
+                className="mt-1.5 h-9 w-full rounded-md bg-slate-50 px-3 text-sm focus:outline-none"
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Statuses</option>
+                <option value="pending_approval">Pending</option>
+                <option value="flagged_for_review">Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="reimbursed">Reimbursed</option>
+              </select>
+            </div>
+
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Reconciliation
+              </Label>
+              <select
+                className="mt-1.5 h-9 w-full rounded-md bg-slate-50 px-3 text-sm focus:outline-none"
+                value={reconciliationFilter}
+                onChange={(event) => {
+                  setReconciliationFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Records</option>
+                <option value="matched">Matched</option>
+                <option value="flagged_variance">Variance</option>
+                <option value="unmatched">Unmatched</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  From
+                </Label>
+                <Input
+                  type="date"
+                  className="mt-1.5 h-9 border-0 bg-slate-50 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={startDate}
+                  onChange={(event) => {
+                    setStartDate(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  To
+                </Label>
+                <Input
+                  type="date"
+                  className="mt-1.5 h-9 border-0 bg-slate-50 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={endDate}
+                  onChange={(event) => {
+                    setEndDate(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            {activeFilterCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full border-0 bg-slate-100 shadow-none"
+                onClick={clearFilters}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
       <LogExpenseDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RejectDialog expenseId={rejectId} onClose={() => setRejectId(null)} />
+      <DeleteExpenseDialog
+        expense={deleteExpense}
+        isPending={deleteMutation.isPending}
+        onClose={() => setDeleteExpense(null)}
+        onConfirm={() => {
+          if (deleteExpense) deleteMutation.mutate(deleteExpense);
+        }}
+      />
       <ImportFuelTransactionsDialog
         open={importOpen}
         isPending={importMutation.isPending}

@@ -15,6 +15,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { addDays, differenceInCalendarDays, format, subDays } from 'date-fns'
 import { getCostAnalysis } from '@/lib/api/fuel'
+import { formatVehicleRegistration } from './formatVehicleText'
 
 const KOBO = 100
 const nairaFromKobo = (k: number) => k / KOBO
@@ -152,7 +153,7 @@ export function useFuelAnalysis(range?: FuelAnalysisRange) {
     // Fuel by Vehicle donut (real volumes) + "Others" bucket.
     const fuelByVehicle = useMemo<{ total: number; slices: DonutSlice[] }>(() => {
         const rows = byVehicle.length
-            ? byVehicle.map((v) => ({ label: v.registration_number, value: v.total_liters }))
+            ? byVehicle.map((v) => ({ label: formatVehicleRegistration(v.registration_number), value: v.total_liters }))
             : [
                 { label: 'LAG 234 XF', value: 2450 }, { label: 'LAG 543 TY', value: 1980 },
                 { label: 'LAG 876 GH', value: 1620 }, { label: 'LAG 112 KL', value: 1320 },
@@ -240,6 +241,5 @@ export function useFuelAnalysis(range?: FuelAnalysisRange) {
         isError: costQuery.isError,
     }
 }
-
 
 

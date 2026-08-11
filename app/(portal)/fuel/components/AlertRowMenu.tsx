@@ -24,7 +24,7 @@ export function AlertRowMenu({ onViewDetails, onAcknowledge, onResolve, onDelete
     // The backend only allows these transitions on an active (new) alert (and resolve
     // on anything not already resolved) — gate the items so we don't fire a 422.
     const canAcknowledge = status === 'new'
-    const canResolve = status !== 'resolved'
+    const canResolve = status !== 'resolved' && status !== 'false_positive'
     const canFalsePositive = status === 'new'
     return (
         <DropdownMenu>
@@ -33,20 +33,20 @@ export function AlertRowMenu({ onViewDetails, onAcknowledge, onResolve, onDelete
                     type="button"
                     aria-label={`Actions for ${label}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-600 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-600"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-700 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-700"
                 >
                     <MoreVertical className="h-4 w-4" />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuContent align="end" className="w-52 border-0 shadow-lg" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={onViewDetails}>
                     <Eye className="mr-2 h-4 w-4 text-slate-400" /> View Details
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onAcknowledge} disabled={!canAcknowledge}>
-                    <Check className="mr-2 h-4 w-4 text-slate-400" /> Acknowledge Alert
+                    <Check className="mr-2 h-4 w-4 text-[#0055FF]" /> Acknowledge Alert
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onResolve} disabled={!canResolve}>
-                    <CircleCheck className="mr-2 h-4 w-4 text-slate-400" /> Resolve Alert
+                    <CircleCheck className="mr-2 h-4 w-4 text-emerald-600" /> Resolve Alert
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDelete} disabled={!canFalsePositive} className="text-rose-600 focus:text-rose-600">
                     <ShieldOff className="mr-2 h-4 w-4" /> Mark as False Positive

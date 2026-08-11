@@ -24,6 +24,7 @@ import {
     getTopFuelConsumers,
 } from '@/lib/api/fuel'
 import type { FuelVehicle } from '@/types/fuel'
+import { formatVehicleMakeModel, formatVehicleRegistration } from './formatVehicleText'
 
 const KOBO = 100
 
@@ -208,8 +209,8 @@ function mapVehicleRow(v: FuelVehicle): VehicleRow {
     const lng = readCoord(coordinates?.longitude, currentLocation?.longitude)
     return {
         id: Number(v.id),
-        registration: v.attributes.registration_number,
-        model: `${v.attributes.make} ${v.attributes.model}`.trim(),
+        registration: formatVehicleRegistration(v.attributes.registration_number),
+        model: formatVehicleMakeModel(v.attributes.make, v.attributes.model),
         chassis: v.attributes.device_imei ?? '—',
         fuelPercent: v.fuel_level ? Math.round(v.fuel_level.fuel_level_percent) : null,
         fuelLiters: v.fuel_level ? Number(finiteNumberOrFallback(v.fuel_level.fuel_level_liters).toFixed(1)) : null,
@@ -401,7 +402,7 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
             .slice(0, 3)
             .map((i) => ({
                 id: i.alert_id,
-                registration: i.registration_number,
+                registration: formatVehicleRegistration(i.registration_number),
                 fuelPercent: Math.max(0, Math.round(100 - i.confidence * 100)),
                 fuelLiters: Number(finiteNumberOrFallback(i.liters_lost).toFixed(1)),
                 location: i.location?.address ?? '—',
@@ -435,8 +436,8 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         const rows = (topConsumersQuery.data?.data.vehicles ?? [])
             .map((r) => ({
                 id: r.vehicle_id,
-                registration: r.vehicle.registration_number,
-                model: `${r.vehicle.make} ${r.vehicle.model}`.trim(),
+                registration: formatVehicleRegistration(r.vehicle.registration_number),
+                model: formatVehicleMakeModel(r.vehicle.make, r.vehicle.model),
                 litersUsed: Number(finiteNumberOrFallback(r.fuel_used_liters).toFixed(2)),
                 costNaira: Number((finiteNumberOrFallback(r.fuel_used_liters) * pricePerL).toFixed(2)),
             }))

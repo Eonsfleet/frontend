@@ -529,6 +529,10 @@ export interface FuelLevelTrendResponse {
             vehicle_id?: number
             labels?: string[]
             fuel_data?: Array<number | null>
+            fuel_liters_data?: Array<number | null>
+            fuel_percent_data?: Array<number | null>
+            fuel_level_liters_data?: Array<number | null>
+            fuel_level_percent_data?: Array<number | null>
             rate_data?: Array<number | null>
             flow_data?: Array<number | null>
             values?: Array<number | null>

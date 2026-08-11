@@ -6,6 +6,7 @@ import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { getFuelVehicles } from '@/lib/api/fuel'
 import { cn } from '@/lib/utils'
+import { formatVehicleMakeModel, formatVehicleRegistration } from './formatVehicleText'
 
 interface VehicleMultiSelectProps {
     /** Currently selected vehicle ids. Empty array = "All Vehicles". */
@@ -42,8 +43,8 @@ export function VehicleMultiSelect({
         () =>
             (vehiclesQuery.data?.data.vehicles ?? []).map((vehicle) => ({
                 id: Number(vehicle.id),
-                label: vehicle.attributes.registration_number,
-                meta: `${vehicle.attributes.make} ${vehicle.attributes.model}`.trim(),
+                label: formatVehicleRegistration(vehicle.attributes.registration_number),
+                meta: formatVehicleMakeModel(vehicle.attributes.make, vehicle.attributes.model),
             })),
         [vehiclesQuery.data],
     )

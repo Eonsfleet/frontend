@@ -21,6 +21,7 @@ import { getFuelEvents, getFuelLevelTrend, getFuelRateTrend, getFuelVehiclesReal
 import type { FuelVehicle } from '@/types/fuel'
 import type { VehicleMovement } from './useFuelOverview'
 import { useFuelLiveSync, type FuelLiveOverride } from './useFuelLiveSync'
+import { formatVehicleMakeModel, formatVehicleRegistration } from './formatVehicleText'
 
 // ── Rail row ─────────────────────────────────────────────────────────────────
 
@@ -71,8 +72,8 @@ function mapRealtimeVehicle(v: RealtimeVehicleSource, index: number, live?: Fuel
         live?.lat != null && live?.lng != null ? [live.lat, live.lng] : vehiclePosition(v)
     return {
         id,
-        registration: v.attributes.registration_number,
-        model: `${v.attributes.make} ${v.attributes.model}`.trim(),
+        registration: formatVehicleRegistration(v.attributes.registration_number),
+        model: formatVehicleMakeModel(v.attributes.make, v.attributes.model),
         fuelPercent: live?.fuelPercent ?? (fuelLevel ? Math.round(fuelLevel.fuel_level_percent) : null),
         fuelLiters: live?.fuelLiters ?? (fuelLevel ? Number(fuelLevel.fuel_level_liters.toFixed(1)) : null),
         status: deriveStatus(online, speedKmh),
@@ -124,6 +125,8 @@ export interface VehicleDetail {
 export interface TrendPoint {
     label: string
     value: number | null
+    liters?: number | null
+    percent?: number | null
 }
 
 export interface FuelEvent {
@@ -261,7 +264,7 @@ function mapFuelEvent(item: FuelEventApiItem, index: number, showRegistration = 
     const timestamp = String(eventAttribute(item, 'occurred_at') ?? eventAttribute(item, 'detected_at') ?? eventAttribute(item, 'timestamp') ?? eventAttribute(item, 'created_at') ?? '')
     const date = new Date(timestamp)
     const amount = Number(eventAttribute(item, 'amount_liters') ?? eventAttribute(item, 'volume_liters') ?? eventAttribute(item, 'liters'))
-    const registration = String(vehicle.registration_number ?? attributes.registration_number ?? '')
+    const registration = formatVehicleRegistration(vehicle.registration_number ?? attributes.registration_number ?? '')
     const title =
         type === 'refill'
             ? 'Fuel Refill'
@@ -292,9 +295,13 @@ function trendRows(payload: TrendPayload | undefined): FuelLevelTrendPoint[] {
     if (Array.isArray(data)) return data
     if (data?.labels?.length) {
         const values = data.fuel_data ?? data.rate_data ?? data.flow_data ?? data.values ?? []
+        const liters = data.fuel_level_liters_data ?? data.fuel_liters_data ?? []
+        const percent = data.fuel_level_percent_data ?? data.fuel_percent_data ?? []
         return data.labels.map((label, index) => ({
             label,
             value: values[index] ?? null,
+            fuel_level_liters: liters[index] ?? undefined,
+            fuel_level_percent: percent[index] ?? undefined,
         }))
     }
     return data?.trend ?? data?.history ?? []
@@ -310,9 +317,21 @@ function formatTrendLabel(value: FuelLevelTrendPoint, fallbackIndex: number) {
 
 function trendValue(value: FuelLevelTrendPoint) {
     const raw = value.fuel_level_liters ?? value.liters ?? value.rate ?? value.flow_rate ?? value.fuel_rate ?? value.value ?? value.fuel_level_percent
+    return trendNumber(raw)
+}
+
+function trendNumber(raw: unknown) {
     if (raw == null) return null
     const number = Number(raw)
     return Number.isFinite(number) ? Number(number.toFixed(1)) : null
+}
+
+function trendLiters(value: FuelLevelTrendPoint) {
+    return trendNumber(value.fuel_level_liters ?? value.liters)
+}
+
+function trendPercent(value: FuelLevelTrendPoint) {
+    return trendNumber(value.fuel_level_percent)
 }
 
 function trendUnit(payload: TrendPayload | undefined, fallback = 'L') {
@@ -412,9 +431,12 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
     })
 
     const fuelLevelTrend = useMemo<TrendPoint[]>(() => {
+        const unit = trendUnit(levelTrendQuery.data)
         return trendRows(levelTrendQuery.data).map((row, index) => ({
             label: formatTrendLabel(row, index),
-            value: trendValue(row),
+            value: trendLiters(row) ?? trendValue(row),
+            liters: trendLiters(row) ?? (unit === 'L' ? trendValue(row) : null),
+            percent: trendPercent(row) ?? (unit === '%' ? trendValue(row) : null),
         }))
     }, [levelTrendQuery.data])
 

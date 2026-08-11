@@ -47,6 +47,10 @@ import { TransactionsTable } from "../components/TransactionsTable";
 import { TransactionFilters } from "../components/TransactionFilters";
 import { useReverseGeocode } from "../components/useReverseGeocode";
 import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
+import {
   useFuelTransactions,
   type EditableFuelExpenseStatus,
   type FuelTransactionFilters,
@@ -252,8 +256,14 @@ function TransactionExpenseDialog({
               <option value="">Select vehicle...</option>
               {(vehiclesQuery.data?.data.vehicles ?? []).map((vehicle) => (
                 <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.attributes.registration_number} -{" "}
-                  {vehicle.attributes.make} {vehicle.attributes.model}
+                  {formatVehicleRegistration(
+                    vehicle.attributes.registration_number,
+                  )}{" "}
+                  -{" "}
+                  {formatVehicleMakeModel(
+                    vehicle.attributes.make,
+                    vehicle.attributes.model,
+                  )}
                 </option>
               ))}
             </select>

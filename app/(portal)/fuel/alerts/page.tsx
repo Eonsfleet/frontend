@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BellPlus } from 'lucide-react'
+import { BellPlus, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn, extractApiError } from '@/lib/utils'
@@ -71,20 +71,33 @@ export default function FuelAlertsPage() {
             })
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="flex min-h-0 flex-col gap-5 xl:h-[calc(100vh-4rem)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <div className="flex items-center gap-2">
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Fuel Alerts</h1>
-                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-rose-100 px-1.5 text-[12px] font-bold text-rose-600">
+                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-50 px-1.5 text-[12px] font-bold text-[#0055FF]">
                             {kpis.total}
                         </span>
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">Monitor and respond to fuel related alerts in real time.</p>
+                    <p className="mt-1 text-sm text-slate-500">Monitor, acknowledge, resolve, and audit fuel alert logs from the backend.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => setRuleOpen(true)} className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200"
+                        onClick={() => setFiltersOpen(true)}
+                    >
+                        <SlidersHorizontal className="h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <span className="ml-0.5 rounded-full bg-[#0055FF] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </Button>
+                    <Button size="sm" onClick={() => setRuleOpen(true)} className="h-9 gap-2 bg-[#0055FF] text-white shadow-none hover:bg-blue-700">
                         <BellPlus className="h-4 w-4" /> Create Alert
                     </Button>
                 </div>
@@ -99,18 +112,16 @@ export default function FuelAlertsPage() {
                     <AlertKpiCards kpis={kpis} isLoading={isLoading} />
 
                     {/* Table + detail panel */}
-                    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+                    <div className="grid min-h-0 grid-cols-1 items-start gap-4 xl:flex-1 xl:grid-cols-3">
                         <div className={cn('min-w-0', selected ? 'xl:col-span-2' : 'xl:col-span-3')}>
                             <AlertsTable
                                 alerts={filtered}
                                 activeId={selected?.id ?? null}
                                 onSelect={setSelectedId}
-                                onOpenFilters={() => setFiltersOpen(true)}
                                 onCreateRule={() => setRuleOpen(true)}
                                 onAcknowledge={acknowledge}
                                 onResolve={resolve}
                                 onDelete={remove}
-                                activeFilterCount={activeFilterCount}
                                 search={search}
                                 onSearchChange={setSearch}
                                 pagination={pagination}
