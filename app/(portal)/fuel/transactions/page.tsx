@@ -8,6 +8,14 @@ import {
   ImageUp,
   Download,
   SlidersHorizontal,
+  Banknote,
+  CalendarClock,
+  ExternalLink,
+  Fuel,
+  Gauge,
+  MapPin,
+  ReceiptText,
+  UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +45,7 @@ import { FuelTabs } from "../components/FuelTabs";
 import { TxKpiCards } from "../components/TxKpiCards";
 import { TransactionsTable } from "../components/TransactionsTable";
 import { TransactionFilters } from "../components/TransactionFilters";
+import { useReverseGeocode } from "../components/useReverseGeocode";
 import {
   useFuelTransactions,
   type EditableFuelExpenseStatus,
@@ -153,6 +162,14 @@ function downloadBlob(blob: Blob, filename: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function isCoordinateLabel(value: string) {
+  return /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(value.trim());
+}
+
+function formatFuelPercent(value: number) {
+  return `${Number(value.toFixed(2))}%`;
 }
 
 function TransactionExpenseDialog({
@@ -415,90 +432,236 @@ function TransactionViewDialog({
   row: TransactionRow | null;
   onClose: () => void;
 }) {
-  const details: Array<[string, string]> = row
-    ? [
-        ["Vehicle", `${row.vehicle} (${row.vehicleModel})`],
-        ["Date", `${row.date} ${row.time}`],
-        ["Type", row.type],
-        ["Source", row.source],
-        [
-          "Reconciliation",
-          row.reconciliationStatus === "flagged_variance"
-            ? "variance"
-            : row.reconciliationStatus,
-        ],
-        ["Volume", row.volumeLiters != null ? `${row.volumeLiters} L` : "-"],
-        [
-          "Fuel Level",
-          row.fuelLevelBefore != null && row.fuelLevelAfter != null
-            ? `${row.fuelLevelBefore}% → ${row.fuelLevelAfter}%`
-            : "-",
-        ],
-        [
-          "Odometer",
-          row.odometerKm != null
-            ? `${row.odometerKm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km`
-            : "-",
-        ],
-        [
-          "Confidence",
-          row.confidence != null ? `${Math.round(row.confidence * 100)}%` : "-",
-        ],
-        [
-          "Location",
-          row.lat != null && row.lng != null
-            ? `${row.lat.toFixed(5)}, ${row.lng.toFixed(5)}`
-            : row.station,
-        ],
-        // Cost/expense fields only appear when the transaction is linked to an expense.
-        ...(row.amountNaira != null
-          ? [
-              ["Amount", `NGN ${row.amountNaira.toLocaleString()}`] as [
-                string,
-                string,
-              ],
-            ]
-          : []),
-        ...(row.pricePerLiter != null
-          ? [
-              ["Price / L", `NGN ${row.pricePerLiter.toLocaleString()}`] as [
-                string,
-                string,
-              ],
-            ]
-          : []),
-        ...(row.receiptUrl
-          ? [["Receipt", row.receiptUrl] as [string, string]]
-          : []),
-      ]
-    : [];
+  const { address, isLoading: isLocationLoading } = useReverseGeocode(
+    row?.lat ?? null,
+    row?.lng ?? null,
+  );
+
+  if (!row) return null;
+
+  const stationAddress =
+    row.station && row.station !== "-" && !isCoordinateLabel(row.station)
+      ? row.station
+      : null;
+  const locationLabel =
+    address ??
+    stationAddress ??
+    (isLocationLoading ? "Resolving location..." : "Location not available");
+  const mapUrl =
+    row.lat != null && row.lng != null
+      ? `https://www.google.com/maps?q=${row.lat},${row.lng}`
+      : null;
+  const amountLabel =
+    row.amountNaira != null
+      ? `${row.currency || "NGN"} ${row.amountNaira.toLocaleString()}`
+      : "-";
+  const priceLabel =
+    row.pricePerLiter != null
+      ? `${row.currency || "NGN"} ${row.pricePerLiter.toLocaleString()}`
+      : "-";
+  const fuelLevelLabel =
+    row.fuelLevelBefore != null && row.fuelLevelAfter != null
+      ? `${formatFuelPercent(row.fuelLevelBefore)} to ${formatFuelPercent(row.fuelLevelAfter)}`
+      : "-";
+  const reconciliationLabel =
+    row.reconciliationStatus === "flagged_variance"
+      ? "Variance"
+      : row.reconciliationStatus;
+
+  const receiptLines = [
+    ["Transaction type", row.type],
+    ["Source", row.source],
+    ["Reference", row.referenceNumber || "-"],
+    ["Driver", row.driver || "-"],
+    ["Status", row.status.replaceAll("_", " ")],
+    ["Reconciliation", reconciliationLabel.replaceAll("_", " ")],
+  ];
 
   return (
     <Dialog open={!!row} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Fuel Transaction Details</DialogTitle>
-          <DialogDescription>
-            Review the selected transaction record.
+      <DialogContent className="max-h-[90vh] overflow-hidden border-0 p-0 shadow-none sm:max-w-3xl">
+        <DialogHeader className="bg-slate-950 px-6 py-5 text-white">
+          <DialogTitle className="flex items-center gap-2 text-lg text-white">
+            <ReceiptText className="h-5 w-5 text-blue-300" />
+            Fuel Receipt
+          </DialogTitle>
+          <DialogDescription className="text-slate-300">
+            {row.vehicle} · {row.date} at {row.time}
           </DialogDescription>
         </DialogHeader>
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {details.map(([label, value]) => (
-            <div
-              key={label}
-              className="rounded-lg bg-slate-50 p-3"
-            >
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                {label}
-              </dt>
-              <dd className="mt-1 break-words text-sm font-medium capitalize text-slate-800">
-                {value}
-              </dd>
+
+        <div className="fuel-record-scroll max-h-[calc(90vh-9rem)] overflow-y-auto bg-white px-6 py-5">
+          <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <Fuel className="h-3.5 w-3.5" />
+                    Volume
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-slate-900">
+                    {row.volumeLiters != null ? `${row.volumeLiters} L` : "-"}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <Banknote className="h-3.5 w-3.5" />
+                    Amount
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-slate-900">
+                    {amountLabel}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <Gauge className="h-3.5 w-3.5" />
+                    Fuel Level
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {fuelLevelLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4">
+                <div className="flex items-start gap-3">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Location
+                    </div>
+                    <div className="mt-1 break-words text-sm font-semibold text-slate-900">
+                      {locationLabel}
+                    </div>
+                    {mapUrl && (
+                      <a
+                        href={mapUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:text-blue-700"
+                      >
+                        Open map
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    Date & Time
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {row.date} · {row.time}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <UserRound className="h-3.5 w-3.5" />
+                    Vehicle
+                  </div>
+                  <div className="mt-1 text-sm font-semibold uppercase text-slate-900">
+                    {row.vehicle}
+                  </div>
+                  <div className="text-[12px] text-slate-500">
+                    {row.vehicleModel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Transaction Breakdown
+                </div>
+                <dl className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                  {receiptLines.map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-[11px] font-medium text-slate-400">
+                        {label}
+                      </dt>
+                      <dd className="mt-0.5 break-words text-sm font-semibold capitalize text-slate-800">
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                  <div>
+                    <dt className="text-[11px] font-medium text-slate-400">
+                      Price / L
+                    </dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {priceLabel}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium text-slate-400">
+                      Odometer
+                    </dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {row.odometerKm != null
+                        ? `${row.odometerKm.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })} km`
+                        : "-"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium text-slate-400">
+                      Confidence
+                    </dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-slate-800">
+                      {row.confidence != null
+                        ? `${Math.round(row.confidence * 100)}%`
+                        : "-"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             </div>
-          ))}
-        </dl>
-        <DialogFooter>
-          <Button type="button" onClick={onClose}>
+
+            <aside className="rounded-xl bg-slate-50 p-4">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <ReceiptText className="h-3.5 w-3.5" />
+                Receipt
+              </div>
+              {row.receiptUrl ? (
+                <div className="mt-3 space-y-3">
+                  <a
+                    href={row.receiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-lg bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={row.receiptUrl}
+                      alt={`Receipt for ${row.vehicle}`}
+                      className="max-h-72 w-full object-contain"
+                    />
+                  </a>
+                  <a
+                    href={row.receiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    View receipt
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-lg bg-white p-4 text-sm text-slate-500">
+                  No receipt image is attached to this transaction.
+                </div>
+              )}
+            </aside>
+          </div>
+        </div>
+
+        <DialogFooter className="bg-slate-50 px-6 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
