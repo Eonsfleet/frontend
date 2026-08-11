@@ -3,24 +3,22 @@
 /**
  * Data layer for the Fuel Overview dashboard.
  *
- * Wires the existing fuel API (getCostAnalysis, getFuelVehicles, getTheftSummary,
- * getVehicleFuelHistory) into flat view-models the presentational components consume.
- * Fields the backend does not yet expose (KPI sparklines, CO2 saved, idle burn) fall
- * back to deterministic mock series so the UI is complete and can be swapped to real
- * endpoints later without touching the components.
+ * Wires the existing fuel API into flat view-models the presentational components consume.
+ * Keeps the overview grounded in values returned by the fuel API. Deeper
+ * analysis stays in the dedicated analysis/reports views.
  */
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
-    getFuelVehicles,
     getTheftSummary,
     getFuelConsumptionReport,
     getFuelCostReport,
     getFuelEfficiencyReport,
     getFuelDistribution,
     getFuelEfficiencyGraph,
+    getFuelVehiclesRealtime,
     getTopFuelConsumers,
 } from '@/lib/api/fuel'
 import type { FuelVehicle } from '@/types/fuel'
@@ -30,18 +28,6 @@ const KOBO = 100
 
 /** Naira from a kobo integer. */
 export const nairaFromKobo = (kobo: number) => kobo / KOBO
-
-/** Deterministic pseudo-random walk so mock sparklines are stable across renders. */
-function sparkline(seed: number, points = 16, base = 50, spread = 20): number[] {
-    const out: number[] = []
-    let v = base
-    for (let i = 0; i < points; i++) {
-        const n = Math.sin(seed + i * 1.7) * 0.5 + Math.cos(seed * 0.3 + i) * 0.5
-        v = Math.max(base - spread, Math.min(base + spread, v + n * (spread / 4)))
-        out.push(Number(v.toFixed(2)))
-    }
-    return out
-}
 
 function formatDateOrFallback(value: string | number | Date | null | undefined, pattern: string, fallback = '—') {
     if (value == null || value === '') return fallback
@@ -70,7 +56,7 @@ export interface FuelOverviewFilters {
     topConsumersFilter?: string
 }
 
-// ── KPI + summary view-models ────────────────────────────────────────────────
+// ── KPI view-models ──────────────────────────────────────────────────────────
 
 export interface KpiViewModel {
     totalFuelUsedLiters: number
@@ -78,18 +64,6 @@ export interface KpiViewModel {
     avgEfficiencyKmPerL: number
     totalRefills: number
     totalVehicles: number
-    sparklines: {
-        fuelUsed: number[]
-        cost: number[]
-        efficiency: number[]
-        refills: number[]
-    }
-    trends: {
-        fuelUsed: number
-        cost: number
-        efficiency: number
-        refills: number
-    }
 }
 
 // ── Vehicle-row view-model (list, distribution, low-fuel) ─────────────────────
@@ -105,9 +79,9 @@ export interface VehicleRow {
     fuelPercent: number | null
     fuelLiters: number | null
     online: boolean
-    /** Last known address, or null when the fuel API has no position for it. */
+    /** Last known address, or null when the vehicle API has no position for it. */
     location: string | null
-    /** Live coordinates from /fuel/vehicles, or null when the vehicle has no fix. */
+    /** Live coordinates from /vehicles?has_fuel=true, or null when the vehicle has no fix. */
     lat: number | null
     lng: number | null
     status: VehicleMovement
@@ -159,7 +133,7 @@ export interface SummaryMetrics {
     totalSavingsTrend: number
 }
 
-/** Reads a lat/lng from the coordinate shapes /fuel/vehicles may return; null when absent. */
+/** Reads a lat/lng from the coordinate shapes /vehicles?has_fuel=true may return; null when absent. */
 function readCoord(...values: Array<number | string | null | undefined>): number | null {
     for (const value of values) {
         if (value == null || value === '') continue
@@ -256,23 +230,19 @@ function appendNoReadingBand(bands: DistributionBand[], totalVehicles: number): 
     ]
 }
 
-/**
- * Maps the Overview vehicle filter enum onto the real /fuel/vehicles query params.
- * The API filters on two independent dimensions — vehicle_status and fuel_level —
- * so each UI option resolves to one of them (or neither for 'all').
- */
-function vehicleFilterParams(filter?: string): { vehicle_status?: string; fuel_level?: string } {
+/** Applies Overview-only vehicle filters to the /vehicles?has_fuel=true rows. */
+function vehicleMatchesFilter(vehicle: VehicleRow, filter?: string): boolean {
     switch (filter) {
         case 'moving':
-            return { vehicle_status: 'moving' }
+            return vehicle.status === 'moving'
         case 'offline':
-            return { vehicle_status: 'offline' }
+            return vehicle.status === 'offline'
         case 'low_fuel':
-            return { fuel_level: 'low' }
+            return vehicle.fuelPercent != null && vehicle.fuelPercent <= 20
         case 'unknown_fuel':
-            return { fuel_level: 'unknown' }
+            return vehicle.fuelPercent == null
         default:
-            return {}
+            return true
     }
 }
 
@@ -281,13 +251,12 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
     const vehicleParams = {
         per_page: 200,
         q: filters.vehicleSearch?.trim() || undefined,
-        ...vehicleFilterParams(filters.vehicleFilter),
     }
     const topConsumersParams = {
         filter: filters.topConsumersFilter,
     }
 
-    // Total Fuel Used → consumption-report (also drives the fuel-used sparkline).
+    // Total Fuel Used → consumption-report.
     const consumptionQuery = useQuery({
         queryKey: ['fuel-overview', 'consumption-report'],
         queryFn: () => getFuelConsumptionReport(),
@@ -307,12 +276,12 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
 
     const totalFuelVehiclesQuery = useQuery({
         queryKey: ['fuel-overview', 'fuel-vehicles-count'],
-        queryFn: () => getFuelVehicles({ page: 1, per_page: 1 }),
+        queryFn: () => getFuelVehiclesRealtime({ page: 1, per_page: 1 }),
     })
 
     const vehiclesQuery = useQuery({
         queryKey: ['fuel-overview', 'vehicles', vehicleParams],
-        queryFn: () => getFuelVehicles(vehicleParams),
+        queryFn: () => getFuelVehiclesRealtime(vehicleParams),
     })
 
     const distributionQuery = useQuery({
@@ -330,10 +299,16 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         queryFn: () => getTheftSummary(params),
     })
 
-    const vehicles = useMemo<VehicleRow[]>(
-        () => (vehiclesQuery.data?.data.vehicles ?? []).map(mapVehicleRow),
-        [vehiclesQuery.data],
-    )
+    const vehicles = useMemo<VehicleRow[]>(() => {
+        const search = filters.vehicleSearch?.trim().toLowerCase()
+        return (vehiclesQuery.data?.data.vehicles ?? [])
+            .map(mapVehicleRow)
+            .filter((vehicle) => vehicleMatchesFilter(vehicle, filters.vehicleFilter))
+            .filter((vehicle) => {
+                if (!search) return true
+                return `${vehicle.registration} ${vehicle.model} ${vehicle.chassis}`.toLowerCase().includes(search)
+            })
+    }, [filters.vehicleFilter, filters.vehicleSearch, vehiclesQuery.data])
 
     const theft = theftQuery.data?.data
     const consumption = consumptionQuery.data?.data
@@ -347,23 +322,12 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
     const kpi = useMemo<KpiViewModel>(() => {
         const totalCost = (costReport?.months ?? []).reduce((s, m) => s + (m.total_cost ?? 0), 0)
         const totalVolume = finiteNumberOrFallback(consumption?.total_fuel_liters)
-        // consumption-report trend → live fuel-used sparkline (fall back to a mock walk).
-        const fuelUsedSpark = consumption?.trend?.length
-            ? consumption.trend.map((t) => finiteNumberOrFallback(t.total_fuel_liters))
-            : sparkline(1, 16, 55, 22)
         return {
             totalFuelUsedLiters: Number(totalVolume.toFixed(2)),
             totalFuelCostNaira: totalCost,
             avgEfficiencyKmPerL: efficiency?.fleet_average ?? 0,
             totalRefills: (topConsumersQuery.data?.data.vehicles ?? []).reduce((s, v) => s + (v.segment_count ?? 0), 0),
             totalVehicles: totalFuelVehicles,
-            sparklines: {
-                fuelUsed: fuelUsedSpark,
-                cost: sparkline(7, 16, 52, 20),
-                efficiency: sparkline(3, 16, 48, 14),
-                refills: sparkline(9, 16, 50, 24),
-            },
-            trends: { fuelUsed: 8.6, cost: 6.4, efficiency: 5.2, refills: 4 },
         }
     }, [consumption, costReport, efficiency, topConsumersQuery.data, totalFuelVehicles])
 
@@ -447,25 +411,6 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         return rows.map((r) => ({ ...r, share: r.litersUsed / max }))
     }, [topConsumersQuery.data, costReport])
 
-    const summary = useMemo<SummaryMetrics>(() => {
-        const litersLost = theft?.total_liters_lost ?? 0
-        // Approx price/L from the cost-report to value the litres saved.
-        const months = costReport?.months ?? []
-        const totalCost = months.reduce((s, m) => s + (m.total_cost ?? 0), 0)
-        const totalLiters = months.reduce((s, m) => s + (m.liters ?? 0), 0)
-        const avgPerL = totalLiters > 0 ? totalCost / totalLiters : 765
-        return {
-            idleFuelLiters: 125.45,
-            idleTrend: 7.5,
-            unauthorizedDrainAlerts: theft?.total_incidents ?? 0,
-            unauthorizedDrainTrend: -1,
-            theftPreventionNaira: Number((litersLost * avgPerL).toFixed(2)),
-            co2SavedKg: 2345,
-            totalSavingsNaira: 3245.6,
-            totalSavingsTrend: 12.6,
-        }
-    }, [theft, costReport])
-
     return {
         kpi,
         vehicles,
@@ -473,7 +418,6 @@ export function useFuelOverview(range: FuelOverviewRange, filters: FuelOverviewF
         lowFuelAlerts,
         topConsumers,
         isTopConsumersLoading: topConsumersQuery.isFetching,
-        summary,
         theftIncidents: theft?.incidents ?? [],
         isLoading: consumptionQuery.isLoading || vehiclesQuery.isLoading,
         isError:
@@ -491,9 +435,7 @@ export interface TrendPoint {
 }
 
 /**
- * Consumption + efficiency day series for the two analytics charts.
- *  - Consumption Trend  → /analytics/fuel/consumption-report (trend[].period/total_fuel_liters)
- *  - Fuel Efficiency    → /fuel-consumptions/efficiency-graph (labels[] / efficiency_data[])
+ * Consumption day series for the overview trend chart.
  */
 export interface FuelTrendFilters {
     consumptionPeriod?: string

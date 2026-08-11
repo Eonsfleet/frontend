@@ -81,8 +81,8 @@ export default function FuelOverviewPage() {
     efficiencyFilter,
   });
 
-  // Map markers: live vehicle positions from /fuel/vehicles (colored by fuel level),
-  // plus theft/abnormality incidents that carry coordinates.
+  // Map markers: fuel-capable vehicle positions from /vehicles?has_fuel=true,
+  // plus abnormality incidents that carry coordinates.
   const markers = useMemo<MapMarkerPoint[]>(() => {
     const lastUpdated = format(new Date(), "hh:mm a");
     const vehicleMarkers: MapMarkerPoint[] = vehicles
@@ -98,7 +98,6 @@ export default function FuelOverviewPage() {
           status: v.status.charAt(0).toUpperCase() + v.status.slice(1),
           fuelPercent: v.fuelPercent,
           fuelLiters: v.fuelLiters,
-          consumptionLph: 3.2,
           location: v.location ?? "—",
           lastUpdated,
         },
@@ -124,9 +123,6 @@ export default function FuelOverviewPage() {
           {/* KPI summary */}
           <KpiSection kpi={kpi} isLoading={isLoading} />
 
-          {/* Main dashboard — responsive:
-              1col (mobile) → 2col (md) → 12col (lg: map full row, list + distribution
-              share row 2) → 12col single row (xl: map | list | distribution) */}
           <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-12">
             <div className="min-w-0 md:col-span-2 lg:col-span-12 xl:col-span-5">
               <RealtimeTrackingCard
@@ -156,7 +152,6 @@ export default function FuelOverviewPage() {
             </div>
           </div>
 
-          {/* Analytics: consumption / efficiency / top consumers */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <TrendChartCard
               title="Fuel Consumption Trend"
@@ -173,7 +168,7 @@ export default function FuelOverviewPage() {
             <TrendChartCard
               title="Fuel Efficiency (km/L)"
               data={trends.efficiency}
-              color="#8b5cf6"
+              color="#0055FF"
               formatValue={(v) => `${v} km/L`}
               filter={efficiencyFilter}
               filterOptions={EFFICIENCY_FILTER_OPTIONS}
@@ -189,9 +184,6 @@ export default function FuelOverviewPage() {
               isLoading={isTopConsumersLoading}
             />
           </div>
-
-          {/* Bottom summary metrics */}
-          {/* <SummaryMetrics data={summary} /> */}
         </>
       )}
     </div>

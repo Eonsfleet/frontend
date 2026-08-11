@@ -12,9 +12,9 @@ interface LowFuelAlertsCardProps {
 
 export function LowFuelAlertsCard({ alerts, className }: LowFuelAlertsCardProps) {
     return (
-        <Card className={cn('rounded-2xl border-slate-100 p-5 shadow-none', className)}>
+        <Card className={cn('rounded-2xl border-0 bg-white p-5 shadow-none', className)}>
             <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-slate-900">Low Fuel Alerts</h2>
+                <h2 className="text-base font-bold text-slate-900">Fuel Attention</h2>
             </div>
 
             <ul className="mt-3 space-y-2.5">

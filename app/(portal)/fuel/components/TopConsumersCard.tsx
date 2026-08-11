@@ -29,20 +29,20 @@ export function TopConsumersCard({ consumers, filter, onFilterChange, isLoading 
     const activeFilterLabel = CONSUMER_FILTERS.find((option) => option.value === filter)?.label ?? 'Daily'
 
     return (
-        <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
+        <Card className="rounded-2xl border-0 bg-white p-5 shadow-none">
             <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-slate-900">Top Fuel Consumers</h2>
                 <div className="relative">
                     <button
                         type="button"
                         aria-expanded={isMenuOpen}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-50"
+                        className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors duration-200 hover:bg-slate-100"
                         onClick={() => setIsMenuOpen((open) => !open)}
                     >
                         {activeFilterLabel} <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                     </button>
                     {isMenuOpen && (
-                        <div className="absolute right-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg bg-white py-1">
                             {CONSUMER_FILTERS.map((option) => (
                                 <button
                                     key={option.value}
@@ -64,21 +64,21 @@ export function TopConsumersCard({ consumers, filter, onFilterChange, isLoading 
             <div className="relative mt-4 overflow-x-auto">
                 {isLoading && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[1px]">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#0055FF]" />
                             Loading
                         </span>
                     </div>
                 )}
                 <table className="w-full min-w-[420px] text-left">
                     <thead>
-                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             <th className="pb-2 font-bold">Vehicle</th>
                             <th className="pb-2 font-bold">Fuel Used (L)</th>
                             <th className="pb-2 text-right font-bold">Fuel Cost</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody>
                         {consumers.length === 0 && (
                             <tr>
                                 <td colSpan={3} className="py-8 text-center text-sm text-slate-400">
@@ -87,9 +87,9 @@ export function TopConsumersCard({ consumers, filter, onFilterChange, isLoading 
                             </tr>
                         )}
                         {consumers.map((c) => (
-                            <tr key={c.id} className="align-middle">
+                            <tr key={c.id} className="align-middle hover:bg-slate-50/70">
                                 {/* Col 1 — Vehicle: image + chassis + name */}
-                                <td className="py-2.5 pr-3">
+                                <td className="rounded-l-xl py-2.5 pl-2 pr-3">
                                     <div className="flex items-center gap-3">
                                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
                                             <Truck className="h-4 w-4" />
@@ -115,7 +115,7 @@ export function TopConsumersCard({ consumers, filter, onFilterChange, isLoading 
                                 </td>
 
                                 {/* Col 3 — Fuel Cost */}
-                                <td className="py-2.5 text-right text-sm font-semibold text-slate-700">
+                                <td className="rounded-r-xl py-2.5 pl-2 pr-2 text-right text-sm font-semibold text-slate-700">
                                     {fmtNaira(c.costNaira)}
                                 </td>
                             </tr>
