@@ -936,15 +936,19 @@ export default function FuelExpensesPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 font-mono font-medium text-slate-700">
-                        {(exp.attributes.volume ?? 0).toFixed(1)} L
+                        {(exp.attributes.volume ?? 0).toFixed(1)}L
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-mono font-bold text-slate-900 text-base">
-                          ₦{(exp.attributes.amount ?? 0).toLocaleString()}
+                          ₦
+                          {(exp.attributes.amount && exp.attributes.volume
+                            ? exp.attributes.amount * exp.attributes.volume
+                            : 0
+                          ).toLocaleString()}
                         </div>
                         <div className="text-[10px] text-slate-400 font-bold">
-                          {exp.attributes.amount && exp.attributes.volume
-                            ? `₦${(exp.attributes.amount / exp.attributes.volume).toFixed(2)}/L`
+                          {exp.attributes.amount
+                            ? `₦${exp.attributes.amount.toFixed(2)}/L`
                             : "-"}
                         </div>
                       </td>
