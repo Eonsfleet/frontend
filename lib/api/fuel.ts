@@ -32,6 +32,7 @@ export interface FuelPagination {
 export interface FuelExpenseListParams {
     q?: string
     status?: string
+    reconciliation_status?: string
     vehicle_id?: number
     user_id?: number
     start_date?: string
@@ -71,7 +72,7 @@ export interface CreateFuelExpensePayload {
     purchase_from?: string | null
     receipt_url?: string | null
     reference_number?: string | null
-    status?: 'pending_approval' | 'approved' | 'rejected' | 'reimbursed' | null
+    status?: 'pending_approval' | 'approved' | 'rejected' | 'reimbursed' | 'flagged_for_review' | null
     entry_date: string
 }
 
@@ -102,6 +103,7 @@ export const rejectFuelExpense = async (id: string | number, reason: string): Pr
 export interface FuelExpenseExportParams {
     q?: string
     status?: string
+    reconciliation_status?: string
     vehicle_id?: number
     user_id?: number
     type?: string

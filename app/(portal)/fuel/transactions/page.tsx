@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Loader2,
   GitCompare,
   AlertTriangle,
   ImageUp,
   Download,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { QueryError } from "@/components/shared/QueryError";
 import { FuelTabs } from "../components/FuelTabs";
 import { TxKpiCards } from "../components/TxKpiCards";
@@ -223,7 +230,7 @@ function TransactionExpenseDialog({
             <select
               value={form.vehicleId}
               onChange={(event) => updateForm("vehicleId", event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+              className="mt-1.5 h-10 w-full rounded-md bg-slate-50 px-3 text-sm outline-none"
             >
               <option value="">Select vehicle...</option>
               {(vehiclesQuery.data?.data.vehicles ?? []).map((vehicle) => (
@@ -240,7 +247,7 @@ function TransactionExpenseDialog({
             <select
               value={form.userId}
               onChange={(event) => updateForm("userId", event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+              className="mt-1.5 h-10 w-full rounded-md bg-slate-50 px-3 text-sm outline-none"
             >
               <option value="">Select driver...</option>
               {(driversQuery.data?.data ?? []).map((driver) => (
@@ -259,7 +266,7 @@ function TransactionExpenseDialog({
               onChange={(event) => updateForm("volume", event.target.value)}
               type="number"
               step="0.01"
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div>
@@ -271,7 +278,7 @@ function TransactionExpenseDialog({
               }
               type="number"
               step="0.01"
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div>
@@ -280,7 +287,7 @@ function TransactionExpenseDialog({
               value={form.entryDate}
               onChange={(event) => updateForm("entryDate", event.target.value)}
               type="date"
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div>
@@ -294,7 +301,7 @@ function TransactionExpenseDialog({
                 )
               }
               maxLength={3}
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div>
@@ -302,7 +309,7 @@ function TransactionExpenseDialog({
             <select
               value={form.status}
               onChange={(event) => updateForm("status", event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+              className="mt-1.5 h-10 w-full rounded-md bg-slate-50 px-3 text-sm outline-none"
             >
               {STATUS_OPTIONS.map((status) => (
                 <option key={status.value} value={status.value}>
@@ -319,7 +326,7 @@ function TransactionExpenseDialog({
               onChange={(event) =>
                 updateForm("purchaseFrom", event.target.value)
               }
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div>
@@ -329,13 +336,13 @@ function TransactionExpenseDialog({
               onChange={(event) =>
                 updateForm("referenceNumber", event.target.value)
               }
-              className="mt-1.5"
+              className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
           </div>
           <div className="sm:col-span-2">
             <Label>Receipt Image</Label>
-            <div className="mt-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3">
-              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:text-blue-600">
+            <div className="mt-1.5 rounded-lg bg-slate-50 p-3">
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-blue-600">
                 <span className="inline-flex items-center gap-2">
                   <ImageUp className="h-4 w-4 text-blue-500" />
                   {form.receiptUrl
@@ -414,6 +421,12 @@ function TransactionViewDialog({
         ["Date", `${row.date} ${row.time}`],
         ["Type", row.type],
         ["Source", row.source],
+        [
+          "Reconciliation",
+          row.reconciliationStatus === "flagged_variance"
+            ? "variance"
+            : row.reconciliationStatus,
+        ],
         ["Volume", row.volumeLiters != null ? `${row.volumeLiters} L` : "-"],
         [
           "Fuel Level",
@@ -473,7 +486,7 @@ function TransactionViewDialog({
           {details.map(([label, value]) => (
             <div
               key={label}
-              className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+              className="rounded-lg bg-slate-50 p-3"
             >
               <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 {label}
@@ -567,7 +580,7 @@ function BulkEditDialog({
             onChange={(event) =>
               setStatus(event.target.value as EditableFuelExpenseStatus)
             }
-            className="mt-1.5 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+            className="mt-1.5 h-10 w-full rounded-md bg-slate-50 px-3 text-sm outline-none"
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -596,12 +609,12 @@ function BulkEditDialog({
 }
 
 export default function FuelTransactionsPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [viewRow, setViewRow] = useState<TransactionRow | null>(null);
   const [editRow, setEditRow] = useState<TransactionRow | null>(null);
   const [deleteRows, setDeleteRows] = useState<TransactionRow[]>([]);
   const [bulkEditRows, setBulkEditRows] = useState<TransactionRow[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileStartDate, setReconcileStartDate] = useState("");
   const [reconcileEndDate, setReconcileEndDate] = useState("");
@@ -621,6 +634,20 @@ export default function FuelTransactionsPage() {
 
   const { rows, kpis, kpisLoading, pagination, isLoading, isError } =
     useFuelTransactions(filters);
+
+  const activeFilterCount = [
+    filters.vehicleId,
+    filters.type && filters.type !== "all" ? filters.type : undefined,
+    filters.reconciliationStatus && filters.reconciliationStatus !== "all"
+      ? filters.reconciliationStatus
+      : undefined,
+    filters.startDate,
+    filters.endDate,
+    filters.perPage !== 10 ? filters.perPage : undefined,
+    filters.sortBy !== "occurred_at" ? filters.sortBy : undefined,
+    filters.orderBy !== "desc" ? filters.orderBy : undefined,
+    filters.exportLimit !== 5000 ? filters.exportLimit : undefined,
+  ].filter(Boolean).length;
 
   const refreshFuelTransactions = () => {
     queryClient.invalidateQueries({ queryKey: ["fuel-transactions"] });
@@ -646,7 +673,7 @@ export default function FuelTransactionsPage() {
 
   const editMutation = useMutation({
     mutationFn: ({ row, form }: { row: TransactionRow; form: ExpenseForm }) =>
-      updateFuelExpense(row.id, formToPayload(form)),
+      updateFuelExpense(row.fuelExpenseId ?? row.id, formToPayload(form)),
     onSuccess: () => {
       toast.success("Fuel transaction updated.");
       refreshFuelTransactions();
@@ -658,7 +685,9 @@ export default function FuelTransactionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (targetRows: TransactionRow[]) =>
-      Promise.all(targetRows.map((row) => deleteFuelExpense(row.id))),
+      Promise.all(
+        targetRows.map((row) => deleteFuelExpense(row.fuelExpenseId ?? row.id)),
+      ),
     onSuccess: (_, targetRows) => {
       toast.success(
         `${targetRows.length} fuel transaction${targetRows.length === 1 ? "" : "s"} deleted.`,
@@ -679,7 +708,9 @@ export default function FuelTransactionsPage() {
       status: EditableFuelExpenseStatus;
     }) =>
       Promise.all(
-        targetRows.map((row) => updateFuelExpense(row.id, { status })),
+        targetRows.map((row) =>
+          updateFuelExpense(row.fuelExpenseId ?? row.id, { status }),
+        ),
       ),
     onSuccess: (_, variables) => {
       toast.success(
@@ -737,6 +768,20 @@ export default function FuelTransactionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -826,34 +871,43 @@ export default function FuelTransactionsPage() {
         <>
           <TxKpiCards kpis={kpis} isLoading={kpisLoading} />
 
-          {/* Table + filters sidebar.
-                        · < xl: single column, natural flow — filters first (so they're
-                          reachable), then the table capped to a scrollable height.
-                        · ≥ xl: side-by-side, both filling the fixed-height viewport column. */}
-          <div className="grid min-h-0 grid-cols-1 items-stretch gap-4 xl:flex-1 xl:grid-cols-4">
-            <div className="order-2 min-h-0 min-w-0 xl:order-1 xl:col-span-3">
-              <div className="h-[60vh] min-w-0 xl:h-full">
-                <TransactionsTable
-                  rows={rows}
-                  isLoading={isLoading}
-                  filters={filters}
-                  pagination={pagination}
-                  onFiltersChange={setFilters}
-                  onViewRow={setViewRow}
-                  onDeleteRows={setDeleteRows}
-                  onBulkEditRows={setBulkEditRows}
-                />
-              </div>
-            </div>
-            <div className="order-1 min-h-0 xl:order-2 xl:col-span-1">
-              <TransactionFilters
+          <div className="min-h-0 min-w-0 xl:flex-1">
+            <div className="h-[60vh] min-w-0 xl:h-full">
+              <TransactionsTable
+                rows={rows}
+                isLoading={isLoading}
                 filters={filters}
+                pagination={pagination}
                 onFiltersChange={setFilters}
+                onViewRow={setViewRow}
+                onEditRow={setEditRow}
+                onDeleteRows={setDeleteRows}
+                onBulkEditRows={setBulkEditRows}
               />
             </div>
           </div>
         </>
       )}
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent
+          side="right"
+          className="w-full border-0 p-0 shadow-none sm:max-w-md"
+        >
+          <SheetHeader className="px-5 pt-5 text-left">
+            <SheetTitle>Fuel Transaction Filters</SheetTitle>
+            <SheetDescription>
+              Refine the ledger by vehicle, reconciliation state, date, and
+              table settings.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+            <TransactionFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
       <TransactionExpenseDialog
         key={editRow?.id ?? "edit-transaction"}
         open={!!editRow}

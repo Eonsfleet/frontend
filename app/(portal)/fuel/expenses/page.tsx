@@ -17,6 +17,8 @@ import {
   XCircle,
   CreditCard,
   Clock,
+  ReceiptText,
+  Truck,
 } from "lucide-react";
 import {
   Dialog,
@@ -48,32 +50,71 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case "approved":
       return (
-        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none gap-1">
+        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-0 gap-1">
           <CheckCircle2 className="w-3 h-3" /> Approved
         </Badge>
       );
     case "rejected":
       return (
-        <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-none gap-1">
+        <Badge className="bg-rose-50 text-rose-700 hover:bg-rose-50 border-0 gap-1">
           <XCircle className="w-3 h-3" /> Rejected
         </Badge>
       );
     case "reimbursed":
       return (
-        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-none gap-1">
+        <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-0 gap-1">
           <CreditCard className="w-3 h-3" /> Reimbursed
+        </Badge>
+      );
+    case "flagged_for_review":
+      return (
+        <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 border-0 gap-1">
+          <AlertCircle className="w-3 h-3" /> Review
         </Badge>
       );
     default:
       return (
         <Badge
-          variant="outline"
-          className="bg-amber-50 text-amber-700 border-amber-200 gap-1"
+          variant="secondary"
+          className="bg-amber-50 text-amber-700 border-0 gap-1"
         >
           <AlertCircle className="w-3 h-3" /> Pending
         </Badge>
       );
   }
+}
+
+function ReconciliationBadge({ status }: { status?: string }) {
+  switch (status) {
+    case "matched":
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-0 gap-1">
+          <CheckCircle2 className="h-3 w-3" /> Matched
+        </Badge>
+      );
+    case "flagged_variance":
+      return (
+        <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 border-0 gap-1">
+          <AlertCircle className="h-3 w-3" /> Variance
+        </Badge>
+      );
+    default:
+      return (
+        <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 border-0 gap-1">
+          <Clock className="h-3 w-3" /> Unmatched
+        </Badge>
+      );
+  }
+}
+
+function sourceLabel(source?: string) {
+  if (source === "card") return "Fleet card";
+  return "Manual entry";
+}
+
+function expenseTotal(expense: FuelExpense) {
+  const amount = expense.attributes.amount ?? expense.attributes.cost_per_volume;
+  return amount && expense.attributes.volume ? amount * expense.attributes.volume : 0;
 }
 
 // ── Standardized Table Pagination ───────────────────────────────────────────
@@ -97,7 +138,7 @@ function TablePagination({
 
   if (variant === "simple") {
     return (
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between bg-slate-50/60 px-4 py-3">
         <p className="text-xs text-slate-500 font-medium">
           Page {pagination.current} of {pagination.lastPage}
         </p>
@@ -105,7 +146,7 @@ function TablePagination({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs border-0 bg-white shadow-none"
             disabled={pagination.current <= 1}
             onClick={() => onPageChange(pagination.current - 1)}
           >
@@ -114,7 +155,7 @@ function TablePagination({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs border-0 bg-white shadow-none"
             disabled={pagination.current >= pagination.lastPage}
             onClick={() => onPageChange(pagination.current + 1)}
           >
@@ -126,7 +167,7 @@ function TablePagination({
   }
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+    <div className="flex items-center justify-between px-6 py-4 bg-slate-50/60">
       <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
         Page {pagination.current} of {pagination.lastPage} &nbsp;·&nbsp;{" "}
         {pagination.total} records
@@ -135,7 +176,7 @@ function TablePagination({
         <Button
           size="sm"
           variant="outline"
-          className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+          className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-0 bg-white shadow-none"
           disabled={pagination.current <= 1}
           onClick={() => onPageChange(pagination.current - 1)}
         >
@@ -144,7 +185,7 @@ function TablePagination({
         <Button
           size="sm"
           variant="outline"
-          className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+          className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-0 bg-white shadow-none"
           disabled={pagination.current >= pagination.lastPage}
           onClick={() => onPageChange(pagination.current + 1)}
         >
@@ -211,7 +252,7 @@ function RejectDialog({
               {...register("reason")}
               rows={3}
               placeholder="e.g. Receipt not attached."
-              className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+              className="mt-1.5 w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
             />
             {errors.reason && (
               <p className="text-xs text-rose-500 mt-1">
@@ -223,6 +264,7 @@ function RejectDialog({
             <Button
               type="button"
               variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
               onClick={() => {
                 reset();
                 onClose();
@@ -318,7 +360,7 @@ function LogExpenseDialog({
               <Label>Vehicle</Label>
               <select
                 {...register("vehicle_id")}
-                className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1.5 w-full rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">Select vehicle...</option>
                 {vehiclesData?.data?.map((v) => (
@@ -341,7 +383,7 @@ function LogExpenseDialog({
                 type="number"
                 step="0.1"
                 placeholder="e.g. 35.0"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.volume && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -356,7 +398,7 @@ function LogExpenseDialog({
                 type="number"
                 step="0.01"
                 placeholder="e.g. 765.00"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.cost_per_volume && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -369,7 +411,7 @@ function LogExpenseDialog({
               <Input
                 {...register("entry_date")}
                 type="date"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.entry_date && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -384,7 +426,7 @@ function LogExpenseDialog({
               <Input
                 {...register("reference_number")}
                 placeholder="REF-00001"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
             </div>
             <div className="col-span-2">
@@ -394,7 +436,7 @@ function LogExpenseDialog({
               <Input
                 {...register("purchase_from")}
                 placeholder="e.g. Total Energy Station VI"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
             </div>
           </div>
@@ -402,6 +444,7 @@ function LogExpenseDialog({
             <Button
               type="button"
               variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
               onClick={() => {
                 reset();
                 onClose();
@@ -490,7 +533,7 @@ function ImportFuelTransactionsDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+          <div className="rounded-xl bg-blue-50/60 p-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-800">
@@ -504,7 +547,7 @@ function ImportFuelTransactionsDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 shrink-0 gap-2 bg-white"
+                className="h-8 shrink-0 gap-2 border-0 bg-white shadow-none"
                 disabled={templateMutation.isPending}
                 onClick={() => templateMutation.mutate()}
               >
@@ -520,7 +563,7 @@ function ImportFuelTransactionsDialog({
 
           <div>
             <Label>Expense File</Label>
-            <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+            <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 py-8 text-center transition-colors hover:bg-blue-50/40">
               <FileSpreadsheet className="h-9 w-9 text-blue-500" />
               <span className="text-sm font-semibold text-slate-700">
                 {file ? file.name : "Choose Excel or CSV file"}
@@ -545,7 +588,7 @@ function ImportFuelTransactionsDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={close}>
+          <Button type="button" variant="outline" className="border-0 bg-slate-100 shadow-none" onClick={close}>
             Cancel
           </Button>
           <Button
@@ -574,6 +617,7 @@ export default function FuelExpensesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [reconciliationFilter, setReconciliationFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
@@ -583,7 +627,7 @@ export default function FuelExpensesPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [
       "fuel-expenses",
-      { page, search, statusFilter, startDate, endDate },
+      { page, search, statusFilter, reconciliationFilter, startDate, endDate },
     ],
     queryFn: () =>
       api.getFuelExpenses({
@@ -591,6 +635,7 @@ export default function FuelExpensesPage() {
         per_page: PAGE_SIZE_DEFAULT,
         q: search || undefined,
         status: statusFilter || undefined,
+        reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
       }),
@@ -637,6 +682,7 @@ export default function FuelExpensesPage() {
       const blob = await api.exportFuelExpenses({
         q: search || undefined,
         status: statusFilter || undefined,
+        reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
       });
@@ -689,7 +735,7 @@ export default function FuelExpensesPage() {
             size="sm"
             disabled={importMutation.isPending}
             onClick={() => setImportOpen(true)}
-            className="shadow-sm"
+            className="border-0 bg-slate-100 shadow-none"
           >
             {importMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -702,13 +748,13 @@ export default function FuelExpensesPage() {
             variant="outline"
             size="sm"
             onClick={handleExport}
-            className="shadow-sm"
+            className="border-0 bg-slate-100 shadow-none"
           >
             <Download className="mr-2 h-4 w-4" /> Export CSV
           </Button>
           <Button
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-none"
             onClick={() => setLogOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Transaction
@@ -720,7 +766,7 @@ export default function FuelExpensesPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Total Volume
@@ -731,7 +777,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Total Cost
@@ -743,7 +789,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Avg Cost / L
@@ -753,7 +799,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Pending Approval
@@ -771,14 +817,14 @@ export default function FuelExpensesPage() {
       </div>
 
       {/* Filters */}
-      <Card className="shadow-sm border-slate-200">
+      <Card className="border-0 shadow-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search vehicle, driver, reference..."
-                className="pl-9 bg-slate-50 border-slate-200 h-9"
+                className="pl-9 bg-slate-50 border-0 shadow-none h-9 focus-visible:border-0 focus-visible:ring-0"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -791,7 +837,7 @@ export default function FuelExpensesPage() {
                 Status
               </Label>
               <select
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-9 bg-slate-50 rounded-md px-3 text-sm focus:outline-none"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
@@ -800,9 +846,28 @@ export default function FuelExpensesPage() {
               >
                 <option value="">All Statuses</option>
                 <option value="pending_approval">Pending</option>
+                <option value="flagged_for_review">Review</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="reimbursed">Reimbursed</option>
+              </select>
+            </div>
+            <div className="w-44">
+              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
+                Reconciliation
+              </Label>
+              <select
+                className="w-full h-9 bg-slate-50 rounded-md px-3 text-sm focus:outline-none"
+                value={reconciliationFilter}
+                onChange={(e) => {
+                  setReconciliationFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Records</option>
+                <option value="matched">Matched</option>
+                <option value="flagged_variance">Variance</option>
+                <option value="unmatched">Unmatched</option>
               </select>
             </div>
             <div className="w-40">
@@ -811,7 +876,7 @@ export default function FuelExpensesPage() {
               </Label>
               <Input
                 type="date"
-                className="h-9 bg-slate-50 border-slate-200 text-sm"
+                className="h-9 bg-slate-50 border-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -822,12 +887,16 @@ export default function FuelExpensesPage() {
               </Label>
               <Input
                 type="date"
-                className="h-9 bg-slate-50 border-slate-200 text-sm"
+                className="h-9 bg-slate-50 border-0 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
-            {(search || statusFilter || startDate || endDate) && (
+            {(search ||
+              statusFilter ||
+              reconciliationFilter ||
+              startDate ||
+              endDate) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -835,6 +904,7 @@ export default function FuelExpensesPage() {
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("");
+                  setReconciliationFilter("");
                   setStartDate("");
                   setEndDate("");
                   setPage(1);
@@ -847,22 +917,23 @@ export default function FuelExpensesPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm border-slate-200">
+      <Card className="border-0 shadow-none">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
+            <table className="w-full min-w-[980px] text-sm text-left">
+              <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80">
                 <tr>
-                  <th className="px-6 py-4">Reference No</th>
+                  <th className="px-6 py-4">Expense</th>
                   <th className="px-6 py-4">Vehicle</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4 whitespace-nowrap">Vol (L)</th>
-                  <th className="px-6 py-4">Cost (₦)</th>
+                  <th className="px-6 py-4">Date & Source</th>
+                  <th className="px-6 py-4 whitespace-nowrap">Volume</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Reconciliation</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
@@ -884,6 +955,9 @@ export default function FuelExpensesPage() {
                         <div className="h-3 w-16 bg-slate-100 rounded" />
                       </td>
                       <td className="px-6 py-4">
+                        <div className="h-5 w-24 bg-slate-200 rounded-full" />
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="h-5 w-20 bg-slate-200 rounded-full" />
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -893,7 +967,7 @@ export default function FuelExpensesPage() {
                   ))
                 ) : isError ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-6">
+                    <td colSpan={8} className="px-6 py-6">
                       <QueryError
                         message="Failed to load fuel expenses."
                         onRetry={refetch}
@@ -903,91 +977,128 @@ export default function FuelExpensesPage() {
                 ) : expenses.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={8}
                       className="px-6 py-20 text-center text-slate-400"
                     >
                       No fuel expenses found.
                     </td>
                   </tr>
                 ) : (
-                  expenses.map((exp) => (
-                    <tr
-                      key={exp.id}
-                      className="hover:bg-slate-50 transition-colors group"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">
-                          {exp?.attributes?.reference_number ?? "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900 uppercase">
-                          {exp.relationships.vehicle?.registration_number ??
-                            "Unknown"}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-medium">
-                          by {exp.relationships.driver?.name ?? "Unknown"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {format(
-                          new Date(exp.attributes.entry_date),
-                          "MMM dd, yyyy",
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono font-medium text-slate-700">
-                        {(exp.attributes.volume ?? 0).toFixed(1)}L
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-mono font-bold text-slate-900 text-base">
-                          ₦
-                          {(exp.attributes.amount && exp.attributes.volume
-                            ? exp.attributes.amount * exp.attributes.volume
-                            : 0
-                          ).toLocaleString()}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-bold">
-                          {exp.attributes.amount
-                            ? `₦${exp.attributes.amount.toFixed(2)}/L`
-                            : "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={exp.attributes.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {exp.attributes.status === "pending_approval" ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                              onClick={() => handleApprove(exp.id)}
-                              disabled={isApproving}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50"
-                              onClick={() => setRejectId(exp.id)}
-                            >
-                              Reject
-                            </Button>
+                  expenses.map((exp) => {
+                    const vehicle = exp.relationships.vehicle;
+                    const driver = exp.relationships.driver;
+                    const unitPrice =
+                      exp.attributes.amount ?? exp.attributes.cost_per_volume;
+                    return (
+                      <tr
+                        key={exp.id}
+                        className="transition-colors even:bg-slate-50/40 hover:bg-slate-50"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-start gap-2.5">
+                            <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            <div>
+                              <div className="font-bold text-slate-900">
+                                {exp.attributes.reference_number ||
+                                  `EXP-${exp.id}`}
+                              </div>
+                              <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                {exp.attributes.purchase_from ||
+                                  "No station recorded"}
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-slate-400"
-                            disabled
-                          >
-                            Finalized
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+                              <Truck className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 uppercase">
+                                {vehicle?.registration_number ?? "Unknown"}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {vehicle
+                                  ? `${vehicle.make} ${vehicle.model}`.trim() ||
+                                    "No model"
+                                  : "No vehicle details"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          <div className="font-semibold text-slate-800">
+                            {format(
+                              new Date(exp.attributes.entry_date),
+                              "MMM dd, yyyy",
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            {sourceLabel(exp.attributes.source)} ·{" "}
+                            {driver?.name ?? "No driver"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-mono font-semibold text-slate-800">
+                          {(exp.attributes.volume ?? 0).toFixed(1)} L
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-mono font-bold text-slate-900 text-base">
+                            {exp.attributes.currency || "NGN"}{" "}
+                            {expenseTotal(exp).toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            {unitPrice
+                              ? `${exp.attributes.currency || "NGN"} ${unitPrice.toFixed(2)}/L`
+                              : "-"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <ReconciliationBadge
+                            status={exp.attributes.reconciliation_status}
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={exp.attributes.status} />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {["pending_approval", "flagged_for_review"].includes(
+                            exp.attributes.status,
+                          ) ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-none"
+                                onClick={() => handleApprove(exp.id)}
+                                disabled={isApproving}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-0 bg-rose-50 text-rose-600 shadow-none hover:bg-rose-100"
+                                onClick={() => setRejectId(exp.id)}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-slate-400"
+                              disabled
+                            >
+                              Finalized
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -23,10 +23,9 @@ const TYPE_OPTIONS: Array<{ label: string; value: 'all' | TxType }> = [
 
 const RECONCILIATION_OPTIONS: Array<{ label: string; value: ReconciliationStatus }> = [
     { label: 'All', value: 'all' },
-    { label: 'Reconciled', value: 'reconciled' },
-    { label: 'Unreconciled', value: 'unreconciled' },
-    { label: 'Pending', value: 'pending' },
-    { label: 'Disputed', value: 'disputed' },
+    { label: 'Matched', value: 'matched' },
+    { label: 'Variance', value: 'flagged_variance' },
+    { label: 'Unmatched', value: 'unmatched' },
 ]
 
 const SORT_OPTIONS = [
@@ -93,7 +92,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
     }
 
     return (
-        <Card className="flex flex-col rounded-2xl border-slate-100 p-4 shadow-none xl:h-full">
+        <Card className="flex flex-col rounded-2xl border-0 bg-white p-4 shadow-none xl:h-full">
             <div className="flex shrink-0 items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">Filters</h2>
                 <button type="button" className="text-[12px] font-semibold text-blue-600 hover:text-blue-700" onClick={resetFilters}>
@@ -106,7 +105,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                     <select
                         value={filters.type ?? 'all'}
                         onChange={(event) => updateFilters({ type: event.target.value as FuelTransactionFilters['type'] })}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                        className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100"
                     >
                         {TYPE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -120,7 +119,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                     <select
                         value={filters.reconciliationStatus ?? 'all'}
                         onChange={(event) => updateFilters({ reconciliationStatus: event.target.value as ReconciliationStatus })}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                        className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100"
                     >
                         {RECONCILIATION_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -135,7 +134,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                         <button
                             type="button"
                             aria-expanded={isVehicleOpen}
-                            className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                            className="flex h-9 w-full items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 text-left text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-100"
                             onClick={() => setIsVehicleOpen((open) => !open)}
                         >
                             <span className="min-w-0 truncate">
@@ -145,15 +144,15 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                         </button>
 
                         {isVehicleOpen && (
-                            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                                <div className="border-b border-slate-100 p-2">
+                            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg bg-white">
+                                <div className="p-2">
                                     <div className="relative">
                                         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                         <Input
                                             value={vehicleSearch}
                                             onChange={(event) => setVehicleSearch(event.target.value)}
                                             placeholder="Search vehicles..."
-                                            className="h-8 border-slate-200 pl-8 text-[12px]"
+                                            className="h-8 border-0 bg-slate-50 pl-8 text-[12px] shadow-none focus-visible:border-0 focus-visible:ring-0"
                                             aria-label="Search vehicles"
                                         />
                                     </div>
@@ -212,7 +211,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                         type="date"
                         value={filters.startDate ?? ''}
                         onChange={(event) => updateFilters({ startDate: event.target.value })}
-                        className="h-9 border-slate-200 text-[13px]"
+                        className="h-9 border-0 bg-slate-50 text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
                         aria-label="Start date"
                     />
                 </Field>
@@ -222,7 +221,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                         type="date"
                         value={filters.endDate ?? ''}
                         onChange={(event) => updateFilters({ endDate: event.target.value })}
-                        className="h-9 border-slate-200 text-[13px]"
+                        className="h-9 border-0 bg-slate-50 text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
                         aria-label="End date"
                     />
                 </Field>
@@ -231,7 +230,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                     <select
                         value={filters.sortBy}
                         onChange={(event) => updateFilters({ sortBy: event.target.value })}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                        className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100"
                     >
                         {SORT_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -245,7 +244,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                     <select
                         value={filters.orderBy}
                         onChange={(event) => updateFilters({ orderBy: event.target.value as FuelTransactionFilters['orderBy'] })}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                        className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100"
                     >
                         <option value="desc">Descending</option>
                         <option value="asc">Ascending</option>
@@ -256,7 +255,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                     <select
                         value={filters.perPage}
                         onChange={(event) => updateFilters({ perPage: Number(event.target.value) })}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-300"
+                        className="h-9 w-full rounded-lg bg-slate-50 px-3 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100"
                     >
                         <option value={10}>10</option>
                         <option value={25}>25</option>
@@ -274,14 +273,14 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
                             const nextLimit = Math.min(10000, Math.max(1, Number(event.target.value) || 1))
                             updateFilters({ exportLimit: nextLimit })
                         }}
-                        className="h-9 border-slate-200 text-[13px]"
+                        className="h-9 border-0 bg-slate-50 text-[13px] shadow-none focus-visible:border-0 focus-visible:ring-0"
                         aria-label="Export row limit"
                     />
                     <p className="mt-1 text-[11px] text-slate-400">Max 10,000 rows.</p>
                 </Field>
             </div>
 
-            <div className="mt-4 shrink-0 border-t border-slate-100 pt-4">
+            <div className="mt-4 shrink-0 pt-4">
                 <button
                     type="button"
                     className="h-9 w-full rounded-lg bg-slate-100 text-[13px] font-semibold text-slate-600 transition-colors duration-200 hover:bg-slate-200"

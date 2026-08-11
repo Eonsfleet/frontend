@@ -1,4 +1,5 @@
-export type FuelExpenseStatus = 'pending_approval' | 'approved' | 'rejected' | 'reimbursed'
+export type FuelExpenseStatus = 'pending_approval' | 'approved' | 'rejected' | 'reimbursed' | 'flagged_for_review'
+export type FuelReconciliationStatus = 'matched' | 'flagged_variance' | 'unmatched'
 export type FuelSource = 'manual' | 'card'
 
 export interface FuelExpense {
@@ -12,6 +13,7 @@ export interface FuelExpense {
         purchase_from: string | null
         reference_number: string | null
         status: FuelExpenseStatus
+        reconciliation_status?: FuelReconciliationStatus
         source?: FuelSource
         approved_at: string | null
         rejection_reason?: string | null
@@ -19,6 +21,7 @@ export interface FuelExpense {
     relationships: {
         vehicle: { id: number; registration_number: string; make: string; model: string }
         driver: { id: number; name: string; email: string }
+        fuel_transaction?: { id: number; type: string; amount_liters: number | null; reconciliation_status?: FuelReconciliationStatus }
     }
 }
 

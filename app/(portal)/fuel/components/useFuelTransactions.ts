@@ -28,10 +28,9 @@ export type EditableFuelExpenseStatus =
 
 export type ReconciliationStatus =
   | "all"
-  | "reconciled"
-  | "unreconciled"
-  | "pending"
-  | "disputed";
+  | "matched"
+  | "flagged_variance"
+  | "unmatched";
 
 export interface FuelTransactionFilters {
   search: string;
@@ -49,6 +48,7 @@ export interface FuelTransactionFilters {
 
 export interface TransactionRow {
   id: string;
+  fuelExpenseId: string | null;
   date: string;
   time: string;
   occurredAt: string;
@@ -70,6 +70,7 @@ export interface TransactionRow {
   receiptUrl: string;
   referenceNumber: string;
   status: EditableFuelExpenseStatus;
+  reconciliationStatus: Exclude<ReconciliationStatus, "all">;
   canManage: boolean;
   // Device-detected telemetry (present on source: "device" transactions).
   lat: number | null;
@@ -175,6 +176,21 @@ function normalizeStatus(value: string): EditableFuelExpenseStatus {
   if (value === "approved" || value === "rejected" || value === "reimbursed")
     return value;
   return "pending_approval";
+}
+
+function normalizeReconciliationStatus(
+  value: unknown,
+): Exclude<ReconciliationStatus, "all"> {
+  if (typeof value !== "string" || !value.trim()) return "unmatched";
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "matched" || normalized === "reconciled") return "matched";
+  if (
+    normalized === "flagged_variance" ||
+    normalized === "variance" ||
+    normalized === "disputed"
+  )
+    return "flagged_variance";
+  return "unmatched";
 }
 
 function extractRows(
@@ -287,9 +303,14 @@ function mapRow(item: FuelTransactionApiItem): TransactionRow {
     readNumber(attributes, ["user_id", "driver_id"]) ??
     readNumber(driver, ["id"]);
   const receiptUrl = readString(attributes, ["receipt_url", "receipt"], "");
+  const fuelExpenseId = readString(attributes, ["fuel_expense_id"], "");
+  const reconciliationStatus = normalizeReconciliationStatus(
+    attributes.reconciliation_status,
+  );
 
   return {
     id: backendId || crypto.randomUUID(),
+    fuelExpenseId: fuelExpenseId || null,
     date: occurredAt ? formatDatePart(occurredAt, "MMM d, yyyy") : "-",
     time: occurredAt ? formatDatePart(occurredAt, "hh:mm a") : "-",
     occurredAt,
@@ -342,9 +363,10 @@ function mapRow(item: FuelTransactionApiItem): TransactionRow {
     status: normalizeStatus(
       readString(attributes, ["status"], "pending_approval"),
     ),
+    reconciliationStatus,
     // Device-detected transactions aren't editable expense records — only rows
     // backed by a fuel expense can be edited/deleted through the expense endpoints.
-    canManage: Boolean(backendId) && attributes.fuel_expense_id != null,
+    canManage: Boolean(fuelExpenseId),
     lat,
     lng,
     odometerKm: readNumber(attributes, ["odometer_at_event", "odometer"]),
