@@ -14,7 +14,7 @@ const fmtNaira = (n: number) => `₦${n.toLocaleString(undefined, { minimumFract
 
 function KpiSkeleton() {
     return (
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-none">
+        <div className="rounded-2xl bg-white p-5">
             <div className="flex items-start justify-between">
                 <div className="space-y-2">
                     <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
@@ -22,7 +22,6 @@ function KpiSkeleton() {
                 </div>
                 <div className="h-10 w-10 animate-pulse rounded-xl bg-slate-100" />
             </div>
-            <div className="mt-4 h-10 w-full animate-pulse rounded bg-slate-50" />
         </div>
     )
 }
@@ -43,32 +42,28 @@ export function KpiSection({ kpi, isLoading }: KpiSectionProps) {
                 value={`${fmtNumber(kpi.totalFuelUsedLiters)} L`}
                 icon={Fuel}
                 accent="green"
-                trend={{ value: `${kpi.trends.fuelUsed}%`, isPositive: true, label: 'vs prev. period' }}
-                sparkline={kpi.sparklines.fuelUsed}
+                subtitle="Measured usage"
             />
             <FuelKpiCard
                 title="Total Fuel Cost"
                 value={fmtNaira(kpi.totalFuelCostNaira)}
                 icon={DollarSign}
                 accent="blue"
-                trend={{ value: `${kpi.trends.cost}%`, isPositive: true, label: 'vs prev. period' }}
-                sparkline={kpi.sparklines.cost}
+                subtitle="Approved spend"
             />
             <FuelKpiCard
                 title="Avg. Fuel Efficiency"
                 value={`${kpi.avgEfficiencyKmPerL.toFixed(2)} km/L`}
                 icon={Gauge}
-                accent="purple"
-                trend={{ value: `${kpi.trends.efficiency}%`, isPositive: true, label: 'vs prev. period' }}
-                sparkline={kpi.sparklines.efficiency}
+                accent="slate"
+                subtitle="Fleet average"
             />
             <FuelKpiCard
                 title="Total Refills"
                 value={`${kpi.totalRefills}`}
                 icon={FuelIcon}
                 accent="orange"
-                trend={{ value: `${kpi.trends.refills}`, isPositive: true, label: 'vs prev. period' }}
-                sparkline={kpi.sparklines.refills}
+                subtitle="Detected segments"
             />
             <FuelKpiCard
                 title="Total Vehicles"

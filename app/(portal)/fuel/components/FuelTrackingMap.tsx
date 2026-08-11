@@ -24,7 +24,6 @@ export interface FeaturedVehicle {
     status: string
     fuelPercent: number | null
     fuelLiters: number | null
-    consumptionLph: number
     location: string
     lastUpdated: string
 }
@@ -99,7 +98,7 @@ export function FuelTrackingMap({ markers, onViewVehicle, className }: FuelTrack
     const featured = selected?.featured ?? null
 
     return (
-        <div className={cn('relative h-[340px] w-full overflow-hidden rounded-xl border border-slate-200', className)}>
+        <div className={cn('relative h-[360px] w-full overflow-hidden rounded-xl bg-slate-100', className)}>
             <MapContainer
                 center={center}
                 zoom={12}
@@ -125,7 +124,7 @@ export function FuelTrackingMap({ markers, onViewVehicle, className }: FuelTrack
             </MapContainer>
 
             {featured && (
-                <div className="pointer-events-auto absolute left-1/2 top-1/2 z-[500] w-64 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                <div className="pointer-events-auto absolute left-1/2 top-1/2 z-[500] w-64 -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-4">
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-slate-900">{featured.registration}</span>
                         <div className="flex items-center gap-2">
@@ -160,10 +159,6 @@ export function FuelTrackingMap({ markers, onViewVehicle, className }: FuelTrack
 
                     <dl className="mt-3 space-y-2 text-[11px]">
                         <div className="flex items-center justify-between">
-                            <dt className="text-slate-400">Consumption</dt>
-                            <dd className="font-semibold text-slate-700">{featured.consumptionLph} L/h</dd>
-                        </div>
-                        <div className="flex items-center justify-between">
                             <dt className="text-slate-400">Last Updated</dt>
                             <dd className="font-semibold text-slate-700">{featured.lastUpdated}</dd>
                         </div>
@@ -187,7 +182,7 @@ export function FuelTrackingMap({ markers, onViewVehicle, className }: FuelTrack
 
             {markers.length === 0 && (
                 <div className="pointer-events-none absolute inset-0 z-[400] flex items-center justify-center">
-                    <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-medium text-slate-500">
                         <Radio className="h-3.5 w-3.5 text-slate-400" /> No positioned vehicles in range
                     </div>
                 </div>

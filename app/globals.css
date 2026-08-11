@@ -151,3 +151,27 @@
     display: none;
   }
 }
+
+.fuel-record-scroll {
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
+.fuel-record-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.fuel-record-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fuel-record-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+}
+
+.fuel-record-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

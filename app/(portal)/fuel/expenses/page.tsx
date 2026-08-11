@@ -17,6 +17,13 @@ import {
   XCircle,
   CreditCard,
   Clock,
+  ReceiptText,
+  Truck,
+  SlidersHorizontal,
+  MoreHorizontal,
+  Link2Off,
+  Trash2,
+  ExternalLink,
 } from "lucide-react";
 import {
   Dialog,
@@ -27,6 +34,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/lib/api/fuel";
 import { getVehicles } from "@/lib/api/vehicles";
@@ -41,6 +62,10 @@ import { QueryError } from "@/components/shared/QueryError";
 import { useAuthStore } from "@/store/authStore";
 import { PAGE_SIZE_DEFAULT, PAGE_SIZE_DROPDOWN } from "@/lib/config";
 import { FuelTabs } from "../components/FuelTabs";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 
@@ -48,32 +73,71 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case "approved":
       return (
-        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none gap-1">
+        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-0 gap-1">
           <CheckCircle2 className="w-3 h-3" /> Approved
         </Badge>
       );
     case "rejected":
       return (
-        <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border-none gap-1">
+        <Badge className="bg-rose-50 text-rose-700 hover:bg-rose-50 border-0 gap-1">
           <XCircle className="w-3 h-3" /> Rejected
         </Badge>
       );
     case "reimbursed":
       return (
-        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-none gap-1">
+        <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-0 gap-1">
           <CreditCard className="w-3 h-3" /> Reimbursed
+        </Badge>
+      );
+    case "flagged_for_review":
+      return (
+        <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 border-0 gap-1">
+          <AlertCircle className="w-3 h-3" /> Review
         </Badge>
       );
     default:
       return (
         <Badge
-          variant="outline"
-          className="bg-amber-50 text-amber-700 border-amber-200 gap-1"
+          variant="secondary"
+          className="bg-amber-50 text-amber-700 border-0 gap-1"
         >
           <AlertCircle className="w-3 h-3" /> Pending
         </Badge>
       );
   }
+}
+
+function ReconciliationBadge({ status }: { status?: string }) {
+  switch (status) {
+    case "matched":
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-0 gap-1">
+          <CheckCircle2 className="h-3 w-3" /> Matched
+        </Badge>
+      );
+    case "flagged_variance":
+      return (
+        <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 border-0 gap-1">
+          <AlertCircle className="h-3 w-3" /> Variance
+        </Badge>
+      );
+    default:
+      return (
+        <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 border-0 gap-1">
+          <Clock className="h-3 w-3" /> Unmatched
+        </Badge>
+      );
+  }
+}
+
+function sourceLabel(source?: string) {
+  if (source === "card") return "Fleet card";
+  return "Manual entry";
+}
+
+function expenseTotal(expense: FuelExpense) {
+  const amount = expense.attributes.amount ?? expense.attributes.cost_per_volume;
+  return amount && expense.attributes.volume ? amount * expense.attributes.volume : 0;
 }
 
 // ── Standardized Table Pagination ───────────────────────────────────────────
@@ -97,7 +161,7 @@ function TablePagination({
 
   if (variant === "simple") {
     return (
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between bg-slate-50/60 px-4 py-3">
         <p className="text-xs text-slate-500 font-medium">
           Page {pagination.current} of {pagination.lastPage}
         </p>
@@ -105,7 +169,7 @@ function TablePagination({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs border-0 bg-white shadow-none"
             disabled={pagination.current <= 1}
             onClick={() => onPageChange(pagination.current - 1)}
           >
@@ -114,7 +178,7 @@ function TablePagination({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs"
+            className="h-8 px-3 text-xs border-0 bg-white shadow-none"
             disabled={pagination.current >= pagination.lastPage}
             onClick={() => onPageChange(pagination.current + 1)}
           >
@@ -126,7 +190,7 @@ function TablePagination({
   }
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+    <div className="flex items-center justify-between px-6 py-4 bg-slate-50/60">
       <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
         Page {pagination.current} of {pagination.lastPage} &nbsp;·&nbsp;{" "}
         {pagination.total} records
@@ -135,7 +199,7 @@ function TablePagination({
         <Button
           size="sm"
           variant="outline"
-          className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+          className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-0 bg-white shadow-none"
           disabled={pagination.current <= 1}
           onClick={() => onPageChange(pagination.current - 1)}
         >
@@ -144,7 +208,7 @@ function TablePagination({
         <Button
           size="sm"
           variant="outline"
-          className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
+          className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-0 bg-white shadow-none"
           disabled={pagination.current >= pagination.lastPage}
           onClick={() => onPageChange(pagination.current + 1)}
         >
@@ -211,7 +275,7 @@ function RejectDialog({
               {...register("reason")}
               rows={3}
               placeholder="e.g. Receipt not attached."
-              className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+              className="mt-1.5 w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
             />
             {errors.reason && (
               <p className="text-xs text-rose-500 mt-1">
@@ -223,6 +287,7 @@ function RejectDialog({
             <Button
               type="button"
               variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
               onClick={() => {
                 reset();
                 onClose();
@@ -236,6 +301,55 @@ function RejectDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteExpenseDialog({
+  expense,
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  expense: FuelExpense | null;
+  isPending?: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={!!expense} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-rose-500" />
+            Delete Expense
+          </DialogTitle>
+          <DialogDescription>
+            This will permanently delete{" "}
+            {expense?.attributes.reference_number || `EXP-${expense?.id}`} from
+            the fuel expense ledger.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-0 bg-slate-100 shadow-none"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isPending}
+            onClick={onConfirm}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Delete
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -318,13 +432,18 @@ function LogExpenseDialog({
               <Label>Vehicle</Label>
               <select
                 {...register("vehicle_id")}
-                className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1.5 w-full rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">Select vehicle...</option>
                 {vehiclesData?.data?.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.attributes.registration_number} — {v.attributes.make}{" "}
-                    {v.attributes.model}
+                    {formatVehicleRegistration(
+                      v.attributes.registration_number,
+                    )}{" "}
+                    — {formatVehicleMakeModel(
+                      v.attributes.make,
+                      v.attributes.model,
+                    )}
                   </option>
                 ))}
               </select>
@@ -341,7 +460,7 @@ function LogExpenseDialog({
                 type="number"
                 step="0.1"
                 placeholder="e.g. 35.0"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.volume && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -356,7 +475,7 @@ function LogExpenseDialog({
                 type="number"
                 step="0.01"
                 placeholder="e.g. 765.00"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.cost_per_volume && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -369,7 +488,7 @@ function LogExpenseDialog({
               <Input
                 {...register("entry_date")}
                 type="date"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
               {errors.entry_date && (
                 <p className="text-xs text-rose-500 mt-1">
@@ -384,7 +503,7 @@ function LogExpenseDialog({
               <Input
                 {...register("reference_number")}
                 placeholder="REF-00001"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
             </div>
             <div className="col-span-2">
@@ -394,7 +513,7 @@ function LogExpenseDialog({
               <Input
                 {...register("purchase_from")}
                 placeholder="e.g. Total Energy Station VI"
-                className="mt-1.5"
+                className="mt-1.5 border-0 bg-slate-50 shadow-none focus-visible:border-0 focus-visible:ring-0"
               />
             </div>
           </div>
@@ -402,6 +521,7 @@ function LogExpenseDialog({
             <Button
               type="button"
               variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
               onClick={() => {
                 reset();
                 onClose();
@@ -490,7 +610,7 @@ function ImportFuelTransactionsDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+          <div className="rounded-xl bg-blue-50/60 p-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-800">
@@ -504,7 +624,7 @@ function ImportFuelTransactionsDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 shrink-0 gap-2 bg-white"
+                className="h-8 shrink-0 gap-2 border-0 bg-white shadow-none"
                 disabled={templateMutation.isPending}
                 onClick={() => templateMutation.mutate()}
               >
@@ -520,7 +640,7 @@ function ImportFuelTransactionsDialog({
 
           <div>
             <Label>Expense File</Label>
-            <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40">
+            <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 py-8 text-center transition-colors hover:bg-blue-50/40">
               <FileSpreadsheet className="h-9 w-9 text-blue-500" />
               <span className="text-sm font-semibold text-slate-700">
                 {file ? file.name : "Choose Excel or CSV file"}
@@ -545,7 +665,7 @@ function ImportFuelTransactionsDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={close}>
+          <Button type="button" variant="outline" className="border-0 bg-slate-100 shadow-none" onClick={close}>
             Cancel
           </Button>
           <Button
@@ -574,16 +694,19 @@ export default function FuelExpensesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [reconciliationFilter, setReconciliationFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
+  const [deleteExpense, setDeleteExpense] = useState<FuelExpense | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [
       "fuel-expenses",
-      { page, search, statusFilter, startDate, endDate },
+      { page, search, statusFilter, reconciliationFilter, startDate, endDate },
     ],
     queryFn: () =>
       api.getFuelExpenses({
@@ -591,6 +714,7 @@ export default function FuelExpensesPage() {
         per_page: PAGE_SIZE_DEFAULT,
         q: search || undefined,
         status: statusFilter || undefined,
+        reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
       }),
@@ -601,14 +725,56 @@ export default function FuelExpensesPage() {
     queryFn: () => api.getFuelExpenseMetrics(),
   });
 
+  const activeFilterCount = [
+    search,
+    statusFilter,
+    reconciliationFilter,
+    startDate,
+    endDate,
+  ].filter(Boolean).length;
+
+  const refreshFuelExpenses = () => {
+    queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
+    queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setReconciliationFilter("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
+
   const { mutate: handleApprove, isPending: isApproving } = useMutation({
     mutationFn: (id: string | number) => api.approveFuelExpense(id),
     onSuccess: () => {
       toast.success("Expense approved.");
-      queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
-      queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
+      refreshFuelExpenses();
     },
     onError: (err) => toast.error(extractApiError(err)),
+  });
+
+  const { mutate: handleUnlink, isPending: isUnlinking } = useMutation({
+    mutationFn: (id: string | number) => api.unlinkExpenseTransaction(id),
+    onSuccess: () => {
+      toast.success("Matched transaction unlinked.");
+      refreshFuelExpenses();
+    },
+    onError: (err) =>
+      toast.error(extractApiError(err, "Failed to unlink transaction.")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (expense: FuelExpense) => api.deleteFuelExpense(expense.id),
+    onSuccess: () => {
+      toast.success("Expense deleted.");
+      refreshFuelExpenses();
+      setDeleteExpense(null);
+    },
+    onError: (err) =>
+      toast.error(extractApiError(err, "Failed to delete expense.")),
   });
 
   const importMutation = useMutation({
@@ -637,6 +803,7 @@ export default function FuelExpensesPage() {
       const blob = await api.exportFuelExpenses({
         q: search || undefined,
         status: statusFilter || undefined,
+        reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
       });
@@ -687,9 +854,23 @@ export default function FuelExpensesPage() {
           <Button
             variant="outline"
             size="sm"
+            className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             disabled={importMutation.isPending}
             onClick={() => setImportOpen(true)}
-            className="shadow-sm"
+            className="border-0 bg-slate-100 shadow-none"
           >
             {importMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -702,13 +883,13 @@ export default function FuelExpensesPage() {
             variant="outline"
             size="sm"
             onClick={handleExport}
-            className="shadow-sm"
+            className="border-0 bg-slate-100 shadow-none"
           >
             <Download className="mr-2 h-4 w-4" /> Export CSV
           </Button>
           <Button
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-none"
             onClick={() => setLogOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Transaction
@@ -720,7 +901,7 @@ export default function FuelExpensesPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Total Volume
@@ -731,7 +912,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Total Cost
@@ -743,7 +924,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Avg Cost / L
@@ -753,7 +934,7 @@ export default function FuelExpensesPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="border-0 shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
               Pending Approval
@@ -770,99 +951,23 @@ export default function FuelExpensesPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="shadow-sm border-slate-200">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search vehicle, driver, reference..."
-                className="pl-9 bg-slate-50 border-slate-200 h-9"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                Status
-              </Label>
-              <select
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-md px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All Statuses</option>
-                <option value="pending_approval">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="reimbursed">Reimbursed</option>
-              </select>
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                From
-              </Label>
-              <Input
-                type="date"
-                className="h-9 bg-slate-50 border-slate-200 text-sm"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="w-40">
-              <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5 block">
-                To
-              </Label>
-              <Input
-                type="date"
-                className="h-9 bg-slate-50 border-slate-200 text-sm"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            {(search || statusFilter || startDate || endDate) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 text-slate-500 hover:text-slate-900"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("");
-                  setStartDate("");
-                  setEndDate("");
-                  setPage(1);
-                }}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm border-slate-200">
+      <Card className="border-0 shadow-none">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
+            <table className="w-full min-w-[980px] text-sm text-left">
+              <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80">
                 <tr>
-                  <th className="px-6 py-4">Reference No</th>
+                  <th className="px-6 py-4">Expense</th>
                   <th className="px-6 py-4">Vehicle</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4 whitespace-nowrap">Vol (L)</th>
-                  <th className="px-6 py-4">Cost (₦)</th>
+                  <th className="px-6 py-4">Date & Source</th>
+                  <th className="px-6 py-4 whitespace-nowrap">Volume</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Reconciliation</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
@@ -884,6 +989,9 @@ export default function FuelExpensesPage() {
                         <div className="h-3 w-16 bg-slate-100 rounded" />
                       </td>
                       <td className="px-6 py-4">
+                        <div className="h-5 w-24 bg-slate-200 rounded-full" />
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="h-5 w-20 bg-slate-200 rounded-full" />
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -893,7 +1001,7 @@ export default function FuelExpensesPage() {
                   ))
                 ) : isError ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-6">
+                    <td colSpan={8} className="px-6 py-6">
                       <QueryError
                         message="Failed to load fuel expenses."
                         onRetry={refetch}
@@ -903,91 +1011,173 @@ export default function FuelExpensesPage() {
                 ) : expenses.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={8}
                       className="px-6 py-20 text-center text-slate-400"
                     >
                       No fuel expenses found.
                     </td>
                   </tr>
                 ) : (
-                  expenses.map((exp) => (
-                    <tr
-                      key={exp.id}
-                      className="hover:bg-slate-50 transition-colors group"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">
-                          {exp?.attributes?.reference_number ?? "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900 uppercase">
-                          {exp.relationships.vehicle?.registration_number ??
-                            "Unknown"}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-medium">
-                          by {exp.relationships.driver?.name ?? "Unknown"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {format(
-                          new Date(exp.attributes.entry_date),
-                          "MMM dd, yyyy",
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono font-medium text-slate-700">
-                        {(exp.attributes.volume ?? 0).toFixed(1)}L
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-mono font-bold text-slate-900 text-base">
-                          ₦
-                          {(exp.attributes.amount && exp.attributes.volume
-                            ? exp.attributes.amount * exp.attributes.volume
-                            : 0
-                          ).toLocaleString()}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-bold">
-                          {exp.attributes.amount
-                            ? `₦${exp.attributes.amount.toFixed(2)}/L`
-                            : "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={exp.attributes.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {exp.attributes.status === "pending_approval" ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                              onClick={() => handleApprove(exp.id)}
-                              disabled={isApproving}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50"
-                              onClick={() => setRejectId(exp.id)}
-                            >
-                              Reject
-                            </Button>
+                  expenses.map((exp) => {
+                    const vehicle = exp.relationships.vehicle;
+                    const driver = exp.relationships.driver;
+                    const unitPrice =
+                      exp.attributes.amount ?? exp.attributes.cost_per_volume;
+                    return (
+                      <tr
+                        key={exp.id}
+                        className="transition-colors even:bg-slate-50/40 hover:bg-slate-50"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-start gap-2.5">
+                            <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            <div>
+                              <div className="font-bold text-slate-900">
+                                {exp.attributes.reference_number ||
+                                  `EXP-${exp.id}`}
+                              </div>
+                              <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                {exp.attributes.purchase_from ||
+                                  "No station recorded"}
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-slate-400"
-                            disabled
-                          >
-                            Finalized
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+                              <Truck className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 uppercase">
+                                {vehicle
+                                  ? formatVehicleRegistration(
+                                      vehicle.registration_number,
+                                    )
+                                  : "UNKNOWN"}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {vehicle
+                                  ? formatVehicleMakeModel(
+                                      vehicle.make,
+                                      vehicle.model,
+                                    ) || "No model"
+                                  : "No vehicle details"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          <div className="font-semibold text-slate-800">
+                            {format(
+                              new Date(exp.attributes.entry_date),
+                              "MMM dd, yyyy",
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            {sourceLabel(exp.attributes.source)} ·{" "}
+                            {driver?.name ?? "No driver"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-mono font-semibold text-slate-800">
+                          {(exp.attributes.volume ?? 0).toFixed(1)} L
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-mono font-bold text-slate-900 text-base">
+                            {exp.attributes.currency || "NGN"}{" "}
+                            {expenseTotal(exp).toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            {unitPrice
+                              ? `${exp.attributes.currency || "NGN"} ${unitPrice.toFixed(2)}/L`
+                              : "-"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <ReconciliationBadge
+                            status={exp.attributes.reconciliation_status}
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={exp.attributes.status} />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                                aria-label={`Open actions for expense ${exp.attributes.reference_number || exp.id}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 border-0 shadow-lg"
+                            >
+                              {["pending_approval", "flagged_for_review"].includes(
+                                exp.attributes.status,
+                              ) && (
+                                <>
+                                  <DropdownMenuItem
+                                    disabled={isApproving}
+                                    onSelect={() => handleApprove(exp.id)}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    Approve expense
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => setRejectId(exp.id)}
+                                  >
+                                    <XCircle className="h-4 w-4 text-rose-600" />
+                                    Reject expense
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              {exp.attributes.receipt_url && (
+                                <DropdownMenuItem asChild>
+                                  <a
+                                    href={exp.attributes.receipt_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <ExternalLink className="h-4 w-4 text-blue-600" />
+                                    Open receipt
+                                  </a>
+                                </DropdownMenuItem>
+                              )}
+                              {exp.relationships.fuel_transaction && (
+                                <DropdownMenuItem
+                                  disabled={isUnlinking}
+                                  onSelect={() => handleUnlink(exp.id)}
+                                >
+                                  <Link2Off className="h-4 w-4 text-amber-600" />
+                                  Unlink transaction
+                                </DropdownMenuItem>
+                              )}
+                              {(exp.attributes.receipt_url ||
+                                exp.relationships.fuel_transaction) && (
+                                <DropdownMenuSeparator />
+                              )}
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => setDeleteExpense(exp)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete expense
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -997,8 +1187,131 @@ export default function FuelExpensesPage() {
         </CardContent>
       </Card>
 
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent
+          side="right"
+          className="w-full border-0 p-0 shadow-none sm:max-w-md"
+        >
+          <SheetHeader className="px-5 pt-5 text-left">
+            <SheetTitle>Fuel Expense Filters</SheetTitle>
+            <SheetDescription>
+              Refine the expense ledger by status, reconciliation, date, and
+              search terms.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-4">
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Search
+              </Label>
+              <div className="relative mt-1.5">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search vehicle, driver, reference..."
+                  className="h-9 border-0 bg-slate-50 pl-9 shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Status
+              </Label>
+              <select
+                className="mt-1.5 h-9 w-full rounded-md bg-slate-50 px-3 text-sm focus:outline-none"
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Statuses</option>
+                <option value="pending_approval">Pending</option>
+                <option value="flagged_for_review">Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="reimbursed">Reimbursed</option>
+              </select>
+            </div>
+
+            <div>
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Reconciliation
+              </Label>
+              <select
+                className="mt-1.5 h-9 w-full rounded-md bg-slate-50 px-3 text-sm focus:outline-none"
+                value={reconciliationFilter}
+                onChange={(event) => {
+                  setReconciliationFilter(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Records</option>
+                <option value="matched">Matched</option>
+                <option value="flagged_variance">Variance</option>
+                <option value="unmatched">Unmatched</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  From
+                </Label>
+                <Input
+                  type="date"
+                  className="mt-1.5 h-9 border-0 bg-slate-50 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={startDate}
+                  onChange={(event) => {
+                    setStartDate(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  To
+                </Label>
+                <Input
+                  type="date"
+                  className="mt-1.5 h-9 border-0 bg-slate-50 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+                  value={endDate}
+                  onChange={(event) => {
+                    setEndDate(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            {activeFilterCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full border-0 bg-slate-100 shadow-none"
+                onClick={clearFilters}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
       <LogExpenseDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RejectDialog expenseId={rejectId} onClose={() => setRejectId(null)} />
+      <DeleteExpenseDialog
+        expense={deleteExpense}
+        isPending={deleteMutation.isPending}
+        onClose={() => setDeleteExpense(null)}
+        onConfirm={() => {
+          if (deleteExpense) deleteMutation.mutate(deleteExpense);
+        }}
+      />
       <ImportFuelTransactionsDialog
         open={importOpen}
         isPending={importMutation.isPending}

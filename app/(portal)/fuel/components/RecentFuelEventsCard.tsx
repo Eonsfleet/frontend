@@ -29,12 +29,12 @@ export function RecentFuelEventsCard({ events, isLoading, isRefreshing, paginati
     const canGoNext = !!pagination && pagination.current < pagination.lastPage
 
     return (
-        <Card className="flex h-[292px] min-h-0 flex-col rounded-2xl border-slate-100 p-5 shadow-none">
+        <Card className="flex h-[292px] min-h-0 flex-col rounded-2xl border-0 bg-white p-5 shadow-none">
             <div className="flex shrink-0 items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-slate-900">Recent Fuel Events</h2>
                 <div className="flex items-center gap-2">
                     {isRefreshing && (
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" aria-label="Refreshing events" />
+                        <Loader2 className="h-4 w-4 animate-spin text-[#0055FF]" aria-label="Refreshing events" />
                     )}
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -53,10 +53,10 @@ export function RecentFuelEventsCard({ events, isLoading, isRefreshing, paginati
                 </div>
             </div>
 
-            <ul className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+            <ul className="fuel-record-scroll mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                 {isLoading && (
                     <li className="flex items-center justify-center gap-2 py-6 text-sm font-medium text-slate-400">
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        <Loader2 className="h-4 w-4 animate-spin text-[#0055FF]" />
                         Loading events
                     </li>
                 )}
@@ -80,14 +80,14 @@ export function RecentFuelEventsCard({ events, isLoading, isRefreshing, paginati
             </ul>
 
             {pagination && (
-                <div className="mt-3 flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div className="mt-3 flex shrink-0 items-center justify-between gap-3 bg-slate-50 px-3 py-2">
                     <span className="text-[11px] font-medium text-slate-400">
                         Showing {start}-{end} of {pagination.total}
                     </span>
                     <div className="flex items-center gap-1">
                         <button
                             type="button"
-                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-500 transition hover:text-slate-800 disabled:cursor-not-allowed disabled:bg-transparent disabled:opacity-40"
                             disabled={!canGoPrevious || isLoading || isRefreshing}
                             onClick={() => pagination && onPageChange?.(pagination.current - 1)}
                             aria-label="Previous fuel events page"
@@ -99,7 +99,7 @@ export function RecentFuelEventsCard({ events, isLoading, isRefreshing, paginati
                         </span>
                         <button
                             type="button"
-                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-500 transition hover:text-slate-800 disabled:cursor-not-allowed disabled:bg-transparent disabled:opacity-40"
                             disabled={!canGoNext || isLoading || isRefreshing}
                             onClick={() => pagination && onPageChange?.(pagination.current + 1)}
                             aria-label="Next fuel events page"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, SlidersHorizontal, MoreVertical, Truck } from 'lucide-react'
+import { Search, SlidersHorizontal, Truck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -62,8 +62,7 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
     const activeFilterLabel = VEHICLE_FILTERS.find((option) => option.value === filter)?.label ?? 'All vehicles'
 
     return (
-        <Card className="flex h-full flex-col rounded-2xl border-slate-100 p-5 shadow-none">
-            {/* Header: title + count, then search + filter on the right */}
+        <Card className="flex h-full flex-col rounded-2xl border-0 bg-white p-5 shadow-none">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-base font-bold text-slate-900">
                     Vehicles <span className="text-slate-400">({vehicles.length})</span>
@@ -75,7 +74,7 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                             value={search}
                             onChange={(e) => onSearchChange(e.target.value)}
                             placeholder="Search vehicle..."
-                            className="h-9 border-slate-200 bg-slate-50 pl-8 text-sm"
+                            className="h-9 border-0 bg-slate-50 pl-8 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-[#0055FF]"
                             aria-label="Search vehicles"
                         />
                     </div>
@@ -85,22 +84,22 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                             aria-label="Filter vehicles"
                             aria-expanded={isFilterOpen}
                             className={cn(
-                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-white transition-colors duration-200 hover:bg-slate-50',
-                                filter === 'all' ? 'border-slate-200 text-slate-500' : 'border-blue-200 text-blue-600',
+                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors duration-200 hover:bg-slate-100',
+                                filter === 'all' ? 'bg-slate-50 text-slate-500' : 'bg-blue-50 text-[#0055FF]',
                             )}
                             onClick={() => setIsFilterOpen((open) => !open)}
                         >
                             <SlidersHorizontal className="h-4 w-4" />
                         </button>
                         {isFilterOpen && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg bg-white py-1">
                                 {VEHICLE_FILTERS.map((option) => (
                                     <button
                                         key={option.value}
                                         type="button"
                                         className={cn(
                                             'block w-full px-3 py-1.5 text-left text-[12px] font-medium transition-colors hover:bg-slate-50',
-                                            option.value === filter ? 'text-blue-600' : 'text-slate-600',
+                                            option.value === filter ? 'text-[#0055FF]' : 'text-slate-600',
                                         )}
                                         onClick={() => {
                                             onFilterChange(option.value)
@@ -121,22 +120,20 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                 </p>
             )}
 
-            {/* 4-column table */}
             <div className="mt-4 -mx-1 max-h-[420px] flex-1 overflow-auto pr-1">
-                <table className="w-full min-w-[420px] text-left">
+                <table className="w-full min-w-[390px] text-left">
                     <thead className="sticky top-0 z-10 bg-white">
-                        <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             <th className="px-1 pb-2 font-bold">Vehicle</th>
                             <th className="px-1 pb-2 font-bold">Fuel Level</th>
                             <th className="px-1 pb-2 font-bold">Location</th>
-                            <th className="w-8 px-1 pb-2" aria-label="Actions" />
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody>
                         {isLoading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={i}>
-                                    <td className="px-1 py-3" colSpan={4}>
+                                    <td className="px-1 py-3" colSpan={3}>
                                         <div className="flex items-center gap-3">
                                             <div className="h-9 w-9 animate-pulse rounded-md bg-slate-100" />
                                             <div className="flex-1 space-y-1.5">
@@ -149,15 +146,14 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                             ))
                         ) : vehicles.length === 0 ? (
                             <tr>
-                                <td colSpan={4} className="px-1 py-10 text-center text-sm text-slate-400">
+                                <td colSpan={3} className="px-1 py-10 text-center text-sm text-slate-400">
                                     No vehicles match your filters.
                                 </td>
                             </tr>
                         ) : (
                             vehicles.map((v) => (
-                                <tr key={v.id} className="align-top">
-                                    {/* Column 1 — Vehicle: image + name + chassis */}
-                                    <td className="px-1 py-3">
+                                <tr key={v.id} className="align-top hover:bg-slate-50/70">
+                                    <td className="rounded-l-xl px-2 py-3">
                                         <div className="flex items-center gap-3">
                                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500">
                                                 <Truck className="h-4 w-4" />
@@ -169,8 +165,7 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                                         </div>
                                     </td>
 
-                                    {/* Column 2 — Fuel Level: percent, progress bar, litres */}
-                                    <td className="px-1 py-3">
+                                    <td className="px-2 py-3">
                                         <div className="w-28">
                                             <div className="flex items-baseline gap-1.5">
                                                 <span className={cn('text-sm font-bold', fuelTextColor(v.fuelPercent))}>
@@ -187,21 +182,9 @@ export function VehicleListCard({ vehicles, isLoading, search, filter, onSearchC
                                         </div>
                                     </td>
 
-                                    {/* Column 3 — Location: address + status */}
-                                    <td className="px-1 py-3">
+                                    <td className="rounded-r-xl px-2 py-3">
                                         <p className="truncate text-[13px] leading-tight text-slate-600">{v.location ?? '—'}</p>
                                         <StatusPill status={v.status} />
-                                    </td>
-
-                                    {/* Column 4 — Action (no title) */}
-                                    <td className="px-1 py-3 text-right">
-                                        <button
-                                            type="button"
-                                            aria-label={`Actions for ${v.registration}`}
-                                            className="rounded-md p-1 text-slate-300 transition-colors duration-200 hover:bg-slate-50 hover:text-slate-500"
-                                        >
-                                            <MoreVertical className="h-4 w-4" />
-                                        </button>
                                     </td>
                                 </tr>
                             ))

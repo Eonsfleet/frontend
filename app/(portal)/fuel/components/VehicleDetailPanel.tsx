@@ -49,7 +49,7 @@ export function VehicleDetailPanel({
 
   if (!detail) {
     return (
-      <Card className="flex h-full items-center justify-center rounded-2xl border-slate-100 p-6 text-center text-sm text-slate-400 shadow-none">
+      <Card className="flex h-full items-center justify-center rounded-2xl border-0 bg-white p-6 text-center text-sm text-slate-400 shadow-none">
         Select a vehicle to see live details.
       </Card>
     );
@@ -70,11 +70,11 @@ export function VehicleDetailPanel({
           : "bg-emerald-500";
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border-slate-100 p-4 shadow-none">
+    <Card className="fuel-record-scroll flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border-0 bg-white p-4 shadow-none">
       {/* Header: thumb + chassis + status + close */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[#0055FF]">
             <Truck className="h-4 w-4" />
           </div>
           <span className="text-sm font-bold text-slate-900">
@@ -82,7 +82,7 @@ export function VehicleDetailPanel({
           </span>
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              "rounded-md px-2 py-0.5 text-[11px] font-semibold",
               STATUS_BADGE[detail.status],
             )}
           >
@@ -100,7 +100,7 @@ export function VehicleDetailPanel({
       </div>
 
       {/* Big image + 2-col details — only fields the API returns */}
-      <div className=" flex gap-3">
+      <div className="mt-3 flex gap-3 rounded-xl bg-slate-50 p-3">
         <dl className="flex-1 space-y-0.5">
           <DetailRow label="Vehicle" value={detail.model} />
           {detail.fuelType && (
@@ -117,7 +117,7 @@ export function VehicleDetailPanel({
 
       {/* Fuel level card — only when the device reports a level reading */}
       {detail.hasLevelReading && detail.fuelPercent != null ? (
-        <div className="mt-2.5 rounded-xl border border-slate-100 p-2.5">
+        <div className="mt-2.5 rounded-xl bg-slate-50 p-3">
           <div className="flex items-center justify-between text-[11px] font-medium text-slate-400">
             <span>Fuel Level</span>
             {detail.fuelLiters != null && detail.tankCapacity != null && (
@@ -142,14 +142,14 @@ export function VehicleDetailPanel({
           </div>
         </div>
       ) : (
-        <div className="mt-2.5 rounded-xl border border-dashed border-slate-200 p-3 text-center text-[12px] text-slate-400">
+        <div className="mt-2.5 rounded-xl bg-slate-50 p-3 text-center text-[12px] text-slate-400">
           No fuel level reading for this device.
         </div>
       )}
 
       {/* Live Fuel Data — rows built strictly from returned metrics */}
       {detail.liveFuel.length > 0 && (
-        <div className="mt-2.5">
+        <div className="mt-2.5 rounded-xl bg-slate-50 p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">Fuel Data</h3>
             {detail.status !== "offline" && (

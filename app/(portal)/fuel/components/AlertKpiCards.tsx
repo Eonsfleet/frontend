@@ -19,8 +19,8 @@ function KpiCard({ title, value, icon: Icon, iconClass, sub, trend, highlight }:
     return (
         <Card
             className={cn(
-                'rounded-2xl p-4 shadow-none',
-                highlight ? 'border-rose-200 bg-rose-50/50' : 'border-slate-100',
+                'rounded-2xl border-0 p-4 shadow-none',
+                highlight ? 'bg-rose-50/70' : 'bg-white',
             )}
         >
             <div className="flex items-start gap-3">
@@ -48,7 +48,7 @@ function KpiCard({ title, value, icon: Icon, iconClass, sub, trend, highlight }:
 
 function AlertKpiSkeleton() {
     return (
-        <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-none">
+        <div className="rounded-2xl bg-white p-4 shadow-none">
             <div className="flex items-center gap-3">
                 <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-slate-100" />
                 <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
@@ -73,9 +73,9 @@ export function AlertKpiCards({ kpis, isLoading }: { kpis: AlertKpis; isLoading?
             <KpiCard title="Critical Alerts" value={kpis.critical} icon={TriangleAlert} iconClass="bg-rose-100 text-rose-600" sub="Require immediate attention" highlight />
             <KpiCard title="Low Fuel" value={kpis.lowFuel} icon={FuelIcon} iconClass="bg-amber-50 text-amber-500" sub="Fuel level below threshold" />
             <KpiCard title="Suspected Theft" value={kpis.suspectedTheft} icon={Droplets} iconClass="bg-amber-50 text-amber-500" sub="Unusual fuel drain detected" />
-            <KpiCard title="Unauthorized Drain" value={kpis.unauthorizedDrain} icon={Battery} iconClass="bg-purple-50 text-purple-500" sub="Outside idle time drain" />
-            <KpiCard title="Fuel Sensor Error" value={kpis.sensorError} icon={Cpu} iconClass="bg-blue-50 text-blue-500" sub="Sensor data issue" />
-            <KpiCard title="All Alerts" value={kpis.total} icon={Bell} iconClass="bg-emerald-50 text-emerald-500" trend={{ value: '18%', isPositive: true }} />
+            <KpiCard title="Unauthorized Drain" value={kpis.unauthorizedDrain} icon={Battery} iconClass="bg-blue-50 text-[#0055FF]" sub="Outside idle time drain" />
+            <KpiCard title="Fuel Sensor Error" value={kpis.sensorError} icon={Cpu} iconClass="bg-blue-50 text-[#0055FF]" sub="Sensor data issue" />
+            <KpiCard title="All Alerts" value={kpis.total} icon={Bell} iconClass="bg-blue-50 text-[#0055FF]" sub="All backend alert logs" />
         </div>
     )
 }

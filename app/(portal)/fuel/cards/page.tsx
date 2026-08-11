@@ -42,6 +42,10 @@ import { extractApiError } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
 
 // ── Standardized Table Pagination ───────────────────────────────────────────
 
@@ -444,10 +448,13 @@ function SetupWizard({ onSuccess }: { onSuccess: () => void }) {
               <Car className="h-4 w-4 text-slate-400 flex-shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-slate-900 uppercase">
-                  {v.attributes.registration_number}
+                  {formatVehicleRegistration(v.attributes.registration_number)}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {v.attributes.make} {v.attributes.model}
+                  {formatVehicleMakeModel(
+                    v.attributes.make,
+                    v.attributes.model,
+                  )}
                 </p>
               </div>
             </button>
@@ -601,10 +608,10 @@ function ActiveAccountView({ account }: { account: FuelCardAccount }) {
                     <tr key={v.id} className="hover:bg-slate-50">
                       <td className="px-5 py-3">
                         <div className="font-semibold text-slate-900 uppercase">
-                          {v.registration_number}
+                          {formatVehicleRegistration(v.registration_number)}
                         </div>
                         <div className="text-xs text-slate-400">
-                          {v.make} {v.model}
+                          {formatVehicleMakeModel(v.make, v.model)}
                         </div>
                       </td>
                       <td className="px-5 py-3">
@@ -692,8 +699,11 @@ function LinkVehicleDialog({
               <option value="">Choose vehicle...</option>
               {vehiclesData?.data?.map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.attributes.registration_number} — {v.attributes.make}{" "}
-                  {v.attributes.model}
+                  {formatVehicleRegistration(v.attributes.registration_number)}{" "}
+                  — {formatVehicleMakeModel(
+                    v.attributes.make,
+                    v.attributes.model,
+                  )}
                 </option>
               ))}
             </select>

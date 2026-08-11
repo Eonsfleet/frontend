@@ -33,6 +33,10 @@ import { useQuery } from "@tanstack/react-query";
 import * as api from "@/lib/api/fuel";
 import { format, subDays } from "date-fns";
 import { toast } from "sonner";
+import {
+  formatVehicleMakeModel,
+  formatVehicleRegistration,
+} from "../components/formatVehicleText";
 
 // ── 8.4.1 IFTA Report ────────────────────────────────────────────────────────
 
@@ -319,7 +323,9 @@ function TheftTab() {
                             <div className="flex items-center gap-2">
                               <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                               <span className="font-semibold text-slate-900 uppercase">
-                                {inc.registration_number}
+                                {formatVehicleRegistration(
+                                  inc.registration_number,
+                                )}
                               </span>
                             </div>
                           </td>
@@ -495,10 +501,12 @@ function CostAnalysisTab() {
                               <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                               <div>
                                 <div className="font-semibold text-slate-900">
-                                  {row.registration_number}
+                                  {formatVehicleRegistration(
+                                    row.registration_number,
+                                  )}
                                 </div>
                                 <div className="text-xs text-slate-400">
-                                  {row.make} {row.model}
+                                  {formatVehicleMakeModel(row.make, row.model)}
                                 </div>
                               </div>
                             </div>

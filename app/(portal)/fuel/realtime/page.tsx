@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Activity, Fuel, Gauge, Radio, RefreshCw, TriangleAlert } from 'lucide-react'
 import { FuelTabs } from '../components/FuelTabs'
 import { RealtimeVehicleRail } from '../components/RealtimeVehicleRail'
 import { RealtimeMap } from '../components/RealtimeMap'
@@ -8,6 +9,7 @@ import { VehicleDetailPanel } from '../components/VehicleDetailPanel'
 import { RealtimeTrendCard } from '../components/RealtimeTrendCard'
 import { RecentFuelEventsCard } from '../components/RecentFuelEventsCard'
 import { useFuelRealtime } from '../components/useFuelRealtime'
+import { cn } from '@/lib/utils'
 import type { FuelLevelTrendFilter, FuelRateTrendFilter } from '@/lib/api/fuel'
 
 const LEVEL_TREND_FILTERS: Array<{ label: string; value: FuelLevelTrendFilter }> = [
@@ -30,6 +32,7 @@ export default function FuelRealtimePage() {
     const {
         vehicles,
         activeId,
+        kpis,
         detail,
         fuelLevelTrend,
         fuelLevelTrendUnit,
@@ -52,20 +55,35 @@ export default function FuelRealtimePage() {
     }
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="space-y-5 pb-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Real-time Fuel Tracking</h1>
-                    <p className="mt-1 text-sm text-slate-500">Monitor live fuel level, consumption and events in real-time.</p>
+                    <p className="mt-1 text-sm text-slate-500">Monitor live fuel levels, connected vehicles, locations, and fuel events from supported devices.</p>
+                </div>
+                <div className="inline-flex w-fit items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-[12px] font-semibold text-[#0055FF]">
+                    <RefreshCw className="h-4 w-4" />
+                    Auto refresh: 10s vehicles · 60s events
                 </div>
             </div>
 
             <FuelTabs active="Real-time Tracking" />
 
-            {/* Main row: rail | map | detail (detail only shows once a vehicle is picked) */}
-            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-                <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
+            <div className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
+                <RealtimeStat label="Online Vehicles" value={`${kpis.online}/${kpis.total}`} icon={Radio} tone="blue" />
+                <RealtimeStat label="Online Rate" value={`${kpis.onlinePercent}%`} icon={Activity} tone="emerald" />
+                <RealtimeStat label="Low Fuel" value={kpis.lowFuelCount.toLocaleString()} icon={TriangleAlert} tone="amber" />
+                <RealtimeStat label="Total Fuel" value={`${kpis.totalFuelLiters.toLocaleString()} L`} icon={Fuel} tone="blue" />
+                <RealtimeStat label="Avg Efficiency" value={`${kpis.avgEfficiency.toFixed(2)} km/L`} icon={Gauge} tone="slate" />
+            </div>
+
+            <div
+                className={cn(
+                    'grid min-h-0 grid-cols-1 gap-4 xl:h-[620px]',
+                    detail ? 'xl:grid-cols-[320px_minmax(0,1fr)_340px]' : 'xl:grid-cols-[320px_minmax(0,1fr)]',
+                )}
+            >
+                <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
                     <RealtimeVehicleRail
                         vehicles={vehicles}
                         activeId={activeId}
@@ -73,11 +91,11 @@ export default function FuelRealtimePage() {
                         isLoading={isLoading}
                     />
                 </div>
-                <div className={detail ? 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-6' : 'h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-9'}>
+                <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
                     <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={handleVehicleSelect} />
                 </div>
                 {detail && (
-                    <div className="h-[min(560px,calc(100vh-260px))] min-h-[420px] min-w-0 lg:col-span-3">
+                    <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
                         <VehicleDetailPanel detail={detail} onClose={() => {
                             setSelectedId(null)
                             setEventsPage(1)
@@ -86,13 +104,12 @@ export default function FuelRealtimePage() {
                 )}
             </div>
 
-            {/* Analytics row */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
                 <RealtimeTrendCard
                     title="Fuel Level Trend"
                     unit={fuelLevelTrendUnit}
                     data={fuelLevelTrend}
-                    color="#3b82f6"
+                    color="#0055FF"
                     filters={[plate]}
                     filterOptions={LEVEL_TREND_FILTERS}
                     selectedFilter={levelTrendFilter}
@@ -122,21 +139,36 @@ export default function FuelRealtimePage() {
                     onPageChange={setEventsPage}
                 />
             </div>
+        </div>
+    )
+}
 
-            {/* Footer */}
-            <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 text-[12px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4">
-                    <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Showing real-time data
-                    </span>
-                    <span className="text-slate-400">Auto refresh every 60 seconds</span>
-                </div>
-                <span className="inline-flex items-center gap-2">
-                    Data accuracy
-                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
-                        98.6%
-                    </span>
-                </span>
+function RealtimeStat({
+    label,
+    value,
+    icon: Icon,
+    tone,
+}: {
+    label: string
+    value: string
+    icon: typeof Activity
+    tone: 'blue' | 'emerald' | 'amber' | 'slate'
+}) {
+    const toneClass = {
+        blue: 'bg-blue-50 text-[#0055FF]',
+        emerald: 'bg-emerald-50 text-emerald-600',
+        amber: 'bg-amber-50 text-amber-600',
+        slate: 'bg-slate-100 text-slate-600',
+    }[tone]
+
+    return (
+        <div className="flex min-w-0 items-center gap-3 rounded-xl bg-slate-50 px-3 py-3">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
+                <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+                <p className="truncate text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+                <p className="mt-0.5 truncate text-lg font-bold text-slate-900">{value}</p>
             </div>
         </div>
     )

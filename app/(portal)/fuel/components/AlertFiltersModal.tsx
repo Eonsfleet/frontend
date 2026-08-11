@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { Calendar } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +37,7 @@ const STATUSES: { value: AlertStatus | "all"; label: string }[] = [
   { value: "acknowledged", label: "Acknowledged" },
   { value: "investigating", label: "Investigating" },
   { value: "resolved", label: "Resolved" },
+  { value: "false_positive", label: "False Positive" },
 ];
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -51,7 +53,7 @@ function SelectBox({
   return (
     <select
       {...props}
-      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="h-9 w-full rounded-lg border-0 bg-slate-50 px-3 text-[13px] font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0055FF]"
     >
       {children}
     </select>
@@ -63,7 +65,7 @@ function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       type="date"
-      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="h-9 w-full rounded-lg border-0 bg-slate-50 px-3 text-[13px] font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0055FF]"
     />
   );
 }
@@ -99,18 +101,23 @@ export function AlertFiltersModal({
     }));
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Filters</DialogTitle>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full border-0 p-0 shadow-none sm:max-w-md"
+      >
+        <SheetHeader className="px-5 pt-5 text-left">
+          <SheetTitle>Fuel Alert Filters</SheetTitle>
+          <SheetDescription>
+            Filter backend alert logs by type, severity, vehicle, status, and
+            date range.
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-4">
-          {/* Alert Type — spans 2 grid columns so its 2 sub-columns have room
-              and don't overflow into Severity. */}
-          <div className="sm:col-span-2">
+        <div className="fuel-record-scroll min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-5 pt-4">
+          <div>
             <FieldLabel>Alert Type</FieldLabel>
-            <div className="grid w-fit grid-cols-2 gap-x-8 gap-y-2">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-2">
               {TYPE_KEYS.map((t) => (
                 <label
                   key={t}
@@ -126,10 +133,9 @@ export function AlertFiltersModal({
             </div>
           </div>
 
-          {/* Severity */}
           <div>
             <FieldLabel>Severity</FieldLabel>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               {SEVERITY_KEYS.map((s) => (
                 <label
                   key={s}
@@ -152,8 +158,6 @@ export function AlertFiltersModal({
             </div>
           </div>
 
-          {/* Status + Vehicle stacked in the same column so Vehicle sits
-              directly under Status. */}
           <div className="space-y-4">
             <div>
               <FieldLabel>Status</FieldLabel>
@@ -183,8 +187,7 @@ export function AlertFiltersModal({
             </div>
           </div>
 
-          {/* Date Range */}
-          <div className="sm:col-span-4">
+          <div>
             <div className="mb-2 flex items-center gap-2">
               <FieldLabel>Date Range</FieldLabel>
               <Calendar className="mb-2 h-4 w-4 text-slate-400" />
@@ -216,37 +219,37 @@ export function AlertFiltersModal({
               />
             </div>
           </div>
-        </div>
 
-        <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-4">
-          <button
-            type="button"
-            onClick={() => setDraft(EMPTY_FILTERS)}
-            className="text-[13px] font-semibold text-blue-600 hover:text-blue-700"
-          >
-            Reset
-          </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between bg-slate-50 px-3 py-3">
             <button
               type="button"
-              onClick={() => handleOpenChange(false)}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+              onClick={() => setDraft(EMPTY_FILTERS)}
+              className="text-[13px] font-semibold text-[#0055FF] hover:text-blue-700"
             >
-              Cancel
+              Reset
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                onApply(draft);
-                onOpenChange(false);
-              }}
-              className="h-9 rounded-lg bg-blue-600 px-4 text-[13px] font-semibold text-white hover:bg-blue-700"
-            >
-              Apply Filters
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                className="h-9 rounded-lg bg-white px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onApply(draft);
+                  onOpenChange(false);
+                }}
+                className="h-9 rounded-lg bg-[#0055FF] px-4 text-[13px] font-semibold text-white hover:bg-blue-700"
+              >
+                Apply Filters
+              </button>
+            </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

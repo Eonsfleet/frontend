@@ -14,7 +14,7 @@ export function FuelDistributionCard({ bands, total }: FuelDistributionCardProps
     const hasData = bands.some((b) => b.count > 0)
 
     return (
-        <Card className="rounded-2xl border-slate-100 p-5 shadow-none">
+        <Card className="rounded-2xl border-0 bg-white p-5 shadow-none">
             <h2 className="text-base font-bold text-slate-900">Fuel Level Distribution</h2>
 
             <div className="mt-4 flex items-center gap-4">
@@ -44,7 +44,7 @@ export function FuelDistributionCard({ bands, total }: FuelDistributionCardProps
                     </div>
                 </div>
 
-                <ul className="flex-1 space-y-1.5">
+                <ul className="flex-1 space-y-2">
                     {bands.map((b) => (
                         <li key={b.key} className="flex items-center justify-between text-[11px]">
                             <span className="flex items-center gap-1.5 text-slate-500">
