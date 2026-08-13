@@ -216,10 +216,13 @@ export class MapboxProvider implements MapProvider {
   }
 
   fitBounds(points: LatLng[], opts?: { paddingPx?: number; maxZoom?: number }): void {
-    if (!this.map || points.length === 0) return;
-    const bounds = points.reduce(
+    const validPoints = points.filter(
+      (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng),
+    );
+    if (!this.map || validPoints.length === 0) return;
+    const bounds = validPoints.reduce(
       (b, p) => b.extend([p.lng, p.lat]),
-      new mapboxgl.LngLatBounds([points[0].lng, points[0].lat], [points[0].lng, points[0].lat]),
+      new mapboxgl.LngLatBounds([validPoints[0].lng, validPoints[0].lat], [validPoints[0].lng, validPoints[0].lat]),
     );
     this.map.fitBounds(bounds, { padding: opts?.paddingPx ?? 100, maxZoom: opts?.maxZoom ?? 14 });
   }

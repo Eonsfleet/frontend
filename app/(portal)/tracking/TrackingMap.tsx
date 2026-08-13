@@ -98,7 +98,7 @@ export default function TrackingMap({
     () =>
       Object.values(locations)
         .map((l: any) => ({ lat: l.lat, lng: l.lng }))
-        .filter((p) => p.lat !== 0 && p.lng !== 0 && !Number.isNaN(p.lat) && !Number.isNaN(p.lng)),
+        .filter((p) => p.lat !== 0 && p.lng !== 0 && Number.isFinite(p.lat) && Number.isFinite(p.lng)),
     [locations],
   );
 
