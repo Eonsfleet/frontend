@@ -146,9 +146,12 @@ export class LeafletProvider implements MapProvider {
   }
 
   fitBounds(points: LatLng[], opts?: { paddingPx?: number; maxZoom?: number }): void {
-    if (!this.map || points.length === 0) return;
+    const validPoints = points.filter(
+      (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng),
+    );
+    if (!this.map || validPoints.length === 0) return;
     const padding = opts?.paddingPx ?? 100;
-    this.map.fitBounds(toLatLngExpr(points), {
+    this.map.fitBounds(toLatLngExpr(validPoints), {
       padding: [padding, padding],
       maxZoom: opts?.maxZoom ?? 14,
     });

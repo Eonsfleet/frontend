@@ -44,7 +44,7 @@ export function useMapCameraFollow({
   const fitFleet = () => {
     if (!provider) return;
     const points = fleetPoints.filter(
-      (p) => p.lat !== 0 && p.lng !== 0 && !Number.isNaN(p.lat) && !Number.isNaN(p.lng),
+      (p) => p.lat !== 0 && p.lng !== 0 && Number.isFinite(p.lat) && Number.isFinite(p.lng),
     );
     if (points.length > 0) {
       provider.fitBounds(points, { paddingPx: 100, maxZoom: 14 });
