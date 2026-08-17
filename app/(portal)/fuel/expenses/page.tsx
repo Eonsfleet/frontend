@@ -798,25 +798,25 @@ export default function FuelExpensesPage() {
       ),
   });
 
-  const handleExport = async () => {
-    try {
-      const blob = await api.exportFuelExpenses({
+  const exportMutation = useMutation({
+    mutationFn: () =>
+      api.exportFuelExpenses({
         q: search || undefined,
         status: statusFilter || undefined,
         reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `fuel-expenses-${format(new Date(), "yyyy-MM-dd")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Export failed.");
-    }
-  };
+      }),
+    onSuccess: (blob) => {
+      downloadBlob(
+        blob,
+        `fuel-expenses-${format(new Date(), "yyyy-MM-dd")}.csv`,
+      );
+      toast.success("Fuel expenses export downloaded.");
+    },
+    onError: (error) =>
+      toast.error(extractApiError(error, "Failed to export fuel expenses.")),
+  });
 
   const m = metricsData?.data;
   const expenses: FuelExpense[] = data?.data?.fuel_expenses ?? [];
@@ -882,10 +882,16 @@ export default function FuelExpensesPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExport}
+            onClick={() => exportMutation.mutate()}
+            disabled={exportMutation.isPending}
             className="border-0 bg-slate-100 shadow-none"
           >
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+            {exportMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}{" "}
+            Export CSV
           </Button>
           <Button
             size="sm"

@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { exportDevices, getDevices } from '@/lib/api/tracking'
+import { deviceExportExtension, exportDevices, getDevices, type DeviceExportFormat } from '@/lib/api/tracking'
 import { getVehiclesBatched } from '@/lib/api/vehicles'
 import { Vehicle } from '@/types'
 import { DeviceTable } from '@/components/devices/DeviceTable'
@@ -22,6 +22,8 @@ import { useAuthStore } from '@/store/authStore'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { extractApiError } from '@/lib/utils'
+
+const EXPORT_FORMAT: DeviceExportFormat = 'excel'
 
 export default function DevicesPage() {
     const { token } = useAuthStore()
@@ -54,12 +56,13 @@ export default function DevicesPage() {
     }, [vehicles])
 
     const exportMutation = useMutation({
-        mutationFn: (status?: 'online' | 'offline') => exportDevices(status ? { status } : undefined),
+        mutationFn: (status?: 'online' | 'offline') =>
+            exportDevices({ status, format: EXPORT_FORMAT }),
         onSuccess: (blob, status) => {
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
-            link.download = `devices-${status ?? 'all'}-${format(new Date(), 'yyyy-MM-dd')}.csv`
+            link.download = `devices-${status ?? 'all'}-${format(new Date(), 'yyyy-MM-dd')}.${deviceExportExtension(EXPORT_FORMAT)}`
             document.body.appendChild(link)
             link.click()
             link.remove()

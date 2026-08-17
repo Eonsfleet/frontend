@@ -29,9 +29,37 @@ export const getDevices = async (params?: any): Promise<{ data: { devices: any[]
     return res.data
 }
 
-export const exportDevices = async (params?: { status?: 'online' | 'offline' }): Promise<Blob> => {
-    const res = await apiClient.get('/devices/export', { params, responseType: 'blob' })
-    return res.data
+export type DeviceExportFormat = 'excel' | 'csv'
+
+export const deviceExportExtension = (format: DeviceExportFormat): string =>
+    format === 'csv' ? 'csv' : 'xlsx'
+
+/**
+ * `/devices/export` defaults to `format=json` server-side, so the format must be
+ * sent explicitly — otherwise the response is a JSON envelope that ends up saved
+ * under a spreadsheet extension. The backend renders the header row and columns
+ * itself (ID, IMEI, Phone Number, Country, Status, Online, Has Fuel Sensor,
+ * Last Packet At, Vehicle Reg., Created At), so nothing is formatted here.
+ */
+export const exportDevices = async (params?: {
+    status?: 'online' | 'offline'
+    format?: DeviceExportFormat
+}): Promise<Blob> => {
+    const { format = 'excel', ...filters } = params ?? {}
+
+    const res = await apiClient.get('/devices/export', {
+        params: { ...filters, format },
+        responseType: 'blob',
+    })
+
+    const blob: Blob = res.data
+    if (blob.type?.includes('application/json')) {
+        throw new Error(
+            'The export did not return a spreadsheet. The server responded with JSON.'
+        )
+    }
+
+    return blob
 }
 
 /**
