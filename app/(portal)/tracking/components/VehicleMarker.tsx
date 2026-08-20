@@ -55,7 +55,7 @@ function VehicleMarkerImpl({
 }: VehicleMarkerProps) {
   const { provider, isReady } = useMapInstance();
   const handleRef = useRef<MapMarkerHandle | null>(null);
-  const idKey: string = vehicle.attributes.uuid;
+  const idKey: string = vehicle.id;
 
   const reg = normalizeReg(vehicle.attributes.registration_number);
   const statusCfg = VEHICLE_STATUS[markerState.statusKey];

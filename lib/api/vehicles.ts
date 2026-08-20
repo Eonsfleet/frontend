@@ -1,9 +1,22 @@
 import apiClient from "./client";
 import { Vehicle, Paginated, VehiclePayload } from "@/types";
 
+export type VehiclesView =
+  | "default"
+  | "summary"
+  | "snapshot"
+  | "tracking"
+  | "telemetry"
+  | "fuel"
+  | "device"
+  | "reporting"
+  | "map";
+
 export interface ListVehiclesParams {
+  view?: VehiclesView;
   page?: number;
   per_page?: number;
+  limit?: number;
   q?: string;
   status?: string;
   make?: string;
@@ -21,6 +34,47 @@ export interface VehicleListResponse {
     pagination: Paginated<Vehicle>["pagination"];
   };
 }
+
+/** Slim vehicle resource returned by `GET /vehicles?view=map` — panel/map only. */
+export interface VehicleMapEntry {
+  id: string;
+  attributes: {
+    registration_number: string;
+    model?: string;
+    device_status?: string;
+    last_packet_received_at?: string | null;
+    speed?: number | null;
+    location?: { latitude: number; longitude: number } | null;
+    fuel?: { level_liters: number | null; level_percent: number | null } | null;
+  };
+}
+
+export interface VehiclesMapPageResponse {
+  data: VehicleMapEntry[];
+  pagination: Paginated<VehicleMapEntry>["pagination"];
+}
+
+/**
+ * Single page of the map/tracking-panel feed — GET /vehicles?view=map. Callers
+ * page through this manually (rather than via getVehiclesBatched) so the UI can
+ * render each page as it arrives instead of blocking on the full fleet.
+ */
+export const getVehiclesMapPage = async (params: {
+  page: number;
+  limit: number;
+  q?: string;
+}): Promise<VehiclesMapPageResponse> => {
+  const response = await apiClient.get<{
+    message: string;
+    data: { vehicles: VehicleMapEntry[]; pagination: Paginated<VehicleMapEntry>["pagination"] };
+  }>("/vehicles", {
+    params: { view: "map", page: params.page, limit: params.limit, q: params.q },
+  });
+  return {
+    data: response.data.data.vehicles,
+    pagination: response.data.data.pagination,
+  };
+};
 
 export interface VehicleDetailResponse {
   message: string;
@@ -41,9 +95,11 @@ export const getVehicles = async (
 
 export const getVehicleById = async (
   id: string | number,
+  params?: { view?: VehiclesView },
 ): Promise<VehicleDetailResponse> => {
   const response = await apiClient.get<VehicleDetailResponse>(
     `/vehicles/${id}`,
+    { params },
   );
   return response.data;
 };

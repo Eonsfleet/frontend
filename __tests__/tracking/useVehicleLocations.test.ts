@@ -11,7 +11,7 @@ vi.mock('@/store/packetStreamStore', () => ({
 }))
 
 vi.mock('@/lib/api/vehicles', () => ({
-  getVehicleLocation: vi.fn().mockResolvedValue(null),
+  getVehicleById: vi.fn().mockResolvedValue({ data: null }),
 }))
 
 function makeSubscribePrivate() {
@@ -45,13 +45,13 @@ describe('useVehicleLocations trail buffer', () => {
       { initialProps: { selectedVehicleId: '42' }, wrapper: Wrapper },
     )
 
-    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
 
     act(() => {
-      locationHandler({ vehicle_id: '42', latitude: 6.5, longitude: 3.4, speed: 10, status: 'in_transit' })
+      locationHandler({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 10, status: 'in_transit' })
     })
     act(() => {
-      locationHandler({ vehicle_id: '99', latitude: 1.1, longitude: 2.2, speed: 10, status: 'in_transit' })
+      locationHandler({ vehicle_id: '99', lat: 1.1, lng: 2.2, speed: 10, status: 'in_transit' })
     })
 
     expect(result.current.trails['42']).toHaveLength(1)
@@ -59,7 +59,7 @@ describe('useVehicleLocations trail buffer', () => {
     expect(result.current.trails['99']).toBeUndefined()
 
     act(() => {
-      locationHandler({ vehicle_id: '42', latitude: 6.51, longitude: 3.41, speed: 12, status: 'in_transit' })
+      locationHandler({ vehicle_id: '42', lat: 6.51, lng: 3.41, speed: 12, status: 'in_transit' })
     })
     expect(result.current.trails['42']).toHaveLength(2)
 
@@ -69,10 +69,10 @@ describe('useVehicleLocations trail buffer', () => {
   })
 })
 
-describe('useVehicleLocations fleet-channel id resolution', () => {
-  it('keys the fleet-wide WS packet by attributes.uuid, not the DB vehicle_id it arrives with', () => {
+describe('useVehicleLocations fleet-channel id keying', () => {
+  it('keys the fleet-wide WS packet by vehicle_id directly — view=map has no separate uuid', () => {
     const vehicles = [
-      { id: '7', attributes: { uuid: 'uuid-7' } },
+      { id: '7', attributes: { registration_number: 'ABC-123' } },
     ] as any
 
     const { subscribePrivate, handlers } = makeSubscribePrivate()
@@ -81,20 +81,17 @@ describe('useVehicleLocations fleet-channel id resolution', () => {
       { wrapper: Wrapper },
     )
 
-    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
     act(() => {
-      // Backend broadcasts vehicle_id as the DB id (same convention as
-      // trips/maintenance/fuel elsewhere), not the uuid consumers read by.
-      locationHandler({ vehicle_id: '7', latitude: 6.5, longitude: 3.4, speed: 10, status: 'in_transit' })
+      locationHandler({ vehicle_id: '7', lat: 6.5, lng: 3.4, speed: 10, status: 'in_transit' })
     })
 
-    expect(result.current.locations['uuid-7']).toMatchObject({ lat: 6.5, lng: 3.4, speed: 10 })
-    expect(result.current.locations['7']).toBeUndefined()
+    expect(result.current.locations['7']).toMatchObject({ lat: 6.5, lng: 3.4, speed: 10 })
   })
 
-  it('keys .vehicle.status.changed and .fuel.event by attributes.uuid too', () => {
+  it('keys .vehicle.status.changed and .fuel.event by vehicle_id too', () => {
     const vehicles = [
-      { id: '7', attributes: { uuid: 'uuid-7' } },
+      { id: '7', attributes: { registration_number: 'ABC-123' } },
     ] as any
 
     const { subscribePrivate, handlers } = makeSubscribePrivate()
@@ -107,79 +104,80 @@ describe('useVehicleLocations fleet-channel id resolution', () => {
     act(() => {
       statusHandler({ vehicle_id: '7', new_status: 'idle' })
     })
-    expect(result.current.locations['uuid-7'].status).toBe('idle')
+    expect(result.current.locations['7'].status).toBe('idle')
 
     const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel.event')!
     act(() => {
       fuelHandler({ vehicle_id: '7' })
     })
-    expect(result.current.alarmState['uuid-7']).toBe(true)
-    expect(result.current.alarmState['7']).toBeUndefined()
+    expect(result.current.alarmState['7']).toBe(true)
   })
 })
 
-describe('useVehicleLocations lastUpdate/lastPacket timestamp priority', () => {
-  it('prefers timestamp_utc (server ingestion time) over device-reported updated_at/gps_datetime', () => {
+describe('useVehicleLocations lastUpdate/lastPacket timestamp', () => {
+  it('uses the packet timestamp field (device time, ISO-8601 with offset) for both lastUpdate and lastPacket', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()
     const { result } = renderHook(
       () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
       { wrapper: Wrapper },
     )
-    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
 
     act(() => {
       locationHandler({
         vehicle_id: '42',
-        latitude: 6.5,
-        longitude: 3.4,
+        lat: 6.5,
+        lng: 3.4,
         speed: 10,
         status: 'in_transit',
-        // gps_datetime deliberately far in the past, simulating a GPS cold-start
-        // clock artifact — timestamp_utc is the trustworthy, fresh value.
-        gps_datetime: '2025-09-01T00:00:00Z',
-        updated_at: '2025-09-01T00:00:00Z',
-        timestamp_utc: '2026-07-03T12:00:00Z',
+        timestamp: '2026-07-03T12:00:00+00:00',
       })
     })
 
-    expect(result.current.locations['42'].lastUpdate).toBe('2026-07-03T12:00:00Z')
+    expect(result.current.locations['42'].lastUpdate).toBe('2026-07-03T12:00:00+00:00')
+    expect(result.current.locations['42'].lastPacket).toBe('2026-07-03T12:00:00+00:00')
   })
 
-  it('falls back lastPacket to timestamp_utc when last_packet_received_at is absent from the live packet', () => {
+  it('forces is_online true, since the new payload carries no is_online/device_status field to derive it from', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()
     const { result } = renderHook(
       () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
       { wrapper: Wrapper },
     )
-    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
 
     act(() => {
       locationHandler({
         vehicle_id: '42',
-        latitude: 6.5,
-        longitude: 3.4,
+        lat: 6.5,
+        lng: 3.4,
         speed: 10,
         status: 'in_transit',
-        timestamp_utc: '2026-07-03T12:00:00Z',
+        timestamp: '2026-07-03T12:00:00+00:00',
       })
     })
 
-    expect(result.current.locations['42'].lastPacket).toBe('2026-07-03T12:00:00Z')
+    expect(result.current.locations['42'].is_online).toBe(true)
   })
 })
 
 describe('useVehicleLocations selection-triggered snapshot seed', () => {
-  it('seeds satellites/battery/GSM fields from GET /vehicles/{id}/location the instant a vehicle is selected, ahead of any WS packet', async () => {
-    const { getVehicleLocation } = await import('@/lib/api/vehicles')
-    vi.mocked(getVehicleLocation).mockResolvedValueOnce({
-      vehicle_id: '42',
-      latitude: 6.5,
-      longitude: 3.4,
-      speed: 0,
-      satellites: 6,
-      timestamp_utc: '2026-07-03T12:00:00Z',
-      metadata: { battery_voltage: '4.15v', active_gsm_operator: 62179 },
-    })
+  it('seeds satellites/battery/GSM fields from GET /vehicles/{id}?view=telemetry the instant a vehicle is selected, ahead of any WS packet', async () => {
+    const { getVehicleById } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleById).mockResolvedValueOnce({
+      message: 'ok',
+      data: {
+        id: '42',
+        attributes: {
+          satellites: 6,
+          timestamp_utc: '2026-07-03T12:00:00Z',
+          metadata: { battery_voltage: '4.15v', active_gsm_operator: 62179 },
+        },
+        relationships: {
+          current_location: { latitude: 6.5, longitude: 3.4, speed: 0 },
+        },
+      },
+    } as any)
 
     const { subscribePrivate } = makeSubscribePrivate()
     const { result } = renderHook(
@@ -193,15 +191,17 @@ describe('useVehicleLocations selection-triggered snapshot seed', () => {
   })
 
   it('never lets the one-off snapshot overwrite a newer WS packet that already arrived', async () => {
-    const { getVehicleLocation } = await import('@/lib/api/vehicles')
-    vi.mocked(getVehicleLocation).mockResolvedValueOnce({
-      vehicle_id: '42',
-      latitude: 6.5,
-      longitude: 3.4,
-      speed: 0,
-      satellites: 2,
-      timestamp_utc: '2026-07-03T11:00:00Z',
-    })
+    const { getVehicleById } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleById).mockResolvedValueOnce({
+      message: 'ok',
+      data: {
+        id: '42',
+        attributes: { satellites: 2, timestamp_utc: '2026-07-03T11:00:00Z' },
+        relationships: {
+          current_location: { latitude: 6.5, longitude: 3.4, speed: 0 },
+        },
+      },
+    } as any)
 
     const { subscribePrivate, handlers } = makeSubscribePrivate()
     const { result } = renderHook(
@@ -209,16 +209,16 @@ describe('useVehicleLocations selection-triggered snapshot seed', () => {
       { wrapper: Wrapper },
     )
 
-    const locationHandler = handlers.get('location.organization.org-1::.current.recent')!
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
     act(() => {
       locationHandler({
         vehicle_id: '42',
-        latitude: 6.51,
-        longitude: 3.41,
+        lat: 6.51,
+        lng: 3.41,
         speed: 40,
         satellites: 9,
         status: 'in_transit',
-        timestamp_utc: '2026-07-03T12:00:00Z',
+        timestamp: '2026-07-03T12:00:00+00:00',
       })
     })
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Vehicle } from "@/types";
+import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
@@ -34,7 +34,7 @@ const ACTIVE_TEXT: Record<StatusFilter, string> = {
 };
 
 interface StatusFiltersProps {
-  vehicles: Vehicle[];
+  vehicles: VehicleMapEntry[];
   locations: Record<string, any>;
   alarmState?: Record<string, boolean>;
   statusFilter: StatusFilter;
@@ -54,13 +54,13 @@ export function StatusFilters({
         const count =
           s === "all"
             ? vehicles.length
-            : vehicles.filter((v: Vehicle) => {
-                const loc = locations[v.attributes.uuid];
-                const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
+            : vehicles.filter((v: VehicleMapEntry) => {
+                const loc = locations[v.id];
+                const isOnline = loc?.is_online ?? false;
                 return matchesStatusBucket(
                   s as StatusBucket,
                   { status: loc?.status, is_online: isOnline, speed: loc?.speed },
-                  alarmState[v.attributes.uuid] === true,
+                  alarmState[v.id] === true,
                 );
               }).length;
 

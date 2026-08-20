@@ -16,9 +16,13 @@ vi.mock('@/lib/map/MapProviderFactory', () => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 vi.mock('@/lib/api/vehicles', () => ({
-  getVehiclesBatched: vi.fn().mockResolvedValue([
-    { id: '1', attributes: { registration_number: 'ABC-123-XD', make: 'Toyota', model: 'Hilux' }, relationships: {} },
-  ]),
+  getVehiclesMapPage: vi.fn().mockResolvedValue({
+    data: [
+      { id: '1', attributes: { registration_number: 'ABC-123-XD', model: 'Hilux' } },
+    ],
+    pagination: { current: 1, lastPage: 1, perPage: 1000, total: 1, next_page_url: null, prev_page_url: null, from: 1 },
+  }),
+  getVehicleById: vi.fn().mockResolvedValue({ data: null }),
 }))
 vi.mock('@/lib/api/trips', () => ({
   getTrips: vi.fn().mockResolvedValue({ data: { trips: [] } }),
@@ -42,6 +46,8 @@ vi.mock('@/store/trackingUiStore', () => {
     toggleAssetPanel: vi.fn(),
     isAssetListCollapsed: false,
     toggleAssetList: vi.fn(),
+    isMapFollowEnabled: true,
+    setMapFollowEnabled: vi.fn(),
   }
   return {
     useTrackingUiStore: (selector?: (s: typeof state) => unknown) =>
@@ -66,9 +72,9 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => (
 )
 
 describe('TrackingPage grid shell', () => {
-  it('renders the top toolbar search input and the asset list', async () => {
+  it('renders the top toolbar search icon (collapsed by default) and the asset list', async () => {
     render(<TrackingPage />, { wrapper: Wrapper })
-    expect(screen.getByPlaceholderText('Search location / address')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search location')).toBeInTheDocument()
     expect(await screen.findByText('ABC-123-XD')).toBeInTheDocument()
   })
 
