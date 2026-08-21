@@ -1,13 +1,13 @@
 "use client";
 
-import { Vehicle } from "@/types";
+import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 
 interface VehicleListItemProps {
-  vehicle: Vehicle;
+  vehicle: VehicleMapEntry;
   loc: any;
   isSelected: boolean;
   onSelect: () => void;
@@ -26,7 +26,7 @@ export function VehicleListItem({
     hasActiveAlarm,
   );
   const statusCfg = VEHICLE_STATUS[statusKey];
-  const TypeIcon = getVehicleTypeIcon(vehicle.attributes.body_type);
+  const TypeIcon = getVehicleTypeIcon(undefined);
   const lastUpdate = useRelativeTime(loc?.lastPacket || loc?.lastUpdate);
   const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
   const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
@@ -62,7 +62,7 @@ export function VehicleListItem({
         </div>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className="text-[11px] text-slate-400 truncate">
-            {`${vehicle.attributes.make} ${vehicle.attributes.model}`}
+            {vehicle.attributes.model}
           </p>
           <span className="text-[11px] text-slate-400 shrink-0">
             {loc?.speed ?? 0} km/h

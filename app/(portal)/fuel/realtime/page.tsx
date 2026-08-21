@@ -83,7 +83,7 @@ export default function FuelRealtimePage() {
                     detail ? 'xl:grid-cols-[320px_minmax(0,1fr)_340px]' : 'xl:grid-cols-[320px_minmax(0,1fr)]',
                 )}
             >
-                <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
+                <div className="h-[420px] min-h-0 min-w-0 sm:h-[500px] xl:h-full">
                     <RealtimeVehicleRail
                         vehicles={vehicles}
                         activeId={activeId}
@@ -91,11 +91,11 @@ export default function FuelRealtimePage() {
                         isLoading={isLoading}
                     />
                 </div>
-                <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
+                <div className="h-[420px] min-h-0 min-w-0 sm:h-[500px] xl:h-full">
                     <RealtimeMap vehicles={vehicles} activeId={activeId} onSelect={handleVehicleSelect} />
                 </div>
                 {detail && (
-                    <div className="h-[420px] min-w-0 sm:h-[500px] xl:h-full">
+                    <div className="h-[420px] min-h-0 min-w-0 sm:h-[500px] xl:h-full">
                         <VehicleDetailPanel detail={detail} onClose={() => {
                             setSelectedId(null)
                             setEventsPage(1)

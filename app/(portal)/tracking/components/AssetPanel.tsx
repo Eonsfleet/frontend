@@ -204,7 +204,7 @@ export function AssetPanel({
         label: plate,
         subtitle: statusCfg.label,
         sourceTimestamp: resolved.lastUpdate,
-        vehicleId: selectedVehicle.attributes?.uuid,
+        vehicleId: selectedVehicle.id,
       },
     );
   };

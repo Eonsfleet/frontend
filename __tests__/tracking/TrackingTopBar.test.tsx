@@ -6,7 +6,7 @@ import { TrackingTopBar } from '@/app/(portal)/tracking/components/TrackingTopBa
 const baseProps = {
   locationSearch: '',
   setLocationSearch: vi.fn(),
-  onLocationSearchSubmit: vi.fn(),
+  onLocationSelect: vi.fn(),
   mapStyle: 'standard' as const,
   setMapStyle: vi.fn(),
   showTraffic: false,
@@ -16,18 +16,26 @@ const baseProps = {
 }
 
 describe('TrackingTopBar', () => {
-  it('renders the location search input with the mockup placeholder', () => {
+  it('renders the search collapsed to an icon-only button by default', () => {
     render(<TrackingTopBar {...baseProps} />)
+    expect(screen.getByLabelText('Search location')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Search location / address')).toBeNull()
+  })
+
+  it('expands into the search input when the icon is clicked', () => {
+    render(<TrackingTopBar {...baseProps} />)
+    fireEvent.click(screen.getByLabelText('Search location'))
     expect(screen.getByPlaceholderText('Search location / address')).toBeInTheDocument()
   })
 
-  it('calls setLocationSearch as the user types and submits on Enter', () => {
+  it('collapses back to the icon on blur', () => {
     render(<TrackingTopBar {...baseProps} />)
+    fireEvent.click(screen.getByLabelText('Search location'))
     const input = screen.getByPlaceholderText('Search location / address')
-    fireEvent.change(input, { target: { value: 'Ikeja' } })
-    expect(baseProps.setLocationSearch).toHaveBeenCalledWith('Ikeja')
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(baseProps.onLocationSearchSubmit).toHaveBeenCalled()
+    expect(input).toBeInTheDocument()
+    fireEvent.blur(input)
+    expect(screen.queryByPlaceholderText('Search location / address')).toBeNull()
+    expect(screen.getByLabelText('Search location')).toBeInTheDocument()
   })
 
   it('calls setShowGeofences when the layers toggle is clicked', () => {
@@ -48,9 +56,9 @@ describe('TrackingTopBar', () => {
     const { container } = render(<TrackingTopBar {...baseProps} />)
     const root = container.firstChild as HTMLElement
     expect(root.className).toContain('justify-between')
-    const searchPill = screen.getByPlaceholderText('Search location / address').closest('div')
-    expect(searchPill?.className).toContain('rounded-2xl')
-    expect(searchPill?.className).toContain('shadow-lg')
+    const searchButton = screen.getByLabelText('Search location')
+    expect(searchButton.className).toContain('rounded-2xl')
+    expect(searchButton.className).toContain('shadow-lg')
   })
 
   it('renders a persistent connection status indicator', () => {

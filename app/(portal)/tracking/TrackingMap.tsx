@@ -19,7 +19,7 @@ import { MapCompatibilityBanner } from "./components/MapCompatibilityBanner";
 interface TrackingMapProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   filteredVehicles: any[];
-  /** Vehicle uuids matching the sidebar search text, or null when search is empty. Highlights pins without hiding the rest. */
+  /** Vehicle ids matching the sidebar search text, or null when search is empty. Highlights pins without hiding the rest. */
   searchMatchIds?: Set<string> | null;
   locations: Record<string, any>;
   selectedVehicle: any;
@@ -75,16 +75,16 @@ export default function TrackingMap({
   // map already follows it via useMapCameraFollow's flyTo, so freezing its
   // imperative position for the popup's lifetime keeps the popup rock-steady.
   const selectedIdRef = useRef<string | null>(null);
-  selectedIdRef.current = selectedVehicle ? selectedVehicle.attributes.uuid : null;
+  selectedIdRef.current = selectedVehicle ? selectedVehicle.id : null;
 
   const { isMapFollowEnabled, setMapFollowEnabled } = useTrackingUiStore();
 
   useEffect(() => {
     if (selectedVehicle) setMapFollowEnabled(true);
-  }, [selectedVehicle?.attributes?.uuid, setMapFollowEnabled]);
+  }, [selectedVehicle?.id, setMapFollowEnabled]);
 
   const currentPlayback = playbackData[playbackIndex];
-  const selectedLoc = selectedVehicle ? locations[selectedVehicle.attributes.uuid] : null;
+  const selectedLoc = selectedVehicle ? locations[selectedVehicle.id] : null;
 
   const followTarget: LatLng | null = isReplayMode
     ? currentPlayback
@@ -260,13 +260,13 @@ export default function TrackingMap({
     () =>
       filteredVehicles
         .filter((v) => {
-          const loc = locations[v.attributes.uuid];
+          const loc = locations[v.id];
           return loc && loc.lat != null && loc.lng != null && !Number.isNaN(loc.lat) && !Number.isNaN(loc.lng);
         })
         .map((v) => ({
-          id: v.attributes.uuid as string,
-          lat: locations[v.attributes.uuid].lat,
-          lng: locations[v.attributes.uuid].lng,
+          id: v.id as string,
+          lat: locations[v.id].lat,
+          lng: locations[v.id].lng,
         })),
     [filteredVehicles, locations],
   );
@@ -274,7 +274,7 @@ export default function TrackingMap({
 
   const vehiclesById = useMemo(() => {
     const map = new Map<string, any>();
-    filteredVehicles.forEach((v) => map.set(v.attributes.uuid, v));
+    filteredVehicles.forEach((v) => map.set(v.id, v));
     return map;
   }, [filteredVehicles]);
 
@@ -307,7 +307,7 @@ export default function TrackingMap({
                 const v = vehiclesById.get(c.id);
                 const loc = locations[c.id];
                 if (!v || !loc) return null;
-                const isSelected = selectedVehicle?.attributes?.uuid === c.id;
+                const isSelected = selectedVehicle?.id === c.id;
                 const hasAlarm = alarmState[c.id] === true;
                 const isHighlighted = searchMatchIds?.has(c.id) ?? false;
                 const markerState = getMarkerState(

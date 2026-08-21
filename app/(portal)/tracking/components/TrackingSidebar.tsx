@@ -3,7 +3,7 @@
 import { useRef, useState, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw, ChevronDown } from "lucide-react";
-import { Vehicle } from "@/types";
+import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
 import { StatusFilters, StatusFilter } from "./StatusFilters";
 import { VehicleListItem } from "./VehicleListItem";
@@ -14,8 +14,8 @@ import { useTrackingUiStore } from "@/store/trackingUiStore";
 
 interface TrackingSidebarProps {
   viewMode: "all" | "focused";
-  vehicles: Vehicle[];
-  filteredVehicles: Vehicle[];
+  vehicles: VehicleMapEntry[];
+  filteredVehicles: VehicleMapEntry[];
   locations: Record<string, any>;
   selectedVehicleId: string | null;
   setSelectedVehicleId: (id: string | null) => void;
@@ -72,16 +72,16 @@ export function TrackingSidebar({
     enabled: shouldVirtualize,
   });
 
-  const renderCard = (v: Vehicle) => (
+  const renderCard = (v: VehicleMapEntry) => (
     <VehicleListItem
       key={v.id}
       vehicle={v}
-      loc={locations[v.attributes.uuid]}
-      isSelected={String(selectedVehicleId) === String(v.attributes.uuid)}
-      hasActiveAlarm={alarmState[v.attributes.uuid] === true}
+      loc={locations[v.id]}
+      isSelected={String(selectedVehicleId) === String(v.id)}
+      hasActiveAlarm={alarmState[v.id] === true}
       onSelect={() => {
-        const isSelected = String(selectedVehicleId) === String(v.attributes.uuid);
-        setSelectedVehicleId(isSelected ? null : v.attributes.uuid);
+        const isSelected = String(selectedVehicleId) === String(v.id);
+        setSelectedVehicleId(isSelected ? null : v.id);
       }}
     />
   );
@@ -93,17 +93,19 @@ export function TrackingSidebar({
     }));
   };
 
+  // view=map carries no cluster relationship, so grouping always yields a
+  // single "Unassigned" bucket — degraded but not broken.
   const groupedClusters = useMemo(() => {
     if (viewType !== "cluster") return [];
 
-    const map: Record<string, Vehicle[]> = {};
+    const map: Record<string, VehicleMapEntry[]> = {};
     const clusterMap = new Map<string, string>();
     clusters.forEach((c) => {
       clusterMap.set(String(c.id), c.attributes?.name || c.name || `Cluster ${c.id}`);
     });
 
     filteredVehicles.forEach((v) => {
-      const cId = v.relationships?.cluster?.id ? String(v.relationships?.cluster.id) : "unassigned";
+      const cId = "unassigned";
       if (!map[cId]) {
         map[cId] = [];
       }
