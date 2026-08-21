@@ -61,14 +61,22 @@ export interface VehiclesMapPageResponse {
  */
 export const getVehiclesMapPage = async (params: {
   page: number;
-  limit: number;
+  per_page: number;
   q?: string;
 }): Promise<VehiclesMapPageResponse> => {
   const response = await apiClient.get<{
     message: string;
-    data: { vehicles: VehicleMapEntry[]; pagination: Paginated<VehicleMapEntry>["pagination"] };
+    data: {
+      vehicles: VehicleMapEntry[];
+      pagination: Paginated<VehicleMapEntry>["pagination"];
+    };
   }>("/vehicles", {
-    params: { view: "map", page: params.page, limit: params.limit, q: params.q },
+    params: {
+      view: "map",
+      page: params.page,
+      per_page: params.per_page,
+      q: params.q,
+    },
   });
   return {
     data: response.data.data.vehicles,

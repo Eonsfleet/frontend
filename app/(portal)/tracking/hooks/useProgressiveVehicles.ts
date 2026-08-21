@@ -48,7 +48,10 @@ const baseState = {
  * page held before growing again, which is what caused the status-count/marker
  * flicker on every 30s tick.
  */
-export function useProgressiveVehicles({ q, enabled }: UseProgressiveVehiclesParams): ProgressiveVehiclesState {
+export function useProgressiveVehicles({
+  q,
+  enabled,
+}: UseProgressiveVehiclesParams): ProgressiveVehiclesState {
   const [state, setState] = useState(baseState);
   const generationRef = useRef(0);
   const hasCompletedInitialLoadRef = useRef(false);
@@ -59,72 +62,85 @@ export function useProgressiveVehicles({ q, enabled }: UseProgressiveVehiclesPar
   // in-flight walk on purpose.
   const isRunningRef = useRef(false);
 
-  const run = useCallback(async (force = false) => {
-    if (isRunningRef.current && !force) return;
-    isRunningRef.current = true;
-    const generation = ++generationRef.current;
-    const isBackgroundRefresh = hasCompletedInitialLoadRef.current;
-    setState((prev) => ({
-      ...(isBackgroundRefresh ? prev : baseState),
-      isLoading: true,
-      error: null,
-    }));
-
-    try {
-      const seen = new Set<string>();
-      const accumulated: VehicleMapEntry[] = [];
-      let page = 1;
-      let lastPage = 1;
-      let total: number | null = null;
-
-      do {
-        const response = await getVehiclesMapPage({ page, limit: PAGE_LIMIT, q });
-        if (generation !== generationRef.current) return;
-
-        for (const vehicle of response.data) {
-          const key = String(vehicle.id);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          accumulated.push(vehicle);
-        }
-        lastPage = response.pagination.last_page ?? response.pagination.lastPage ?? 1;
-        total = response.pagination.total ?? total;
-        page++;
-
-        // Only reveal partial progress for the very first load — a background
-        // refresh keeps showing the last complete fleet until its own walk
-        // finishes, so the list/map never visibly shrinks mid-refresh.
-        if (!isBackgroundRefresh) {
-          const snapshot = accumulated.slice();
-          const snapshotTotal = total;
-          setState((prev) => ({
-            ...prev,
-            vehicles: snapshot,
-            loadedCount: snapshot.length,
-            total: snapshotTotal,
-            isLoading: page <= lastPage,
-          }));
-        }
-      } while (page <= lastPage);
-
-      if (generation !== generationRef.current) return;
-      hasCompletedInitialLoadRef.current = true;
+  const run = useCallback(
+    async (force = false) => {
+      if (isRunningRef.current && !force) return;
+      isRunningRef.current = true;
+      const generation = ++generationRef.current;
+      const isBackgroundRefresh = hasCompletedInitialLoadRef.current;
       setState((prev) => ({
-        ...prev,
-        vehicles: accumulated,
-        loadedCount: accumulated.length,
-        total,
-        isLoading: false,
-        isInitialLoad: false,
+        ...(isBackgroundRefresh ? prev : baseState),
+        isLoading: true,
+        error: null,
       }));
-    } catch (error) {
-      if (generation !== generationRef.current) return;
-      setState((prev) => ({ ...prev, isLoading: false, isInitialLoad: false, error }));
-    } finally {
-      if (generation === generationRef.current) isRunningRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+
+      try {
+        const seen = new Set<string>();
+        const accumulated: VehicleMapEntry[] = [];
+        let page = 1;
+        let lastPage = 1;
+        let total: number | null = null;
+
+        do {
+          const response = await getVehiclesMapPage({
+            page,
+            per_page: PAGE_LIMIT,
+            q,
+          });
+          if (generation !== generationRef.current) return;
+
+          for (const vehicle of response.data) {
+            const key = String(vehicle.id);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            accumulated.push(vehicle);
+          }
+          lastPage =
+            response.pagination.last_page ?? response.pagination.lastPage ?? 1;
+          total = response.pagination.total ?? total;
+          page++;
+
+          // Only reveal partial progress for the very first load — a background
+          // refresh keeps showing the last complete fleet until its own walk
+          // finishes, so the list/map never visibly shrinks mid-refresh.
+          if (!isBackgroundRefresh) {
+            const snapshot = accumulated.slice();
+            const snapshotTotal = total;
+            setState((prev) => ({
+              ...prev,
+              vehicles: snapshot,
+              loadedCount: snapshot.length,
+              total: snapshotTotal,
+              isLoading: page <= lastPage,
+            }));
+          }
+        } while (page <= lastPage);
+
+        if (generation !== generationRef.current) return;
+        hasCompletedInitialLoadRef.current = true;
+        setState((prev) => ({
+          ...prev,
+          vehicles: accumulated,
+          loadedCount: accumulated.length,
+          total,
+          isLoading: false,
+          isInitialLoad: false,
+        }));
+      } catch (error) {
+        if (generation !== generationRef.current) return;
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isInitialLoad: false,
+          error,
+        }));
+      } finally {
+        if (generation === generationRef.current) isRunningRef.current = false;
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [q],
+  );
 
   useEffect(() => {
     if (!enabled) {
