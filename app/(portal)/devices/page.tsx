@@ -1,27 +1,19 @@
 'use client'
 
 import React from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { exportDevices, getDevices } from '@/lib/api/tracking'
+import { useQuery } from '@tanstack/react-query'
+import { getDevices } from '@/lib/api/tracking'
 import { getVehiclesBatched } from '@/lib/api/vehicles'
 import { Vehicle } from '@/types'
 import { DeviceTable } from '@/components/devices/DeviceTable'
 import { DeviceFilters, DeviceFiltersState } from '@/components/devices/DeviceFilters'
+import { DeviceExportDialog } from '@/components/devices/DeviceExportDialog'
 import { QueryError } from '@/components/shared/QueryError'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Search, HardDrive, Download, Loader2 } from 'lucide-react'
+import { Search, HardDrive, Download } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { format } from 'date-fns'
-import { toast } from 'sonner'
-import { extractApiError } from '@/lib/utils'
 
 export default function DevicesPage() {
     const { token } = useAuthStore()
@@ -53,21 +45,7 @@ export default function DevicesPage() {
         return map
     }, [vehicles])
 
-    const exportMutation = useMutation({
-        mutationFn: (status?: 'online' | 'offline') => exportDevices(status ? { status } : undefined),
-        onSuccess: (blob, status) => {
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `devices-${status ?? 'all'}-${format(new Date(), 'yyyy-MM-dd')}.csv`
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
-            URL.revokeObjectURL(url)
-            toast.success('Devices export downloaded.')
-        },
-        onError: (error) => toast.error(extractApiError(error, 'Failed to export devices.')),
-    })
+    const [exportOpen, setExportOpen] = React.useState(false)
 
     const handleSearch = (val: string) => {
         setSearch(val)
@@ -96,18 +74,10 @@ export default function DevicesPage() {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Devices</h1>
                     <p className="text-slate-500 mt-1">Monitor GPS trackers and their connection health across your fleet.</p>
                 </div>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" disabled={exportMutation.isPending}>
-                            {exportMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => exportMutation.mutate('online')}>Online devices</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => exportMutation.mutate('offline')}>Offline devices</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => exportMutation.mutate(undefined)}>All devices</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" onClick={() => setExportOpen(true)}>
+                    <Download className="h-4 w-4" /> Export
+                </Button>
+                <DeviceExportDialog open={exportOpen} onOpenChange={setExportOpen} />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">

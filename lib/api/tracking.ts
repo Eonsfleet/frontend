@@ -29,7 +29,7 @@ export const getDevices = async (params?: any): Promise<{ data: { devices: any[]
     return res.data
 }
 
-export const exportDevices = async (params?: { status?: 'online' | 'offline' }): Promise<Blob> => {
+export const exportDevices = async (params?: { status?: 'online' | 'offline'; format?: 'csv' | 'xlsx' }): Promise<Blob> => {
     const res = await apiClient.get('/devices/export', { params, responseType: 'blob' })
     return res.data
 }
