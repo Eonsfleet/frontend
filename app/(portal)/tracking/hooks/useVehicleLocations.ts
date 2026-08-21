@@ -1,16 +1,33 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeTelemetry } from "@/lib/utils";
-import { Vehicle } from "@/types";
 import { isStaleOffline } from "../utils";
 import { VehicleInterpolator } from "@/lib/vehicleInterpolation";
 import { buildPacketEntry } from "@/lib/packetStream";
 import { usePacketStreamStore } from "@/store/packetStreamStore";
 import { appendTrailPoint, type TrailPoint } from "@/lib/vehicleTrail";
-import { getVehicleLocation } from "@/lib/api/vehicles";
+import { getVehicleById, type VehicleMapEntry } from "@/lib/api/vehicles";
+
+/**
+ * The {id, attributes, relationships} envelope (PRD §2: a `view` changes the
+ * fields inside the resource, not the outer shape) isn't consumable by
+ * normalizeTelemetry(), which expects a flat packet — so flatten attributes +
+ * relationships.current_location the same way the bulk REST fleet-seed effect
+ * below does per-vehicle, before handing it off.
+ */
+function flattenTelemetryEnvelope(vehicle: any): any {
+  if (!vehicle) return null;
+  const attributes = vehicle.attributes ?? {};
+  const location = vehicle.relationships?.current_location ?? {};
+  return {
+    ...attributes,
+    ...location,
+    vehicle_id: vehicle.id,
+  };
+}
 
 interface UseVehicleLocationsProps {
-  vehicles: Vehicle[];
+  vehicles: VehicleMapEntry[];
   token: string | null;
   organization: any;
   subscribePrivate: (
@@ -51,42 +68,24 @@ export function useVehicleLocations({
     selectedIdRef.current = selectedVehicleId;
   }, [selectedVehicleId]);
 
-  // The fleet-wide WS channels broadcast `vehicle_id` as the vehicle's DB id
-  // (same convention as trips/maintenance/fuel elsewhere in the app), but
-  // every consumer of `locations`/`alarmState` (map markers, sidebar cards,
-  // filters) reads by `attributes.uuid` — the same key the REST seed and the
-  // per-vehicle channel already use. Without this resolution, live packets
-  // land on a key nothing reads and only the 30s REST poll ever appears to
-  // update the UI. Keep both the DB id and the uuid as keys pointing at the
-  // uuid so a packet is resolved correctly regardless of which one arrives.
-  const idResolverRef = useRef<Record<string, string>>({});
-  useEffect(() => {
-    const map: Record<string, string> = {};
-    vehicles.forEach((v: Vehicle) => {
-      const uuid = v.attributes?.uuid;
-      if (!uuid) return;
-      map[String(v.id)] = String(uuid);
-      map[String(uuid)] = String(uuid);
-    });
-    idResolverRef.current = map;
-  }, [vehicles]);
-  const resolveIdKey = (rawId: unknown) => idResolverRef.current[String(rawId)] ?? String(rawId);
+  // The view=map feed keys everything by the vehicle's DB `id`, and the
+  // fleet-wide WS channels already broadcast `vehicle_id` as that same DB id
+  // — so no id resolution/remapping is needed here, unlike the old uuid-keyed
+  // shape. Kept as a named helper for clarity at each WS call site.
+  const resolveIdKey = (rawId: unknown) => String(rawId);
 
   useEffect(() => {
     setTrails({});
   }, [selectedVehicleId]);
 
-  // Fresh, uncached single-vehicle snapshot fired the instant a vehicle is
-  // selected — GET /vehicles/{id}/location returns the same flat shape as the
-  // WS `.current.recent` packet (both built from
-  // TelemetryFormatHelper::fromVehicleLocation on the backend), so it can be
-  // normalized identically. This fills in fields the bulk /vehicles list never
-  // carries (satellites, battery voltage, GSM operator, engine metadata, ...)
-  // instead of leaving them blank until the fleet-wide 30s poll or the first
-  // WS packet for this specific vehicle arrives.
+  // Full latest normalized telemetry fired the instant a vehicle is selected —
+  // GET /vehicles/{id}?view=telemetry (PRD §9/§19/§21/§23). This fills in
+  // fields the bulk /vehicles list never carries (satellites, battery voltage,
+  // GSM operator, engine metadata, ...) instead of leaving them blank until
+  // the fleet-wide 30s poll or the first WS packet for this vehicle arrives.
   const { data: selectedVehicleSnapshot } = useQuery({
-    queryKey: ["vehicle-location-snapshot", selectedVehicleId],
-    queryFn: () => getVehicleLocation(selectedVehicleId!),
+    queryKey: ["vehicle", selectedVehicleId, "telemetry"],
+    queryFn: () => getVehicleById(selectedVehicleId!, { view: "telemetry" }),
     enabled: !!selectedVehicleId,
     staleTime: 0,
     retry: false,
@@ -94,7 +93,8 @@ export function useVehicleLocations({
 
   useEffect(() => {
     if (!selectedVehicleSnapshot || !selectedVehicleId) return;
-    const normalized = normalizeTelemetry(selectedVehicleSnapshot);
+    const flat = flattenTelemetryEnvelope(selectedVehicleSnapshot.data);
+    const normalized = normalizeTelemetry(flat);
     if (!normalized) return;
 
     setLocations((prev) => {
@@ -141,17 +141,14 @@ export function useVehicleLocations({
     if (!vehicles.length) return;
     setLocations((prev) => {
       const next = { ...prev };
-      vehicles.forEach((v: Vehicle) => {
-        const vehicleId = v.attributes.uuid || String(v.id);
-        const loc = v.relationships?.current_location ?? null;
-        // is_online + last_packet are now on attributes, not on device relationship
-        const isOnline = v.attributes?.is_online ?? false;
-        const lastPacketTs =
-          v.attributes?.last_packet_received_at ??
-          loc?.last_packet_received_at ??
-          null;
-        const lastUpdateTs = loc?.created_at ?? loc?.last_packet_received_at ?? null;
-        const staleOffline = isStaleOffline(isOnline, lastPacketTs || lastUpdateTs);
+      vehicles.forEach((v: VehicleMapEntry) => {
+        const vehicleId = String(v.id);
+        const loc = v.attributes.location ?? null;
+        // view=map has no boolean is_online field — derive it from device_status.
+        const isOnline = v.attributes?.device_status === "active";
+        const lastPacketTs = v.attributes?.last_packet_received_at ?? null;
+        const lastUpdateTs = lastPacketTs;
+        const staleOffline = isStaleOffline(isOnline, lastPacketTs);
 
         if (!loc) {
           if (next[vehicleId]) {
@@ -167,11 +164,12 @@ export function useVehicleLocations({
 
         const lat = loc.latitude;
         const lng = loc.longitude;
+        const speed = v.attributes.speed ?? 0;
 
-        // Derive movement status from speed — new API no longer sends state on REST location
+        // Derive movement status from speed — the map feed carries no explicit state.
         const derivedStatus = staleOffline || !isOnline
           ? "offline"
-          : (loc.speed ?? 0) > 0
+          : speed > 0
             ? "in_transit"
             : "parked";
 
@@ -181,20 +179,17 @@ export function useVehicleLocations({
             ? (prevEntry?.statusSinceMs ?? Date.now())
             : Date.now();
 
-        const locAny = loc as any;
-        const attrAny = v.attributes as any;
-        const fuelPct = locAny?.fuel_level_percent ?? locAny?.fuel ?? attrAny?.fuel_level_percent ?? attrAny?.fuel ?? null;
-        const fuelL = locAny?.fuel_level_liters ?? locAny?.fuel_liters ?? attrAny?.fuel_level_liters ?? attrAny?.fuel_liters ?? null;
+        const fuelPct = v.attributes.fuel?.level_percent ?? null;
+        const fuelL = v.attributes.fuel?.level_liters ?? null;
 
         const restData = {
           lat: lat ?? 0,
           lng: lng ?? 0,
-          speed: loc.speed ?? 0,
+          speed,
           heading: 0,
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,
-          odometer: v.attributes?.odometer?.lifetime_km ?? null,
           lastUpdate: lastUpdateTs,
           lastPacket: lastPacketTs,
           fuel: fuelPct != null ? Number(fuelPct) : (prevEntry?.fuel ?? null),
@@ -213,12 +208,21 @@ export function useVehicleLocations({
           ? { ...prevEntry, ...restData }
           : { ...restData, ...prevEntry };
 
+        // status/is_online follow the same freshness rule as position: a
+        // WS-derived status that's newer than this REST snapshot wins. REST
+        // used to overwrite status/is_online unconditionally here regardless
+        // of a fresher WS packet already having set them — every 30s poll
+        // briefly stomped a vehicle's live status back to whatever this REST
+        // snapshot's speed/device_status implied, which is a large part of
+        // what produced the status-count flicker.
+        const statusBase = restIsFresherOrEqual
+          ? { status: derivedStatus, statusSinceMs, is_online: isOnline }
+          : { status: prevEntry?.status ?? derivedStatus, statusSinceMs: prevEntry?.statusSinceMs ?? statusSinceMs, is_online: prevEntry?.is_online ?? isOnline };
+
         if (!lat || !lng) {
           next[vehicleId] = {
             ...positionalBase,
-            is_online: isOnline,
-            status: derivedStatus,
-            statusSinceMs,
+            ...statusBase,
             raw: prevEntry?.raw ?? loc,
             lastPacket: lastPacketTs,
           };
@@ -236,13 +240,9 @@ export function useVehicleLocations({
           });
         }
 
-        // A WS-updated prev entry only keeps positional priority when it's newer
-        // than this REST snapshot; REST is always authoritative for is_online/status.
         next[vehicleId] = {
           ...positionalBase,
-          status: derivedStatus,
-          statusSinceMs,
-          is_online: isOnline,
+          ...statusBase,
           raw: prevEntry?.raw ?? loc,
           lastPacket: lastPacketTs,
         };
@@ -257,13 +257,29 @@ export function useVehicleLocations({
       organization?.attributes?.identifier || organization?.id;
     if (!token || !orgIdentifier) return;
 
+    // Positions are published by the Go telemetry pipeline on the org-wide
+    // tracking channel — the old Laravel broadcaster (location.organization.*
+    // / .current.recent, keyed on latitude/longitude) was retired and nothing
+    // publishes to it any more. New event carries lat/lng (not latitude/
+    // longitude) and no is_online/device_status field — every packet that
+    // arrives here is by definition a live vehicle, so is_online is forced
+    // true below rather than derived from a field the payload doesn't have.
     const locationUnsubscribe = subscribePrivate(
-      `location.organization.${orgIdentifier}`,
-      ".current.recent",
+      `org.${orgIdentifier}.tracking`,
+      ".vehicle.location.updated",
       (packet: any) => {
+        // vehicle_id is nullable (a device with no linked vehicle record still
+        // broadcasts) — imei is always present, but every other consumer in
+        // this hook keys by vehicle_id, so packets without one are dropped
+        // rather than introducing a second identity scheme here.
         if (packet.vehicle_id) {
           const normalized = normalizeTelemetry(packet);
-          const status = normalized.status;
+          // normalizeTelemetry() derives status from an is_online/device_status
+          // field this payload doesn't carry, so it always resolves "offline" —
+          // every packet on this channel is by definition a live vehicle (see
+          // comment above), so status here is derived directly from the
+          // packet's own speed instead, same rule as the REST seed uses.
+          const status = (normalized.speed ?? 0) > 0 ? "in_transit" : "parked";
           const idKey = resolveIdKey(packet.vehicle_id);
 
           if (normalized.lat != null && normalized.lng != null) {
@@ -302,8 +318,19 @@ export function useVehicleLocations({
             }));
           }
 
+          // timestamp is the position's device time (ISO-8601 with offset) — the
+          // new payload carries no separate server-ingestion timestamp field.
+          const packetTs = packet.timestamp;
+          const packetUpdateMs = packetTs ? new Date(packetTs).getTime() : 0;
+
           setLocations((prev) => {
             const prevEntry = prev[idKey];
+            // A late-arriving or reordered WS packet must not roll a vehicle's
+            // state backward — mirrors the guard already applied to the REST
+            // seed and the selected-vehicle snapshot query below.
+            const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+            if (prevEntry && packetUpdateMs > 0 && prevUpdateMs > packetUpdateMs) return prev;
+
             const statusSinceMs =
               prevEntry?.status === status
                 ? (prevEntry?.statusSinceMs ?? Date.now())
@@ -313,20 +340,20 @@ export function useVehicleLocations({
               [idKey]: {
                 ...prevEntry,
                 ...normalized,
+                // Coordinates are optional per-packet (e.g. a status-only event) —
+                // never let an absent lat/lng in this packet blank out a previously
+                // known good position.
+                lat: normalized.lat ?? prevEntry?.lat,
+                lng: normalized.lng ?? prevEntry?.lng,
                 status,
                 statusSinceMs,
                 state: packet.state ?? prevEntry?.state,
+                // Every packet on this channel is by definition a live position —
+                // the payload carries no is_online/device_status field to derive
+                // this from (see the subscription comment above).
                 is_online: true,
-                // timestamp_utc is the server's ingestion time — always fresh. Device-
-                // reported updated_at/gps_datetime can be wrong (GPS cold-start clocks
-                // commonly report a bogus fallback date before acquiring a fix), so
-                // they're only a fallback, not the primary source.
-                lastUpdate:
-                  packet.timestamp_utc ||
-                  packet.updated_at ||
-                  packet.gps_datetime,
-                lastPacket:
-                  packet.last_packet_received_at ?? packet.timestamp_utc ?? prevEntry?.lastPacket,
+                lastUpdate: packetTs || prevEntry?.lastUpdate,
+                lastPacket: packetTs || prevEntry?.lastPacket,
                 fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
                 fuel_liters:
                   normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
@@ -339,7 +366,7 @@ export function useVehicleLocations({
             };
           });
 
-          pushIfSelected(idKey, ".current.recent", packet);
+          pushIfSelected(idKey, ".vehicle.location.updated", packet);
         }
       },
     );
@@ -420,5 +447,10 @@ export function useVehicleLocations({
     interpolator,
     alarmState,
     trails,
+    // Full {id, attributes, relationships} envelope for the selected vehicle,
+    // from GET /vehicles/{id}?view=telemetry — the panel/bottom-cards read
+    // display fields (make, body_type, device/imei, ...) from this rather than
+    // the slim view=map list entry, which no longer carries them.
+    selectedVehicleDetail: selectedVehicleSnapshot?.data ?? null,
   };
 }

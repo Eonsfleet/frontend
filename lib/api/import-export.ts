@@ -74,6 +74,48 @@ export const importFile = async (
 // Batch polling
 // -------------------------------------------------------------------------
 
+export type RawBatchJobStatus = 'processing' | 'completed' | 'failed' | string
+
+export interface BatchJobStatusResponse {
+    status: RawBatchJobStatus
+    progress: number
+    message: string | null
+}
+
+// Generic batch job status poll (GET /batch/{id}) — used by the global
+// import/export progress widget. Tolerant of the varying shapes different
+// job types (fuel import, vehicle import, exports, ...) report progress in.
+export const getBatchJobStatus = async (batchId: string): Promise<BatchJobStatusResponse> => {
+    const res = await apiClient.get(`/batch/${batchId}`)
+    const d = res.data?.data ?? res.data
+
+    const rawStatus: string = (d.status ?? '').toLowerCase()
+    const status: RawBatchJobStatus =
+        rawStatus === 'processing' || rawStatus === 'pending' || rawStatus === 'running'
+            ? 'processing'
+            : rawStatus === 'completed' || rawStatus === 'finished' || rawStatus === 'success'
+              ? 'completed'
+              : rawStatus === 'failed' || rawStatus === 'cancelled' || rawStatus === 'error'
+                ? 'failed'
+                : rawStatus || 'processing'
+
+    const total = d.total_jobs ?? d.total ?? 0
+    const processed = d.processed_jobs ?? d.processed ?? 0
+    const progress =
+        typeof d.progress === 'number'
+            ? d.progress
+            : total > 0
+              ? Math.round((processed / total) * 100)
+              : status === 'completed'
+                ? 100
+                : 0
+
+    const message: string | null =
+        d.error ?? d.error_message ?? d.failure_reason ?? d.message ?? null
+
+    return { status, progress, message }
+}
+
 export const getBatchStatus = async (batchId: string): Promise<BatchStatus> => {
     const res = await apiClient.get(`/batch/${batchId}`)
     const d = res.data?.data ?? res.data

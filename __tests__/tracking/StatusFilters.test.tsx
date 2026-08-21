@@ -4,15 +4,15 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { StatusFilters } from '@/app/(portal)/tracking/components/StatusFilters'
 
 const vehicles = [
-  { id: '1', attributes: { uuid: 'uuid-1' } },
-  { id: '2', attributes: { uuid: 'uuid-2' } },
-  { id: '3', attributes: { uuid: 'uuid-3' } },
+  { id: '1', attributes: {} },
+  { id: '2', attributes: {} },
+  { id: '3', attributes: {} },
 ] as any
 
 const locations = {
-  'uuid-1': { status: 'in_transit', is_online: true },
-  'uuid-2': { status: 'idle', is_online: true },
-  'uuid-3': { is_online: false },
+  '1': { status: 'in_transit', is_online: true },
+  '2': { status: 'idle', is_online: true },
+  '3': { is_online: false },
 }
 
 describe('StatusFilters', () => {

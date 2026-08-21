@@ -58,6 +58,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { extractApiError } from "@/lib/utils";
+import { useImportExportStore } from "@/store/importExportStore";
 import { QueryError } from "@/components/shared/QueryError";
 import { useAuthStore } from "@/store/authStore";
 import { PAGE_SIZE_DEFAULT, PAGE_SIZE_DROPDOWN } from "@/lib/config";
@@ -691,6 +692,7 @@ function ImportFuelTransactionsDialog({
 
 export default function FuelExpensesPage() {
   const queryClient = useQueryClient();
+  const addImportExportJob = useImportExportStore((s) => s.addJob);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -784,6 +786,22 @@ export default function FuelExpensesPage() {
       return api.importFuelTransactions(formData);
     },
     onSuccess: (response) => {
+      const batchId =
+        (response.data?.data_import_id ?? response.data?.fuel_import_id) != null
+          ? String(response.data?.data_import_id ?? response.data?.fuel_import_id)
+          : null;
+
+      // Only ever show progress once the API confirms a pollable batch job
+      // exists — a 2xx with no batch id has nothing to track.
+      if (batchId) {
+        addImportExportJob({
+          id: `fuel-import-${batchId}`,
+          batchId,
+          kind: "import",
+          label: "Fuel transactions import",
+        });
+      }
+
       toast.success(
         response.message ||
           "Import received. You’ll get an email report when reconciliation completes.",
@@ -792,31 +810,34 @@ export default function FuelExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
       setImportOpen(false);
     },
+    // The request failed before any batch job could exist (e.g. the 422 file
+    // validation error) — there is nothing to poll, so just surface the
+    // error. No progress entry is ever created for a failed trigger request.
     onError: (error) =>
       toast.error(
         extractApiError(error, "Failed to import fuel transactions."),
       ),
   });
 
-  const handleExport = async () => {
-    try {
-      const blob = await api.exportFuelExpenses({
+  const exportMutation = useMutation({
+    mutationFn: () =>
+      api.exportFuelExpenses({
         q: search || undefined,
         status: statusFilter || undefined,
         reconciliation_status: reconciliationFilter || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `fuel-expenses-${format(new Date(), "yyyy-MM-dd")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Export failed.");
-    }
-  };
+      }),
+    onSuccess: (blob) => {
+      downloadBlob(
+        blob,
+        `fuel-expenses-${format(new Date(), "yyyy-MM-dd")}.csv`,
+      );
+      toast.success("Fuel expenses export downloaded.");
+    },
+    onError: (error) =>
+      toast.error(extractApiError(error, "Failed to export fuel expenses.")),
+  });
 
   const m = metricsData?.data;
   const expenses: FuelExpense[] = data?.data?.fuel_expenses ?? [];
@@ -882,10 +903,16 @@ export default function FuelExpensesPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExport}
+            onClick={() => exportMutation.mutate()}
+            disabled={exportMutation.isPending}
             className="border-0 bg-slate-100 shadow-none"
           >
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+            {exportMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}{" "}
+            Export CSV
           </Button>
           <Button
             size="sm"

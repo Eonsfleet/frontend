@@ -3,14 +3,14 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { subHours } from "date-fns";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Vehicle, Trip } from "@/types";
+import { useQuery } from "@tanstack/react-query";
+import { Trip } from "@/types";
+import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { useTrackingUiStore } from "@/store/trackingUiStore";
 import { useEcho } from "@/hooks/useEcho";
-import * as api from "@/lib/api/vehicles";
 import * as tripApi from "@/lib/api/trips";
 import { getClusters } from "@/lib/api/settings";
 import { getGeofences } from "@/lib/api/geofencing";
@@ -18,6 +18,7 @@ import TrackingMap from "./TrackingMap";
 import { AssetPanel } from "./components/AssetPanel";
 import { getVehicleIcon, type TrackingMapStyle } from "./utils";
 import { useVehicleLocations } from "./hooks/useVehicleLocations";
+import { useProgressiveVehicles } from "./hooks/useProgressiveVehicles";
 import { useMapProvider } from "./hooks/useMapProvider";
 import { MapInstanceProvider } from "./MapInstanceContext";
 import { useResolvedVehicleTelemetry } from "@/hooks/useResolvedVehicleTelemetry";
@@ -34,15 +35,16 @@ import {
 } from "./components/FilterPanelDrawer";
 import { StatusFilter } from "./components/StatusFilters";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { FleetLoadProgressBanner } from "./components/FleetLoadProgressBanner";
 import { StreetImageryPanel } from "./components/StreetImageryPanel";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { BottomCards } from "./components/BottomCards";
 import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { cn, normalizeTelemetry } from "@/lib/utils";
 import { matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
 export default function TrackingPage() {
-  const queryClient = useQueryClient();
   const isAssetListCollapsed = useTrackingUiStore(
     (s) => s.isAssetListCollapsed,
   );
@@ -81,13 +83,21 @@ export default function TrackingPage() {
   const { subscribePrivate } = useEcho();
   const { status: connectionStatus } = useConnectionStatus();
 
-  const { data: vehicleData, isLoading: isLoadingVehicles } = useQuery({
-    queryKey: ["vehicles-tracking"],
-    queryFn: () => api.getVehiclesBatched(),
-    enabled: !!token,
-    refetchInterval: 30_000,
-    staleTime: 0,
+  // Debounced so typing doesn't fire a request per keystroke — the sidebar
+  // list swaps to server search results once this settles; the map keeps
+  // showing the always-on `fleet` feed the whole time (see searchMatchIds).
+  const debouncedSearch = useDebouncedValue(filters.search.trim(), 300);
+
+  const fleet = useProgressiveVehicles({ enabled: !!token });
+  const searchResult = useProgressiveVehicles({
+    q: debouncedSearch || undefined,
+    enabled: !!token && !!debouncedSearch,
   });
+  // Skeleton rows only while nothing has landed yet — once the first page
+  // resolves, the sidebar renders those rows immediately and grows as further
+  // pages arrive, same as the map's markers. fleet.isInitialLoad stays true
+  // for the whole multi-page walk, so it's only used to gate the load banner.
+  const isLoadingVehicles = fleet.vehicles.length === 0 && fleet.isLoading;
 
   const { data: clustersData } = useQuery({
     queryKey: ["clusters-tracking"],
@@ -107,7 +117,7 @@ export default function TrackingPage() {
     enabled: !!token,
   });
 
-  const vehicles = useMemo(() => vehicleData ?? [], [vehicleData]);
+  const vehicles = fleet.vehicles;
   const ongoingTrips = useMemo(() => tripData?.data?.trips || [], [tripData]);
   const clusters = useMemo(
     () => clustersData?.data?.clusters || [],
@@ -118,7 +128,7 @@ export default function TrackingPage() {
     [geofencesData],
   );
 
-  const { locations, setLocations, interpolator, alarmState, trails } =
+  const { locations, setLocations, interpolator, alarmState, trails, selectedVehicleDetail } =
     useVehicleLocations({
       vehicles,
       token,
@@ -127,14 +137,26 @@ export default function TrackingPage() {
       selectedVehicleId,
     });
 
-  const selectedVehicle = useMemo(
-    () =>
-      vehicles.find(
-        (v: Vehicle) =>
-          String(v.attributes?.uuid) === String(selectedVehicleId),
-      ) || null,
+  // The panel/bottom-cards need richer fields (make, body_type, device/imei)
+  // than the slim view=map list entry carries — selectedVehicleDetail (from
+  // GET /vehicles/{id}?view=telemetry) is the source of truth once it resolves.
+  // Until then, fall back to a minimal envelope built from the map-list entry
+  // so the panel can open immediately with at least registration/model/status.
+  const selectedMapEntry = useMemo(
+    () => vehicles.find((v) => String(v.id) === String(selectedVehicleId)) || null,
     [vehicles, selectedVehicleId],
   );
+  const selectedVehicle = useMemo(() => {
+    if (selectedVehicleDetail && String(selectedVehicleDetail.id) === String(selectedVehicleId)) {
+      return selectedVehicleDetail;
+    }
+    if (!selectedMapEntry) return null;
+    return {
+      id: selectedMapEntry.id,
+      attributes: { registration_number: selectedMapEntry.attributes.registration_number, model: selectedMapEntry.attributes.model },
+      relationships: {},
+    };
+  }, [selectedVehicleDetail, selectedVehicleId, selectedMapEntry]);
 
   const selectedTrail = useMemo(
     () => (selectedVehicleId ? (trails[selectedVehicleId] ?? []) : []),
@@ -147,14 +169,14 @@ export default function TrackingPage() {
   // BottomCards needs the same live-resolved telemetry, so all three consume this
   // single subscription instead of each opening their own.
   const selectedLoc = selectedVehicle
-    ? locations[selectedVehicle.attributes.uuid]
+    ? locations[selectedVehicle.id]
     : null;
   const selectedVehicleSnapshot = useMemo(
     () => buildVehicleSnapshot(selectedVehicle, selectedLoc),
     [selectedVehicle, selectedLoc],
   );
   const resolvedTelemetry = useResolvedVehicleTelemetry(
-    selectedVehicle?.attributes.uuid ?? null,
+    selectedVehicle?.id ?? null,
     selectedVehicleSnapshot,
     !!selectedVehicle,
   );
@@ -254,17 +276,12 @@ export default function TrackingPage() {
   const isFilterActive = useMemo(() => {
     return (
       filters.search !== "" ||
-      filters.group !== "all" ||
       filters.statuses.length < 4 ||
       filters.locationType === "radius" ||
       filters.geofenceId !== "all" ||
-      filters.vehicleType !== "all" ||
-      filters.vehicleMake !== "all" ||
       filters.vehicleModel !== "all" ||
-      filters.vehicleYearFrom !== "" ||
       filters.speedRange[0] > 0 ||
       filters.speedRange[1] < 120 ||
-      filters.engineStatus !== "all" ||
       filters.fuelLevel !== "all"
     );
   }, [filters]);
@@ -344,19 +361,16 @@ export default function TrackingPage() {
   // narrows further, below) and the map (search never hides pins; it only
   // highlights matches, see searchMatchIds), so status/group/etc. filters stay
   // in effect for the map while free-text search doesn't affect what's plotted.
+  // Group/cluster, vehicle type, vehicle make, and vehicle-year-from filters
+  // were dropped: GET /vehicles?view=map (the panel/map feed) carries none of
+  // relationships.cluster, body_type/type, make, or year — there's no data left
+  // to filter on for this page. Status/radius/geofence/model/speed/fuel all
+  // still work since their source fields remain in the view=map response.
   const applyNonSearchFilters = useCallback(
-    (vehiclesToFilter: Vehicle[]) => {
+    (vehiclesToFilter: VehicleMapEntry[]) => {
       let result = vehiclesToFilter;
 
-      // 2. Group/Cluster filter
-      if (filters.group !== "all") {
-        result = result.filter((v: Vehicle) => {
-          const clusterId = String(v.relationships?.cluster?.id || "");
-          return String(filters.group) === clusterId;
-        });
-      }
-
-      // 3. Status filter — resolve each vehicle through the SAME canonical status
+      // Status filter — resolve each vehicle through the SAME canonical status
       // logic the sidebar cards / panels / markers use (matchesStatusBucket →
       // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
       // label disagrees with the status shown on its card. "all" is the full set of
@@ -366,91 +380,59 @@ export default function TrackingPage() {
         filters.statuses.length > 0 &&
         !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
       if (isNarrowed) {
-        result = result.filter((v: Vehicle) => {
-          const loc = locations[v.attributes.uuid];
-          const isOnline = loc?.is_online ?? v.attributes.is_online ?? false;
+        result = result.filter((v: VehicleMapEntry) => {
+          const loc = locations[v.id];
+          const isOnline = loc?.is_online ?? false;
           const input = {
             status: loc?.status,
             is_online: isOnline,
             speed: loc?.speed,
           };
-          const hasAlarm = alarmState[v.attributes.uuid] === true;
+          const hasAlarm = alarmState[v.id] === true;
           return filters.statuses.some((bucket) =>
             matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
           );
         });
       }
 
-      // 4. Location & Radius filter
+      // Location & Radius filter
       if (filters.locationType === "radius" && filters.locationCoords) {
         const { latitude: centerLat, longitude: centerLng } =
           filters.locationCoords;
-        result = result.filter((v: Vehicle) => {
-          const loc = locations[v.attributes.uuid];
+        result = result.filter((v: VehicleMapEntry) => {
+          const loc = locations[v.id];
           if (!loc?.lat || !loc?.lng) return false;
           const dist = getDistance(loc.lat, loc.lng, centerLat, centerLng);
           return dist <= filters.radiusKm;
         });
       }
 
-      // 5. Geofence filter
+      // Geofence filter
       if (filters.geofenceId !== "all") {
         const selectedGeofence = geofences.find(
           (g) => String(g.id) === filters.geofenceId,
         );
         if (selectedGeofence) {
-          result = result.filter((v: Vehicle) => {
-            const loc = locations[v.attributes.uuid];
+          result = result.filter((v: VehicleMapEntry) => {
+            const loc = locations[v.id];
             if (!loc?.lat || !loc?.lng) return false;
             return isVehicleInGeofence(loc.lat, loc.lng, selectedGeofence);
           });
         }
       }
 
-      // 6. Vehicle Type
-      if (filters.vehicleType !== "all") {
-        result = result.filter((v: Vehicle) => {
-          const t = (
-            v.attributes.body_type ||
-            v.attributes.type ||
-            ""
-          ).toLowerCase();
-          return t === filters.vehicleType.toLowerCase();
-        });
-      }
-
-      // 7. Vehicle Make
-      if (filters.vehicleMake !== "all") {
-        result = result.filter((v: Vehicle) => {
-          const m = (v.attributes.make || "").toLowerCase();
-          return m === filters.vehicleMake.toLowerCase();
-        });
-      }
-
-      // 8. Vehicle Model
+      // Vehicle Model
       if (filters.vehicleModel !== "all") {
-        result = result.filter((v: Vehicle) => {
+        result = result.filter((v: VehicleMapEntry) => {
           const md = (v.attributes.model || "").toLowerCase();
           return md === filters.vehicleModel.toLowerCase();
         });
       }
 
-      // 9. Vehicle Year From
-      if (filters.vehicleYearFrom) {
-        const yearLimit = parseInt(filters.vehicleYearFrom, 10);
-        if (!isNaN(yearLimit)) {
-          result = result.filter((v: Vehicle) => {
-            const y = parseInt(String(v.attributes.year), 10);
-            return !isNaN(y) && y >= yearLimit;
-          });
-        }
-      }
-
-      // 10. Speed Range
-      // 10. Speed Range
+      // Speed Range
       if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
-        result = result.filter((v: Vehicle) => {
-          const loc = locations[v.attributes.uuid];
+        result = result.filter((v: VehicleMapEntry) => {
+          const loc = locations[v.id];
           const speed = loc?.speed ?? 0;
           return (
             speed >= filters.speedRange[0] && speed <= filters.speedRange[1]
@@ -458,24 +440,10 @@ export default function TrackingPage() {
         });
       }
 
-      // 11. Engine Status
-      if (filters.engineStatus !== "all") {
-        result = result.filter((v: Vehicle) => {
-          const loc = locations[v.attributes.uuid];
-          const isIgnitionOn =
-            loc?.ignition === "on" ||
-            loc?.ignition === "1" ||
-            loc?.ignition === true;
-          if (filters.engineStatus === "on") return isIgnitionOn;
-          if (filters.engineStatus === "off") return !isIgnitionOn;
-          return true;
-        });
-      }
-
-      // 12. Fuel Level
+      // Fuel Level
       if (filters.fuelLevel !== "all") {
-        result = result.filter((v: Vehicle) => {
-          const loc = locations[v.attributes.uuid];
+        result = result.filter((v: VehicleMapEntry) => {
+          const loc = locations[v.id];
           const fuel = loc?.fuel_level_percent ?? 0;
           if (filters.fuelLevel === "low") return fuel < 20;
           if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
@@ -496,28 +464,28 @@ export default function TrackingPage() {
     ],
   );
 
-  // Map pins: every filter except search, so typing in the sidebar search box
-  // never hides pins — only the sidebar list narrows.
+  // Map pins: every filter except search, always sourced from the always-on
+  // full-fleet feed — search never shrinks the map's pin set, only the
+  // sidebar list (below) narrows via the server-searched result.
   const mapVehicles = useMemo(
     () => applyNonSearchFilters(vehicles),
     [vehicles, applyNonSearchFilters],
   );
 
-  // Sidebar list: map-filtered set further narrowed by the registration search.
+  // Sidebar list: while a search is active, this is the server-searched result
+  // (still passed through the same non-search filters for consistency with the
+  // status pills / filter drawer); otherwise it's the map-filtered full fleet.
   const filteredVehicles = useMemo(() => {
-    if (!filters.search) return mapVehicles;
-    const q = filters.search.trim().toLowerCase();
-    return mapVehicles.filter((v: Vehicle) =>
-      (v.attributes.registration_number ?? "").toLowerCase().includes(q),
-    );
-  }, [mapVehicles, filters.search]);
+    if (!debouncedSearch) return mapVehicles;
+    return applyNonSearchFilters(searchResult.vehicles);
+  }, [debouncedSearch, mapVehicles, searchResult.vehicles, applyNonSearchFilters]);
 
-  // Vehicles matching the search text, so the map can highlight them without
-  // removing the rest of the fleet's pins.
+  // Vehicles matching the active search, so the map can highlight them without
+  // removing the rest of the fleet's pins (map pins always come from mapVehicles).
   const searchMatchIds = useMemo(() => {
-    if (!filters.search) return null;
-    return new Set(filteredVehicles.map((v: Vehicle) => v.attributes.uuid));
-  }, [filteredVehicles, filters.search]);
+    if (!debouncedSearch) return null;
+    return new Set(filteredVehicles.map((v: VehicleMapEntry) => v.id));
+  }, [filteredVehicles, debouncedSearch]);
 
   // Clear selection if the selected vehicle drops out of the map-visible set
   // (status/group/etc. filters) — deliberately NOT keyed on filteredVehicles,
@@ -527,7 +495,7 @@ export default function TrackingPage() {
     if (
       selectedVehicleId &&
       !mapVehicles.find(
-        (v: Vehicle) => String(v.attributes.uuid) === String(selectedVehicleId),
+        (v: VehicleMapEntry) => String(v.id) === String(selectedVehicleId),
       )
     ) {
       setSelectedVehicleId(null);
@@ -543,9 +511,7 @@ export default function TrackingPage() {
         trip.attributes?.vehicle_id;
       const fleetVehicle = bestVehicleId
         ? vehicles.find(
-            (v: Vehicle) =>
-              String(v.attributes?.uuid) === String(bestVehicleId) ||
-              String(v.id) === String(bestVehicleId),
+            (v: VehicleMapEntry) => String(v.id) === String(bestVehicleId),
           )
         : null;
       return {
@@ -581,35 +547,43 @@ export default function TrackingPage() {
     }
   }, []);
 
+  // A flapping WS connection (repeated disconnect/reconnect within seconds,
+  // e.g. a socket host issue) fires "connected" on every brief blip — refreshing
+  // the fleet on each one restarts the whole view=map page-walk mid-flight,
+  // which is what produced the "loads, stops partway, starts over" symptom.
+  // Only refresh once the connection has genuinely stayed up for a few
+  // seconds, and cancel the pending refresh if it drops again before then.
   const wasDisconnectedRef = useRef(false);
   useEffect(() => {
     if (connectionStatus === "disconnected" || connectionStatus === "failed") {
       wasDisconnectedRef.current = true;
-    } else if (connectionStatus === "connected" && wasDisconnectedRef.current) {
-      wasDisconnectedRef.current = false;
-      queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] });
+      return;
     }
-  }, [connectionStatus, queryClient]);
+    if (connectionStatus !== "connected" || !wasDisconnectedRef.current) return;
 
-  const handleLocationSearchSubmit = useCallback(() => {
-    const q = locationSearch.trim().toLowerCase();
-    if (!q) return;
-    const match = vehicles.find((v: Vehicle) => {
-      const loc = locations[v.attributes.uuid];
-      return (
-        v.attributes.registration_number?.toLowerCase().includes(q) ||
-        (loc?.address ?? "").toLowerCase().includes(q)
-      );
-    });
-    const loc = match ? locations[match.attributes.uuid] : null;
-    if (loc?.lat && loc?.lng) {
-      mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 16);
-    }
-  }, [locationSearch, vehicles, locations, mapInstance.provider]);
+    const timeoutId = setTimeout(() => {
+      wasDisconnectedRef.current = false;
+      fleet.refresh();
+    }, 4000);
+    return () => clearTimeout(timeoutId);
+  }, [connectionStatus, fleet.refresh]);
+
+  // Was previously a vehicle-registration/last-known-address lookup mislabeled
+  // as "search location" — most vehicles never have an address (it's only
+  // populated by reverse-geocoding the currently-selected vehicle), so it
+  // worked only when searching a plate number. Now a real place search via
+  // LocationAutocomplete's Mapbox suggestions — it hands back the selected
+  // place's coordinates directly, no vehicle lookup involved.
+  const handleLocationSelect = useCallback(
+    (coords: { latitude: number; longitude: number }) => {
+      mapInstance.provider?.flyTo({ lat: coords.latitude, lng: coords.longitude }, 16);
+    },
+    [mapInstance.provider],
+  );
 
   const handleLiveTrack = useCallback(() => {
     const loc = selectedVehicle
-      ? locations[selectedVehicle.attributes.uuid]
+      ? locations[selectedVehicle.id]
       : null;
     if (loc?.lat && loc?.lng) {
       mapInstance.provider?.flyTo({ lat: loc.lat, lng: loc.lng }, 18);
@@ -689,9 +663,7 @@ export default function TrackingPage() {
             alarmState={alarmState}
             isFilterActive={isFilterActive}
             onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
-            onRefresh={() =>
-              queryClient.invalidateQueries({ queryKey: ["vehicles-tracking"] })
-            }
+            onRefresh={() => fleet.refresh()}
             viewType={filters.viewType}
             clusters={clusters}
           />
@@ -706,7 +678,7 @@ export default function TrackingPage() {
               locations={locations}
               selectedVehicle={selectedVehicle}
               setSelectedVehicle={(v) =>
-                setSelectedVehicleId(v?.attributes.uuid ?? null)
+                setSelectedVehicleId(v?.id ?? null)
               }
               showTraffic={showTraffic}
               trail={selectedTrail}
@@ -728,7 +700,7 @@ export default function TrackingPage() {
               <TrackingTopBar
                 locationSearch={locationSearch}
                 setLocationSearch={setLocationSearch}
-                onLocationSearchSubmit={handleLocationSearchSubmit}
+                onLocationSelect={handleLocationSelect}
                 mapStyle={mapStyle}
                 setMapStyle={setMapStyle}
                 showTraffic={showTraffic}
@@ -749,6 +721,9 @@ export default function TrackingPage() {
 
             <MapLegend />
             <ConnectionBanner />
+            {fleet.isInitialLoad && fleet.total != null && (
+              <FleetLoadProgressBanner loaded={fleet.loadedCount} total={fleet.total} />
+            )}
             <StreetImageryPanel locations={locations} />
           </MapInstanceProvider>
         </div>
@@ -768,7 +743,7 @@ export default function TrackingPage() {
             resolved={resolvedTelemetry}
             hasActiveAlarm={
               selectedVehicle
-                ? alarmState[selectedVehicle.attributes.uuid] === true
+                ? alarmState[selectedVehicle.id] === true
                 : false
             }
           />
@@ -782,7 +757,7 @@ export default function TrackingPage() {
                 resolved={resolvedTelemetry}
                 loc={selectedLoc}
                 hasActiveAlarm={
-                  alarmState[selectedVehicle.attributes.uuid] === true
+                  alarmState[selectedVehicle.id] === true
                 }
               />
             </div>
@@ -805,7 +780,7 @@ export default function TrackingPage() {
             resolved={resolvedTelemetry}
             hasActiveAlarm={
               selectedVehicle
-                ? alarmState[selectedVehicle.attributes.uuid] === true
+                ? alarmState[selectedVehicle.id] === true
                 : false
             }
           />

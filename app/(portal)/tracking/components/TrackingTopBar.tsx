@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   ChevronDown,
@@ -21,6 +21,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { LocationAutocomplete } from "@/components/ui/LocationAutocomplete";
 import { cn } from "@/lib/utils";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import type { TrackingMapStyle } from "../utils";
@@ -54,7 +55,7 @@ const CONNECTION_STATUS_COLOR: Record<string, string> = {
 interface TrackingTopBarProps {
   locationSearch: string;
   setLocationSearch: (v: string) => void;
-  onLocationSearchSubmit: () => void;
+  onLocationSelect: (coords: { latitude: number; longitude: number }) => void;
   mapStyle: TrackingMapStyle;
   setMapStyle: (s: TrackingMapStyle) => void;
   showTraffic: boolean;
@@ -71,7 +72,7 @@ interface TrackingTopBarProps {
 export function TrackingTopBar({
   locationSearch,
   setLocationSearch,
-  onLocationSearchSubmit,
+  onLocationSelect,
   mapStyle,
   setMapStyle,
   showTraffic,
@@ -80,6 +81,8 @@ export function TrackingTopBar({
   setShowGeofences,
 }: TrackingTopBarProps) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const CurrentStyleIcon = MAP_STYLE_ICON[mapStyle];
   const { status: connectionStatus } = useConnectionStatus();
 
@@ -87,21 +90,48 @@ export function TrackingTopBar({
     "h-9 w-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors";
   const activeIconButtonClass = "bg-blue-50 text-blue-600 hover:bg-blue-100";
 
+  // Collapses back to the icon-only button on blur — focus moving to
+  // anything outside this container (including clicking the map). A blur
+  // whose relatedTarget is still inside the container (e.g. clicking a
+  // suggestion row in the autocomplete's own dropdown) doesn't count, since
+  // that's not actually leaving the search.
+  const handleSearchBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (searchContainerRef.current?.contains(e.relatedTarget as Node)) return;
+    setIsSearchExpanded(false);
+  };
+
+  // LocationAutocomplete doesn't expose an autoFocus prop — focus its inner
+  // input imperatively once it mounts on expand.
+  useEffect(() => {
+    if (!isSearchExpanded) return;
+    searchContainerRef.current?.querySelector("input")?.focus();
+  }, [isSearchExpanded]);
+
   return (
     <div className="flex items-start justify-between gap-3">
-      {/* Search — its own floating pill, independent from the controls pill */}
-      <div className="relative flex-1 max-w-md rounded-2xl border border-slate-200 bg-white shadow-lg">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <input
-          type="text"
-          value={locationSearch}
-          onChange={(e) => setLocationSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onLocationSearchSubmit();
-          }}
-          placeholder="Search location / address"
-          className="w-full h-10 pl-10 pr-4 rounded-2xl bg-transparent text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-        />
+      {/* Search — collapses to an icon-only pill until clicked, so it doesn't
+          permanently take up map-overlay space the way a full input would. */}
+      <div ref={searchContainerRef} className="relative" onBlur={handleSearchBlur}>
+        {isSearchExpanded ? (
+          <LocationAutocomplete
+            value={locationSearch}
+            onSelect={(loc) => {
+              setLocationSearch(loc.name);
+              onLocationSelect(loc.coords);
+            }}
+            placeholder="Search location / address"
+            className="w-72 [&_input]:h-10 [&_input]:rounded-2xl [&_input]:border-slate-200 [&_input]:bg-white [&_input]:shadow-none [&_input:focus-visible]:border-blue-500 [&_input:focus-visible]:ring-blue-500/30"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsSearchExpanded(true)}
+            aria-label="Search location"
+            className="h-10 w-10 rounded-2xl border border-slate-200 bg-white shadow-lg flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Desktop controls — a separate floating pill, with a gap of map visible between it and search */}

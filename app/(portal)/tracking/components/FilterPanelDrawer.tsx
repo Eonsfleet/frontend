@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Search, ChevronDown, Calendar } from "lucide-react";
+import { X, Search, ChevronDown } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LocationAutocomplete } from "@/components/ui/LocationAutocomplete";
-import { Vehicle } from "@/types";
+import type { VehicleMapEntry } from "@/lib/api/vehicles";
 
 export interface FilterState {
   search: string;
@@ -16,12 +16,8 @@ export interface FilterState {
   locationCoords: { latitude: number; longitude: number } | null;
   locationName: string;
   geofenceId: string; // geofence id or "all"
-  vehicleType: string;
-  vehicleMake: string;
   vehicleModel: string;
-  vehicleYearFrom: string;
   speedRange: [number, number];
-  engineStatus: "all" | "on" | "off";
   fuelLevel: "all" | "low" | "medium" | "high";
   viewType: "listing" | "cluster";
 }
@@ -35,12 +31,8 @@ export const initialFilterState: FilterState = {
   locationCoords: null,
   locationName: "",
   geofenceId: "all",
-  vehicleType: "all",
-  vehicleMake: "all",
   vehicleModel: "all",
-  vehicleYearFrom: "",
   speedRange: [0, 120],
-  engineStatus: "all",
   fuelLevel: "all",
   viewType: "listing",
 };
@@ -48,7 +40,7 @@ export const initialFilterState: FilterState = {
 interface FilterPanelDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  vehicles: Vehicle[];
+  vehicles: VehicleMapEntry[];
   clusters: any[];
   geofences: any[];
   filters: FilterState;
@@ -75,17 +67,10 @@ export function FilterPanelDrawer({
     }
   }, [open, filters]);
 
-  // Extract unique options from vehicles data
-  const vehicleTypes = useMemo(() => {
-    const types = vehicles.map((v) => v.attributes.body_type || v.attributes.type).filter(Boolean);
-    return Array.from(new Set(types)) as string[];
-  }, [vehicles]);
-
-  const vehicleMakes = useMemo(() => {
-    const makes = vehicles.map((v) => v.attributes.make).filter(Boolean);
-    return Array.from(new Set(makes)) as string[];
-  }, [vehicles]);
-
+  // Extract unique options from vehicles data. Vehicle type/make/year/engine-status
+  // filters were dropped: GET /vehicles?view=map (the panel/map feed) carries
+  // none of body_type/type, make, year, or ignition — there's no data left to
+  // filter on for this page.
   const vehicleModels = useMemo(() => {
     const models = vehicles.map((v) => v.attributes.model).filter(Boolean);
     return Array.from(new Set(models)) as string[];
@@ -133,14 +118,6 @@ export function FilterPanelDrawer({
         clear: () => onApplyFilters({ ...filters, search: "" }),
       });
     }
-    if (filters.group !== "all") {
-      const cName = clusters.find((c) => String(c.id) === filters.group)?.attributes?.name || "Group";
-      badges.push({
-        id: "group",
-        label: cName,
-        clear: () => onApplyFilters({ ...filters, group: "all" }),
-      });
-    }
     if (filters.statuses.length < 4) {
       filters.statuses.forEach((status) => {
         badges.push({
@@ -175,20 +152,6 @@ export function FilterPanelDrawer({
         clear: () => onApplyFilters({ ...filters, geofenceId: "all" }),
       });
     }
-    if (filters.vehicleType !== "all") {
-      badges.push({
-        id: "vehicleType",
-        label: filters.vehicleType,
-        clear: () => onApplyFilters({ ...filters, vehicleType: "all" }),
-      });
-    }
-    if (filters.vehicleMake !== "all") {
-      badges.push({
-        id: "vehicleMake",
-        label: filters.vehicleMake,
-        clear: () => onApplyFilters({ ...filters, vehicleMake: "all" }),
-      });
-    }
     if (filters.vehicleModel !== "all") {
       badges.push({
         id: "vehicleModel",
@@ -196,25 +159,11 @@ export function FilterPanelDrawer({
         clear: () => onApplyFilters({ ...filters, vehicleModel: "all" }),
       });
     }
-    if (filters.vehicleYearFrom) {
-      badges.push({
-        id: "vehicleYearFrom",
-        label: `Year >= ${filters.vehicleYearFrom}`,
-        clear: () => onApplyFilters({ ...filters, vehicleYearFrom: "" }),
-      });
-    }
     if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
       badges.push({
         id: "speedRange",
         label: `${filters.speedRange[0]}-${filters.speedRange[1]} km/h`,
         clear: () => onApplyFilters({ ...filters, speedRange: [0, 120] }),
-      });
-    }
-    if (filters.engineStatus !== "all") {
-      badges.push({
-        id: "engineStatus",
-        label: `Engine: ${filters.engineStatus.toUpperCase()}`,
-        clear: () => onApplyFilters({ ...filters, engineStatus: "all" }),
       });
     }
     if (filters.fuelLevel !== "all") {
@@ -330,28 +279,6 @@ export function FilterPanelDrawer({
                   placeholder="Search vehicles, drivers..."
                   className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                 />
-              </div>
-            </div>
-
-            {/* Groups / Clusters Dropdown */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Groups
-              </label>
-              <div className="relative">
-                <select
-                  value={tempFilters.group}
-                  onChange={(e) => updateTempFilter("group", e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                >
-                  <option value="all">All Groups</option>
-                  {clusters.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.attributes?.name || c.name || `Cluster ${c.id}`}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
@@ -483,90 +410,25 @@ export function FilterPanelDrawer({
               Vehicle
             </h4>
 
-            {/* Grid for vehicle type & make */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Vehicle Type
-                </label>
-                <div className="relative">
-                  <select
-                    value={tempFilters.vehicleType}
-                    onChange={(e) => updateTempFilter("vehicleType", e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                  >
-                    <option value="all">All Types</option>
-                    {vehicleTypes.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Vehicle Make
-                </label>
-                <div className="relative">
-                  <select
-                    value={tempFilters.vehicleMake}
-                    onChange={(e) => updateTempFilter("vehicleMake", e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                  >
-                    <option value="all">All Makes</option>
-                    {vehicleMakes.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Model & Year */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Model
-                </label>
-                <div className="relative">
-                  <select
-                    value={tempFilters.vehicleModel}
-                    onChange={(e) => updateTempFilter("vehicleModel", e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                  >
-                    <option value="all">All Models</option>
-                    {vehicleModels.map((md) => (
-                      <option key={md} value={md}>
-                        {md}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Year
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="1990"
-                    max={new Date().getFullYear()}
-                    value={tempFilters.vehicleYearFrom}
-                    onChange={(e) => updateTempFilter("vehicleYearFrom", e.target.value)}
-                    placeholder="From"
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl pl-3 pr-9 py-2 text-sm text-slate-800 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
-                  />
-                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
+            {/* Model */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Model
+              </label>
+              <div className="relative">
+                <select
+                  value={tempFilters.vehicleModel}
+                  onChange={(e) => updateTempFilter("vehicleModel", e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                >
+                  <option value="all">All Models</option>
+                  {vehicleModels.map((md) => (
+                    <option key={md} value={md}>
+                      {md}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -603,43 +465,23 @@ export function FilterPanelDrawer({
               </div>
             </div>
 
-            {/* Grid for engine status & fuel level */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Engine Status
-                </label>
-                <div className="relative">
-                  <select
-                    value={tempFilters.engineStatus}
-                    onChange={(e) => updateTempFilter("engineStatus", e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                  >
-                    <option value="all">All</option>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Fuel Level
-                </label>
-                <div className="relative">
-                  <select
-                    value={tempFilters.fuelLevel}
-                    onChange={(e) => updateTempFilter("fuelLevel", e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
-                  >
-                    <option value="all">All</option>
-                    <option value="low">Low (&lt;20%)</option>
-                    <option value="medium">Medium (20-70%)</option>
-                    <option value="high">High (&gt;70%)</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
+            {/* Fuel Level */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Fuel Level
+              </label>
+              <div className="relative">
+                <select
+                  value={tempFilters.fuelLevel}
+                  onChange={(e) => updateTempFilter("fuelLevel", e.target.value as any)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 appearance-none outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                >
+                  <option value="all">All</option>
+                  <option value="low">Low (&lt;20%)</option>
+                  <option value="medium">Medium (20-70%)</option>
+                  <option value="high">High (&gt;70%)</option>
+                </select>
+                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               </div>
             </div>
           </div>
