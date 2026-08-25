@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,45 +9,104 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
-import type { Webhook } from '@/types'
+import { STALE_TIME_STATIC } from '@/lib/config'
+import type { Webhook, WebhookEventCatalogEntry } from '@/types'
 import { EventMultiSelect, type EventCategory } from './EventMultiSelect'
+import { EventFilterEditor, defaultFilter, toSubscriptions, type EventFilterMap } from './EventFilterEditor'
 
-const EVENT_CATEGORIES: EventCategory[] = [
-    { title: 'Trips', events: [
-        { id: 'trip.started', label: 'Trip Started' },
-        { id: 'trip.completed', label: 'Trip Completed' },
-        { id: 'trip.assigned', label: 'Trip Assigned' },
-    ] },
-    { title: 'Location', events: [
-        { id: 'location.updated', label: 'Location Updated' },
-    ] },
-    { title: 'Fuel', events: [
-        { id: 'fuel_alert_rule.triggered', label: 'Fuel Alert Triggered', disabled: true, disabledNote: 'Configured per rule under Fuel → Alert Rules, not here' },
-    ] },
-    { title: 'Incidents', events: [
-        { id: 'incidents.created', label: 'Incident Created' },
-        { id: 'incidents.resolved', label: 'Incident Resolved' },
-        { id: 'incidents.closed', label: 'Incident Closed' },
-    ] },
-    { title: 'Maintenance', events: [
-        { id: 'maintenance.assigned', label: 'Maintenance Assigned' },
-        { id: 'maintenance.completed', label: 'Maintenance Completed' },
-    ] },
-    { title: 'Geofencing', events: [{ id: 'geofence.alert', label: 'Geofence Alert' }] },
-    { title: 'Device', events: [{ id: 'device.status_changed', label: 'Device Status Changed' }] },
-]
+/**
+ * Event types the register/update endpoints actually accept. The catalog at
+ * GET /webhooks/events also lists `fuel_alert_rule.triggered` and `test.ping`
+ * for reference, but neither is selectable here — the first is wired per Fuel
+ * Alert Rule, the second only ever fires from the Test Webhook action.
+ */
+const NON_SELECTABLE_EVENTS: Record<string, string> = {
+    'fuel_alert_rule.triggered': 'Configured per rule under Fuel → Alert Rules, not here',
+    'test.ping': 'Sent only by the Test Webhook action',
+}
 
-type FormState = { name: string; url: string; description: string; events: string[]; status: 'active' | 'inactive' }
+const CATEGORY_TITLES: Record<string, string> = {
+    trip: 'Trips',
+    location: 'Location',
+    incidents: 'Incidents',
+    maintenance: 'Maintenance',
+    geofence: 'Geofencing',
+    device: 'Device',
+    alert: 'Alerts',
+    fuel_alert_rule: 'Fuel',
+}
 
-const emptyForm: FormState = { name: '', url: '', description: '', events: [], status: 'active' }
+const titleCase = (segment: string) =>
+    segment.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+/** "trip.started" → { category: "Trips", label: "Trip Started" } */
+function describeEvent(type: string) {
+    const [prefix, ...rest] = type.split('.')
+    return {
+        category: CATEGORY_TITLES[prefix] ?? titleCase(prefix),
+        label: `${titleCase(prefix)} ${titleCase(rest.join('.') || '')}`.trim(),
+    }
+}
+
+/**
+ * Build the picker from the server's catalog rather than a local copy, so a new
+ * event type becomes selectable as soon as the backend ships it.
+ */
+function buildCategories(catalog: WebhookEventCatalogEntry[]): EventCategory[] {
+    const grouped = new Map<string, EventCategory>()
+
+    for (const entry of catalog) {
+        const { category, label } = describeEvent(entry.type)
+        if (!grouped.has(category)) grouped.set(category, { title: category, events: [] })
+        grouped.get(category)!.events.push({
+            id: entry.type,
+            label,
+            disabled: entry.type in NON_SELECTABLE_EVENTS,
+            disabledNote: NON_SELECTABLE_EVENTS[entry.type],
+        })
+    }
+
+    return [...grouped.values()]
+}
+
+type FormState = {
+    name: string
+    url: string
+    description: string
+    events: string[]
+    status: 'active' | 'inactive'
+    /** Blank means "let the server pick its current default". */
+    payloadVersion: string
+    /** Blank means "use the server default"; otherwise 30–3600 seconds. */
+    locationThrottle: string
+}
+
+const emptyForm: FormState = { name: '', url: '', description: '', events: [], status: 'active', payloadVersion: '', locationThrottle: '' }
 
 function computeInitialForm(editing?: Webhook | null, duplicateFrom?: Webhook | null): FormState {
     if (editing) {
-        return { name: editing.name ?? '', url: editing.url, description: editing.description ?? '', events: editing.events, status: editing.status }
+        return {
+            name: editing.name ?? '',
+            url: editing.url,
+            description: editing.description ?? '',
+            events: editing.events,
+            status: editing.status,
+            payloadVersion: editing.payload_version ?? '',
+            locationThrottle: editing.location_throttle_seconds != null ? String(editing.location_throttle_seconds) : '',
+        }
     }
     if (duplicateFrom) {
-        return { name: `${duplicateFrom.name ?? 'Webhook'} (copy)`, url: '', description: duplicateFrom.description ?? '', events: duplicateFrom.events, status: 'active' }
+        return {
+            name: `${duplicateFrom.name ?? 'Webhook'} (copy)`,
+            url: '',
+            description: duplicateFrom.description ?? '',
+            events: duplicateFrom.events,
+            status: 'active',
+            payloadVersion: duplicateFrom.payload_version ?? '',
+            locationThrottle: duplicateFrom.location_throttle_seconds != null ? String(duplicateFrom.location_throttle_seconds) : '',
+        }
     }
     return emptyForm
 }
@@ -96,8 +155,49 @@ function WebhookFormBody({
     const queryClient = useQueryClient()
     const [form, setForm] = useState<FormState>(() => computeInitialForm(editing, duplicateFrom))
 
+    const { data: catalogData, isLoading: catalogLoading } = useQuery({
+        queryKey: ['webhook-event-catalog'],
+        queryFn: api.getWebhookEventCatalog,
+        staleTime: STALE_TIME_STATIC,
+    })
+    const categories = useMemo(
+        () => buildCategories(catalogData?.data.events ?? []),
+        [catalogData]
+    )
+
+    const isEditing = Boolean(editing)
+    const [filters, setFilters] = useState<EventFilterMap>({})
+
+    const throttleValue = form.locationThrottle.trim() === '' ? null : Number(form.locationThrottle)
+    const throttleInvalid =
+        throttleValue !== null && (!Number.isInteger(throttleValue) || throttleValue < 30 || throttleValue > 3600)
+
+    const buildPayload = () => {
+        const subscriptions = toSubscriptions(form.events, filters)
+        return {
+            url: form.url,
+            name: form.name || undefined,
+            description: form.description || undefined,
+            events: form.events,
+            payload_version: form.payloadVersion.trim() || undefined,
+            location_throttle_seconds: throttleValue ?? undefined,
+            // Omitted entirely when nothing was set, which leaves every event
+            // filter-less on create and untouched on update.
+            subscriptions: subscriptions.length > 0 ? subscriptions : undefined,
+        }
+    }
+
+    // Keep a filter row for each selected event, dropping rows for de-selected ones.
+    const syncFilters = (events: string[]) => {
+        setFilters((prev) => {
+            const next: EventFilterMap = {}
+            for (const event of events) next[event] = prev[event] ?? defaultFilter(isEditing)
+            return next
+        })
+    }
+
     const createMutation = useMutation({
-        mutationFn: () => api.createWebhook({ url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events }),
+        mutationFn: () => api.createWebhook(buildPayload()),
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook created')
@@ -108,7 +208,7 @@ function WebhookFormBody({
     })
 
     const updateMutation = useMutation({
-        mutationFn: () => api.updateWebhook(String(editing!.id), { url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events, status: form.status }),
+        mutationFn: () => api.updateWebhook(editing!.id, { ...buildPayload(), status: form.status }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook updated')
@@ -153,13 +253,57 @@ function WebhookFormBody({
                 </div>
                 <div className="space-y-2 border-t pt-4">
                     <Label className="text-sm font-bold text-slate-900">Event Subscriptions</Label>
-                    <EventMultiSelect categories={EVENT_CATEGORIES} value={form.events} onChange={(events) => setForm({ ...form, events })} />
+                    {catalogLoading ? (
+                        <p className="text-[11px] text-slate-500">Loading available events…</p>
+                    ) : (
+                        <EventMultiSelect categories={categories} value={form.events} onChange={(events) => { setForm({ ...form, events }); syncFilters(events) }} />
+                    )}
+                </div>
+
+                <div className="space-y-2 border-t pt-4">
+                    <Label className="text-sm font-bold text-slate-900">Delivery Filters</Label>
+                    <p className="text-[11px] text-slate-500">
+                        Restrict an event to specific vehicles. Events left on All vehicles are delivered for the
+                        whole fleet.
+                    </p>
+                    <EventFilterEditor
+                        events={form.events}
+                        filters={filters}
+                        isEditing={isEditing}
+                        onChange={setFilters}
+                    />
+                </div>
+
+                <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <Label>Payload Version</Label>
+                        <Input
+                            placeholder="Server default"
+                            value={form.payloadVersion}
+                            onChange={(e) => setForm({ ...form, payloadVersion: e.target.value })}
+                        />
+                        <p className="text-[11px] text-slate-500">Pins this endpoint to a payload contract.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Location Throttle (seconds)</Label>
+                        <Input
+                            inputMode="numeric"
+                            placeholder="Server default"
+                            value={form.locationThrottle}
+                            onChange={(e) => setForm({ ...form, locationThrottle: e.target.value })}
+                        />
+                        <p className={cn('text-[11px]', throttleInvalid ? 'text-rose-600' : 'text-slate-500')}>
+                            {throttleInvalid
+                                ? 'Must be a whole number between 30 and 3600.'
+                                : 'How often location.updated may fire per vehicle (30–3600).'}
+                        </p>
+                    </div>
                 </div>
             </div>
             <DialogFooter className="border-t bg-slate-50 p-4">
                 <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button
-                    disabled={!form.url || form.events.length === 0 || isSaving}
+                    disabled={!form.url || form.events.length === 0 || throttleInvalid || isSaving}
                     className="min-w-[120px] bg-blue-600 hover:bg-blue-700"
                     onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate())}
                 >

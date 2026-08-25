@@ -1,121 +1,109 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, CreditCard, Download, Loader2, CheckCircle2, Mail } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ArrowLeft, Download, Loader2, Mail } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { QueryError } from '@/components/shared/QueryError'
+import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
 import { InvoiceStatusBadge } from '@/components/shared/subscription/StatusBadges'
 import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
-import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
 import { extractApiError } from '@/lib/utils'
-import * as api from '@/lib/api/billing-groups'
+import * as billing from '@/lib/api/billing'
 
 export default function SubscriptionInvoiceDetailPage() {
     const params = useParams<{ id: string }>()
     const invoiceId = params.id
-    const queryClient = useQueryClient()
-    const [verifying, setVerifying] = useState(false)
 
-    const { data: invoice, isLoading, isError, refetch } = useQuery({
+    const invoiceQuery = useQuery({
         queryKey: ['subscription-invoice', invoiceId],
-        queryFn: () => api.getSubscriptionInvoiceDetail(invoiceId),
+        queryFn: () => billing.getInvoiceDetails(invoiceId),
     })
 
-    const payMutation = useMutation({
-        mutationFn: () => api.initiateInvoicePayment(invoiceId),
-        onSuccess: () => {
-            // Never mark payment successful from a browser redirect alone (spec 11.3) —
-            // simulate the provider round trip, then poll the backend for confirmation.
-            setVerifying(true)
-        },
-        onError: (err) => toast.error(extractApiError(err, 'Failed to start payment.')),
-    })
+    const invoice = invoiceQuery.data?.data
 
-    const verifyMutation = useMutation({
-        mutationFn: () => api.verifyPayment(invoiceId),
-        onSuccess: (res) => {
-            if (res.state === 'successful') {
-                toast.success('Payment confirmed.')
-                queryClient.invalidateQueries({ queryKey: ['subscription-invoice', invoiceId] })
-                queryClient.invalidateQueries({ queryKey: ['subscription-invoices'] })
-                setVerifying(false)
-            }
-        },
-    })
+    const downloadPdf = async () => {
+        try {
+            const blob = await billing.downloadInvoicePdf(invoiceId)
+            const url = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = `invoice-${invoice?.invoice_number ?? invoiceId}.pdf`
+            anchor.click()
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            toast.error(extractApiError(error, 'Failed to download invoice PDF.'))
+        }
+    }
 
-    useEffect(() => {
-        if (!verifying) return
-        verifyMutation.mutate()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [verifying])
-
-    if (isLoading) {
+    if (invoiceQuery.isLoading) {
         return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-slate-300" /></div>
     }
 
-    if (isError || !invoice) {
-        return <QueryError message="Failed to load invoice." onRetry={refetch} />
+    if (invoiceQuery.isError || !invoice) {
+        return <QueryError message="Failed to load invoice." onRetry={invoiceQuery.refetch} />
     }
 
+    const tax = invoice.tax ?? invoice.vat ?? 0
+    const amountDue = invoice.amount_due ?? invoice.total
+    const paidAmount = Math.max(Number(invoice.total ?? 0) - Number(amountDue ?? 0), 0)
+
     return (
-        <div className="max-w-4xl space-y-6">
-            <Link href="/subscription/invoices" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
+        <div className="max-w-5xl space-y-6">
+            <Link href="/subscription/invoices" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900">
                 <ArrowLeft className="h-4 w-4" /> Invoices
             </Link>
 
-            <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Invoice {invoice.invoiceNumber}</h1>
-                    <p className="mt-1 text-sm text-slate-500">{invoice.organizationName} &middot; {invoice.billingPeriod}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#0055FF]">Invoice detail</p>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{invoice.invoice_number}</h1>
+                    <p className="mt-1 text-sm text-slate-500">
+                        {invoice.billing_period_start && invoice.billing_period_end
+                            ? <><BillingDateDisplay date={invoice.billing_period_start} /> - <BillingDateDisplay date={invoice.billing_period_end} /></>
+                            : 'Billing period not supplied'}
+                    </p>
                 </div>
-                <InvoiceStatusBadge status={invoice.status} />
+                <InvoiceStatusBadge status={billing.normalizeInvoiceStatus(invoice.status)} />
             </div>
 
-            {verifying && (
-                <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                    We are confirming your payment.
-                </div>
-            )}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <Info label="Issued" value={<BillingDateDisplay date={invoice.issued_at} />} />
+                <Info label="Currency" value={invoice.currency} />
+                <Info label="Total" value={<MoneyDisplay value={billing.toMoney(invoice.total, invoice.currency)} />} />
+                <Info label="Balance due" value={<MoneyDisplay value={billing.toMoney(amountDue, invoice.currency)} />} />
+            </div>
 
-            <Card className="border-slate-200 shadow-sm">
-                <CardContent className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
-                    <Info label="Issue date" value={<BillingDateDisplay date={invoice.issuedDate} />} />
-                    <Info label="Due date" value={<BillingDateDisplay date={invoice.dueDate} />} />
-                    <Info label="Currency" value={invoice.amount.currency} />
-                    <Info label="Balance due" value={<MoneyDisplay value={invoice.balance} className="font-bold text-slate-900" />} />
-                </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden border-slate-200 shadow-sm">
-                <CardHeader className="border-b border-slate-100"><CardTitle className="text-[13px] font-semibold text-slate-700">Line Items</CardTitle></CardHeader>
+            <Card className="border-0 shadow-none">
                 <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    <div className="border-b border-slate-100 py-3">
+                        <h2 className="text-base font-semibold text-slate-950">Line Items</h2>
+                        <p className="text-sm text-slate-500">The backend-calculated charges that make up this invoice.</p>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg bg-white">
+                        <table className="min-w-[760px] w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                 <tr>
-                                    <th className="px-5 py-3">Description</th>
-                                    <th className="px-5 py-3 text-right">Quantity</th>
-                                    <th className="px-5 py-3 text-right">Unit price</th>
-                                    <th className="px-5 py-3 text-right">Discount</th>
-                                    <th className="px-5 py-3 text-right">Tax</th>
-                                    <th className="px-5 py-3 text-right">Total</th>
+                                    <th className="px-4 py-3">Description</th>
+                                    <th className="px-4 py-3 text-right">Quantity</th>
+                                    <th className="px-4 py-3 text-right">Unit price</th>
+                                    <th className="px-4 py-3 text-right">Total</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {invoice.lineItems.map((item, i) => (
-                                    <tr key={i}>
-                                        <td className="px-5 py-3.5 text-slate-700">{item.description}</td>
-                                        <td className="px-5 py-3.5 text-right text-slate-600">{item.quantity}</td>
-                                        <td className="px-5 py-3.5 text-right"><MoneyDisplay value={item.unitPrice} /></td>
-                                        <td className="px-5 py-3.5 text-right"><MoneyDisplay value={item.discount} /></td>
-                                        <td className="px-5 py-3.5 text-right"><MoneyDisplay value={item.tax} /></td>
-                                        <td className="px-5 py-3.5 text-right font-semibold"><MoneyDisplay value={item.total} /></td>
+                                {(invoice.line_items ?? []).length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">No line items were returned for this invoice.</td>
+                                    </tr>
+                                ) : invoice.line_items?.map((item, index) => (
+                                    <tr key={`${item.description}-${index}`}>
+                                        <td className="px-4 py-3 text-slate-900">{item.description}</td>
+                                        <td className="px-4 py-3 text-right text-slate-600">{item.quantity}</td>
+                                        <td className="px-4 py-3 text-right"><MoneyDisplay value={billing.toMoney(item.unit_price, invoice.currency)} /></td>
+                                        <td className="px-4 py-3 text-right font-semibold"><MoneyDisplay value={billing.toMoney(item.total, invoice.currency)} /></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -124,31 +112,26 @@ export default function SubscriptionInvoiceDetailPage() {
                 </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-sm">
-                <CardContent className="space-y-2 p-5 text-sm">
-                    <Row label="Subtotal" value={<MoneyDisplay value={invoice.subtotal} />} />
-                    <Row label="Discount" value={<MoneyDisplay value={invoice.discount} />} />
-                    <Row label="Tax" value={<MoneyDisplay value={invoice.tax} />} />
-                    <Row label="Amount paid" value={<MoneyDisplay value={invoice.amountPaid} />} />
-                    <Row label="Balance due" value={<MoneyDisplay value={invoice.balance} />} bold />
+            <Card className="border-0 shadow-none">
+                <CardContent className="space-y-3 rounded-lg bg-white p-5 text-sm">
+                    <Row label="Subtotal" value={<MoneyDisplay value={billing.toMoney(invoice.subtotal, invoice.currency)} />} />
+                    <Row label={invoice.tax_label ?? 'Tax'} value={<MoneyDisplay value={billing.toMoney(tax, invoice.currency)} />} />
+                    <Row label="Discount" value={<MoneyDisplay value={billing.toMoney(invoice.discount, invoice.currency)} />} />
+                    <Row label="Credit applied" value={<MoneyDisplay value={billing.toMoney(invoice.credit_applied, invoice.currency)} />} />
+                    <Row label="Amount paid" value={<MoneyDisplay value={billing.toMoney(paidAmount, invoice.currency)} />} />
+                    <Row label="Balance due" value={<MoneyDisplay value={billing.toMoney(amountDue, invoice.currency)} />} bold />
                 </CardContent>
             </Card>
 
             <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="outline" size="sm" className="gap-2"><Download className="h-4 w-4" /> Download invoice</Button>
-                {invoice.status === 'PAID' && <Button variant="outline" size="sm" className="gap-2"><CheckCircle2 className="h-4 w-4" /> Download receipt</Button>}
-                <Button variant="outline" size="sm" className="gap-2"><Mail className="h-4 w-4" /> Contact support</Button>
-                {invoice.payable && (
-                    <Button
-                        size="sm"
-                        className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                        disabled={payMutation.isPending || verifying}
-                        onClick={() => payMutation.mutate()}
-                    >
-                        {(payMutation.isPending || verifying) ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                        Pay now
+                {invoice.pdf_available && (
+                    <Button variant="outline" size="sm" className="gap-2" onClick={downloadPdf}>
+                        <Download className="h-4 w-4" /> Download PDF
                     </Button>
                 )}
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                    <a href="mailto:support@eonsfleet.com"><Mail className="h-4 w-4" /> Contact finance</a>
+                </Button>
             </div>
         </div>
     )
@@ -156,18 +139,18 @@ export default function SubscriptionInvoiceDetailPage() {
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-            <div className="mt-1 text-sm text-slate-800">{value}</div>
+        <div className="rounded-lg bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">{label}</p>
+            <div className="mt-2 text-sm font-semibold text-slate-950">{value}</div>
         </div>
     )
 }
 
 function Row({ label, value, bold }: { label: string; value: React.ReactNode; bold?: boolean }) {
     return (
-        <div className="flex items-center justify-between border-b border-slate-50 pb-2 last:border-0 last:pb-0">
+        <div className="flex items-center justify-between gap-4">
             <span className="text-slate-500">{label}</span>
-            <span className={bold ? 'text-base font-bold text-slate-900' : 'text-slate-700'}>{value}</span>
+            <span className={bold ? 'text-base font-semibold text-slate-950' : 'text-slate-800'}>{value}</span>
         </div>
     )
 }

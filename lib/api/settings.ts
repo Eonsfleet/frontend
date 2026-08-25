@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery, WebhookStats, ApiUsageDay, ApiUsageLog, RateLimitStatus } from '@/types'
+import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery, WebhookDeliveryAttempt, WebhookEventCatalogEntry, WebhookReplay, WebhookStats, ApiUsageDay, ApiUsageLog, RateLimitStatus } from '@/types'
 
 // Organizations
 export interface UpdateOrganizationPayload {
@@ -150,33 +150,111 @@ export const deleteCluster = async (id: string | number): Promise<{ message: str
     return response.data
 }
 
-// Webhooks
-export const getWebhooks = async (): Promise<{ data: { webhooks: Webhook[] } }> => {
-    const response = await apiClient.get<{ data: { webhooks: Webhook[] } }>('/webhooks')
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+//
+// Endpoint IDs are the numeric `id`, not `public_id` — the routes bind to an
+// int and 404 on anything else.
+
+/** Shared page envelope used by every paginated webhook endpoint. */
+type WebhookPagination = { current_page: number; per_page: number; total: number; last_page: number }
+
+export const getWebhooks = async (
+    params?: { page?: number; per_page?: number; status?: 'active' | 'inactive' | 'failed' }
+): Promise<{ data: { webhooks: Webhook[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { webhooks: Webhook[]; pagination: WebhookPagination } }>(
+        '/webhooks',
+        { params }
+    )
     return response.data
 }
 
-export const createWebhook = async (data: { url: string, events: string[], name?: string, description?: string }): Promise<{ data: Webhook }> => {
+export const getWebhook = async (id: number): Promise<{ data: Webhook }> => {
+    const response = await apiClient.get<{ data: Webhook }>(`/webhooks/${id}`)
+    return response.data
+}
+
+/**
+ * Per-event delivery filters. An event type listed in `events` but absent here
+ * stays filter-less, i.e. delivered for every vehicle.
+ */
+export interface WebhookSubscriptionFilter {
+    event_type: string
+    filters?: { vehicle_ids?: number[]; device_imeis?: string[] }
+}
+
+export interface WebhookWritePayload {
+    url: string
+    events: string[]
+    name?: string
+    description?: string
+    payload_version?: string
+    /** Throttle for location.updated, in seconds (30–3600). */
+    location_throttle_seconds?: number
+    subscriptions?: WebhookSubscriptionFilter[]
+}
+
+/** The response carries `secret_key`. This is the only time it is ever returned. */
+export const createWebhook = async (data: WebhookWritePayload): Promise<{ data: Webhook }> => {
     const response = await apiClient.post<{ data: Webhook }>('/webhooks', data)
     return response.data
 }
 
-export const updateWebhook = async (id: string, data: { url?: string, events?: string[], name?: string, description?: string, status?: 'active' | 'inactive' }): Promise<{ data: Webhook }> => {
+/**
+ * Omitted fields keep their current value, but sending `events` replaces the
+ * entire subscription list — event types dropped from it lose their filters.
+ */
+export const updateWebhook = async (
+    id: number,
+    data: Partial<WebhookWritePayload> & { status?: 'active' | 'inactive' }
+): Promise<{ data: Webhook }> => {
     const response = await apiClient.put<{ data: Webhook }>(`/webhooks/${id}`, data)
     return response.data
 }
 
-export const deleteWebhook = async (id: string): Promise<void> => {
+export const deleteWebhook = async (id: number): Promise<void> => {
     await apiClient.delete(`/webhooks/${id}`)
 }
 
-export const testWebhook = async (id: string): Promise<{ message: string }> => {
+export const testWebhook = async (id: number): Promise<{ message: string }> => {
     const response = await apiClient.post<{ message: string }>(`/webhooks/${id}/test`)
     return response.data
 }
 
-export const getWebhookDeliveries = async (id: string): Promise<{ data: { deliveries: WebhookDelivery[] } }> => {
-    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[] } }>(`/webhooks/${id}/deliveries`)
+export const getWebhookDeliveries = async (
+    id: number,
+    params?: { page?: number; per_page?: number }
+): Promise<{ data: { deliveries: WebhookDelivery[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[]; pagination: WebhookPagination } }>(
+        `/webhooks/${id}/deliveries`,
+        { params }
+    )
+    return response.data
+}
+
+/** Full attempt-by-attempt history for one delivery, oldest first. */
+export const getWebhookDeliveryAttempts = async (
+    id: number,
+    deliveryId: number,
+    params?: { page?: number; per_page?: number }
+): Promise<{ data: { attempts: WebhookDeliveryAttempt[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { attempts: WebhookDeliveryAttempt[]; pagination: WebhookPagination } }>(
+        `/webhooks/${id}/deliveries/${deliveryId}/attempts`,
+        { params }
+    )
+    return response.data
+}
+
+/** Re-queues one delivery. Rejected with 422 if it already succeeded. */
+export const retryWebhookDelivery = async (id: number, deliveryId: number): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>(
+        `/webhooks/${id}/deliveries/${deliveryId}/retry`
+    )
+    return response.data
+}
+
+/** Authoritative list of subscribable events, with example payloads. */
+export const getWebhookEventCatalog = async (): Promise<{ data: { events: WebhookEventCatalogEntry[] } }> => {
+    const response = await apiClient.get<{ data: { events: WebhookEventCatalogEntry[] } }>('/webhooks/events')
     return response.data
 }
 
@@ -185,13 +263,76 @@ export const getWebhookStats = async (): Promise<{ data: WebhookStats }> => {
     return response.data
 }
 
-export const getOrgWebhookDeliveries = async (params?: { page?: number; per_page?: number; status?: string }): Promise<{ data: { deliveries: WebhookDelivery[]; pagination: Paginated<WebhookDelivery>['pagination'] } }> => {
-    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[]; pagination: Paginated<WebhookDelivery>['pagination'] } }>('/webhooks/deliveries', { params })
+export const getOrgWebhookDeliveries = async (
+    params?: { page?: number; per_page?: number; status?: 'pending' | 'delivered' | 'failed' | 'retrying' | 'dead_lettered' }
+): Promise<{ data: { deliveries: WebhookDelivery[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { deliveries: WebhookDelivery[]; pagination: WebhookPagination } }>(
+        '/webhooks/deliveries',
+        { params }
+    )
     return response.data
 }
 
-export const regenerateWebhookSecret = async (id: string): Promise<{ message: string; data: Webhook }> => {
+/**
+ * Rotates the signing secret and returns the new one — once. The old secret
+ * stops working immediately, so the caller must surface `data.secret_key` from
+ * this response; refetching the endpoint afterwards will not include it.
+ */
+export const regenerateWebhookSecret = async (id: number): Promise<{ message: string; data: Webhook }> => {
     const response = await apiClient.post<{ message: string; data: Webhook }>(`/webhooks/${id}/regenerate-secret`)
+    return response.data
+}
+
+// ─── Webhook replays ──────────────────────────────────────────────────────────
+//
+// Bulk re-delivery of failed or dead-lettered deliveries. Rate-limited to 5
+// runs per hour per organization, and guarded by match-count thresholds — see
+// createWebhookReplay.
+
+export interface CreateWebhookReplayPayload {
+    webhook_endpoint_id?: number
+    event_type?: string
+    /**
+     * `failed` (the default) matches on the status column. `dead_lettered`
+     * matches on dead_lettered_at instead, which is a broader set — a delivery
+     * can be dead-lettered without the status column ever reaching `failed`.
+     */
+    status?: 'failed' | 'dead_lettered'
+    date_from?: string
+    date_to?: string
+    /** Required once the match count exceeds 100. Below that it is ignored. */
+    confirm?: boolean
+}
+
+/**
+ * Queues a replay. Filters combine with AND, and omitting all of them matches
+ * every failed delivery in the organization.
+ *
+ * Rejections all arrive as 422 with a distinguishing message: zero matches,
+ * more than 500 matches (narrow the filters), or between 100 and 500 matches
+ * (resend the identical payload with `confirm: true`). Exceeding the hourly
+ * limit returns 429.
+ */
+export const createWebhookReplay = async (
+    payload: CreateWebhookReplayPayload
+): Promise<{ message: string; data: WebhookReplay }> => {
+    const response = await apiClient.post<{ message: string; data: WebhookReplay }>('/webhook-replays', payload)
+    return response.data
+}
+
+export const getWebhookReplays = async (
+    params?: { page?: number; per_page?: number }
+): Promise<{ data: { replays: WebhookReplay[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { replays: WebhookReplay[]; pagination: WebhookPagination } }>(
+        '/webhook-replays',
+        { params }
+    )
+    return response.data
+}
+
+/** Poll while a run is pending or processing to track replayed_count. */
+export const getWebhookReplay = async (id: number): Promise<{ data: WebhookReplay }> => {
+    const response = await apiClient.get<{ data: WebhookReplay }>(`/webhook-replays/${id}`)
     return response.data
 }
 

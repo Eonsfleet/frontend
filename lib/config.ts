@@ -49,3 +49,14 @@ export const CLUSTER_THRESHOLD = 50
 
 /** Asset list length above which the sidebar switches to virtualized rendering */
 export const VIRTUALIZE_LIST_THRESHOLD = 50
+
+// ── Billing feature flags ────────────────────────────────────────────────────
+
+/**
+ * Saved payment methods and B2B change requests have no backing endpoints —
+ * the client billing API surface has no card vault and no change-request
+ * route. The helpers in lib/api/billing.ts are in-memory stand-ins kept for
+ * when those endpoints land; they refuse to run unless this is explicitly
+ * enabled, so no user is shown state that silently disappears on refresh.
+ */
+export const BILLING_MOCKS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_BILLING_MOCKS === 'true'

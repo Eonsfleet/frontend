@@ -317,7 +317,7 @@ export default function Sidebar() {
               const badgeCount = href === "/alerts" ? unreadAlertsCount : 0;
               const itemContent = (
                 <Link
-                  href={isLocked ? "/billing" : href}
+                  href={isLocked ? "/subscription" : href}
                   className={cn(
                     "flex items-center rounded-xl transition-all duration-200 group relative",
                     isSidebarCollapsed

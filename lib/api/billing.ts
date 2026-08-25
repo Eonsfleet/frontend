@@ -1,5 +1,7 @@
 import apiClient from './client'
+import { BILLING_MOCKS_ENABLED } from '@/lib/config'
 import type { DunningStage, PlanTier, Capability } from '@/store/subscriptionStore'
+import type { BillingCycle, InvoiceStatus, Money, PaymentStatus, SubscriptionStatus } from '@/types/subscription'
 
 export interface OrganizationSubscription {
     id: number
@@ -31,6 +33,17 @@ export interface SubscriptionApiResponse {
             ended_at: string | null
             organization_id: number
             status: 'active' | 'trial' | 'grace' | 'restricted' | 'suspended' | 'expired'
+            subscription_type?: string | null
+            payment_state?: string | null
+            billing_cycle?: 'monthly' | 'yearly' | null
+            price?: number | string | null
+            next_billing_date?: string | null
+            trial_ends_at?: string | null
+            vehicle_count?: number | null
+            currency?: string | null
+            is_payment_restricted?: boolean
+            scheduled_plan_id?: number | null
+            plan_change_effective_at?: string | null
         }
         relationships: {
             plan: {
@@ -41,10 +54,53 @@ export interface SubscriptionApiResponse {
                 admin_limit?: number | null
                 core_modules?: { name: string; slug: string }[]
                 advanced_capabilities?: { name: string; slug: string }[]
+                currency?: string | null
             }
         }
         billing_cycle?: 'monthly' | 'yearly'
     }
+}
+
+export const toMoney = (amount: number | string | null | undefined, currency = 'NGN'): Money => ({
+    amount: Number(amount ?? 0),
+    currency,
+})
+
+export const normalizeBillingCycle = (cycle?: string | null): BillingCycle => {
+    return cycle === 'yearly' || cycle === 'annual' || cycle === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
+}
+
+export const normalizeSubscriptionStatus = (status?: string | null): SubscriptionStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (['active', 'trial', 'grace'].includes(normalized)) return 'ACTIVE'
+    if (['past_due', 'past-due', 'restricted'].includes(normalized)) return 'PAST_DUE'
+    if (normalized === 'suspended') return 'SUSPENDED'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'expired') return 'EXPIRED'
+    if (normalized === 'pending_activation' || normalized === 'pending') return 'PENDING_ACTIVATION'
+    return 'DRAFT'
+}
+
+export const normalizeInvoiceStatus = (status?: string | null): InvoiceStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (normalized === 'paid') return 'PAID'
+    if (normalized === 'partially_paid' || normalized === 'partially-paid') return 'PARTIALLY_PAID'
+    if (normalized === 'overdue' || normalized === 'failed') return 'OVERDUE'
+    if (normalized === 'void') return 'VOID'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'issued' || normalized === 'pending') return 'ISSUED'
+    return 'DRAFT'
+}
+
+export const normalizePaymentStatus = (status?: string | null): PaymentStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (['success', 'successful', 'paid', 'completed'].includes(normalized)) return 'SUCCESSFUL'
+    if (normalized === 'processing') return 'PROCESSING'
+    if (normalized === 'failed') return 'FAILED'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'refunded') return 'REFUNDED'
+    if (normalized === 'partially_refunded' || normalized === 'partially-refunded') return 'PARTIALLY_REFUNDED'
+    return 'PENDING'
 }
 
 export const getOrganizationSubscription = async (): Promise<OrganizationSubscription | null> => {
@@ -95,25 +151,26 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         capabilities = Array.from(new Set([...capabilities, ...overrides]))
     }
 
-    const currency = (rawData as any).attributes.currency || (rawData as any).relationships?.plan?.currency || 'NGN'
+    const currency = rawData.attributes.currency || rawData.relationships?.plan?.currency || 'NGN'
+    const billingCycle = rawData.attributes.billing_cycle ?? rawData.billing_cycle ?? 'monthly'
     return {
         id: rawData.id,
         status: rawData.attributes.status,
         dunning_stage: null,
-        billing_cycle: rawData.billing_cycle ?? 'monthly',
+        billing_cycle: billingCycle,
         plan: {
             id: rawData.relationships.plan.id,
             name: planName,
             tier: tier,
-            price: 0,
+            price: Number(rawData.attributes.price ?? 0),
         },
         capabilities,
         vehicle_limit: rawData.relationships.plan.vehicle_limit ?? null,
         user_limit: rawData.relationships.plan.user_limit ?? null,
         admin_limit: rawData.relationships.plan.admin_limit ?? null,
-        vehicle_count: 0,
+        vehicle_count: rawData.attributes.vehicle_count ?? 0,
         starts_at: rawData.attributes.started_at,
-        ends_at: rawData.attributes.ended_at,
+        ends_at: rawData.attributes.next_billing_date ?? rawData.attributes.ended_at,
         currency,
     }
 }
@@ -123,18 +180,21 @@ export interface SubscriptionPlan {
     attributes: {
         name: string
         description: string
-        price_monthly: number
-        price_yearly: number
+        /**
+         * Per-asset pricing in Naira major units. PlansResource converts from
+         * the integer-kobo columns via Money::majorFromMinor before serialising,
+         * so these render as-is — never divide by 100.
+         *
+         * These are the only price keys GET /subscriptions/plans returns. The
+         * plan-level `price_monthly`/`price_yearly` columns and the raw `*_kobo`
+         * columns exist in the database but are not exposed on this endpoint.
+         */
+        vehicle_price_monthly?: number
+        vehicle_price_yearly?: number
+        has_custom_pricing?: boolean
         vehicle_limit: number | null
         user_limit: number | null
         admin_limit: number | null
-        // Per-asset pricing (kobo)
-        vehicle_price_monthly_kobo?: number
-        vehicle_price_yearly_kobo?: number
-        device_price_monthly_kobo?: number
-        device_price_yearly_kobo?: number
-        trial_vehicle_limit?: number
-        trial_device_limit?: number
     }
     relationships: {
         core_modules: { name: string; slug: string }[]
@@ -150,14 +210,25 @@ export const getSubscriptionPlans = async (): Promise<{ data: SubscriptionPlan[]
 export interface Invoice {
     id: number
     invoice_number: string
+    billing_period_start?: string | null
+    billing_period_end?: string | null
+    subtotal?: number
+    vat?: number
+    tax?: number
+    tax_label?: string
+    reference_currency?: string
+    fx_rate?: number
+    discount?: number
+    credit_applied?: number
+    amount_due?: number
     total: number
     currency: string
-    status: 'paid' | 'pending' | 'failed'
+    status: string
     issued_at: string
     pdf_available: boolean
 }
 
-export const getInvoices = async (params?: { page?: number }): Promise<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number } } }> => {
+export const getInvoices = async (params?: { page?: number; per_page?: number; status?: string }): Promise<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number; total?: number } } }> => {
     const response = await apiClient.get<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number } } }>('/subscriptions/invoices', { params })
     return response.data
 }
@@ -211,13 +282,95 @@ export const changePlan = async (data: ChangePlanPayload): Promise<ChangePlanRes
     return response.data
 }
 
-export const getSubscriptionHistory = async (params?: { page?: number }): Promise<{ data: { subscriptions: any[]; paginate: any } }> => {
-    const response = await apiClient.get<{ data: { subscriptions: any[]; paginate: any } }>('/subscriptions/organization/', { params })
+export interface SubscriptionTransaction {
+    id: string | number
+    attributes: {
+        reference: string | null
+        amount: number | string
+        currency: string
+        payment_method: string | null
+        status: string
+        paid_at: string | null
+        created_at: string
+    }
+    relationships?: {
+        subscription?: {
+            id: number
+            billing_cycle?: string | null
+            status?: string | null
+            plan?: { id: number; name: string } | null
+        }
+    }
+}
+
+export const getSubscriptionTransactions = async (
+    params?: { page?: number; per_page?: number; status?: string }
+): Promise<{ data: { data: SubscriptionTransaction[]; meta: { current_page: number; last_page: number; total?: number } } }> => {
+    const response = await apiClient.get<{ data: { data: SubscriptionTransaction[]; meta: { current_page: number; last_page: number; total?: number } } }>('/subscriptions/transactions', { params })
     return response.data
 }
 
-export const getSubscriptionAddons = async (): Promise<{ data: any[] }> => {
-    const response = await apiClient.get<{ data: any[] }>('/subscriptions/addons')
+export const upgradeSubscription = async (planId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/upgrade', { plan_id: planId })
+    return response.data
+}
+
+export const downgradeSubscription = async (planId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/downgrade', { plan_id: planId })
+    return response.data
+}
+
+export const cancelSubscription = async (subscriptionId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post(`/subscriptions/${subscriptionId}/cancel`)
+    return response.data
+}
+
+/**
+ * Response of POST /subscriptions/capacity/purchase.
+ *
+ * NOTE: `amount_due_minor` is integer kobo, not Naira. SubscriptionController
+ * builds this payload directly instead of through a Resource, so it skips the
+ * Money::majorFromMinor conversion every other billing response goes through.
+ * Divide by 100 before display.
+ */
+export interface PurchaseCapacityResponse {
+    billing_group_id: number
+    transaction_id: number
+    invoice_id: number
+    invoice_number: string
+    renewal_reference: string | null
+    amount_due_minor: number
+    currency: string
+    next_renewal_at: string
+}
+
+/**
+ * Buy additional asset slots under the current plan. Pricing and proration are
+ * computed server-side from the subscription's plan — the client only says how
+ * many slots it wants. Requires an active production subscription.
+ */
+export const purchaseCapacity = async (
+    quantity: number
+): Promise<{ message: string; data: PurchaseCapacityResponse }> => {
+    const response = await apiClient.post<{ message: string; data: PurchaseCapacityResponse }>(
+        '/subscriptions/capacity/purchase',
+        { quantity }
+    )
+    return response.data
+}
+
+export const reduceCapacity = async (quantity: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/capacity/reduce', { quantity })
+    return response.data
+}
+
+export const getSubscriptionHistory = async (params?: { page?: number }): Promise<{ data: { subscriptions: unknown[]; paginate: unknown } }> => {
+    const response = await apiClient.get<{ data: { subscriptions: unknown[]; paginate: unknown } }>('/subscriptions/organization/', { params })
+    return response.data
+}
+
+export const getSubscriptionAddons = async (): Promise<{ data: unknown[] }> => {
+    const response = await apiClient.get<{ data: unknown[] }>('/subscriptions/addons')
     return response.data
 }
 
@@ -310,7 +463,27 @@ export const initializeSubscription = async (data: InitializeSubscriptionPayload
     return response.data
 }
 
-// ─── Payment Methods Mocking ──────────────────────────────────────────────────
+/**
+ * Guards a stand-in helper that has no endpoint behind it. Throwing keeps the
+ * absence loud: a caller wired to one of these fails visibly in development
+ * instead of quietly rendering state the server knows nothing about.
+ */
+const assertMocksEnabled = (feature: string): void => {
+    if (!BILLING_MOCKS_ENABLED) {
+        throw new Error(
+            `${feature} has no backend endpoint yet. Set NEXT_PUBLIC_ENABLE_BILLING_MOCKS=true to use the in-memory stand-in.`
+        )
+    }
+}
+
+// ─── Payment Methods (NO BACKEND) ─────────────────────────────────────────────
+//
+// There is no card-vault endpoint on the client billing surface — no route
+// stores, lists or removes payment instruments. Card capture happens entirely
+// on the payment provider's own checkout page, which the subscribe/upgrade
+// flows redirect to. The helpers below are in-memory stand-ins, disabled
+// unless BILLING_MOCKS_ENABLED is set, so nothing presents fabricated cards
+// as if they were real.
 
 export interface PaymentMethod {
     id: string
@@ -322,11 +495,12 @@ export interface PaymentMethod {
 }
 
 // In-memory mock storage for payment methods, initialised with a default Visa card
-let mockCards: PaymentMethod[] = [
+const mockCards: PaymentMethod[] = [
     { id: 'pm_1', brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2028, is_default: true }
 ]
 
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve([...mockCards])
@@ -335,6 +509,7 @@ export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
 }
 
 export const addPaymentMethod = async (data: { brand: string; last4: string; exp_month: number; exp_year: number }): Promise<PaymentMethod> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve) => {
         setTimeout(() => {
             const newCard: PaymentMethod = {
@@ -352,6 +527,7 @@ export const addPaymentMethod = async (data: { brand: string; last4: string; exp
 }
 
 export const removePaymentMethod = async (id: string): Promise<void> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve, reject) => {
         setTimeout(() => {
             const index = mockCards.findIndex(c => c.id === id)
@@ -365,7 +541,11 @@ export const removePaymentMethod = async (id: string): Promise<void> => {
     })
 }
 
-// ─── B2B Change Requests Mocking ──────────────────────────────────────────────
+// ─── B2B Change Requests (NO BACKEND) ─────────────────────────────────────────
+//
+// No change-request route exists. Downgrades and cancellations go through the
+// real endpoints (POST /subscriptions/downgrade, POST /subscriptions/{id}/cancel)
+// rather than an approval queue. Disabled unless BILLING_MOCKS_ENABLED.
 
 export interface BillingChangeRequest {
     id: number
@@ -376,9 +556,10 @@ export interface BillingChangeRequest {
     submitted_at: string
 }
 
-let mockRequests: BillingChangeRequest[] = []
+const mockRequests: BillingChangeRequest[] = []
 
 export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancellation'; reason: string; details?: string }): Promise<{ success: boolean; data: BillingChangeRequest }> => {
+    assertMocksEnabled('Billing change requests')
     return new Promise((resolve) => {
         setTimeout(() => {
             const newReq: BillingChangeRequest = {
@@ -396,39 +577,10 @@ export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancella
 }
 
 export const getBillingRequests = async (): Promise<BillingChangeRequest[]> => {
+    assertMocksEnabled('Billing change requests')
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve([...mockRequests])
         }, 300)
-    })
-}
-
-// ─── Add Vehicles Beyond Capacity ──────────────────────────────────────────────
-
-export interface AddVehiclesResponse {
-    success: boolean
-    message: string
-    batch_id: string
-    quantity: number
-    prorated_charge: number
-    currency: string
-    next_billing_date: string
-}
-
-export const addVehiclesBeyondCapacity = async (data: { count: number; proration_kobo: number }): Promise<AddVehiclesResponse> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const nextMonth = new Date()
-            nextMonth.setMonth(nextMonth.getMonth() + 1)
-            resolve({
-                success: true,
-                message: `${data.count} vehicles successfully added to your fleet subscription.`,
-                batch_id: `batch-${Date.now().toString().slice(-6)}`,
-                quantity: data.count,
-                prorated_charge: data.proration_kobo,
-                currency: 'NGN',
-                next_billing_date: nextMonth.toISOString(),
-            })
-        }, 800)
     })
 }

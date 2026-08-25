@@ -42,7 +42,7 @@ export function UpgradeGate({
                     </p>
                 </div>
                 <Button asChild className="bg-blue-600 hover:bg-blue-700 mt-4 px-8 h-11 shrink-0">
-                    <Link href="/billing">Upgrade Plan</Link>
+                    <Link href="/subscription/plan">Upgrade Plan</Link>
                 </Button>
             </CardContent>
         </Card>
