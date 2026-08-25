@@ -1,5 +1,6 @@
 import apiClient from './client'
 import type { DunningStage, PlanTier, Capability } from '@/store/subscriptionStore'
+import type { BillingCycle, InvoiceStatus, Money, PaymentStatus, SubscriptionStatus } from '@/types/subscription'
 
 export interface OrganizationSubscription {
     id: number
@@ -31,6 +32,17 @@ export interface SubscriptionApiResponse {
             ended_at: string | null
             organization_id: number
             status: 'active' | 'trial' | 'grace' | 'restricted' | 'suspended' | 'expired'
+            subscription_type?: string | null
+            payment_state?: string | null
+            billing_cycle?: 'monthly' | 'yearly' | null
+            price?: number | string | null
+            next_billing_date?: string | null
+            trial_ends_at?: string | null
+            vehicle_count?: number | null
+            currency?: string | null
+            is_payment_restricted?: boolean
+            scheduled_plan_id?: number | null
+            plan_change_effective_at?: string | null
         }
         relationships: {
             plan: {
@@ -41,10 +53,53 @@ export interface SubscriptionApiResponse {
                 admin_limit?: number | null
                 core_modules?: { name: string; slug: string }[]
                 advanced_capabilities?: { name: string; slug: string }[]
+                currency?: string | null
             }
         }
         billing_cycle?: 'monthly' | 'yearly'
     }
+}
+
+export const toMoney = (amount: number | string | null | undefined, currency = 'NGN'): Money => ({
+    amount: Number(amount ?? 0),
+    currency,
+})
+
+export const normalizeBillingCycle = (cycle?: string | null): BillingCycle => {
+    return cycle === 'yearly' || cycle === 'annual' || cycle === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
+}
+
+export const normalizeSubscriptionStatus = (status?: string | null): SubscriptionStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (['active', 'trial', 'grace'].includes(normalized)) return 'ACTIVE'
+    if (['past_due', 'past-due', 'restricted'].includes(normalized)) return 'PAST_DUE'
+    if (normalized === 'suspended') return 'SUSPENDED'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'expired') return 'EXPIRED'
+    if (normalized === 'pending_activation' || normalized === 'pending') return 'PENDING_ACTIVATION'
+    return 'DRAFT'
+}
+
+export const normalizeInvoiceStatus = (status?: string | null): InvoiceStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (normalized === 'paid') return 'PAID'
+    if (normalized === 'partially_paid' || normalized === 'partially-paid') return 'PARTIALLY_PAID'
+    if (normalized === 'overdue' || normalized === 'failed') return 'OVERDUE'
+    if (normalized === 'void') return 'VOID'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'issued' || normalized === 'pending') return 'ISSUED'
+    return 'DRAFT'
+}
+
+export const normalizePaymentStatus = (status?: string | null): PaymentStatus => {
+    const normalized = String(status ?? '').toLowerCase()
+    if (['success', 'successful', 'paid', 'completed'].includes(normalized)) return 'SUCCESSFUL'
+    if (normalized === 'processing') return 'PROCESSING'
+    if (normalized === 'failed') return 'FAILED'
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'CANCELLED'
+    if (normalized === 'refunded') return 'REFUNDED'
+    if (normalized === 'partially_refunded' || normalized === 'partially-refunded') return 'PARTIALLY_REFUNDED'
+    return 'PENDING'
 }
 
 export const getOrganizationSubscription = async (): Promise<OrganizationSubscription | null> => {
@@ -95,25 +150,26 @@ export const getOrganizationSubscription = async (): Promise<OrganizationSubscri
         capabilities = Array.from(new Set([...capabilities, ...overrides]))
     }
 
-    const currency = (rawData as any).attributes.currency || (rawData as any).relationships?.plan?.currency || 'NGN'
+    const currency = rawData.attributes.currency || rawData.relationships?.plan?.currency || 'NGN'
+    const billingCycle = rawData.attributes.billing_cycle ?? rawData.billing_cycle ?? 'monthly'
     return {
         id: rawData.id,
         status: rawData.attributes.status,
         dunning_stage: null,
-        billing_cycle: rawData.billing_cycle ?? 'monthly',
+        billing_cycle: billingCycle,
         plan: {
             id: rawData.relationships.plan.id,
             name: planName,
             tier: tier,
-            price: 0,
+            price: Number(rawData.attributes.price ?? 0),
         },
         capabilities,
         vehicle_limit: rawData.relationships.plan.vehicle_limit ?? null,
         user_limit: rawData.relationships.plan.user_limit ?? null,
         admin_limit: rawData.relationships.plan.admin_limit ?? null,
-        vehicle_count: 0,
+        vehicle_count: rawData.attributes.vehicle_count ?? 0,
         starts_at: rawData.attributes.started_at,
-        ends_at: rawData.attributes.ended_at,
+        ends_at: rawData.attributes.next_billing_date ?? rawData.attributes.ended_at,
         currency,
     }
 }
@@ -123,8 +179,11 @@ export interface SubscriptionPlan {
     attributes: {
         name: string
         description: string
-        price_monthly: number
-        price_yearly: number
+        price_monthly?: number
+        price_yearly?: number
+        vehicle_price_monthly?: number
+        vehicle_price_yearly?: number
+        has_custom_pricing?: boolean
         vehicle_limit: number | null
         user_limit: number | null
         admin_limit: number | null
@@ -150,14 +209,25 @@ export const getSubscriptionPlans = async (): Promise<{ data: SubscriptionPlan[]
 export interface Invoice {
     id: number
     invoice_number: string
+    billing_period_start?: string | null
+    billing_period_end?: string | null
+    subtotal?: number
+    vat?: number
+    tax?: number
+    tax_label?: string
+    reference_currency?: string
+    fx_rate?: number
+    discount?: number
+    credit_applied?: number
+    amount_due?: number
     total: number
     currency: string
-    status: 'paid' | 'pending' | 'failed'
+    status: string
     issued_at: string
     pdf_available: boolean
 }
 
-export const getInvoices = async (params?: { page?: number }): Promise<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number } } }> => {
+export const getInvoices = async (params?: { page?: number; per_page?: number; status?: string }): Promise<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number; total?: number } } }> => {
     const response = await apiClient.get<{ data: { data: Invoice[]; meta: { current_page: number; last_page: number } } }>('/subscriptions/invoices', { params })
     return response.data
 }
@@ -211,13 +281,66 @@ export const changePlan = async (data: ChangePlanPayload): Promise<ChangePlanRes
     return response.data
 }
 
-export const getSubscriptionHistory = async (params?: { page?: number }): Promise<{ data: { subscriptions: any[]; paginate: any } }> => {
-    const response = await apiClient.get<{ data: { subscriptions: any[]; paginate: any } }>('/subscriptions/organization/', { params })
+export interface SubscriptionTransaction {
+    id: string | number
+    attributes: {
+        reference: string | null
+        amount: number | string
+        currency: string
+        payment_method: string | null
+        status: string
+        paid_at: string | null
+        created_at: string
+    }
+    relationships?: {
+        subscription?: {
+            id: number
+            billing_cycle?: string | null
+            status?: string | null
+            plan?: { id: number; name: string } | null
+        }
+    }
+}
+
+export const getSubscriptionTransactions = async (
+    params?: { page?: number; per_page?: number; status?: string }
+): Promise<{ data: { data: SubscriptionTransaction[]; meta: { current_page: number; last_page: number; total?: number } } }> => {
+    const response = await apiClient.get<{ data: { data: SubscriptionTransaction[]; meta: { current_page: number; last_page: number; total?: number } } }>('/subscriptions/transactions', { params })
     return response.data
 }
 
-export const getSubscriptionAddons = async (): Promise<{ data: any[] }> => {
-    const response = await apiClient.get<{ data: any[] }>('/subscriptions/addons')
+export const upgradeSubscription = async (planId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/upgrade', { plan_id: planId })
+    return response.data
+}
+
+export const downgradeSubscription = async (planId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/downgrade', { plan_id: planId })
+    return response.data
+}
+
+export const cancelSubscription = async (subscriptionId: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post(`/subscriptions/${subscriptionId}/cancel`)
+    return response.data
+}
+
+export const purchaseCapacity = async (quantity: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/capacity/purchase', { quantity })
+    return response.data
+}
+
+export const reduceCapacity = async (quantity: number): Promise<{ message: string; data?: unknown }> => {
+    const response = await apiClient.post('/subscriptions/capacity/reduce', { quantity })
+    return response.data
+}
+
+export const getSubscriptionHistory = async (params?: { page?: number }): Promise<{ data: { subscriptions: unknown[]; paginate: unknown } }> => {
+    const response = await apiClient.get<{ data: { subscriptions: unknown[]; paginate: unknown } }>('/subscriptions/organization/', { params })
+    return response.data
+}
+
+export const getSubscriptionAddons = async (): Promise<{ data: unknown[] }> => {
+    const response = await apiClient.get<{ data: unknown[] }>('/subscriptions/addons')
     return response.data
 }
 
@@ -322,7 +445,7 @@ export interface PaymentMethod {
 }
 
 // In-memory mock storage for payment methods, initialised with a default Visa card
-let mockCards: PaymentMethod[] = [
+const mockCards: PaymentMethod[] = [
     { id: 'pm_1', brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2028, is_default: true }
 ]
 
@@ -376,7 +499,7 @@ export interface BillingChangeRequest {
     submitted_at: string
 }
 
-let mockRequests: BillingChangeRequest[] = []
+const mockRequests: BillingChangeRequest[] = []
 
 export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancellation'; reason: string; details?: string }): Promise<{ success: boolean; data: BillingChangeRequest }> => {
     return new Promise((resolve) => {
