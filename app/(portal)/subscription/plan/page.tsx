@@ -14,11 +14,12 @@ import { extractApiError, cn } from '@/lib/utils'
 import * as billing from '@/lib/api/billing'
 import type { SubscriptionPlan } from '@/lib/api/billing'
 
+/** Plan prices arrive in Naira major units — see SubscriptionPlan.attributes. */
 function planPrice(plan: SubscriptionPlan, cycle: 'monthly' | 'yearly') {
     return Number(
-        cycle === 'yearly'
-            ? (plan.attributes.vehicle_price_yearly ?? plan.attributes.price_yearly ?? plan.attributes.vehicle_price_yearly_kobo ?? 0)
-            : (plan.attributes.vehicle_price_monthly ?? plan.attributes.price_monthly ?? plan.attributes.vehicle_price_monthly_kobo ?? 0)
+        (cycle === 'yearly'
+            ? plan.attributes.vehicle_price_yearly
+            : plan.attributes.vehicle_price_monthly) ?? 0
     )
 }
 

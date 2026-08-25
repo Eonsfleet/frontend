@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { BILLING_MOCKS_ENABLED } from '@/lib/config'
 import type { DunningStage, PlanTier, Capability } from '@/store/subscriptionStore'
 import type { BillingCycle, InvoiceStatus, Money, PaymentStatus, SubscriptionStatus } from '@/types/subscription'
 
@@ -179,21 +180,21 @@ export interface SubscriptionPlan {
     attributes: {
         name: string
         description: string
-        price_monthly?: number
-        price_yearly?: number
+        /**
+         * Per-asset pricing in Naira major units. PlansResource converts from
+         * the integer-kobo columns via Money::majorFromMinor before serialising,
+         * so these render as-is — never divide by 100.
+         *
+         * These are the only price keys GET /subscriptions/plans returns. The
+         * plan-level `price_monthly`/`price_yearly` columns and the raw `*_kobo`
+         * columns exist in the database but are not exposed on this endpoint.
+         */
         vehicle_price_monthly?: number
         vehicle_price_yearly?: number
         has_custom_pricing?: boolean
         vehicle_limit: number | null
         user_limit: number | null
         admin_limit: number | null
-        // Per-asset pricing (kobo)
-        vehicle_price_monthly_kobo?: number
-        vehicle_price_yearly_kobo?: number
-        device_price_monthly_kobo?: number
-        device_price_yearly_kobo?: number
-        trial_vehicle_limit?: number
-        trial_device_limit?: number
     }
     relationships: {
         core_modules: { name: string; slug: string }[]
@@ -324,8 +325,37 @@ export const cancelSubscription = async (subscriptionId: number): Promise<{ mess
     return response.data
 }
 
-export const purchaseCapacity = async (quantity: number): Promise<{ message: string; data?: unknown }> => {
-    const response = await apiClient.post('/subscriptions/capacity/purchase', { quantity })
+/**
+ * Response of POST /subscriptions/capacity/purchase.
+ *
+ * NOTE: `amount_due_minor` is integer kobo, not Naira. SubscriptionController
+ * builds this payload directly instead of through a Resource, so it skips the
+ * Money::majorFromMinor conversion every other billing response goes through.
+ * Divide by 100 before display.
+ */
+export interface PurchaseCapacityResponse {
+    billing_group_id: number
+    transaction_id: number
+    invoice_id: number
+    invoice_number: string
+    renewal_reference: string | null
+    amount_due_minor: number
+    currency: string
+    next_renewal_at: string
+}
+
+/**
+ * Buy additional asset slots under the current plan. Pricing and proration are
+ * computed server-side from the subscription's plan — the client only says how
+ * many slots it wants. Requires an active production subscription.
+ */
+export const purchaseCapacity = async (
+    quantity: number
+): Promise<{ message: string; data: PurchaseCapacityResponse }> => {
+    const response = await apiClient.post<{ message: string; data: PurchaseCapacityResponse }>(
+        '/subscriptions/capacity/purchase',
+        { quantity }
+    )
     return response.data
 }
 
@@ -433,7 +463,27 @@ export const initializeSubscription = async (data: InitializeSubscriptionPayload
     return response.data
 }
 
-// ─── Payment Methods Mocking ──────────────────────────────────────────────────
+/**
+ * Guards a stand-in helper that has no endpoint behind it. Throwing keeps the
+ * absence loud: a caller wired to one of these fails visibly in development
+ * instead of quietly rendering state the server knows nothing about.
+ */
+const assertMocksEnabled = (feature: string): void => {
+    if (!BILLING_MOCKS_ENABLED) {
+        throw new Error(
+            `${feature} has no backend endpoint yet. Set NEXT_PUBLIC_ENABLE_BILLING_MOCKS=true to use the in-memory stand-in.`
+        )
+    }
+}
+
+// ─── Payment Methods (NO BACKEND) ─────────────────────────────────────────────
+//
+// There is no card-vault endpoint on the client billing surface — no route
+// stores, lists or removes payment instruments. Card capture happens entirely
+// on the payment provider's own checkout page, which the subscribe/upgrade
+// flows redirect to. The helpers below are in-memory stand-ins, disabled
+// unless BILLING_MOCKS_ENABLED is set, so nothing presents fabricated cards
+// as if they were real.
 
 export interface PaymentMethod {
     id: string
@@ -450,6 +500,7 @@ const mockCards: PaymentMethod[] = [
 ]
 
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve([...mockCards])
@@ -458,6 +509,7 @@ export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
 }
 
 export const addPaymentMethod = async (data: { brand: string; last4: string; exp_month: number; exp_year: number }): Promise<PaymentMethod> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve) => {
         setTimeout(() => {
             const newCard: PaymentMethod = {
@@ -475,6 +527,7 @@ export const addPaymentMethod = async (data: { brand: string; last4: string; exp
 }
 
 export const removePaymentMethod = async (id: string): Promise<void> => {
+    assertMocksEnabled('Saved payment methods')
     return new Promise((resolve, reject) => {
         setTimeout(() => {
             const index = mockCards.findIndex(c => c.id === id)
@@ -488,7 +541,11 @@ export const removePaymentMethod = async (id: string): Promise<void> => {
     })
 }
 
-// ─── B2B Change Requests Mocking ──────────────────────────────────────────────
+// ─── B2B Change Requests (NO BACKEND) ─────────────────────────────────────────
+//
+// No change-request route exists. Downgrades and cancellations go through the
+// real endpoints (POST /subscriptions/downgrade, POST /subscriptions/{id}/cancel)
+// rather than an approval queue. Disabled unless BILLING_MOCKS_ENABLED.
 
 export interface BillingChangeRequest {
     id: number
@@ -502,6 +559,7 @@ export interface BillingChangeRequest {
 const mockRequests: BillingChangeRequest[] = []
 
 export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancellation'; reason: string; details?: string }): Promise<{ success: boolean; data: BillingChangeRequest }> => {
+    assertMocksEnabled('Billing change requests')
     return new Promise((resolve) => {
         setTimeout(() => {
             const newReq: BillingChangeRequest = {
@@ -519,39 +577,10 @@ export const submitBillingRequest = async (data: { type: 'downgrade' | 'cancella
 }
 
 export const getBillingRequests = async (): Promise<BillingChangeRequest[]> => {
+    assertMocksEnabled('Billing change requests')
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve([...mockRequests])
         }, 300)
-    })
-}
-
-// ─── Add Vehicles Beyond Capacity ──────────────────────────────────────────────
-
-export interface AddVehiclesResponse {
-    success: boolean
-    message: string
-    batch_id: string
-    quantity: number
-    prorated_charge: number
-    currency: string
-    next_billing_date: string
-}
-
-export const addVehiclesBeyondCapacity = async (data: { count: number; proration_kobo: number }): Promise<AddVehiclesResponse> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const nextMonth = new Date()
-            nextMonth.setMonth(nextMonth.getMonth() + 1)
-            resolve({
-                success: true,
-                message: `${data.count} vehicles successfully added to your fleet subscription.`,
-                batch_id: `batch-${Date.now().toString().slice(-6)}`,
-                quantity: data.count,
-                prorated_charge: data.proration_kobo,
-                currency: 'NGN',
-                next_billing_date: nextMonth.toISOString(),
-            })
-        }, 800)
     })
 }
