@@ -40,7 +40,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
             p => pathname === p || pathname.startsWith(p + '/')
         )
         if (!allowed) {
-            router.replace('/billing')
+            router.replace('/subscription')
         }
     }, [isExpiredTrial, pathname, router])
 
@@ -96,7 +96,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                 return (
                                     <Link
                                         key={item.name}
-                                        href={isLocked ? '/billing' : item.href}
+                                        href={isLocked ? '/subscription' : item.href}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group whitespace-nowrap lg:whitespace-normal
                                             ${isActive
                                                 ? 'bg-slate-100 text-slate-900 font-semibold shadow-sm border border-slate-200'
