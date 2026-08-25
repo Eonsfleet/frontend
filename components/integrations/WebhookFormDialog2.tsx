@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,33 +10,64 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import * as api from '@/lib/api/settings'
-import type { Webhook } from '@/types'
+import { STALE_TIME_STATIC } from '@/lib/config'
+import type { Webhook, WebhookEventCatalogEntry } from '@/types'
 import { EventMultiSelect, type EventCategory } from './EventMultiSelect'
 
-const EVENT_CATEGORIES: EventCategory[] = [
-    { title: 'Trips', events: [
-        { id: 'trip.started', label: 'Trip Started' },
-        { id: 'trip.completed', label: 'Trip Completed' },
-        { id: 'trip.assigned', label: 'Trip Assigned' },
-    ] },
-    { title: 'Location', events: [
-        { id: 'location.updated', label: 'Location Updated' },
-    ] },
-    { title: 'Fuel', events: [
-        { id: 'fuel_alert_rule.triggered', label: 'Fuel Alert Triggered', disabled: true, disabledNote: 'Configured per rule under Fuel → Alert Rules, not here' },
-    ] },
-    { title: 'Incidents', events: [
-        { id: 'incidents.created', label: 'Incident Created' },
-        { id: 'incidents.resolved', label: 'Incident Resolved' },
-        { id: 'incidents.closed', label: 'Incident Closed' },
-    ] },
-    { title: 'Maintenance', events: [
-        { id: 'maintenance.assigned', label: 'Maintenance Assigned' },
-        { id: 'maintenance.completed', label: 'Maintenance Completed' },
-    ] },
-    { title: 'Geofencing', events: [{ id: 'geofence.alert', label: 'Geofence Alert' }] },
-    { title: 'Device', events: [{ id: 'device.status_changed', label: 'Device Status Changed' }] },
-]
+/**
+ * Event types the register/update endpoints actually accept. The catalog at
+ * GET /webhooks/events also lists `fuel_alert_rule.triggered` and `test.ping`
+ * for reference, but neither is selectable here — the first is wired per Fuel
+ * Alert Rule, the second only ever fires from the Test Webhook action.
+ */
+const NON_SELECTABLE_EVENTS: Record<string, string> = {
+    'fuel_alert_rule.triggered': 'Configured per rule under Fuel → Alert Rules, not here',
+    'test.ping': 'Sent only by the Test Webhook action',
+}
+
+const CATEGORY_TITLES: Record<string, string> = {
+    trip: 'Trips',
+    location: 'Location',
+    incidents: 'Incidents',
+    maintenance: 'Maintenance',
+    geofence: 'Geofencing',
+    device: 'Device',
+    alert: 'Alerts',
+    fuel_alert_rule: 'Fuel',
+}
+
+const titleCase = (segment: string) =>
+    segment.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+/** "trip.started" → { category: "Trips", label: "Trip Started" } */
+function describeEvent(type: string) {
+    const [prefix, ...rest] = type.split('.')
+    return {
+        category: CATEGORY_TITLES[prefix] ?? titleCase(prefix),
+        label: `${titleCase(prefix)} ${titleCase(rest.join('.') || '')}`.trim(),
+    }
+}
+
+/**
+ * Build the picker from the server's catalog rather than a local copy, so a new
+ * event type becomes selectable as soon as the backend ships it.
+ */
+function buildCategories(catalog: WebhookEventCatalogEntry[]): EventCategory[] {
+    const grouped = new Map<string, EventCategory>()
+
+    for (const entry of catalog) {
+        const { category, label } = describeEvent(entry.type)
+        if (!grouped.has(category)) grouped.set(category, { title: category, events: [] })
+        grouped.get(category)!.events.push({
+            id: entry.type,
+            label,
+            disabled: entry.type in NON_SELECTABLE_EVENTS,
+            disabledNote: NON_SELECTABLE_EVENTS[entry.type],
+        })
+    }
+
+    return [...grouped.values()]
+}
 
 type FormState = { name: string; url: string; description: string; events: string[]; status: 'active' | 'inactive' }
 
@@ -96,6 +127,16 @@ function WebhookFormBody({
     const queryClient = useQueryClient()
     const [form, setForm] = useState<FormState>(() => computeInitialForm(editing, duplicateFrom))
 
+    const { data: catalogData, isLoading: catalogLoading } = useQuery({
+        queryKey: ['webhook-event-catalog'],
+        queryFn: api.getWebhookEventCatalog,
+        staleTime: STALE_TIME_STATIC,
+    })
+    const categories = useMemo(
+        () => buildCategories(catalogData?.data.events ?? []),
+        [catalogData]
+    )
+
     const createMutation = useMutation({
         mutationFn: () => api.createWebhook({ url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events }),
         onSuccess: (res) => {
@@ -108,7 +149,7 @@ function WebhookFormBody({
     })
 
     const updateMutation = useMutation({
-        mutationFn: () => api.updateWebhook(String(editing!.id), { url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events, status: form.status }),
+        mutationFn: () => api.updateWebhook(editing!.id, { url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events, status: form.status }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook updated')
@@ -153,7 +194,11 @@ function WebhookFormBody({
                 </div>
                 <div className="space-y-2 border-t pt-4">
                     <Label className="text-sm font-bold text-slate-900">Event Subscriptions</Label>
-                    <EventMultiSelect categories={EVENT_CATEGORIES} value={form.events} onChange={(events) => setForm({ ...form, events })} />
+                    {catalogLoading ? (
+                        <p className="text-[11px] text-slate-500">Loading available events…</p>
+                    ) : (
+                        <EventMultiSelect categories={categories} value={form.events} onChange={(events) => setForm({ ...form, events })} />
+                    )}
                 </div>
             </div>
             <DialogFooter className="border-t bg-slate-50 p-4">

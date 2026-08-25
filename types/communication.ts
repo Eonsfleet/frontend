@@ -45,19 +45,31 @@ export interface WorkflowHistoryEntry {
     }
 }
 
+/** Delivery lifecycle as recorded on the delivery log row itself. */
+export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed' | 'retrying'
+
 export interface Webhook {
-    id: string | number
+    id: number
+    public_id: string
     name: string | null
     url: string
     description: string | null
     events: string[]
+    payload_version: string | null
+    location_throttle_seconds: number | null
     status: 'active' | 'inactive'
+    /**
+     * Returned exactly once, by create and by regenerate-secret — never by the
+     * list or show endpoints. Capture it from those two responses or it is gone.
+     */
     secret_key?: string
     failure_count: number
     last_failure_at: string | null
-    last_delivery_at: string | null
-    last_delivery_status: 'pending' | 'delivered' | 'failed' | 'retrying' | null
-    success_rate_30d: number | null
+    /** Present only when the endpoint's latest delivery was eager-loaded. */
+    last_delivery_at?: string | null
+    last_delivery_status?: WebhookDeliveryStatus | null
+    /** Computed over a 30-day window; absent when not attached to the response. */
+    success_rate_30d?: number | null
     created_at: string
     updated_at?: string
 }
@@ -72,16 +84,61 @@ export interface WebhookStats {
     avg_response_time_ms: number | null
 }
 
+/**
+ * One delivery of one event. The row is rewritten in place on every retry, so it
+ * always reflects the most recent attempt — per-attempt history lives in
+ * WebhookDeliveryAttempt.
+ */
 export interface WebhookDelivery {
-    id: string | number
+    id: number
+    public_id: string
+    webhook_endpoint_id: number
     event_type: string
-    response_code: number
+    status: WebhookDeliveryStatus
+    attempt_number: number
+    response_code: number | null
     response_body: string | null
-    payload: Record<string, unknown>
-    duration_ms: number
-    status?: 'pending' | 'delivered' | 'failed' | 'retrying'
+    duration_ms: number | null
+    delivered_at: string | null
+    failed_at: string | null
+    /**
+     * Set once retries are exhausted. `status` stays 'failed' for these, so a
+     * dead-lettered delivery is only identifiable by this field being non-null.
+     */
+    dead_lettered_at: string | null
     created_at: string
-    endpoint?: { id: string | number; name: string | null; url: string }
+    /** Present only when the endpoint relation was eager-loaded. */
+    endpoint?: { id: number; name: string | null; url: string }
+}
+
+export type WebhookAttemptErrorType =
+    | 'ssrf_blocked'
+    | 'http_4xx'
+    | 'http_5xx'
+    | 'rate_limited'
+    | 'connection_error'
+
+/** One immutable HTTP attempt within a delivery. Never rewritten once recorded. */
+export interface WebhookDeliveryAttempt {
+    id: number
+    public_id: string
+    attempt_number: number
+    response_status: number | null
+    response_body: string | null
+    /** Null on a successful attempt. */
+    error_type: WebhookAttemptErrorType | null
+    error_message: string | null
+    latency_ms: number | null
+    started_at: string
+    completed_at: string | null
+    created_at: string
+}
+
+/** An entry from GET /webhooks/events — the authoritative subscribable-event list. */
+export interface WebhookEventCatalogEntry {
+    type: string
+    description: string
+    example: Record<string, unknown>
 }
 
 export interface ApiUsageDay {

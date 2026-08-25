@@ -44,7 +44,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+import { cn, extractApiError } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
 import { WebhookFormDialog2 } from '@/components/integrations/WebhookFormDialog2'
@@ -613,6 +613,42 @@ function ResourcesPanel() {
     )
 }
 
+/** Shared pager for the webhook tables — both endpoints paginate server-side. */
+function TablePager({
+    pagination,
+    onPage,
+}: {
+    pagination: { current_page: number; last_page: number; total: number } | undefined
+    onPage: (next: number) => void
+}) {
+    if (!pagination || pagination.last_page <= 1) return null
+    return (
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+            <p>Page {pagination.current_page} of {pagination.last_page} ({pagination.total} total)</p>
+            <div className="flex items-center gap-2">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg bg-slate-50"
+                    disabled={pagination.current_page <= 1}
+                    onClick={() => onPage(pagination.current_page - 1)}
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg bg-slate-50"
+                    disabled={pagination.current_page >= pagination.last_page}
+                    onClick={() => onPage(pagination.current_page + 1)}
+                >
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    )
+}
+
 function WebhookMetricCard({ title, value, subtitle, icon: Icon, tone }: { title: string; value: string; subtitle: string; icon: React.ElementType; tone: string }) {
     return (
         <section className="rounded-2xl bg-white p-5">
@@ -630,16 +666,29 @@ function WebhookMetricCard({ title, value, subtitle, icon: Icon, tone }: { title
     )
 }
 
-function WebhookSecretCard({ webhook, className }: { webhook: Webhook | undefined; className?: string }) {
+function WebhookSecretCard({
+    webhook,
+    onSecretIssued,
+    className,
+}: {
+    webhook: Webhook | undefined
+    onSecretIssued: (secret: string) => void
+    className?: string
+}) {
     const queryClient = useQueryClient()
-    const [revealed, setRevealed] = useState(false)
 
     const regenerateMutation = useMutation({
-        mutationFn: () => api.regenerateWebhookSecret(String(webhook!.id)),
-        onSuccess: () => {
+        mutationFn: () => api.regenerateWebhookSecret(webhook!.id),
+        // The rotated secret is in this response and nowhere else — refetching the
+        // endpoint afterwards will not include it. Hand it straight to the reveal
+        // dialog before invalidating, or the caller is left with a dead endpoint.
+        onSuccess: (res) => {
+            if (res.data.secret_key) {
+                onSecretIssued(res.data.secret_key)
+            } else {
+                toast.error('Secret was rotated but not returned — contact support before your endpoint fails.')
+            }
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
-            setRevealed(true)
-            toast.success('Secret regenerated — copy it now, it will not be shown again')
         },
         onError: () => toast.error('Failed to regenerate secret'),
     })
@@ -648,7 +697,7 @@ function WebhookSecretCard({ webhook, className }: { webhook: Webhook | undefine
         return (
             <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
                 <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
-                <p className="mt-2 text-sm text-slate-500">Select a webhook to view its signing secret.</p>
+                <p className="mt-2 text-sm text-slate-500">Select a webhook to rotate its signing secret.</p>
             </section>
         )
     }
@@ -656,27 +705,22 @@ function WebhookSecretCard({ webhook, className }: { webhook: Webhook | undefine
     return (
         <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
             <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
-            <p className="mt-1 text-sm text-slate-500">For &quot;{webhook.name ?? webhook.url}&quot; — verify signatures using this secret.</p>
-            <div className="mt-4 flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">
-                    {revealed && webhook.secret_key ? webhook.secret_key : 'whsec_••••••••••••••••••••••••'}
-                </p>
-                {revealed && webhook.secret_key && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100" onClick={() => {
-                        navigator.clipboard.writeText(webhook.secret_key!)
-                        toast.info('Copied to clipboard')
-                    }}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                )}
-            </div>
+            <p className="mt-1 text-sm text-slate-500">For &quot;{webhook.name ?? webhook.url}&quot;</p>
+            <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
+                Signing secrets are shown once, when the endpoint is created or its secret is rotated. Existing
+                secrets cannot be retrieved — if yours is lost, rotate to get a new one.
+            </p>
+            <p className="mt-3 text-xs leading-relaxed text-amber-700">
+                Rotating takes effect immediately: deliveries signed with the old secret will start failing
+                signature checks until you deploy the new one.
+            </p>
             <Button
                 variant="ghost"
                 disabled={regenerateMutation.isPending}
                 className="mt-4 h-9 w-full rounded-lg bg-slate-50 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                 onClick={() => regenerateMutation.mutate()}
             >
-                <RefreshCw className="mr-2 h-4 w-4" /> Rotate Secret
+                <RefreshCw className={cn('mr-2 h-4 w-4', regenerateMutation.isPending && 'animate-spin')} /> Rotate Secret
             </Button>
         </section>
     )
@@ -690,9 +734,14 @@ function WebhooksTable({
 }) {
     const queryClient = useQueryClient()
     const [openMenu, setOpenMenu] = useState<string | null>(null)
+    const [page, setPage] = useState(1)
 
-    const { data, isLoading } = useQuery({ queryKey: ['webhooks'], queryFn: api.getWebhooks })
+    const { data, isLoading } = useQuery({
+        queryKey: ['webhooks', page],
+        queryFn: () => api.getWebhooks({ page }),
+    })
     const webhooks = data?.data.webhooks ?? []
+    const pagination = data?.data.pagination
 
     const deleteMutation = useMutation({
         mutationFn: api.deleteWebhook,
@@ -710,7 +759,7 @@ function WebhooksTable({
     })
 
     const pauseMutation = useMutation({
-        mutationFn: ({ id, status }: { id: string; status: 'active' | 'inactive' }) => api.updateWebhook(id, { status }),
+        mutationFn: ({ id, status }: { id: number; status: 'active' | 'inactive' }) => api.updateWebhook(id, { status }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook status updated')
@@ -720,19 +769,19 @@ function WebhooksTable({
 
     const actionsFor = (webhook: Webhook) => [
         { label: 'Edit Webhook', icon: Edit3, onClick: () => onOpenDialog({ mode: 'edit', webhook }) },
-        { label: 'Test Webhook', icon: Send, onClick: () => testMutation.mutate(String(webhook.id)) },
+        { label: 'Test Webhook', icon: Send, onClick: () => testMutation.mutate(webhook.id) },
         { label: 'Duplicate Webhook', icon: Copy, onClick: () => onOpenDialog({ mode: 'duplicate', webhook }) },
         {
             label: webhook.status === 'active' ? 'Pause Webhook' : 'Activate Webhook',
             icon: Pause,
-            onClick: () => pauseMutation.mutate({ id: String(webhook.id), status: webhook.status === 'active' ? 'inactive' : 'active' }),
+            onClick: () => pauseMutation.mutate({ id: webhook.id, status: webhook.status === 'active' ? 'inactive' : 'active' }),
         },
         {
             label: 'Delete Webhook',
             icon: Trash2,
             danger: true,
             onClick: () => {
-                if (confirm('Delete this webhook endpoint?')) deleteMutation.mutate(String(webhook.id))
+                if (confirm('Delete this webhook endpoint?')) deleteMutation.mutate(webhook.id)
             },
         },
     ]
@@ -819,6 +868,7 @@ function WebhooksTable({
                     </tbody>
                 </table>
             </div>
+            <TablePager pagination={pagination} onPage={setPage} />
         </section>
     )
 }
@@ -848,6 +898,7 @@ function WebhookGuideCard() {
     )
 }
 function RecentDeliveriesTable() {
+    const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
     const { data, isLoading } = useQuery({
         queryKey: ['webhook-deliveries-all', page],
@@ -855,6 +906,17 @@ function RecentDeliveriesTable() {
     })
 
     const deliveries = data?.data.deliveries ?? []
+    const pagination = data?.data.pagination
+
+    const retryMutation = useMutation({
+        mutationFn: ({ endpointId, deliveryId }: { endpointId: number; deliveryId: number }) =>
+            api.retryWebhookDelivery(endpointId, deliveryId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['webhook-deliveries-all'] })
+            toast.success('Delivery queued for retry')
+        },
+        onError: (error) => toast.error(extractApiError(error, 'Failed to retry delivery')),
+    })
 
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-8">
@@ -867,16 +929,21 @@ function RecentDeliveriesTable() {
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
                     <thead className="text-xs font-medium text-slate-400">
-                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th></tr>
+                        <tr><th className="px-3 py-3">Time</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">Endpoint</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Response</th><th className="px-3 py-3">Duration</th><th className="px-3 py-3 text-right">Actions</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {isLoading ? (
-                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">Loading…</td></tr>
                         ) : deliveries.length === 0 ? (
-                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No deliveries yet.</td></tr>
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">No deliveries yet.</td></tr>
                         ) : (
                             deliveries.map((delivery) => {
                                 const isFailed = delivery.status === 'failed'
+                                const isDeadLettered = delivery.dead_lettered_at !== null
+                                // The API rejects retrying anything already delivered.
+                                const canRetry = delivery.status !== 'delivered'
+                                const isRetrying =
+                                    retryMutation.isPending && retryMutation.variables?.deliveryId === delivery.id
                                 return (
                                     <tr className="text-slate-600 transition hover:bg-slate-50/70" key={delivery.id}>
                                         <td className="px-3 py-4 whitespace-nowrap">{new Date(delivery.created_at).toLocaleString()}</td>
@@ -884,9 +951,28 @@ function RecentDeliveriesTable() {
                                         <td className="px-3 py-4">{delivery.endpoint?.name ?? delivery.endpoint?.url ?? '—'}</td>
                                         <td className={cn('px-3 py-4 font-medium', isFailed ? 'text-rose-600' : 'text-emerald-600')}>
                                             {isFailed ? '✕' : '✓'} {delivery.status}
+                                            {isDeadLettered && (
+                                                <span className="mt-1 block text-[11px] font-medium text-rose-500">
+                                                    Dead-lettered · retries exhausted
+                                                </span>
+                                            )}
                                         </td>
                                         <td className={cn('px-3 py-4', isFailed ? 'text-slate-700' : 'text-emerald-600')}>{delivery.response_code ?? '—'}</td>
                                         <td className="px-3 py-4">{delivery.duration_ms != null ? `${delivery.duration_ms} ms` : '—'}</td>
+                                        <td className="px-3 py-4 text-right">
+                                            {canRetry && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={isRetrying}
+                                                    className="h-8 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50"
+                                                    onClick={() => retryMutation.mutate({ endpointId: delivery.webhook_endpoint_id, deliveryId: delivery.id })}
+                                                >
+                                                    <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', isRetrying && 'animate-spin')} />
+                                                    Retry
+                                                </Button>
+                                            )}
+                                        </td>
                                     </tr>
                                 )
                             })
@@ -894,6 +980,7 @@ function RecentDeliveriesTable() {
                     </tbody>
                 </table>
             </div>
+            <TablePager pagination={pagination} onPage={setPage} />
         </section>
     )
 }
@@ -954,7 +1041,7 @@ function WebhooksTabContent({
             </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
                 <WebhooksTable onSelectSecret={setSelectedWebhook} onOpenDialog={onOpenDialog} />
-                <WebhookSecretCard webhook={selectedWebhook} className="h-fit xl:col-span-4" />
+                <WebhookSecretCard webhook={selectedWebhook} onSecretIssued={onSecretIssued} className="h-fit xl:col-span-4" />
             </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><RecentDeliveriesTable /><WebhookGuideCard /></section>
 
