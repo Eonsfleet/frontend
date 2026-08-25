@@ -48,7 +48,9 @@ import { cn, extractApiError } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
 import { WebhookFormDialog2 } from '@/components/integrations/WebhookFormDialog2'
-import type { Webhook } from '@/types'
+import { WebhookDeliveryAttemptsSheet } from '@/components/integrations/WebhookDeliveryAttemptsSheet'
+import { WebhookReplayDialog, WebhookReplayHistory } from '@/components/integrations/WebhookReplayDialog'
+import type { Webhook, WebhookDelivery } from '@/types'
 
 type IntegrationTab = 'api' | 'webhooks'
 type WebhookDialogState = { mode: 'create' | 'edit' | 'duplicate'; webhook: Webhook | null } | null
@@ -894,12 +896,15 @@ function WebhookGuideCard() {
             <a className="mt-5 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
                 View Full Documentation <ExternalLink className="ml-2 h-3.5 w-3.5" />
             </a>
+            <WebhookReplayHistory />
         </section>
     )
 }
 function RecentDeliveriesTable() {
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
+    const [replayOpen, setReplayOpen] = useState(false)
+    const [inspecting, setInspecting] = useState<WebhookDelivery | null>(null)
     const { data, isLoading } = useQuery({
         queryKey: ['webhook-deliveries-all', page],
         queryFn: () => api.getOrgWebhookDeliveries({ page, per_page: 10 }),
@@ -923,8 +928,15 @@ function RecentDeliveriesTable() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h2 className="text-base font-bold text-slate-900">Recent Deliveries</h2>
-                    <p className="mt-1 text-sm text-slate-500">Monitor the delivery status of your webhook events.</p>
+                    <p className="mt-1 text-sm text-slate-500">Monitor the delivery status of your webhook events. Select a row for its full attempt history.</p>
                 </div>
+                <Button
+                    className="h-9 rounded-lg text-xs font-medium"
+                    onClick={() => setReplayOpen(true)}
+                    variant="outline"
+                >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Replay Failed
+                </Button>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
@@ -945,7 +957,11 @@ function RecentDeliveriesTable() {
                                 const isRetrying =
                                     retryMutation.isPending && retryMutation.variables?.deliveryId === delivery.id
                                 return (
-                                    <tr className="text-slate-600 transition hover:bg-slate-50/70" key={delivery.id}>
+                                    <tr
+                                        className="cursor-pointer text-slate-600 transition hover:bg-slate-50/70"
+                                        key={delivery.id}
+                                        onClick={() => setInspecting(delivery)}
+                                    >
                                         <td className="px-3 py-4 whitespace-nowrap">{new Date(delivery.created_at).toLocaleString()}</td>
                                         <td className="px-3 py-4"><p className="font-medium text-slate-900">{delivery.event_type}</p></td>
                                         <td className="px-3 py-4">{delivery.endpoint?.name ?? delivery.endpoint?.url ?? '—'}</td>
@@ -966,7 +982,10 @@ function RecentDeliveriesTable() {
                                                     size="sm"
                                                     disabled={isRetrying}
                                                     className="h-8 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50"
-                                                    onClick={() => retryMutation.mutate({ endpointId: delivery.webhook_endpoint_id, deliveryId: delivery.id })}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        retryMutation.mutate({ endpointId: delivery.webhook_endpoint_id, deliveryId: delivery.id })
+                                                    }}
                                                 >
                                                     <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', isRetrying && 'animate-spin')} />
                                                     Retry
@@ -981,6 +1000,11 @@ function RecentDeliveriesTable() {
                 </table>
             </div>
             <TablePager pagination={pagination} onPage={setPage} />
+            <WebhookDeliveryAttemptsSheet
+                delivery={inspecting}
+                onOpenChange={(open) => !open && setInspecting(null)}
+            />
+            <WebhookReplayDialog onOpenChange={setReplayOpen} open={replayOpen} />
         </section>
     )
 }

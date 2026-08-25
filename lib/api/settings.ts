@@ -1,5 +1,5 @@
 import apiClient from './client'
-import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery, WebhookDeliveryAttempt, WebhookEventCatalogEntry, WebhookStats, ApiUsageDay, ApiUsageLog, RateLimitStatus } from '@/types'
+import { UserProfile, Organization, Paginated, RoleSlug, SecurityRole, Cluster, Permission, Webhook, WebhookDelivery, WebhookDeliveryAttempt, WebhookEventCatalogEntry, WebhookReplay, WebhookStats, ApiUsageDay, ApiUsageLog, RateLimitStatus } from '@/types'
 
 // Organizations
 export interface UpdateOrganizationPayload {
@@ -280,6 +280,59 @@ export const getOrgWebhookDeliveries = async (
  */
 export const regenerateWebhookSecret = async (id: number): Promise<{ message: string; data: Webhook }> => {
     const response = await apiClient.post<{ message: string; data: Webhook }>(`/webhooks/${id}/regenerate-secret`)
+    return response.data
+}
+
+// ─── Webhook replays ──────────────────────────────────────────────────────────
+//
+// Bulk re-delivery of failed or dead-lettered deliveries. Rate-limited to 5
+// runs per hour per organization, and guarded by match-count thresholds — see
+// createWebhookReplay.
+
+export interface CreateWebhookReplayPayload {
+    webhook_endpoint_id?: number
+    event_type?: string
+    /**
+     * `failed` (the default) matches on the status column. `dead_lettered`
+     * matches on dead_lettered_at instead, which is a broader set — a delivery
+     * can be dead-lettered without the status column ever reaching `failed`.
+     */
+    status?: 'failed' | 'dead_lettered'
+    date_from?: string
+    date_to?: string
+    /** Required once the match count exceeds 100. Below that it is ignored. */
+    confirm?: boolean
+}
+
+/**
+ * Queues a replay. Filters combine with AND, and omitting all of them matches
+ * every failed delivery in the organization.
+ *
+ * Rejections all arrive as 422 with a distinguishing message: zero matches,
+ * more than 500 matches (narrow the filters), or between 100 and 500 matches
+ * (resend the identical payload with `confirm: true`). Exceeding the hourly
+ * limit returns 429.
+ */
+export const createWebhookReplay = async (
+    payload: CreateWebhookReplayPayload
+): Promise<{ message: string; data: WebhookReplay }> => {
+    const response = await apiClient.post<{ message: string; data: WebhookReplay }>('/webhook-replays', payload)
+    return response.data
+}
+
+export const getWebhookReplays = async (
+    params?: { page?: number; per_page?: number }
+): Promise<{ data: { replays: WebhookReplay[]; pagination: WebhookPagination } }> => {
+    const response = await apiClient.get<{ data: { replays: WebhookReplay[]; pagination: WebhookPagination } }>(
+        '/webhook-replays',
+        { params }
+    )
+    return response.data
+}
+
+/** Poll while a run is pending or processing to track replayed_count. */
+export const getWebhookReplay = async (id: number): Promise<{ data: WebhookReplay }> => {
+    const response = await apiClient.get<{ data: WebhookReplay }>(`/webhook-replays/${id}`)
     return response.data
 }
 

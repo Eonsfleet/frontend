@@ -9,10 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import { STALE_TIME_STATIC } from '@/lib/config'
 import type { Webhook, WebhookEventCatalogEntry } from '@/types'
 import { EventMultiSelect, type EventCategory } from './EventMultiSelect'
+import { EventFilterEditor, defaultFilter, toSubscriptions, type EventFilterMap } from './EventFilterEditor'
 
 /**
  * Event types the register/update endpoints actually accept. The catalog at
@@ -69,16 +71,42 @@ function buildCategories(catalog: WebhookEventCatalogEntry[]): EventCategory[] {
     return [...grouped.values()]
 }
 
-type FormState = { name: string; url: string; description: string; events: string[]; status: 'active' | 'inactive' }
+type FormState = {
+    name: string
+    url: string
+    description: string
+    events: string[]
+    status: 'active' | 'inactive'
+    /** Blank means "let the server pick its current default". */
+    payloadVersion: string
+    /** Blank means "use the server default"; otherwise 30–3600 seconds. */
+    locationThrottle: string
+}
 
-const emptyForm: FormState = { name: '', url: '', description: '', events: [], status: 'active' }
+const emptyForm: FormState = { name: '', url: '', description: '', events: [], status: 'active', payloadVersion: '', locationThrottle: '' }
 
 function computeInitialForm(editing?: Webhook | null, duplicateFrom?: Webhook | null): FormState {
     if (editing) {
-        return { name: editing.name ?? '', url: editing.url, description: editing.description ?? '', events: editing.events, status: editing.status }
+        return {
+            name: editing.name ?? '',
+            url: editing.url,
+            description: editing.description ?? '',
+            events: editing.events,
+            status: editing.status,
+            payloadVersion: editing.payload_version ?? '',
+            locationThrottle: editing.location_throttle_seconds != null ? String(editing.location_throttle_seconds) : '',
+        }
     }
     if (duplicateFrom) {
-        return { name: `${duplicateFrom.name ?? 'Webhook'} (copy)`, url: '', description: duplicateFrom.description ?? '', events: duplicateFrom.events, status: 'active' }
+        return {
+            name: `${duplicateFrom.name ?? 'Webhook'} (copy)`,
+            url: '',
+            description: duplicateFrom.description ?? '',
+            events: duplicateFrom.events,
+            status: 'active',
+            payloadVersion: duplicateFrom.payload_version ?? '',
+            locationThrottle: duplicateFrom.location_throttle_seconds != null ? String(duplicateFrom.location_throttle_seconds) : '',
+        }
     }
     return emptyForm
 }
@@ -137,8 +165,39 @@ function WebhookFormBody({
         [catalogData]
     )
 
+    const isEditing = Boolean(editing)
+    const [filters, setFilters] = useState<EventFilterMap>({})
+
+    const throttleValue = form.locationThrottle.trim() === '' ? null : Number(form.locationThrottle)
+    const throttleInvalid =
+        throttleValue !== null && (!Number.isInteger(throttleValue) || throttleValue < 30 || throttleValue > 3600)
+
+    const buildPayload = () => {
+        const subscriptions = toSubscriptions(form.events, filters)
+        return {
+            url: form.url,
+            name: form.name || undefined,
+            description: form.description || undefined,
+            events: form.events,
+            payload_version: form.payloadVersion.trim() || undefined,
+            location_throttle_seconds: throttleValue ?? undefined,
+            // Omitted entirely when nothing was set, which leaves every event
+            // filter-less on create and untouched on update.
+            subscriptions: subscriptions.length > 0 ? subscriptions : undefined,
+        }
+    }
+
+    // Keep a filter row for each selected event, dropping rows for de-selected ones.
+    const syncFilters = (events: string[]) => {
+        setFilters((prev) => {
+            const next: EventFilterMap = {}
+            for (const event of events) next[event] = prev[event] ?? defaultFilter(isEditing)
+            return next
+        })
+    }
+
     const createMutation = useMutation({
-        mutationFn: () => api.createWebhook({ url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events }),
+        mutationFn: () => api.createWebhook(buildPayload()),
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook created')
@@ -149,7 +208,7 @@ function WebhookFormBody({
     })
 
     const updateMutation = useMutation({
-        mutationFn: () => api.updateWebhook(editing!.id, { url: form.url, name: form.name || undefined, description: form.description || undefined, events: form.events, status: form.status }),
+        mutationFn: () => api.updateWebhook(editing!.id, { ...buildPayload(), status: form.status }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['webhooks'] })
             toast.success('Webhook updated')
@@ -197,14 +256,54 @@ function WebhookFormBody({
                     {catalogLoading ? (
                         <p className="text-[11px] text-slate-500">Loading available events…</p>
                     ) : (
-                        <EventMultiSelect categories={categories} value={form.events} onChange={(events) => setForm({ ...form, events })} />
+                        <EventMultiSelect categories={categories} value={form.events} onChange={(events) => { setForm({ ...form, events }); syncFilters(events) }} />
                     )}
+                </div>
+
+                <div className="space-y-2 border-t pt-4">
+                    <Label className="text-sm font-bold text-slate-900">Delivery Filters</Label>
+                    <p className="text-[11px] text-slate-500">
+                        Restrict an event to specific vehicles. Events left on All vehicles are delivered for the
+                        whole fleet.
+                    </p>
+                    <EventFilterEditor
+                        events={form.events}
+                        filters={filters}
+                        isEditing={isEditing}
+                        onChange={setFilters}
+                    />
+                </div>
+
+                <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <Label>Payload Version</Label>
+                        <Input
+                            placeholder="Server default"
+                            value={form.payloadVersion}
+                            onChange={(e) => setForm({ ...form, payloadVersion: e.target.value })}
+                        />
+                        <p className="text-[11px] text-slate-500">Pins this endpoint to a payload contract.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Location Throttle (seconds)</Label>
+                        <Input
+                            inputMode="numeric"
+                            placeholder="Server default"
+                            value={form.locationThrottle}
+                            onChange={(e) => setForm({ ...form, locationThrottle: e.target.value })}
+                        />
+                        <p className={cn('text-[11px]', throttleInvalid ? 'text-rose-600' : 'text-slate-500')}>
+                            {throttleInvalid
+                                ? 'Must be a whole number between 30 and 3600.'
+                                : 'How often location.updated may fire per vehicle (30–3600).'}
+                        </p>
+                    </div>
                 </div>
             </div>
             <DialogFooter className="border-t bg-slate-50 p-4">
                 <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button
-                    disabled={!form.url || form.events.length === 0 || isSaving}
+                    disabled={!form.url || form.events.length === 0 || throttleInvalid || isSaving}
                     className="min-w-[120px] bg-blue-600 hover:bg-blue-700"
                     onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate())}
                 >

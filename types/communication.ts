@@ -134,6 +134,35 @@ export interface WebhookDeliveryAttempt {
     created_at: string
 }
 
+export type WebhookReplayStatus = 'pending' | 'processing' | 'completed'
+
+/** Filters a replay run was queued with, echoed back by the API. */
+export interface WebhookReplayFilters {
+    webhook_endpoint_id?: number
+    event_type?: string
+    status?: 'failed' | 'dead_lettered'
+    date_from?: string
+    date_to?: string
+}
+
+/**
+ * A bulk replay run. Replaying never mutates the original deliveries — each
+ * match gets a brand-new delivery record queued for a fresh attempt.
+ */
+export interface WebhookReplay {
+    id: number
+    public_id: string
+    webhook_endpoint_id: number | null
+    filters: WebhookReplayFilters
+    total_count: number
+    /** Climbs towards total_count while the run is processing. */
+    replayed_count: number
+    status: WebhookReplayStatus
+    started_at: string | null
+    completed_at: string | null
+    created_at: string
+}
+
 /** An entry from GET /webhooks/events — the authoritative subscribable-event list. */
 export interface WebhookEventCatalogEntry {
     type: string
