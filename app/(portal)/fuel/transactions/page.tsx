@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Loader2,
   GitCompare,
@@ -28,11 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -69,7 +65,6 @@ import {
 import { getDrivers } from "@/lib/api/drivers";
 import { uploadFile } from "@/lib/api/documents";
 import { extractApiError } from "@/lib/utils";
-import * as api from "@/lib/api/fuel";
 
 interface ExpenseForm {
   vehicleId: string;
@@ -788,9 +783,6 @@ export default function FuelTransactionsPage() {
   const [deleteRows, setDeleteRows] = useState<TransactionRow[]>([]);
   const [bulkEditRows, setBulkEditRows] = useState<TransactionRow[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [reconcileOpen, setReconcileOpen] = useState(false);
-  const [reconcileStartDate, setReconcileStartDate] = useState("");
-  const [reconcileEndDate, setReconcileEndDate] = useState("");
   const [filters, setFilters] = useState<FuelTransactionFilters>({
     search: "",
     vehicleId: undefined,
@@ -826,23 +818,6 @@ export default function FuelTransactionsPage() {
     queryClient.invalidateQueries({ queryKey: ["fuel-transactions"] });
     queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
   };
-
-  const { mutate: runEngine, isPending: isRunningEngine } = useMutation({
-    mutationFn: () =>
-      api.runReconciliationEngine({
-        start_date: reconcileStartDate || undefined,
-        end_date: reconcileEndDate || undefined,
-      }),
-    onSuccess: (res) => {
-      toast.success(
-        `Reconciliation complete. ${res.data.matched_count} matched, ${res.data.unmatched_transactions_count} unmatched transactions.`,
-      );
-      queryClient.invalidateQueries({ queryKey: ["reconciliation-report"] });
-      queryClient.invalidateQueries({ queryKey: ["fuel-discrepancies"] });
-      setReconcileOpen(false);
-    },
-    onError: (err) => toast.error(extractApiError(err)),
-  });
 
   const editMutation = useMutation({
     mutationFn: ({ row, form }: { row: TransactionRow; form: ExpenseForm }) =>
@@ -969,70 +944,15 @@ export default function FuelTransactionsPage() {
             )}{" "}
             Export
           </Button>
-          <Popover open={reconcileOpen} onOpenChange={setReconcileOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                size="sm"
-                className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700 cursor-pointer"
-              >
-                <GitCompare className="h-4 w-4" /> Reconciliation
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">
-                    Run Reconciliation
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-slate-500">
-                    Choose a date range to match transactions against
-                    expenses. Leave blank to reconcile everything.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                      Start Date
-                    </Label>
-                    <Input
-                      type="date"
-                      className="mt-1 h-9 text-sm"
-                      value={reconcileStartDate}
-                      onChange={(event) =>
-                        setReconcileStartDate(event.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                      End Date
-                    </Label>
-                    <Input
-                      type="date"
-                      className="mt-1 h-9 text-sm"
-                      value={reconcileEndDate}
-                      onChange={(event) =>
-                        setReconcileEndDate(event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  className="h-9 w-full gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700"
-                  disabled={isRunningEngine}
-                  onClick={() => runEngine()}
-                >
-                  {isRunningEngine ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <GitCompare className="h-4 w-4" />
-                  )}
-                  Run Reconciliation
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+            asChild
+            size="sm"
+            className="h-9 gap-2 bg-blue-600 text-white shadow-none hover:bg-blue-700"
+          >
+            <Link href="/fuel/reconciliation">
+              <GitCompare className="h-4 w-4" /> Review Matches
+            </Link>
+          </Button>
         </div>
       </div>
 

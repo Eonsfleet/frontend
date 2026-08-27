@@ -7,7 +7,10 @@ import {
     FuelCardTransaction,
     FuelCardProvider,
     FuelReconciliationDiscrepancy,
+    FuelReconciliationDetail,
     FuelReconciliationReport,
+    FuelReconciliationReviewItem,
+    FuelReconciliationSummary,
     FuelVehicle,
     FuelAbnormality,
     FuelSettings,
@@ -337,6 +340,77 @@ export interface DiscrepancyListResponse {
 
 export const getDiscrepancies = async (params?: DiscrepancyListParams): Promise<DiscrepancyListResponse> => {
     const response = await apiClient.get<DiscrepancyListResponse>('/fuel-reconciliation/discrepancies', { params })
+    return response.data
+}
+
+// ── V2 reconciliation review queue ──────────────────────────────────────────
+
+export interface FuelReconciliationListParams {
+    confidence?: string[]
+    status?: string[]
+    reviewed?: 'yes' | 'no'
+    auto_eligible?: boolean
+    min_variance?: number
+    vehicle_id?: number
+    driver_id?: number
+    imported_by?: number
+    data_import_id?: number
+    vendor?: string
+    cluster_id?: number
+    duplicate_classification?: string
+    from?: string
+    to?: string
+    sort_by?: 'attention' | 'exposure' | 'variance' | 'oldest' | 'confidence'
+    per_page?: number
+    page?: number
+}
+
+export interface FuelReconciliationListResponse {
+    message: string
+    data: {
+        reconciliations: FuelReconciliationReviewItem[]
+        pagination: FuelPagination
+    }
+    status: number
+}
+
+export const getFuelReconciliations = async (params?: FuelReconciliationListParams): Promise<FuelReconciliationListResponse> => {
+    const response = await apiClient.get<FuelReconciliationListResponse>('/fuel-reconciliations', { params })
+    return response.data
+}
+
+export const getFuelReconciliationSummary = async (params?: { from?: string; to?: string }): Promise<{ message: string; data: FuelReconciliationSummary; status: number }> => {
+    const response = await apiClient.get('/fuel-reconciliations/summary', { params })
+    return response.data
+}
+
+export const getFuelReconciliationDetail = async (id: string | number): Promise<{ message: string; data: { reconciliation: FuelReconciliationDetail; history: Array<Record<string, unknown>>; previous_decisions: FuelReconciliationReviewItem[] }; status: number }> => {
+    const response = await apiClient.get(`/fuel-reconciliations/${id}`)
+    return response.data
+}
+
+export const acceptFuelReconciliation = async (id: string | number, reason?: string): Promise<{ message: string; data: FuelReconciliationReviewItem; status: number }> => {
+    const response = await apiClient.post(`/fuel-reconciliations/${id}/accept`, { reason })
+    return response.data
+}
+
+export const rejectFuelReconciliation = async (id: string | number, reason: string): Promise<{ message: string; data: FuelReconciliationReviewItem; status: number }> => {
+    const response = await apiClient.post(`/fuel-reconciliations/${id}/reject`, { reason })
+    return response.data
+}
+
+export const investigateFuelReconciliation = async (id: string | number, reason: string): Promise<{ message: string; data: FuelReconciliationReviewItem; status: number }> => {
+    const response = await apiClient.post(`/fuel-reconciliations/${id}/investigate`, { reason })
+    return response.data
+}
+
+export const approveReconciledFuelExpense = async (id: string | number, reason: string): Promise<{ message: string; data: FuelReconciliationReviewItem; status: number }> => {
+    const response = await apiClient.post(`/fuel-reconciliations/${id}/approve-expense`, { reason })
+    return response.data
+}
+
+export const rejectReconciledFuelExpense = async (id: string | number, reason: string): Promise<{ message: string; data: FuelReconciliationReviewItem; status: number }> => {
+    const response = await apiClient.post(`/fuel-reconciliations/${id}/reject-expense`, { reason })
     return response.data
 }
 

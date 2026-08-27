@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ import {
   Link2Off,
   Trash2,
   ExternalLink,
+  GitCompare,
 } from "lucide-react";
 import {
   Dialog,
@@ -915,6 +917,16 @@ export default function FuelExpensesPage() {
             Export CSV
           </Button>
           <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-0 bg-slate-100 shadow-none"
+          >
+            <Link href="/fuel/reconciliation">
+              <GitCompare className="mr-2 h-4 w-4" /> Review Matches
+            </Link>
+          </Button>
+          <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-none"
             onClick={() => setLogOpen(true)}
@@ -1126,6 +1138,11 @@ export default function FuelExpensesPage() {
                           <ReconciliationBadge
                             status={exp.attributes.reconciliation_status}
                           />
+                          {exp.attributes.reason && (
+                            <div className="mt-1 max-w-56 whitespace-normal text-[11px] leading-4 text-slate-400">
+                              {exp.attributes.reason}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <StatusBadge status={exp.attributes.status} />
