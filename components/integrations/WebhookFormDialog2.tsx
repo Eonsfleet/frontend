@@ -27,6 +27,22 @@ const NON_SELECTABLE_EVENTS: Record<string, string> = {
     'test.ping': 'Sent only by the Test Webhook action',
 }
 
+const FALLBACK_WEBHOOK_EVENTS: WebhookEventCatalogEntry[] = [
+    { type: 'trip.started', description: 'A trip has been started by a driver.', example: {} },
+    { type: 'trip.completed', description: 'A trip has been completed.', example: {} },
+    { type: 'trip.assigned', description: 'A trip has been assigned to a driver.', example: {} },
+    { type: 'location.updated', description: 'A vehicle location has been updated.', example: {} },
+    { type: 'incidents.created', description: 'A new incident has been reported.', example: {} },
+    { type: 'incidents.resolved', description: 'An incident has been resolved.', example: {} },
+    { type: 'incidents.closed', description: 'An incident has been closed.', example: {} },
+    { type: 'maintenance.assigned', description: 'A maintenance job has been assigned.', example: {} },
+    { type: 'maintenance.completed', description: 'A maintenance job has been completed.', example: {} },
+    { type: 'geofence.alert', description: 'A vehicle entered or exited a geofence.', example: {} },
+    { type: 'device.status_changed', description: 'A tracking device changed status.', example: {} },
+    { type: 'alert.speeding', description: 'A vehicle exceeded its speed limit.', example: {} },
+    { type: 'alert.idling', description: 'A vehicle was detected idling.', example: {} },
+]
+
 const CATEGORY_TITLES: Record<string, string> = {
     trip: 'Trips',
     location: 'Location',
@@ -69,6 +85,23 @@ function buildCategories(catalog: WebhookEventCatalogEntry[]): EventCategory[] {
     }
 
     return [...grouped.values()]
+}
+
+function RequiredLabel({ children, className }: { children: string; className?: string }) {
+    return (
+        <Label className={className}>
+            {children} <span className="text-red-500">*</span>
+        </Label>
+    )
+}
+
+function isValidWebhookUrl(value: string) {
+    try {
+        const url = new URL(value)
+        return url.protocol === 'https:'
+    } catch {
+        return false
+    }
 }
 
 type FormState = {
@@ -126,7 +159,7 @@ export function WebhookFormDialog2({
 }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[600px]">
+            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 shadow-none sm:max-w-[600px]">
                 {open && (
                     <WebhookFormBody
                         key={editing?.id ?? duplicateFrom?.id ?? 'create'}
@@ -154,6 +187,7 @@ function WebhookFormBody({
 }) {
     const queryClient = useQueryClient()
     const [form, setForm] = useState<FormState>(() => computeInitialForm(editing, duplicateFrom))
+    const [submitted, setSubmitted] = useState(false)
 
     const { data: catalogData, isLoading: catalogLoading } = useQuery({
         queryKey: ['webhook-event-catalog'],
@@ -161,7 +195,7 @@ function WebhookFormBody({
         staleTime: STALE_TIME_STATIC,
     })
     const categories = useMemo(
-        () => buildCategories(catalogData?.data.events ?? []),
+        () => buildCategories(catalogData?.data.events?.length ? catalogData.data.events : FALLBACK_WEBHOOK_EVENTS),
         [catalogData]
     )
 
@@ -171,13 +205,15 @@ function WebhookFormBody({
     const throttleValue = form.locationThrottle.trim() === '' ? null : Number(form.locationThrottle)
     const throttleInvalid =
         throttleValue !== null && (!Number.isInteger(throttleValue) || throttleValue < 30 || throttleValue > 3600)
+    const urlInvalid = !isValidWebhookUrl(form.url.trim())
+    const eventsInvalid = form.events.length === 0
 
     const buildPayload = () => {
         const subscriptions = toSubscriptions(form.events, filters)
         return {
-            url: form.url,
-            name: form.name || undefined,
-            description: form.description || undefined,
+            url: form.url.trim(),
+            name: form.name.trim() || undefined,
+            description: form.description.trim() || undefined,
             events: form.events,
             payload_version: form.payloadVersion.trim() || undefined,
             location_throttle_seconds: throttleValue ?? undefined,
@@ -219,6 +255,15 @@ function WebhookFormBody({
 
     const isSaving = createMutation.isPending || updateMutation.isPending
     const title = editing ? 'Edit Webhook Endpoint' : duplicateFrom ? 'Duplicate Webhook Endpoint' : 'Register Webhook Endpoint'
+    const saveWebhook = () => {
+        setSubmitted(true)
+        if (urlInvalid || eventsInvalid || throttleInvalid) {
+            toast.error('Please complete the required webhook fields before submitting.')
+            return
+        }
+        if (editing) updateMutation.mutate()
+        else createMutation.mutate()
+    }
 
     return (
         <>
@@ -230,16 +275,17 @@ function WebhookFormBody({
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Name</Label>
-                        <Input placeholder="e.g. Primary Production" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                        <Input className="shadow-none" placeholder="e.g. Primary Production" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Endpoint URL</Label>
-                        <Input placeholder="https://your-api.com/webhooks" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                        <RequiredLabel>Endpoint URL</RequiredLabel>
+                        <Input className="shadow-none" placeholder="https://your-api.com/webhooks" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                        {submitted && urlInvalid && <p className="text-xs text-red-500">Enter a valid HTTPS endpoint URL.</p>}
                         <p className="text-[11px] text-slate-500">Must be a secure HTTPS endpoint accessible over the public internet.</p>
                     </div>
                     <div className="space-y-2">
                         <Label>Description</Label>
-                        <Input placeholder="e.g. Production Analytics" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                        <Input className="shadow-none" placeholder="e.g. Production Analytics" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                     </div>
                     {editing && (
                         <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-3">
@@ -252,12 +298,10 @@ function WebhookFormBody({
                     )}
                 </div>
                 <div className="space-y-2 border-t pt-4">
-                    <Label className="text-sm font-bold text-slate-900">Event Subscriptions</Label>
-                    {catalogLoading ? (
-                        <p className="text-[11px] text-slate-500">Loading available events…</p>
-                    ) : (
-                        <EventMultiSelect categories={categories} value={form.events} onChange={(events) => { setForm({ ...form, events }); syncFilters(events) }} />
-                    )}
+                    <RequiredLabel className="text-sm font-bold text-slate-900">Event Subscriptions</RequiredLabel>
+                    <EventMultiSelect categories={categories} value={form.events} onChange={(events) => { setForm({ ...form, events }); syncFilters(events) }} />
+                    {submitted && eventsInvalid && <p className="text-xs text-red-500">Choose at least one event subscription.</p>}
+                    {catalogLoading && <p className="text-[11px] text-slate-500">Showing supported event values while the live catalog loads.</p>}
                 </div>
 
                 <div className="space-y-2 border-t pt-4">
@@ -278,6 +322,7 @@ function WebhookFormBody({
                     <div className="space-y-2">
                         <Label>Payload Version</Label>
                         <Input
+                            className="shadow-none"
                             placeholder="Server default"
                             value={form.payloadVersion}
                             onChange={(e) => setForm({ ...form, payloadVersion: e.target.value })}
@@ -287,6 +332,7 @@ function WebhookFormBody({
                     <div className="space-y-2">
                         <Label>Location Throttle (seconds)</Label>
                         <Input
+                            className="shadow-none"
                             inputMode="numeric"
                             placeholder="Server default"
                             value={form.locationThrottle}
@@ -303,9 +349,9 @@ function WebhookFormBody({
             <DialogFooter className="border-t bg-slate-50 p-4">
                 <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button
-                    disabled={!form.url || form.events.length === 0 || throttleInvalid || isSaving}
+                    disabled={isSaving}
                     className="min-w-[120px] bg-blue-600 hover:bg-blue-700"
-                    onClick={() => (editing ? updateMutation.mutate() : createMutation.mutate())}
+                    onClick={saveWebhook}
                 >
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'Update Webhook' : 'Create Webhook'}
                 </Button>

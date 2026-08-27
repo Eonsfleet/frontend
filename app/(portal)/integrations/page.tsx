@@ -169,31 +169,6 @@ function MetricCard({
     )
 }
 
-function StatusCard() {
-    return (
-        <section className="rounded-2xl bg-white p-5">
-            <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-bold text-slate-900">API Status</h2>
-                <Badge className="rounded-md bg-emerald-50 px-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50">
-                    Active
-                </Badge>
-            </div>
-            <div className="mt-5 space-y-4 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                    <span className="text-slate-500">Environment</span>
-                    <span className="flex items-center gap-2 font-medium text-slate-900">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Production
-                    </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                    <span className="text-slate-500">API Version</span>
-                    <span className="font-medium text-slate-900">v1</span>
-                </div>
-            </div>
-        </section>
-    )
-}
-
 function RateLimitCard() {
     const { data } = useQuery({ queryKey: ['rate-limit'], queryFn: api.getRateLimit, refetchInterval: 15000 })
     const limit = data?.data.limit ?? 0
@@ -379,7 +354,7 @@ function CredentialsCard() {
             <GenerateApiKeyDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
 
             <Dialog open={rotatedKey !== null} onOpenChange={(open) => !open && setRotatedKey(null)}>
-                <DialogContent className="sm:max-w-[450px]">
+                <DialogContent className="shadow-none sm:max-w-[450px]">
                     <DialogHeader>
                         <DialogTitle>Key rotated</DialogTitle>
                         <DialogDescription>
@@ -667,7 +642,9 @@ function WebhookSecretCard({
         return (
             <section className={cn('col-span-4 min-h-max w-full rounded-2xl bg-white p-5', className)}>
                 <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
-                <p className="mt-2 text-sm text-slate-500">Select a webhook to rotate its signing secret.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Select an endpoint to manage its signing secret. Existing secrets are never displayed for security.
+                </p>
             </section>
         )
     }
@@ -677,8 +654,8 @@ function WebhookSecretCard({
             <h2 className="text-base font-bold text-slate-900">Webhook Signing Secret</h2>
             <p className="mt-1 text-sm text-slate-500">For &quot;{webhook.name ?? webhook.url}&quot;</p>
             <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
-                Signing secrets are shown once, when the endpoint is created or its secret is rotated. Existing
-                secrets cannot be retrieved — if yours is lost, rotate to get a new one.
+                This secret is used by your system to verify that incoming webhook requests were sent by EonsFleet.
+                You only see the value when the endpoint is created or the secret is rotated.
             </p>
             <p className="mt-3 text-xs leading-relaxed text-amber-700">
                 Rotating takes effect immediately: deliveries signed with the old secret will start failing
@@ -837,7 +814,7 @@ function WebhooksTable({
                                                     <MoreVertical className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-56">
+                                            <DropdownMenuContent align="end" className="w-56 shadow-none">
                                                 {actionsFor(webhook).map(({ label, icon: Icon, danger, onClick }) => (
                                                     <DropdownMenuItem
                                                         key={label}
@@ -1015,8 +992,7 @@ function ApiTabContent() {
 
     return (
         <>
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-5">
-                <StatusCard />
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard title="Requests (30 Days)" value={totalRequests.toLocaleString()} delta="" dataKey="requests" stroke="#3b82f6" data={chartData} />
                 <MetricCard title="Success Rate (30 Days)" value={`${avgSuccessRate.toFixed(1)}%`} delta="" dataKey="success_rate" stroke="#10b981" data={chartData} />
                 <MetricCard title="Average Response Time" value={`${Math.round(avgResponseTime)} ms`} delta="" dataKey="avg_response_time_ms" stroke="#8b5cf6" data={chartData} />
@@ -1067,7 +1043,7 @@ function WebhooksTabContent({
             />
 
             <Dialog open={newSecret !== null} onOpenChange={(open) => !open && onSecretIssued('')}>
-                <DialogContent className="sm:max-w-[450px]">
+                <DialogContent className="shadow-none sm:max-w-[450px]">
                     <DialogHeader>
                         <DialogTitle>Webhook secret</DialogTitle>
                         <DialogDescription>Save this now — it won&apos;t be shown again.</DialogDescription>
