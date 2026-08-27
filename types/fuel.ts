@@ -15,6 +15,7 @@ export interface FuelExpense {
         reference_number: string | null
         status: FuelExpenseStatus
         reconciliation_status?: FuelReconciliationStatus
+        reason?: string | null
         source?: FuelSource
         approved_at: string | null
         rejection_reason?: string | null
@@ -144,6 +145,55 @@ export interface FuelReconciliationReport {
         device_liters: number
         manual_liters: number
     }>
+}
+
+export type FuelReviewConfidence = 'high' | 'medium' | 'low' | 'none'
+export type FuelReviewStatus = 'proposed' | 'confirmed' | 'rejected' | 'unmatched' | 'superseded'
+
+export interface FuelReconciliationReviewItem {
+    id: number
+    fuel_expense_id: number
+    attributes: {
+        confidence: FuelReviewConfidence
+        confidence_label: string
+        status: FuelReviewStatus
+        status_label: string
+        decided_by: 'system' | 'person'
+        reviewed: boolean
+        awaiting_review_hours: number | null
+        imported_liters: number | null
+        device_liters: number | null
+        liters_difference: number | null
+        variance_percent: number | null
+        time_difference_minutes: number | null
+        amount: number
+        currency: string
+        duplicate_classification: string | null
+        duplicate_label: string | null
+        would_auto_approve: boolean
+    }
+    relationships: {
+        vehicle: { id: number; registration_number: string; model: string | null } | null
+        driver: { id: number; name: string } | null
+        reviewer: { id: number; name: string } | null
+    }
+}
+
+export interface FuelReconciliationSummary {
+    total_spend: number
+    total_transactions: number
+    by_status: Record<string, { amount: number; transactions: number; label: string }>
+    currency: string
+}
+
+export interface FuelReconciliationDetail {
+    id: number
+    financial_evidence: Record<string, unknown>
+    device_evidence: Record<string, unknown> | null
+    comparison: Record<string, unknown>
+    engine_reasoning: Record<string, unknown>
+    decision: Record<string, unknown>
+    alternatives?: Array<Record<string, unknown>>
 }
 
 export interface FuelCapabilities {
