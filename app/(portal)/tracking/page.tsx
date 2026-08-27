@@ -574,7 +574,7 @@ export default function TrackingPage() {
   // as "search location" — most vehicles never have an address (it's only
   // populated by reverse-geocoding the currently-selected vehicle), so it
   // worked only when searching a plate number. Now a real place search via
-  // LocationAutocomplete's Mapbox suggestions — it hands back the selected
+  // LocationAutocomplete's place suggestions — it hands back the selected
   // place's coordinates directly, no vehicle lookup involved.
   const handleLocationSelect = useCallback(
     (coords: { latitude: number; longitude: number }) => {

@@ -23,10 +23,9 @@ export interface UseMapProviderResult {
 }
 
 /**
- * Owns the mount/failover lifecycle for a single map root: tries Mapbox first
- * (unless the session already fell back), swaps to Leaflet automatically on
- * init failure or a runtime error, and preserves the last-known camera across
- * the swap so the replacement provider doesn't snap back to a default view.
+ * Owns the mount lifecycle for a single map root. Leaflet/OpenStreetMap is the
+ * default provider; callers can explicitly request Mapbox, which still keeps
+ * the existing Leaflet failover behavior on init/runtime failure.
  *
  * Camera position is the only provider-owned state that doesn't already live
  * in React/Zustand — selection, filters, and trails survive a swap for free
@@ -105,9 +104,10 @@ export function useMapProvider({
 
   useEffect(() => {
     let cancelled = false;
-    const stickyFallback = shouldStartInFallback();
-    const preferredKind: MapProviderKind = preferredProviderKind ?? (stickyFallback ? "leaflet" : "mapbox");
-    const startsInFallback = !preferredProviderKind && stickyFallback;
+    const wantsMapbox = preferredProviderKind === "mapbox";
+    const stickyFallback = wantsMapbox && shouldStartInFallback();
+    const preferredKind: MapProviderKind = stickyFallback ? "leaflet" : (preferredProviderKind ?? "leaflet");
+    const startsInFallback = wantsMapbox && stickyFallback;
 
     void (async () => {
       if (cancelled) return;
