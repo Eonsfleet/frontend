@@ -44,6 +44,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn, extractApiError } from '@/lib/utils'
 import * as api from '@/lib/api/settings'
 import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
@@ -53,6 +54,8 @@ import { WebhookReplayDialog, WebhookReplayHistory } from '@/components/integrat
 import type { Webhook, WebhookDelivery } from '@/types'
 
 type IntegrationTab = 'api' | 'webhooks'
+type WebhookStatusFilter = 'all' | 'active' | 'inactive' | 'failed'
+type DeliveryStatusFilter = 'all' | 'pending' | 'delivered' | 'failed' | 'retrying' | 'dead_lettered'
 type WebhookDialogState = { mode: 'create' | 'edit' | 'duplicate'; webhook: Webhook | null } | null
 
 const resources = [
@@ -90,25 +93,56 @@ const webhookGuide = [
 ]
 function IntegrationTabs({ activeTab, onTabChange }: { activeTab: IntegrationTab; onTabChange: (tab: IntegrationTab) => void }) {
     return (
-        <nav aria-label="Integration sections" className="flex items-center gap-6 overflow-x-auto border-b border-slate-100 pb-px">
+        <nav aria-label="Integration sections" className="inline-flex w-fit rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
             {(['api', 'webhooks'] as IntegrationTab[]).map((tab) => {
                 const isActive = activeTab === tab
+                const Icon = tab === 'api' ? ShieldCheck : WebhookIcon
                 return (
                     <button
                         className={cn(
-                            'relative inline-flex items-center whitespace-nowrap pb-3 text-sm font-medium transition-colors',
-                            isActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700',
+                            'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-semibold transition-colors',
+                            isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
                         )}
                         key={tab}
                         onClick={() => onTabChange(tab)}
                         type="button"
                     >
+                        <Icon className="h-4 w-4" />
                         {tab === 'api' ? 'API' : 'Webhooks'}
-                        {isActive && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-blue-600" />}
                     </button>
                 )
             })}
         </nav>
+    )
+}
+
+function FilterPills<T extends string>({
+    value,
+    options,
+    onChange,
+}: {
+    value: T
+    options: { label: string; value: T }[]
+    onChange: (value: T) => void
+}) {
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(option.value)}
+                    className={cn(
+                        'h-8 rounded-md border px-3 text-xs font-semibold transition-colors',
+                        value === option.value
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800',
+                    )}
+                >
+                    {option.label}
+                </button>
+            ))}
+        </div>
     )
 }
 function MetricCard({
@@ -283,7 +317,11 @@ function CredentialsCard() {
     const toggleReveal = (id: string) => {
         setRevealedIds((prev) => {
             const next = new Set(prev)
-            next.has(id) ? next.delete(id) : next.add(id)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
             return next
         })
     }
@@ -735,12 +773,12 @@ function WebhooksTable({
     onOpenDialog: (state: WebhookDialogState) => void
 }) {
     const queryClient = useQueryClient()
-    const [openMenu, setOpenMenu] = useState<string | null>(null)
     const [page, setPage] = useState(1)
+    const [status, setStatus] = useState<WebhookStatusFilter>('all')
 
-    const { data, isLoading } = useQuery({
-        queryKey: ['webhooks', page],
-        queryFn: () => api.getWebhooks({ page }),
+    const { data, isError, isLoading, refetch } = useQuery({
+        queryKey: ['webhooks', page, status],
+        queryFn: () => api.getWebhooks({ page, per_page: 10, status: status === 'all' ? undefined : status }),
     })
     const webhooks = data?.data.webhooks ?? []
     const pagination = data?.data.pagination
@@ -790,11 +828,24 @@ function WebhooksTable({
 
     return (
         <section className="relative rounded-2xl bg-white p-5 xl:col-span-8">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <h2 className="text-base font-bold text-slate-900">Your Webhooks</h2>
                     <p className="mt-1 text-sm text-slate-500">Manage your webhook endpoints and configurations.</p>
                 </div>
+                <FilterPills<WebhookStatusFilter>
+                    value={status}
+                    onChange={(nextStatus) => {
+                        setStatus(nextStatus)
+                        setPage(1)
+                    }}
+                    options={[
+                        { label: 'All', value: 'all' },
+                        { label: 'Active', value: 'active' },
+                        { label: 'Inactive', value: 'inactive' },
+                        { label: 'Failed', value: 'failed' },
+                    ]}
+                />
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[840px] text-left text-sm">
@@ -811,8 +862,17 @@ function WebhooksTable({
                     <tbody className="divide-y divide-slate-100">
                         {isLoading ? (
                             <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : isError ? (
+                            <tr>
+                                <td colSpan={6} className="py-10 text-center">
+                                    <p className="text-sm font-medium text-slate-700">Could not load webhook endpoints.</p>
+                                    <Button variant="ghost" size="sm" className="mt-2 h-8 text-blue-600 hover:bg-blue-50" onClick={() => refetch()}>
+                                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                                    </Button>
+                                </td>
+                            </tr>
                         ) : webhooks.length === 0 ? (
-                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No webhooks registered yet.</td></tr>
+                            <tr><td colSpan={6} className="py-10 text-center text-slate-400">No {status === 'all' ? '' : `${status} `}webhooks found.</td></tr>
                         ) : (
                             webhooks.map((webhook) => (
                                 <tr className="cursor-pointer text-slate-600 transition hover:bg-slate-50/70" key={webhook.id} onClick={() => onSelectSecret(webhook)}>
@@ -841,28 +901,25 @@ function WebhooksTable({
                                         )}
                                     </td>
                                     <td className="relative px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 rounded-lg text-slate-400"
-                                            onClick={() => setOpenMenu(openMenu === String(webhook.id) ? null : String(webhook.id))}
-                                        >
-                                            <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                        {openMenu === String(webhook.id) && (
-                                            <div className="absolute right-3 top-12 z-20 w-56 rounded-2xl bg-white p-2 text-sm shadow-lg">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400">
+                                                    <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-56">
                                                 {actionsFor(webhook).map(({ label, icon: Icon, danger, onClick }) => (
-                                                    <button
-                                                        className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-slate-50', danger ? 'text-rose-600' : 'text-slate-700')}
+                                                    <DropdownMenuItem
                                                         key={label}
-                                                        onClick={() => { setOpenMenu(null); onClick(); }}
-                                                        type="button"
+                                                        variant={danger ? 'destructive' : 'default'}
+                                                        onClick={onClick}
+                                                        className="gap-3"
                                                     >
                                                         <Icon className="h-4 w-4" /> {label}
-                                                    </button>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                            </div>
-                                        )}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </td>
                                 </tr>
                             ))
@@ -903,11 +960,13 @@ function WebhookGuideCard() {
 function RecentDeliveriesTable() {
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
+    const [status, setStatus] = useState<DeliveryStatusFilter>('all')
     const [replayOpen, setReplayOpen] = useState(false)
     const [inspecting, setInspecting] = useState<WebhookDelivery | null>(null)
-    const { data, isLoading } = useQuery({
-        queryKey: ['webhook-deliveries-all', page],
-        queryFn: () => api.getOrgWebhookDeliveries({ page, per_page: 10 }),
+
+    const { data, isError, isLoading, refetch } = useQuery({
+        queryKey: ['webhook-deliveries-all', page, status],
+        queryFn: () => api.getOrgWebhookDeliveries({ page, per_page: 10, status: status === 'all' ? undefined : status }),
     })
 
     const deliveries = data?.data.deliveries ?? []
@@ -930,13 +989,30 @@ function RecentDeliveriesTable() {
                     <h2 className="text-base font-bold text-slate-900">Recent Deliveries</h2>
                     <p className="mt-1 text-sm text-slate-500">Monitor the delivery status of your webhook events. Select a row for its full attempt history.</p>
                 </div>
-                <Button
-                    className="h-9 rounded-lg text-xs font-medium"
-                    onClick={() => setReplayOpen(true)}
-                    variant="outline"
-                >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Replay Failed
-                </Button>
+                <div className="flex flex-col gap-2 sm:items-end">
+                    <Button
+                        className="h-9 rounded-lg text-xs font-medium"
+                        onClick={() => setReplayOpen(true)}
+                        variant="outline"
+                    >
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Replay Failed
+                    </Button>
+                    <FilterPills<DeliveryStatusFilter>
+                        value={status}
+                        onChange={(nextStatus) => {
+                            setStatus(nextStatus)
+                            setPage(1)
+                        }}
+                        options={[
+                            { label: 'All', value: 'all' },
+                            { label: 'Pending', value: 'pending' },
+                            { label: 'Delivered', value: 'delivered' },
+                            { label: 'Failed', value: 'failed' },
+                            { label: 'Retrying', value: 'retrying' },
+                            { label: 'Dead-lettered', value: 'dead_lettered' },
+                        ]}
+                    />
+                </div>
             </div>
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[820px] text-left text-sm">
@@ -946,8 +1022,17 @@ function RecentDeliveriesTable() {
                     <tbody className="divide-y divide-slate-100">
                         {isLoading ? (
                             <tr><td colSpan={7} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                        ) : isError ? (
+                            <tr>
+                                <td colSpan={7} className="py-10 text-center">
+                                    <p className="text-sm font-medium text-slate-700">Could not load webhook deliveries.</p>
+                                    <Button variant="ghost" size="sm" className="mt-2 h-8 text-blue-600 hover:bg-blue-50" onClick={() => refetch()}>
+                                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                                    </Button>
+                                </td>
+                            </tr>
                         ) : deliveries.length === 0 ? (
-                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">No deliveries yet.</td></tr>
+                            <tr><td colSpan={7} className="py-10 text-center text-slate-400">No {status === 'all' ? '' : `${status.replace('_', '-')} `}deliveries yet.</td></tr>
                         ) : (
                             deliveries.map((delivery) => {
                                 const isFailed = delivery.status === 'failed'
@@ -1115,27 +1200,30 @@ function IntegrationsPageContent() {
 
     return (
         <div className="space-y-6 p-6 lg:p-8">
-            <div className="space-y-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Integrations</h1>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Developer Console</p>
+                        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Integrations</h1>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
                             {isWebhooks
                                 ? 'Receive real-time event notifications from EonsFleet via webhooks.'
                                 : 'Connect EonsFleet API with your systems and automate data flow.'}
                         </p>
                     </div>
-                    {isWebhooks && (
-                        <Button
-                            className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
-                            onClick={() => setDialogState({ mode: 'create', webhook: null })}
-                        >
-                            <Plus className="mr-2 h-4 w-4" /> Add Webhook
-                        </Button>
-                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <IntegrationTabs activeTab={activeTab} onTabChange={setActiveTab} />
+                        {isWebhooks && (
+                            <Button
+                                className="h-10 w-fit rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+                                onClick={() => setDialogState({ mode: 'create', webhook: null })}
+                            >
+                                <Plus className="mr-2 h-4 w-4" /> Add Webhook
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                <IntegrationTabs activeTab={activeTab} onTabChange={setActiveTab} />
-            </div>
+            </section>
 
             {isWebhooks ? (
                 <WebhooksTabContent
