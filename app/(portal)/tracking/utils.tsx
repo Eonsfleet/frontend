@@ -4,9 +4,8 @@ import { cn } from "@/lib/utils";
 import { VEHICLE_STATUS, resolveStatusKey, type VehicleStatusKey } from "@/lib/vehicleStatus";
 
 export const MAP_LAYERS = {
-  standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  satellite:
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  standard: "https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+  satellite: "https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
   hybrid: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
 };
 

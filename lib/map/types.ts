@@ -10,6 +10,7 @@ export interface LatLng {
 }
 
 export type MapProviderKind = "mapbox" | "leaflet";
+export type RasterTileSource = "osm" | "google";
 
 export type MapProviderErrorCode =
   | "init-failed"
@@ -65,6 +66,8 @@ export interface MapProviderMountOptions {
   zoom: number;
   /** Style key resolved by the caller (e.g. TrackingMapStyle); provider maps it internally. */
   styleKey: string;
+  /** Raster source used by Leaflet. Defaults to OpenStreetMap for fallback/secondary maps. */
+  tileSource?: RasterTileSource;
 }
 
 export interface MapProvider {

@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createMapProvider } from "@/lib/map/MapProviderFactory";
 import { recordMapboxFailover, shouldStartInFallback } from "@/lib/map/health/mapboxHealth";
-import type { LatLng, MapProvider, MapProviderKind } from "@/lib/map/types";
+import type { LatLng, MapProvider, MapProviderKind, RasterTileSource } from "@/lib/map/types";
 
 export interface UseMapProviderOptions {
   containerRef: React.RefObject<HTMLElement | null>;
   initialCenter: LatLng;
   initialZoom: number;
   styleKey: string;
+  preferredProviderKind?: MapProviderKind;
+  tileSource?: RasterTileSource;
 }
 
 export interface UseMapProviderResult {
@@ -35,6 +37,8 @@ export function useMapProvider({
   initialCenter,
   initialZoom,
   styleKey,
+  preferredProviderKind,
+  tileSource,
 }: UseMapProviderOptions): UseMapProviderResult {
   const [provider, setProvider] = useState<MapProvider | null>(null);
   const [providerKind, setProviderKind] = useState<MapProviderKind | null>(null);
@@ -43,6 +47,7 @@ export function useMapProvider({
 
   const lastCameraRef = useRef<{ center: LatLng; zoom: number }>({ center: initialCenter, zoom: initialZoom });
   const styleKeyRef = useRef(styleKey);
+  const tileSourceRef = useRef(tileSource);
   const mountedProviderRef = useRef<MapProvider | null>(null);
   const failingOverRef = useRef(false);
 
@@ -50,18 +55,27 @@ export function useMapProvider({
     styleKeyRef.current = styleKey;
   }, [styleKey]);
 
+  useEffect(() => {
+    tileSourceRef.current = tileSource;
+  }, [tileSource]);
+
   const mountProvider = useCallback(
-    async (kind: MapProviderKind, center: LatLng, zoom: number): Promise<void> => {
+    async (kind: MapProviderKind, center: LatLng, zoom: number, fallbackMode = false): Promise<void> => {
       const container = containerRef.current;
       if (!container) return;
 
       const instance = await createMapProvider(kind);
       try {
-        await instance.mount(container, { center, zoom, styleKey: styleKeyRef.current });
+        await instance.mount(container, {
+          center,
+          zoom,
+          styleKey: styleKeyRef.current,
+          tileSource: tileSourceRef.current,
+        });
       } catch {
         if (kind === "mapbox") {
           recordMapboxFailover();
-          await mountProvider("leaflet", center, zoom);
+          await mountProvider("leaflet", center, zoom, true);
         }
         return;
       }
@@ -69,7 +83,7 @@ export function useMapProvider({
       mountedProviderRef.current = instance;
       setProvider(instance);
       setProviderKind(kind);
-      setIsFallback(kind === "leaflet");
+      setIsFallback(fallbackMode);
       setIsReady(true);
       failingOverRef.current = false;
 
@@ -83,7 +97,7 @@ export function useMapProvider({
         recordMapboxFailover();
         const { center, zoom } = lastCameraRef.current;
         instance.unmount();
-        void mountProvider("leaflet", center, zoom);
+        void mountProvider("leaflet", center, zoom, true);
       });
     },
     [containerRef],
@@ -91,11 +105,13 @@ export function useMapProvider({
 
   useEffect(() => {
     let cancelled = false;
-    const preferredKind: MapProviderKind = shouldStartInFallback() ? "leaflet" : "mapbox";
+    const stickyFallback = shouldStartInFallback();
+    const preferredKind: MapProviderKind = preferredProviderKind ?? (stickyFallback ? "leaflet" : "mapbox");
+    const startsInFallback = !preferredProviderKind && stickyFallback;
 
     void (async () => {
       if (cancelled) return;
-      await mountProvider(preferredKind, initialCenter, initialZoom);
+      await mountProvider(preferredKind, initialCenter, initialZoom, startsInFallback);
     })();
 
     return () => {
