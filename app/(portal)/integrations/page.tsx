@@ -26,9 +26,6 @@ import {
     ExternalLink,
     Eye,
     EyeOff,
-    FileJson,
-    FileText,
-    Headphones,
     MoreVertical,
     Pause,
     Plus,
@@ -37,7 +34,6 @@ import {
     ShieldCheck,
     Trash2,
     Webhook as WebhookIcon,
-    Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -50,7 +46,7 @@ import * as api from '@/lib/api/settings'
 import { GenerateApiKeyDialog } from '@/components/integrations/GenerateApiKeyDialog'
 import { WebhookFormDialog2 } from '@/components/integrations/WebhookFormDialog2'
 import { WebhookDeliveryAttemptsSheet } from '@/components/integrations/WebhookDeliveryAttemptsSheet'
-import { WebhookReplayDialog, WebhookReplayHistory } from '@/components/integrations/WebhookReplayDialog'
+import { WebhookReplayDialog } from '@/components/integrations/WebhookReplayDialog'
 import type { Webhook, WebhookDelivery } from '@/types'
 
 type IntegrationTab = 'api' | 'webhooks'
@@ -58,42 +54,9 @@ type WebhookStatusFilter = 'all' | 'active' | 'inactive' | 'failed'
 type DeliveryStatusFilter = 'all' | 'pending' | 'delivered' | 'failed' | 'retrying' | 'dead_lettered'
 type WebhookDialogState = { mode: 'create' | 'edit' | 'duplicate'; webhook: Webhook | null } | null
 
-const resources = [
-    {
-        title: 'API Documentation',
-        description: 'Explore endpoints and guides',
-        icon: FileText,
-        className: 'bg-blue-50 text-blue-600',
-    },
-    {
-        title: 'Authentication Guide',
-        description: 'Learn how to authenticate',
-        icon: ShieldCheck,
-        className: 'bg-indigo-50 text-indigo-600',
-    },
-    {
-        title: 'Postman Collection',
-        description: 'Import our collection',
-        icon: Zap,
-        className: 'bg-orange-50 text-orange-600',
-    },
-    {
-        title: 'API Status Page',
-        description: 'View real-time status',
-        icon: CheckCircle2,
-        className: 'bg-emerald-50 text-emerald-600',
-    },
-]
-
-const webhookGuide = [
-    { title: 'Webhook Documentation', description: 'Learn how webhooks work', icon: FileText },
-    { title: 'Verify Webhook Signatures', description: 'Validate requests from EonsFleet', icon: ShieldCheck },
-    { title: 'Example Payloads', description: 'View sample event payloads', icon: FileJson },
-    { title: 'Troubleshooting', description: 'Common issues and solutions', icon: Clock3 },
-]
 function IntegrationTabs({ activeTab, onTabChange }: { activeTab: IntegrationTab; onTabChange: (tab: IntegrationTab) => void }) {
     return (
-        <nav aria-label="Integration sections" className="inline-flex w-fit rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+        <nav aria-label="Integration sections" className="inline-flex w-fit rounded-lg border border-slate-200 bg-white p-1">
             {(['api', 'webhooks'] as IntegrationTab[]).map((tab) => {
                 const isActive = activeTab === tab
                 const Icon = tab === 'api' ? ShieldCheck : WebhookIcon
@@ -101,7 +64,7 @@ function IntegrationTabs({ activeTab, onTabChange }: { activeTab: IntegrationTab
                     <button
                         className={cn(
                             'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-semibold transition-colors',
-                            isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
+                            isActive ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800',
                         )}
                         key={tab}
                         onClick={() => onTabChange(tab)}
@@ -450,34 +413,35 @@ function CredentialsCard() {
 
 const QUICK_START_SNIPPETS: Record<string, string> = {
     cURL: `curl --request GET \\
-  https://api.eonsfleet.com/v1/vehicles \\
+  https://api.eonsfleet.com/v1 \\
   --header "Authorization: Bearer ef_****************7a3f" \\
   --header "Accept: application/json"`,
-    JavaScript: `const response = await fetch('https://api.eonsfleet.com/v1/vehicles', {
+    JavaScript: `const baseUrl = 'https://api.eonsfleet.com/v1'
+const response = await fetch(baseUrl, {
   headers: {
     Authorization: 'Bearer ef_****************7a3f',
     Accept: 'application/json',
   },
 })
-const vehicles = await response.json()`,
+const data = await response.json()`,
     Python: `import requests
 
 response = requests.get(
-    "https://api.eonsfleet.com/v1/vehicles",
+    "https://api.eonsfleet.com/v1",
     headers={
         "Authorization": "Bearer ef_****************7a3f",
         "Accept": "application/json",
     },
 )
-vehicles = response.json()`,
-    PHP: `$ch = curl_init('https://api.eonsfleet.com/v1/vehicles');
+data = response.json()`,
+    PHP: `$ch = curl_init('https://api.eonsfleet.com/v1');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Authorization: Bearer ef_****************7a3f',
     'Accept: application/json',
 ]);
-$vehicles = json_decode(curl_exec($ch), true);`,
-    Go: `req, _ := http.NewRequest("GET", "https://api.eonsfleet.com/v1/vehicles", nil)
+$data = json_decode(curl_exec($ch), true);`,
+    Go: `req, _ := http.NewRequest("GET", "https://api.eonsfleet.com/v1", nil)
 req.Header.Set("Authorization", "Bearer ef_****************7a3f")
 req.Header.Set("Accept", "application/json")
 resp, _ := http.DefaultClient.Do(req)
@@ -501,8 +465,8 @@ function QuickStartCard() {
 
     return (
         <section className="rounded-2xl bg-white p-5 xl:col-span-5">
-            <h2 className="text-base font-bold text-slate-900">Quick Start</h2>
-            <p className="mt-1 text-sm text-slate-500">Make your first API request in minutes.</p>
+            <h2 className="text-base font-bold text-slate-900">Base URL</h2>
+            <p className="mt-1 text-sm text-slate-500">Use this base URL for API calls, then append the endpoint path you need.</p>
             <div className="mt-5 overflow-hidden rounded-2xl bg-slate-950 text-white">
                 <div className="flex overflow-x-auto text-xs font-medium text-slate-300">
                     {languages.map((tabName) => (
@@ -547,7 +511,7 @@ function LogsTable() {
     const pagination = data?.data.pagination
 
     return (
-        <section className="rounded-2xl bg-white p-5 xl:col-span-9">
+        <section className="rounded-2xl bg-white p-5 xl:col-span-12">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h2 className="text-base font-bold text-slate-900">API Request Logs</h2>
@@ -616,40 +580,6 @@ function LogsTable() {
                 </div>
             )}
         </section>
-    )
-}
-
-function ResourcesPanel() {
-    return (
-        <aside className="space-y-4 xl:col-span-3">
-            <section className="rounded-2xl bg-white p-5">
-                <h2 className="text-base font-bold text-slate-900">Resources</h2>
-                <div className="mt-4 space-y-4">
-                    {resources.map((resource) => {
-                        const ResourceIcon = resource.icon
-                        return (
-                            <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="https://api.eonsfleet.io" target="_blank" rel="noopener noreferrer" key={resource.title}>
-                                <span className={cn('grid h-9 w-9 place-items-center rounded-lg', resource.className)}>
-                                    <ResourceIcon className="h-5 w-5" />
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                    <span className="block text-sm font-medium text-slate-900">{resource.title}</span>
-                                    <span className="block text-xs text-slate-400">{resource.description}</span>
-                                </span>
-                                <ExternalLink className="h-4 w-4 text-slate-400" />
-                            </a>
-                        )
-                    })}
-                </div>
-            </section>
-            <section className="rounded-2xl bg-white p-5">
-                <h2 className="text-base font-bold text-slate-900">Need Help?</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">Our support team is ready to help you integrate smoothly.</p>
-                <Button variant="ghost" className="mt-4 h-10 w-full rounded-lg bg-slate-50 font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">
-                    <Headphones className="mr-2 h-4 w-4" /> Contact Support
-                </Button>
-            </section>
-        </aside>
     )
 }
 
@@ -931,32 +861,6 @@ function WebhooksTable({
         </section>
     )
 }
-function WebhookGuideCard() {
-    return (
-        <section className="rounded-2xl bg-white p-5 xl:col-span-4">
-            <h2 className="text-base font-bold text-slate-900">Webhook Guide</h2>
-            <p className="mt-1 text-sm text-slate-500">Learn how to configure and secure webhooks.</p>
-            <div className="mt-5 space-y-4">
-                {webhookGuide.map((item) => {
-                    const Icon = item.icon
-                    return (
-                        <a className="flex items-center gap-3 rounded-xl transition hover:bg-slate-50" href="#" key={item.title}>
-                            <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-600"><Icon className="h-5 w-5" /></span>
-                            <span>
-                                <span className="block text-sm font-medium text-slate-900">{item.title}</span>
-                                <span className="block text-xs text-slate-400">{item.description}</span>
-                            </span>
-                        </a>
-                    )
-                })}
-            </div>
-            <a className="mt-5 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700" href="#">
-                View Full Documentation <ExternalLink className="ml-2 h-3.5 w-3.5" />
-            </a>
-            <WebhookReplayHistory />
-        </section>
-    )
-}
 function RecentDeliveriesTable() {
     const queryClient = useQueryClient()
     const [page, setPage] = useState(1)
@@ -983,7 +887,7 @@ function RecentDeliveriesTable() {
     })
 
     return (
-        <section className="rounded-2xl bg-white p-5 xl:col-span-8">
+        <section className="rounded-2xl bg-white p-5 xl:col-span-12">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h2 className="text-base font-bold text-slate-900">Recent Deliveries</h2>
@@ -1119,7 +1023,7 @@ function ApiTabContent() {
                 <RateLimitCard />
             </section>
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><CredentialsCard /><QuickStartCard /></section>
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><LogsTable /><ResourcesPanel /></section>
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><LogsTable /></section>
         </>
     )
 }
@@ -1152,7 +1056,7 @@ function WebhooksTabContent({
                 <WebhooksTable onSelectSecret={setSelectedWebhook} onOpenDialog={onOpenDialog} />
                 <WebhookSecretCard webhook={selectedWebhook} onSecretIssued={onSecretIssued} className="h-fit xl:col-span-4" />
             </section>
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><RecentDeliveriesTable /><WebhookGuideCard /></section>
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12"><RecentDeliveriesTable /></section>
 
             <WebhookFormDialog2
                 open={dialogState !== null}
@@ -1200,7 +1104,7 @@ function IntegrationsPageContent() {
 
     return (
         <div className="space-y-6 p-6 lg:p-8">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Developer Console</p>
