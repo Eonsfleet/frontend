@@ -9,6 +9,7 @@ import {
     Eye,
     FileSearch,
     Loader2,
+    MoreHorizontal,
     RefreshCw,
     ShieldCheck,
     SlidersHorizontal,
@@ -19,6 +20,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -125,7 +133,7 @@ function SummaryCards({ from, to }: { from: string; to: string }) {
     const buckets = summary?.by_status ?? {}
 
     return (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <MetricCard title="Total spend" value={summary ? money(summary.total_spend, summary.currency) : '-'} loading={isLoading} />
             <MetricCard title="Verified" value={money(buckets.verified_by_device?.amount ?? 0, summary?.currency)} sub={`${buckets.verified_by_device?.transactions ?? 0} records`} loading={isLoading} tone="emerald" />
             <MetricCard title="Needs review" value={money(buckets.awaiting_review?.amount ?? 0, summary?.currency)} sub={`${buckets.awaiting_review?.transactions ?? 0} records`} loading={isLoading} tone="amber" />
@@ -140,7 +148,7 @@ function MetricCard({ title, value, sub, loading, tone = 'slate' }: { title: str
         <Card className="border-0 shadow-none">
             <CardContent className="p-4">
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</p>
-                {loading ? <div className="h-7 w-28 animate-pulse rounded bg-slate-100" /> : <p className={cn('text-xl font-bold', toneClass)}>{value}</p>}
+                {loading ? <div className="h-8 w-28 animate-pulse rounded bg-slate-100" /> : <p className={cn('text-2xl font-bold', toneClass)}>{value}</p>}
                 {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
             </CardContent>
         </Card>
@@ -315,19 +323,33 @@ export default function FuelReconciliationPage() {
     })
 
     const updateFilters = (next: Partial<ReviewFilters>) => setFilters((current) => ({ ...current, ...next }))
+    const activeFilterCount = [
+        filters.status !== 'all' ? filters.status : undefined,
+        filters.confidence !== 'all' ? filters.confidence : undefined,
+        filters.reviewed !== 'no' ? filters.reviewed : undefined,
+        filters.from,
+        filters.to,
+        filters.sortBy !== 'attention' ? filters.sortBy : undefined,
+    ].filter(Boolean).length
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Fuel Reconciliation</h1>
-                    <p className="mt-1 text-sm text-slate-500">Review V2 matching evidence separately from financial approval.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reconciliation Queue</h1>
+                    <p className="mt-1 text-slate-500">Review V2 fuel matches and approve expenses from one ledger.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200" onClick={() => setFiltersOpen(true)}>
-                        <SlidersHorizontal className="h-4 w-4" /> Filters
+                        <SlidersHorizontal className="h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <span className="ml-0.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                {activeFilterCount}
+                            </span>
+                        )}
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 shadow-none" onClick={() => refetch()} disabled={isFetching}>
+                    <Button variant="outline" size="sm" className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200" onClick={() => refetch()} disabled={isFetching}>
                         {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
                     </Button>
                 </div>
@@ -342,67 +364,88 @@ export default function FuelReconciliationPage() {
                 <Card className="overflow-hidden border-0 shadow-none">
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[1180px] text-left text-sm">
+                            <table className="w-full min-w-[980px] text-left text-sm">
                                 <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                                     <tr>
-                                        <th className="px-5 py-3.5">Expense</th>
-                                        <th className="px-5 py-3.5">Vehicle</th>
-                                        <th className="px-5 py-3.5">Evidence</th>
-                                        <th className="px-5 py-3.5">Variance</th>
-                                        <th className="px-5 py-3.5">Confidence</th>
-                                        <th className="px-5 py-3.5">Decision</th>
-                                        <th className="px-5 py-3.5 text-right">Actions</th>
+                                        <th className="px-6 py-4">Expense</th>
+                                        <th className="px-6 py-4">Vehicle</th>
+                                        <th className="px-6 py-4">Evidence</th>
+                                        <th className="px-6 py-4">Variance</th>
+                                        <th className="px-6 py-4">Confidence</th>
+                                        <th className="px-6 py-4">Decision</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {isLoading ? (
                                         Array.from({ length: 6 }).map((_, index) => (
                                             <tr key={index}>
-                                                <td colSpan={7} className="px-5 py-3"><div className="h-14 animate-pulse rounded-lg bg-slate-50" /></td>
+                                                <td colSpan={7} className="px-6 py-4"><div className="h-14 animate-pulse rounded bg-slate-100" /></td>
                                             </tr>
                                         ))
                                     ) : rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="px-5 py-16 text-center text-slate-400">No reconciliation records match the selected filters.</td>
+                                            <td colSpan={7} className="px-6 py-20 text-center text-slate-400">No reconciliation records match the selected filters.</td>
                                         </tr>
                                     ) : rows.map((row) => {
                                         const attrs = row.attributes
                                         const vehicle = row.relationships.vehicle
                                         return (
-                                            <tr key={row.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50/80">
-                                                <td className="px-5 py-4">
+                                            <tr key={row.id} className="transition-colors even:bg-slate-50/40 hover:bg-slate-50">
+                                                <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-900">EXP-{row.fuel_expense_id}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">{money(attrs.amount, attrs.currency)}</div>
+                                                    <div className="mt-0.5 font-mono text-[11px] font-medium text-slate-400">{money(attrs.amount, attrs.currency)}</div>
                                                 </td>
-                                                <td className="px-5 py-4">
+                                                <td className="px-6 py-4">
                                                     <div className="font-bold uppercase text-slate-900">{vehicle?.registration_number ?? 'UNKNOWN'}</div>
-                                                    <div className="text-xs text-slate-400">{vehicle?.model ?? 'No model'} · {row.relationships.driver?.name ?? 'No driver'}</div>
+                                                    <div className="text-[11px] font-medium text-slate-400">{vehicle?.model ?? 'No model'} · {row.relationships.driver?.name ?? 'No driver'}</div>
                                                 </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="font-medium text-slate-800">{attrs.imported_liters ?? '-'} L imported</div>
-                                                    <div className="text-xs text-slate-500">{attrs.device_liters ?? '-'} L device · {attrs.time_difference_minutes ?? '-'} min</div>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-semibold text-slate-800">{attrs.imported_liters ?? '-'} L imported</div>
+                                                    <div className="text-[11px] text-slate-400">{attrs.device_liters ?? '-'} L device · {attrs.time_difference_minutes ?? '-'} min</div>
                                                 </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="font-semibold text-slate-800">{attrs.variance_percent != null ? `${Number(attrs.variance_percent).toFixed(2)}%` : '-'}</div>
-                                                    <div className="text-xs text-slate-400">{attrs.liters_difference ?? '-'} L difference</div>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-mono font-semibold text-slate-800">{attrs.variance_percent != null ? `${Number(attrs.variance_percent).toFixed(2)}%` : '-'}</div>
+                                                    <div className="text-[11px] text-slate-400">{attrs.liters_difference ?? '-'} L difference</div>
                                                 </td>
-                                                <td className="px-5 py-4">
+                                                <td className="px-6 py-4">
                                                     <Badge className={cn('border-0', confidenceClass[attrs.confidence])}>{attrs.confidence_label}</Badge>
-                                                    {attrs.would_auto_approve && <div className="mt-1 text-xs font-medium text-emerald-600">Eligible by evidence</div>}
+                                                    {attrs.would_auto_approve && <div className="mt-1 text-[11px] font-medium text-emerald-600">Eligible by evidence</div>}
                                                 </td>
-                                                <td className="px-5 py-4">
+                                                <td className="px-6 py-4">
                                                     <Badge className={cn('border-0', statusClass[attrs.status])}>{attrs.status_label}</Badge>
-                                                    <div className="mt-1 text-xs text-slate-400">{attrs.decided_by === 'person' ? 'Human locked' : 'System proposed'}</div>
+                                                    <div className="mt-1 text-[11px] text-slate-400">{attrs.decided_by === 'person' ? 'Human locked' : 'System proposed'}</div>
                                                 </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="View evidence" title="View evidence" onClick={() => setDetailId(row.id)}><Eye className="h-4 w-4" /></Button>
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" aria-label="Confirm match" title="Confirm match" onClick={() => setAction({ kind: 'accept', item: row })}><CheckCircle2 className="h-4 w-4" /></Button>
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700" aria-label="Reject match" title="Reject match" onClick={() => setAction({ kind: 'reject', item: row })}><XCircle className="h-4 w-4" /></Button>
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" aria-label="Request investigation" title="Request investigation" onClick={() => setAction({ kind: 'investigate', item: row })}><FileSearch className="h-4 w-4" /></Button>
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700" aria-label="Approve expense" title="Approve expense" onClick={() => setAction({ kind: 'approve_expense', item: row })}><ShieldCheck className="h-4 w-4" /></Button>
-                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-500 hover:text-rose-700" aria-label="Reject expense" title="Reject expense" onClick={() => setAction({ kind: 'reject_expense', item: row })}><Ban className="h-4 w-4" /></Button>
-                                                    </div>
+                                                <td className="px-6 py-4 text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={`Open actions for expense ${row.fuel_expense_id}`}>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-52">
+                                                            <DropdownMenuItem onClick={() => setDetailId(row.id)}>
+                                                                <Eye className="mr-2 h-4 w-4" /> View evidence
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'accept', item: row })}>
+                                                                <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /> Confirm match
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'reject', item: row })}>
+                                                                <XCircle className="mr-2 h-4 w-4 text-rose-600" /> Reject match
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'investigate', item: row })}>
+                                                                <FileSearch className="mr-2 h-4 w-4 text-amber-600" /> Investigate
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'approve_expense', item: row })}>
+                                                                <ShieldCheck className="mr-2 h-4 w-4 text-blue-600" /> Approve expense
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'reject_expense', item: row })}>
+                                                                <Ban className="mr-2 h-4 w-4 text-rose-600" /> Reject expense
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </td>
                                             </tr>
                                         )
@@ -410,7 +453,7 @@ export default function FuelReconciliationPage() {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="flex items-center justify-between bg-slate-50/70 px-5 py-3 text-sm text-slate-500">
+                        <div className="flex items-center justify-between bg-slate-50/70 px-6 py-4 text-sm text-slate-500">
                             <span>{pagination.total} records · page {pagination.current} of {pagination.lastPage}</span>
                             <div className="flex gap-2">
                                 <Button size="sm" variant="outline" disabled={pagination.current <= 1} onClick={() => updateFilters({ page: pagination.current - 1 })}>Previous</Button>

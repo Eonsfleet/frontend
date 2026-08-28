@@ -182,7 +182,7 @@ export default function NewIncidentPage() {
 
     const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
 
-    // When a location is selected, parse Mapbox place_name and fill all location fields
+    // When a location is selected, parse the place label and fill all location fields.
     const handleLocationSelect = (location: { name: string; coords: { latitude: number; longitude: number } }) => {
         const parts = location.name.split(',').map((p: string) => p.trim())
         setForm(f => ({

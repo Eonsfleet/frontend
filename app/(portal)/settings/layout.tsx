@@ -4,7 +4,7 @@ import React, { useEffect } from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Building2, Users, Shield, Network, UserCircle, ArrowLeft } from 'lucide-react'
+import { Building2, Users, Shield, UserCircle, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAccessControl, TRIAL_EXPIRED_ALLOWED_PATHS } from '@/hooks/useAccessControl'
@@ -58,7 +58,6 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'My Profile', href: '/profile', icon: UserCircle, show: true, ownerAllowed: true },
         { name: 'Organization', href: '/settings', icon: Building2, show: true, ownerAllowed: false },
         { name: 'User Management', href: '/settings/users', icon: Users, show: true, ownerAllowed: false },
-        { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true, ownerAllowed: true },
         { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' as Capability, ownerAllowed: false },
     ].filter(item => {
         if (!item.show) return false
@@ -68,12 +67,18 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     })
 
     const ownerBlocked = isOwnerRestricted(pathname)
+    const isStandaloneSettingsPage = pathname === '/settings/clusters'
 
     return (
         <RoleGate
             allowedRoles={['administrator', 'fleet_manager', 'owner']}
             fallbackMessage="Organizational settings and user management are restricted to Fleet Managers and Administrators."
         >
+            {isStandaloneSettingsPage ? (
+                <div className="h-full overflow-y-auto bg-slate-50">
+                    <main className="min-w-0 p-6 lg:p-8">{children}</main>
+                </div>
+            ) : (
             <div className="flex h-full flex-col lg:flex-row bg-slate-50">
                 {/* Secondary Sidebar Navigation */}
                 <aside className="w-full lg:w-[280px] shrink-0 border-r border-slate-200 bg-white shadow-[1px_0_2px_rgba(0,0,0,0.02)] h-auto lg:h-[calc(100vh-64px)] overflow-y-auto">
@@ -140,6 +145,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                     ) : children}
                 </main>
             </div>
+            )}
         </RoleGate>
     )
 }

@@ -49,7 +49,7 @@ export function EventMultiSelect({
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
-                        className="h-auto w-full min-h-10 justify-between font-normal"
+                        className="h-auto min-h-10 w-full justify-between font-normal shadow-none"
                         type="button"
                     >
                         <span className="text-slate-500">
@@ -58,7 +58,7 @@ export function EventMultiSelect({
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 shadow-none" align="start">
                     <Command>
                         <CommandInput placeholder="Search events…" />
                         <CommandList>
@@ -75,7 +75,7 @@ export function EventMultiSelect({
                                                 onSelect={() => !event.disabled && toggle(event.id)}
                                                 className={cn('flex items-start gap-2', event.disabled && 'opacity-60')}
                                             >
-                                                <Checkbox checked={selected} disabled={event.disabled} className="mt-0.5" />
+                                                <Checkbox checked={selected} disabled={event.disabled} className="mt-0.5 shadow-none" />
                                                 <div className="min-w-0 flex-1">
                                                     <p className="text-sm font-medium text-slate-900">{event.label}</p>
                                                     <p className="font-mono text-[10px] text-slate-500">{event.id}</p>
@@ -96,7 +96,7 @@ export function EventMultiSelect({
             {value.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                     {value.map((eventId) => (
-                        <Badge key={eventId} variant="secondary" className="gap-1 rounded-md py-1 pl-2 pr-1 text-[11px] font-medium">
+                        <Badge key={eventId} variant="secondary" className="gap-1 rounded-md py-1 pl-2 pr-1 text-[11px] font-medium shadow-none">
                             {optionsById.get(eventId)?.label ?? eventId}
                             <button
                                 type="button"

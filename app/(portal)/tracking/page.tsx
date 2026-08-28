@@ -75,6 +75,8 @@ export default function TrackingPage() {
     initialCenter: { lat: 6.5244, lng: 3.3792 },
     initialZoom: 12,
     styleKey: mapStyle,
+    preferredProviderKind: "leaflet",
+    tileSource: "google",
   });
 
   const router = useRouter();
@@ -572,7 +574,7 @@ export default function TrackingPage() {
   // as "search location" — most vehicles never have an address (it's only
   // populated by reverse-geocoding the currently-selected vehicle), so it
   // worked only when searching a plate number. Now a real place search via
-  // LocationAutocomplete's Mapbox suggestions — it hands back the selected
+  // LocationAutocomplete's place suggestions — it hands back the selected
   // place's coordinates directly, no vehicle lookup involved.
   const handleLocationSelect = useCallback(
     (coords: { latitude: number; longitude: number }) => {

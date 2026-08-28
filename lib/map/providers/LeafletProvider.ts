@@ -8,8 +8,9 @@ import type {
   MapProviderMountOptions,
   MarkerIconSize,
   OverlayStyle,
+  RasterTileSource,
 } from "../types";
-import { resolveLeafletTileUrl } from "../mapboxStyles";
+import { resolveLeafletAttribution, resolveLeafletTileUrl } from "../mapboxStyles";
 
 class LeafletMarkerHandle implements MapMarkerHandle {
   private popupEl: HTMLDivElement;
@@ -95,17 +96,20 @@ export class LeafletProvider implements MapProvider {
   private errorCbs = new Set<(e: MapProviderError) => void>();
   private tileLayer: L.TileLayer | null = null;
   private styleKey = "standard";
+  private tileSource: RasterTileSource = "osm";
 
   async mount(container: HTMLElement, opts: MapProviderMountOptions): Promise<void> {
     this.styleKey = opts.styleKey;
+    this.tileSource = opts.tileSource ?? "osm";
     const map = L.map(container, {
       center: [opts.center.lat, opts.center.lng],
       zoom: opts.zoom,
       zoomControl: false,
     });
     this.map = map;
-    this.tileLayer = L.tileLayer(resolveLeafletTileUrl(opts.styleKey), {
-      attribution: "&copy; OpenStreetMap contributors",
+    this.tileLayer = L.tileLayer(resolveLeafletTileUrl(opts.styleKey, this.tileSource), {
+      attribution: resolveLeafletAttribution(this.tileSource),
+      subdomains: this.tileSource === "google" ? ["mt0", "mt1", "mt2", "mt3"] : ["a", "b", "c"],
     }).addTo(map);
 
     this.tileLayer.on("tileerror", (e) => {
@@ -125,7 +129,7 @@ export class LeafletProvider implements MapProvider {
   setStyle(styleKey: string): void {
     if (!this.map || !this.tileLayer) return;
     this.styleKey = styleKey;
-    this.tileLayer.setUrl(resolveLeafletTileUrl(styleKey));
+    this.tileLayer.setUrl(resolveLeafletTileUrl(styleKey, this.tileSource));
   }
 
   getCenter(): LatLng {
