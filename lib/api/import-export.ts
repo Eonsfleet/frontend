@@ -49,11 +49,19 @@ export interface ExportUsersParams {
 // Import
 // -------------------------------------------------------------------------
 
+// POST /file/import returns the import record's own numeric id -- never a batch
+// id -- and a progress_url pointing at that record.
+export interface ImportStartedResponse {
+    data_import_id: number
+    status: string
+    progress_url: string
+}
+
 export const importFile = async (
     model: ImportModel,
     file: File,
     onProgress?: (pct: number) => void
-): Promise<{ batch_id: string }> => {
+): Promise<ImportStartedResponse> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('model', model)
@@ -114,6 +122,38 @@ export const getBatchJobStatus = async (batchId: string): Promise<BatchJobStatus
         d.error ?? d.error_message ?? d.failure_reason ?? d.message ?? null
 
     return { status, progress, message }
+}
+
+// An import's progress lives on the import record, not on the Bus batch it
+// eventually dispatches: the batch id is only written once the queued parse job
+// dispatches one, and an import with no rows to queue never dispatches a batch
+// at all. So imports are polled here; only exports have a batch id to poll.
+export const getDataImportStatus = async (dataImportId: string): Promise<BatchJobStatusResponse> => {
+    const res = await apiClient.get(`/data-imports/${dataImportId}`)
+    const d = res.data?.data ?? res.data
+
+    const rawStatus: string = (d.status ?? '').toLowerCase()
+    const status: RawBatchJobStatus =
+        rawStatus === 'completed' || rawStatus === 'completed_with_errors'
+            ? 'completed'
+            : rawStatus === 'failed'
+              ? 'failed'
+              : 'processing'
+
+    // A finished import that could not write every row is not a success story,
+    // so the row count travels with it rather than being reported as "done".
+    const failedRows: number = d.failed_rows ?? 0
+    const message: string | null =
+        d.error_message ??
+        (status === 'completed' && failedRows > 0
+            ? `Completed with ${failedRows} failed row${failedRows === 1 ? '' : 's'}.`
+            : null)
+
+    return {
+        status,
+        progress: typeof d.progress_percent === 'number' ? d.progress_percent : 0,
+        message,
+    }
 }
 
 export const getBatchStatus = async (batchId: string): Promise<BatchStatus> => {

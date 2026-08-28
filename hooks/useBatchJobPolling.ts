@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { getBatchJobStatus } from '@/lib/api/import-export'
+import { getBatchJobStatus, getDataImportStatus } from '@/lib/api/import-export'
 import { useImportExportStore } from '@/store/importExportStore'
 
 const POLL_INTERVAL_MS = 2500
@@ -48,13 +48,21 @@ export function useBatchJobPolling() {
           }
 
           try {
-            const result = await getBatchJobStatus(job.batchId)
+            const result =
+              job.source === 'data_import'
+                ? await getDataImportStatus(job.sourceId)
+                : await getBatchJobStatus(job.sourceId)
             consecutiveErrors = 0
 
             if (result.status === 'completed') {
               clearInterval(timerId)
               timers.current.delete(job.id)
-              updateJob(job.id, { status: 'completed', progress: 100, finishedAt: Date.now() })
+              updateJob(job.id, {
+                status: 'completed',
+                progress: 100,
+                error: result.message,
+                finishedAt: Date.now(),
+              })
             } else if (result.status === 'failed') {
               clearInterval(timerId)
               timers.current.delete(job.id)

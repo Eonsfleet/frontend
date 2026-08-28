@@ -1,11 +1,16 @@
 import { create } from 'zustand'
 
 export type BatchJobKind = 'import' | 'export'
+// Which endpoint reports this job's progress. Imports are addressed by their own
+// numeric record id and exports by a batch UUID; the two id spaces are not
+// interchangeable, so a job carries the one it belongs to.
+export type BatchJobSource = 'batch' | 'data_import'
 export type BatchJobStatus = 'processing' | 'completed' | 'failed'
 
 export interface BatchJob {
   id: string
-  batchId: string
+  source: BatchJobSource
+  sourceId: string
   kind: BatchJobKind
   label: string
   status: BatchJobStatus
