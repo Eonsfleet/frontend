@@ -105,6 +105,7 @@ export function DetailsTab({ resolved, todayKm }: DetailsTabProps) {
       <TelemetryRow label="Eco Score" value={fmt(resolved.ecoScore, "/100")} />
       <TelemetryRow label="Altitude" value={fmt(resolved.altitude, " m")} />
       <TelemetryRow label="GPS Precision (HDOP)" value={fmt(resolved.hdop)} />
+      <TelemetryRow label="GPS Confidence" value={fmt(resolved.gpsConfidence)} />
 
       <SectionLabel>Protocol</SectionLabel>
       <TelemetryRow label="Protocol Name" value={resolved.protocol} />

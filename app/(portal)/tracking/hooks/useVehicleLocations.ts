@@ -260,10 +260,10 @@ export function useVehicleLocations({
     // Positions are published by the Go telemetry pipeline on the org-wide
     // tracking channel — the old Laravel broadcaster (location.organization.*
     // / .current.recent, keyed on latitude/longitude) was retired and nothing
-    // publishes to it any more. New event carries lat/lng (not latitude/
-    // longitude) and no is_online/device_status field — every packet that
-    // arrives here is by definition a live vehicle, so is_online is forced
-    // true below rather than derived from a field the payload doesn't have.
+    // publishes to it any more. The event carries lat/lng (not latitude/
+    // longitude) and, since System 3 started serialising the enriched fields it
+    // already held, also ignition, movement, status, is_online, mileage_km and
+    // gps_confidence — so status no longer has to be guessed from speed.
     const locationUnsubscribe = subscribePrivate(
       `org.${orgIdentifier}.tracking`,
       ".vehicle.location.updated",
@@ -273,13 +273,21 @@ export function useVehicleLocations({
         // this hook keys by vehicle_id, so packets without one are dropped
         // rather than introducing a second identity scheme here.
         if (packet.vehicle_id) {
-          const normalized = normalizeTelemetry(packet);
-          // normalizeTelemetry() derives status from an is_online/device_status
-          // field this payload doesn't carry, so it always resolves "offline" —
-          // every packet on this channel is by definition a live vehicle (see
-          // comment above), so status here is derived directly from the
-          // packet's own speed instead, same rule as the REST seed uses.
-          const status = (normalized.speed ?? 0) > 0 ? "in_transit" : "parked";
+          // is_online is forced true only when the payload omits it: a packet
+          // on this channel is by definition a live position, since a device
+          // going offline produces no packet. Supplying it as an override
+          // instead of ignoring the field lets a real `false` through, and lets
+          // normalizeTelemetry's own status derivation run at all — with no
+          // truthy is_online it resolves "offline" for every packet.
+          const normalized = normalizeTelemetry(packet, {
+            is_online: packet.is_online ?? true,
+          });
+          // The packet carries ignition and movement, so "idle" (engine
+          // running, stationary) is distinguishable from "parked". Deriving
+          // from speed alone collapsed the two, and every idling vehicle in the
+          // fleet reported as parked.
+          const status =
+            normalized.status ?? ((normalized.speed ?? 0) > 0 ? "in_transit" : "parked");
           const idKey = resolveIdKey(packet.vehicle_id);
 
           if (normalized.lat != null && normalized.lng != null) {
@@ -348,10 +356,9 @@ export function useVehicleLocations({
                 status,
                 statusSinceMs,
                 state: packet.state ?? prevEntry?.state,
-                // Every packet on this channel is by definition a live position —
-                // the payload carries no is_online/device_status field to derive
-                // this from (see the subscription comment above).
-                is_online: true,
+                // Resolved above: the payload's own value, defaulted to true
+                // when absent (see the normalizeTelemetry call).
+                is_online: normalized.is_online,
                 lastUpdate: packetTs || prevEntry?.lastUpdate,
                 lastPacket: packetTs || prevEntry?.lastPacket,
                 fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
