@@ -138,7 +138,7 @@ describe('useVehicleLocations lastUpdate/lastPacket timestamp', () => {
     expect(result.current.locations['42'].lastPacket).toBe('2026-07-03T12:00:00+00:00')
   })
 
-  it('forces is_online true, since the new payload carries no is_online/device_status field to derive it from', () => {
+  it('defaults is_online to true when the packet omits it — a packet is by definition a live position', () => {
     const { subscribePrivate, handlers } = makeSubscribePrivate()
     const { result } = renderHook(
       () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
@@ -227,5 +227,44 @@ describe('useVehicleLocations selection-triggered snapshot seed', () => {
 
     expect(result.current.locations['42'].satellites).toBe(9)
     expect(result.current.locations['42'].speed).toBe(40)
+  })
+})
+
+describe('useVehicleLocations status fidelity', () => {
+  const send = (packet: Record<string, unknown>) => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    const locationHandler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
+    act(() => {
+      locationHandler({ vehicle_id: '42', lat: 6.5, lng: 3.4, timestamp: '2026-08-28T12:00:00+00:00', ...packet })
+    })
+    return result
+  }
+
+  // The packet carries ignition and movement, so an idling vehicle (engine
+  // running, stationary) is distinguishable from a parked one. A speed-only
+  // derivation reported every idling vehicle in the fleet as parked.
+  it('reports an ignition-on, stationary vehicle as idle rather than parked', () => {
+    const result = send({ speed: 0, ignition: 'on', movement: 'off', status: 'stopped', is_online: true })
+    expect(result.current.locations['42'].status).toBe('idle')
+  })
+
+  it('reports an ignition-off, stationary vehicle as parked', () => {
+    const result = send({ speed: 0, ignition: 'off', movement: 'off', status: 'active', is_online: true })
+    expect(result.current.locations['42'].status).toBe('parked')
+  })
+
+  it('reports a moving vehicle as in_transit', () => {
+    const result = send({ speed: 48, ignition: 'on', movement: 'on', status: 'in_transit', is_online: true })
+    expect(result.current.locations['42'].status).toBe('in_transit')
+  })
+
+  it('honours an explicit is_online false instead of overriding it with true', () => {
+    const result = send({ speed: 0, ignition: 'off', movement: 'off', is_online: false })
+    expect(result.current.locations['42'].is_online).toBe(false)
+    expect(result.current.locations['42'].status).toBe('offline')
   })
 })

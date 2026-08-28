@@ -41,6 +41,7 @@ export interface ResolvedVehicleTelemetryInput {
     driving_state?: string;
     altitude?: number | null;
     movement?: string | null;
+    gps_confidence?: number | null;
     raw?: any;
   } | null;
   telemetry: any;
@@ -93,7 +94,13 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     satellites: loc?.satellites ?? null,
     signal: loc?.satellites != null ? `${loc.satellites} Sats` : "---",
     ignition: loc?.ignition ?? false,
-    odometer: loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+    // mileage_km, not odometer_km: System 2 documents odometer_km as the
+    // device's own counter with an arbitrary base (one live unit reads
+    // 4,121,010 km), so only its delta means anything. mileage_km is that
+    // counter rebased onto the vehicle's real odometer — the one to show.
+    odometer:
+      loc?.odometer ?? loc?.mileage_km ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+    gps_confidence: loc?.gps_confidence ?? null,
     lat: loc?.lat ?? rel?.latitude,
     lng: loc?.lng ?? rel?.longitude,
     lastUpdate:
@@ -182,11 +189,12 @@ export function resolveVehicleTelemetry({
     : (vehicle?.ignition as any) === "on" || (vehicle?.ignition as any) === "1" || vehicle?.ignition === true;
   const liveMovement = telemetry?.movement ?? vehicle?.movement;
   const liveStatus = telemetry?.status ?? vehicle?.status;
-  const liveLat = telemetry?.latitude ?? vehicle?.lat;
-  const liveLng = telemetry?.longitude ?? vehicle?.lng;
+  const liveLat = telemetry?.latitude ?? telemetry?.lat ?? vehicle?.lat;
+  const liveLng = telemetry?.longitude ?? telemetry?.lng ?? vehicle?.lng;
   const liveAltitude = telemetry?.altitude ?? vehicle?.altitude ?? raw.altitude;
   const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
-  const liveOdo = telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
+  const liveOdo =
+    telemetry?.odometer ?? telemetry?.mileage_km ?? vehicle?.odometer ?? raw.odometer ?? raw.mileage_km;
   // Not every device/protocol reports engine hours — surface it only when the
   // device actually sends it rather than fabricating a value from unrelated data.
   const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;
@@ -197,12 +205,16 @@ export function resolveVehicleTelemetry({
   // A live WS packet's timestamp_utc only wins when it's actually newer than
   // the last REST-recorded receipt time, so streaming still feels live without
   // ever showing an earlier moment than what "last packet received" reports.
-  const wsTimestampMs = telemetry?.timestamp_utc ? new Date(telemetry.timestamp_utc).getTime() : 0;
+  // timestamp_utc is the per-vehicle channel's key; the fleet channel calls the
+  // same value `timestamp`. Reading only the former meant a fleet packet could
+  // never win the comparison below, so "Last Update" sat on the REST value.
+  const wsPacketTs = telemetry?.timestamp_utc ?? telemetry?.timestamp;
+  const wsTimestampMs = wsPacketTs ? new Date(wsPacketTs).getTime() : 0;
   const restReceivedMs = vehicle?.lastPacketReceivedAt ? new Date(vehicle.lastPacketReceivedAt).getTime() : 0;
   const liveLastUpdate =
     wsTimestampMs > restReceivedMs
-      ? telemetry?.timestamp_utc
-      : (vehicle?.lastPacketReceivedAt ?? telemetry?.timestamp_utc ?? telemetry?.gps_datetime ?? vehicle?.lastUpdate);
+      ? wsPacketTs
+      : (vehicle?.lastPacketReceivedAt ?? wsPacketTs ?? telemetry?.gps_datetime ?? vehicle?.lastUpdate);
   const liveRpm = meta.engine_rpm ?? telemetry?.engine_rpm ?? raw.engine_rpm ?? vehicle?.rpm;
   const liveRpmObd = meta.engine_rpm_obd ?? telemetry?.engine_rpm_obd ?? raw.engine_rpm_obd;
   const liveOilLevel = meta.oil_level ?? telemetry?.oil_level ?? raw.oil_level;
@@ -315,6 +327,10 @@ export function resolveVehicleTelemetry({
     raw.total_mileage_counted ??
     null;
   const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
+  // Distinct from the protocol `confidence` below — this is the ingest
+  // pipeline's confidence in the GPS fix itself.
+  const liveGpsConfidence =
+    telemetry?.gps_confidence ?? raw.gps_confidence ?? vehicle?.gps_confidence ?? null;
   const liveOdoSource = meta.odometer_source ?? telemetry?.odometer_source ?? raw.odometer_source ?? null;
   const liveProtocol = meta.protocol_name ?? telemetry?.protocol_name ?? raw.protocol_name ?? null;
   const liveConfidence = meta.confidence ?? telemetry?.confidence ?? raw.confidence ?? null;
@@ -397,6 +413,7 @@ export function resolveVehicleTelemetry({
     odoSource: liveOdoSource,
     protocol: liveProtocol,
     confidence: liveConfidence,
+    gpsConfidence: liveGpsConfidence,
     fuel: liveFuel,
     fuelLiters: liveFuelLiters,
     fuelTankCap,
