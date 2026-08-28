@@ -788,17 +788,20 @@ export default function FuelExpensesPage() {
       return api.importFuelTransactions(formData);
     },
     onSuccess: (response) => {
-      const batchId =
+      const dataImportId =
         (response.data?.data_import_id ?? response.data?.fuel_import_id) != null
           ? String(response.data?.data_import_id ?? response.data?.fuel_import_id)
           : null;
 
-      // Only ever show progress once the API confirms a pollable batch job
-      // exists — a 2xx with no batch id has nothing to track.
-      if (batchId) {
+      // Only ever show progress once the API confirms a pollable import exists —
+      // a 2xx with no import id has nothing to track. This is the import
+      // record's id, polled at /data-imports/{id}: it is not a batch id, and
+      // sending it to /batch/{id} is what used to 404 the progress widget.
+      if (dataImportId) {
         addImportExportJob({
-          id: `fuel-import-${batchId}`,
-          batchId,
+          id: `fuel-import-${dataImportId}`,
+          source: "data_import",
+          sourceId: dataImportId,
           kind: "import",
           label: "Fuel transactions import",
         });

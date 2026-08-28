@@ -101,7 +101,9 @@ function JobRow({ job, onDismiss }: { job: BatchJob; onDismiss: () => void }) {
           )}
 
           {job.status === 'completed' && (
-            <p className="mt-0.5 text-[11px] text-emerald-600">Completed successfully.</p>
+            <p className={cn('mt-0.5 text-[11px]', job.error ? 'text-amber-600' : 'text-emerald-600')}>
+              {job.error ?? 'Completed successfully.'}
+            </p>
           )}
 
           {job.status === 'failed' && (

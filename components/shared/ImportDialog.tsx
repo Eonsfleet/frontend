@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Download, Upload, CheckCircle2, XCircle, Loader2, FileSpreadsheet, AlertTriangle } from 'lucide-react'
-import { downloadTemplate, importFile, getBatchStatus, EntityType, ImportModel } from '@/lib/api/import-export'
+import { downloadTemplate, importFile, getDataImportStatus, EntityType, ImportModel } from '@/lib/api/import-export'
 import { toast } from 'sonner'
 
 interface ImportDialogProps {
@@ -47,7 +47,6 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
     const [step, setStep] = useState<Step>('template')
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [uploadPct, setUploadPct] = useState(0)
-    const [batchId, setBatchId] = useState<string | null>(null)
     const [batchProgress, setBatchProgress] = useState(0)
     const [batchStatus, setBatchStatus] = useState<'running' | 'finished' | 'failed'>('running')
     const [isDragging, setIsDragging] = useState(false)
@@ -62,7 +61,6 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
         setStep('template')
         setSelectedFile(null)
         setUploadPct(0)
-        setBatchId(null)
         setBatchProgress(0)
         setBatchStatus('running')
         setIsUploading(false)
@@ -103,14 +101,14 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
     const startPolling = (id: string) => {
         pollRef.current = setInterval(async () => {
             try {
-                const status = await getBatchStatus(id)
+                const status = await getDataImportStatus(id)
                 setBatchProgress(status.progress ?? 0)
 
-                if (status.status === 'finished') {
+                if (status.status === 'completed') {
                     clearInterval(pollRef.current!)
                     setBatchStatus('finished')
                     onComplete?.()
-                } else if (status.status === 'cancelled' || status.status === 'failed' || status.failedJobs > 0) {
+                } else if (status.status === 'failed') {
                     clearInterval(pollRef.current!)
                     setBatchStatus('failed')
                 }
@@ -127,8 +125,7 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
         setBatchProgress(0)
         try {
             const result = await importFile(model, selectedFile, setUploadPct)
-            setBatchId(result.batch_id)
-            startPolling(result.batch_id)
+            startPolling(String(result.data_import_id))
         } catch {
             toast.error('Upload failed. Please check the file format and try again.')
             setIsUploading(false)
