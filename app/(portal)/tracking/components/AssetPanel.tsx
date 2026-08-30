@@ -12,14 +12,10 @@ import {
   MoreHorizontal,
   MapPinned,
   Share2,
-  FileDown,
   ChevronRight,
   Crosshair,
   PlayCircle,
   Play,
-  Calendar,
-  ChevronDown,
-  Trash2,
   Camera,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,6 +49,7 @@ import { DriverTab } from "./tabs/DriverTab";
 import { TripTab } from "./tabs/TripTab";
 import { DeviceTab } from "./tabs/DeviceTab";
 import { PacketStreamTab } from "./tabs/PacketStreamTab";
+import { RouteHistoryPanel } from "./RouteHistoryPanel";
 
 const TAB_TRIGGER_CLASS =
   "data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium text-[11px]";
@@ -358,224 +355,11 @@ export function AssetPanel({
 
       {/* Tabs / Route History Panel */}
       {activeTab === "history" ? (
-        <div className="flex-1 flex flex-col min-h-0 bg-white">
-          {/* Route History Header */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Route History
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                View historical routes and movements of this vehicle.
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab("details")}
-              aria-label="Close route history"
-              className="h-7 w-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Date Picker Row */}
-          <div className="flex items-center gap-2 px-6 py-3 shrink-0">
-            <button className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 flex items-center gap-2 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors">
-              <span>May 20, 2024</span>
-              <Calendar className="h-3.5 w-3.5 text-slate-400" />
-            </button>
-            <button className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors">
-              Today
-            </button>
-          </div>
-
-          {/* Metrics Summary Row */}
-          <div className="grid grid-cols-4 gap-2 bg-slate-50 border border-slate-100 rounded-xl p-3 mx-6 mb-4 text-center shrink-0">
-            <div>
-              <div className="text-xs font-extrabold text-slate-800">4</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                Trips
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-extrabold text-slate-800">
-                182 km
-              </div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                Distance
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-extrabold text-slate-800">
-                6h 45m
-              </div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                Duration
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-extrabold text-slate-800">8</div>
-              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                Stops
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline list of historical trips */}
-          <div className="flex-1 overflow-y-auto px-6 pb-4 relative min-h-0">
-            {/* Vertical timeline line */}
-            <div className="absolute left-[33px] top-6 bottom-6 w-0.5 bg-slate-100" />
-
-            <div className="space-y-4">
-              {[
-                {
-                  id: 1,
-                  time: "08:15 AM - 10:27 AM",
-                  duration: "2h 12m",
-                  distance: "68.4 km",
-                  stops: 2,
-                  start: "Ikeja, Lagos",
-                  end: "Victoria Island, Lagos",
-                },
-                {
-                  id: 2,
-                  time: "11:02 AM - 12:15 PM",
-                  duration: "1h 13m",
-                  distance: "32.6 km",
-                  stops: 1,
-                  start: "Victoria Island, Lagos",
-                  end: "Lekki, Lagos",
-                },
-                {
-                  id: 3,
-                  time: "01:05 PM - 03:18 PM",
-                  duration: "2h 13m",
-                  distance: "58.7 km",
-                  stops: 3,
-                  start: "Lekki, Lagos",
-                  end: "Maryland, Lagos",
-                },
-                {
-                  id: 4,
-                  time: "04:01 PM - 05:16 PM",
-                  duration: "1h 15m",
-                  distance: "22.3 km",
-                  stops: 2,
-                  start: "Maryland, Lagos",
-                  end: "Ikeja, Lagos",
-                },
-              ].map((tripItem) => (
-                <div
-                  key={tripItem.id}
-                  className="flex items-start gap-4 relative pl-1"
-                >
-                  <div className="relative flex items-center justify-center w-5 h-5 rounded-full border border-slate-200 bg-white z-10 shrink-0 mt-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  </div>
-                  <div className="flex-1 min-w-0 bg-white rounded-xl p-3 border border-slate-100 hover:bg-slate-50/50 hover:border-slate-200 transition-all duration-200 flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">
-                          {tripItem.time}
-                        </span>
-                        <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-wider">
-                          Completed
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                        {tripItem.duration} • {tripItem.distance} •{" "}
-                        {tripItem.stops}{" "}
-                        {tripItem.stops === 1 ? "stop" : "stops"}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-50">
-                        <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                            Start
-                          </span>
-                          <span className="text-[10px] font-semibold text-slate-700 truncate block">
-                            {tripItem.start}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">
-                            End
-                          </span>
-                          <span className="text-[10px] font-semibold text-slate-700 truncate block">
-                            {tripItem.end}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 self-center">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="h-7 w-7 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center transition-colors">
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="w-44 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1"
-                        >
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.success("Focusing trip on map")
-                            }
-                            className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <MapPinned className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Show on Map</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.success("Exporting trip data...")
-                            }
-                            className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <FileDown className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Export Trip</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.success(
-                                "Copied shareable trip link to clipboard",
-                              )
-                            }
-                            className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <Share2 className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Share Trip</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.success("Preparing PDF report...")
-                            }
-                            className="flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <FileDown className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Download Report</span>
-                          </DropdownMenuItem>
-                          <div className="h-px bg-slate-100 my-1" />
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.error("Trip deletion is not available.")
-                            }
-                            className="flex items-center gap-2 px-2.5 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-rose-500" />
-                            <span>Delete</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <RouteHistoryPanel
+          vehicleId={String(selectedVehicle.id)}
+          plate={plate}
+          onClose={() => setActiveTab("details")}
+        />
       ) : (
         <Tabs
           value={activeTab}

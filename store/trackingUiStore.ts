@@ -2,6 +2,17 @@ import { create } from "zustand";
 
 export type TrackingDetailTab = "details" | "driver" | "trip" | "device" | "packets" | "history";
 
+/**
+ * A route-history journey the user asked to see drawn on the map. Lives here
+ * rather than in AssetPanel because the panel renders twice (desktop + mobile
+ * variants toggled by CSS breakpoint) and TrackingMap is a sibling of both.
+ */
+export interface FocusedRoute {
+  vehicleId: string;
+  segmentId: string;
+  path: { lat: number; lng: number }[];
+}
+
 export interface TrackingAdvancedFilters {
   clusterIds: string[];
   organizationId: string | null;
@@ -28,6 +39,9 @@ interface TrackingUiState {
   activeTab: TrackingDetailTab;
   setActiveTab: (tab: TrackingDetailTab) => void;
 
+  focusedRoute: FocusedRoute | null;
+  setFocusedRoute: (route: FocusedRoute | null) => void;
+
   // Tablet: collapsible side panels
   isAssetListCollapsed: boolean;
   isAssetPanelCollapsed: boolean;
@@ -52,7 +66,16 @@ interface TrackingUiState {
 
 export const useTrackingUiStore = create<TrackingUiState>((set) => ({
   activeTab: "details",
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  // Leaving the history tab drops the drawn route with it — otherwise a journey
+  // stays painted over the live map long after the panel showing it is gone.
+  setActiveTab: (tab) =>
+    set((s) => ({
+      activeTab: tab,
+      focusedRoute: tab === "history" ? s.focusedRoute : null,
+    })),
+
+  focusedRoute: null,
+  setFocusedRoute: (route) => set({ focusedRoute: route }),
 
   isAssetListCollapsed: false,
   isAssetPanelCollapsed: false,

@@ -107,3 +107,90 @@ export const getVehicleSensorHealth = async (
   });
   return res.data;
 };
+
+/** One endpoint of a journey: where it began, ended, or paused. */
+export interface RouteHistoryPlace {
+  latitude: number;
+  longitude: number;
+  /** Null when the endpoint could not be named — render the coordinates instead. */
+  address: string | null;
+}
+
+export interface RouteHistoryStop extends RouteHistoryPlace {
+  arrived_at: string;
+  departed_at: string;
+  duration_seconds: number;
+}
+
+export interface RouteHistoryPathPoint {
+  latitude: number;
+  longitude: number;
+  speed: number | null;
+  timestamp: string;
+}
+
+/** A single journey the vehicle made, derived server-side from its GPS packets. */
+export interface RouteHistorySegment {
+  id: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  idle_seconds: number;
+  distance_km: number;
+  max_speed: number;
+  avg_speed: number;
+  stops: number;
+  start: RouteHistoryPlace;
+  end: RouteHistoryPlace;
+  stop_points: RouteHistoryStop[];
+  /** Empty when the request passed include_path=false. */
+  path: RouteHistoryPathPoint[];
+}
+
+export interface RouteHistorySummary {
+  trips: number;
+  distance_km: number;
+  duration_seconds: number;
+  idle_seconds: number;
+  stops: number;
+  max_speed: number;
+  avg_speed: number;
+}
+
+export interface RouteHistoryResponse {
+  message: string;
+  data: RouteHistorySegment[];
+  meta: {
+    total: number;
+    vehicle_id: string;
+    start_date: string;
+    end_date: string;
+    summary: RouteHistorySummary;
+  };
+}
+
+/** Widest window the endpoint accepts, in days — mirrors RouteHistoryService::MAX_WINDOW_DAYS. */
+export const ROUTE_HISTORY_MAX_WINDOW_DAYS = 31;
+
+/**
+ * Historical journeys for a vehicle over a date range.
+ *
+ * Distinct from getVehiclePlayback, which returns every raw frame for at most
+ * 24 hours: this collapses the window into journeys (start, end, distance,
+ * duration, stops) and accepts up to 31 days.
+ */
+export const getVehicleRouteHistory = async (
+  vehicleId: string | number,
+  startDate: string,
+  endDate: string,
+  options?: { includePath?: boolean },
+): Promise<RouteHistoryResponse> => {
+  const res = await apiClient.get(`/vehicles/${vehicleId}/route-history`, {
+    params: {
+      start_date: startDate,
+      end_date: endDate,
+      include_path: options?.includePath === false ? 0 : 1,
+    },
+  });
+  return res.data;
+};

@@ -6,6 +6,7 @@ import {
     getDevices,
     getTripPlayback,
     getVehicleSensorHealth,
+    getVehicleRouteHistory,
 } from '@/lib/api/tracking'
 
 vi.mock('@/lib/api/client', () => ({
@@ -116,6 +117,49 @@ describe('getVehicleSensorHealth', () => {
         await getVehicleSensorHealth('7', { include_history: true, anomaly_threshold: 'high' })
         expect(mockGet).toHaveBeenCalledWith('/vehicles/7/sensors/health', {
             params: { include_history: true, anomaly_threshold: 'high' },
+        })
+    })
+})
+
+describe('getVehicleRouteHistory', () => {
+    it('GETs /vehicles/:id/route-history with the window and asks for paths by default', async () => {
+        const payload = {
+            message: 'Route history retrieved successfully',
+            data: [],
+            meta: {
+                total: 0,
+                vehicle_id: '42',
+                start_date: '2026-08-30T00:00:00Z',
+                end_date: '2026-08-30T23:59:59Z',
+                summary: {
+                    trips: 0, distance_km: 0, duration_seconds: 0,
+                    idle_seconds: 0, stops: 0, max_speed: 0, avg_speed: 0,
+                },
+            },
+        }
+        mockGet.mockResolvedValueOnce({ data: payload })
+
+        const result = await getVehicleRouteHistory('42', '2026-08-30T00:00:00Z', '2026-08-30T23:59:59Z')
+
+        expect(mockGet).toHaveBeenCalledWith('/vehicles/42/route-history', {
+            params: {
+                start_date: '2026-08-30T00:00:00Z',
+                end_date: '2026-08-30T23:59:59Z',
+                include_path: 1,
+            },
+        })
+        expect(result).toEqual(payload)
+    })
+
+    it('opts out of paths when the caller only needs the journey summaries', async () => {
+        mockGet.mockResolvedValueOnce({ data: { data: [], meta: {} } })
+
+        await getVehicleRouteHistory('42', '2026-08-30T00:00:00Z', '2026-08-30T23:59:59Z', {
+            includePath: false,
+        })
+
+        expect(mockGet).toHaveBeenCalledWith('/vehicles/42/route-history', {
+            params: expect.objectContaining({ include_path: 0 }),
         })
     })
 })

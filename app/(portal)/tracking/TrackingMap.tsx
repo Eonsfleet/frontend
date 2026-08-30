@@ -77,7 +77,7 @@ export default function TrackingMap({
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedVehicle ? selectedVehicle.id : null;
 
-  const { isMapFollowEnabled, setMapFollowEnabled } = useTrackingUiStore();
+  const { isMapFollowEnabled, setMapFollowEnabled, focusedRoute } = useTrackingUiStore();
 
   useEffect(() => {
     if (selectedVehicle) setMapFollowEnabled(true);
@@ -163,6 +163,29 @@ export default function TrackingMap({
       provider.removeOverlay("trail");
     }
   }, [provider, isReady, isReplayMode, selectedVehicle, trail]);
+
+  // A route-history journey the user picked out of the asset panel. Drawn over
+  // the live trail in a distinct colour, and framed once when it first appears
+  // so the whole journey is visible without hunting for it.
+  useEffect(() => {
+    if (!provider || !isReady) return;
+
+    const path = focusedRoute?.path ?? [];
+
+    if (path.length > 1) {
+      provider.setPolyline("route-history", path, {
+        color: "#7c3aed",
+        weight: 5,
+        opacity: 0.9,
+      });
+      provider.fitBounds(path, { paddingPx: 64, maxZoom: 16 });
+      // The camera belongs to the journey now — leaving follow on would snap it
+      // straight back to wherever the vehicle currently is.
+      setMapFollowEnabled(false);
+    } else {
+      provider.removeOverlay("route-history");
+    }
+  }, [provider, isReady, focusedRoute, setMapFollowEnabled]);
 
   // Playback route (dashed) — the ghost marker below tracks the current index.
   useEffect(() => {
