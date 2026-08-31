@@ -26,6 +26,65 @@ function flattenTelemetryEnvelope(vehicle: any): any {
   };
 }
 
+/** A snapshot position of 0,0 means the field was absent, not that the vehicle is at Null Island. */
+const hasFix = (lat: unknown, lng: unknown) =>
+  typeof lat === "number" && typeof lng === "number" && (lat !== 0 || lng !== 0);
+
+/**
+ * Fold the one-off ?view=telemetry snapshot into whatever the fleet seed and
+ * the WS stream have already put in the map for this vehicle.
+ *
+ * Freshness decides which side wins a field they BOTH carry. It must not decide
+ * whether the snapshot lands at all, because the two sides do not carry the same
+ * fields and they do not read the same clock. relationships.current_location is
+ * the only source of the extended telemetry — engine, electrical, door, GSM,
+ * odometer, satellites, protocol — none of which the view=map feed has at all;
+ * and it is stamped with the GPS fix's own time while the map feed's lastUpdate
+ * is the device's server-recorded receipt time, which is later essentially
+ * always. Gating the whole payload on that comparison discarded every snapshot
+ * for any vehicle already in the list, which is every vehicle the panel can open,
+ * so the Details tab sat empty below the handful of fields the map feed carries.
+ */
+export function mergeTelemetrySnapshot(prevEntry: any, normalized: any) {
+  const snapshotTs = normalized.timestamp_utc || normalized.gps_datetime || null;
+  const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+  const snapshotUpdateMs = snapshotTs ? new Date(snapshotTs).getTime() : 0;
+  const snapshotIsFresher = snapshotUpdateMs >= prevUpdateMs;
+
+  // The fresher side wins the overlap; the older side still fills in every
+  // field its counterpart never had.
+  const merged = snapshotIsFresher
+    ? { ...prevEntry, ...normalized }
+    : { ...normalized, ...prevEntry };
+
+  const pick = <T,>(fromSnapshot: T, fromPrev: T): T =>
+    snapshotIsFresher ? (fromSnapshot ?? fromPrev) : (fromPrev ?? fromSnapshot);
+
+  return {
+    ...merged,
+    // A known-good position is never traded for an absent one.
+    lat: hasFix(normalized.lat, normalized.lng) ? pick(normalized.lat, prevEntry?.lat) : (prevEntry?.lat ?? normalized.lat),
+    lng: hasFix(normalized.lat, normalized.lng) ? pick(normalized.lng, prevEntry?.lng) : (prevEntry?.lng ?? normalized.lng),
+    // This snapshot is "last stored location," not "online right now" —
+    // leave connectivity state to the bulk-list seed / WS status stream
+    // rather than asserting online/offline from a single REST read.
+    status: prevEntry?.status ?? normalized.status,
+    statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
+    is_online: prevEntry?.is_online ?? true,
+    // Never walk the clock backwards.
+    lastUpdate: snapshotIsFresher ? (snapshotTs ?? prevEntry?.lastUpdate) : (prevEntry?.lastUpdate ?? snapshotTs),
+    fuel: pick(normalized.fuel_level_percent, prevEntry?.fuel),
+    fuel_liters: pick(normalized.fuel_level_liters, prevEntry?.fuel_liters),
+    ignition: snapshotIsFresher
+      ? normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
+      : (prevEntry?.ignition ?? normalized.ignition === "on"),
+    // raw is the resolver's last-resort lookup for anything the live payloads
+    // omit, so it holds the best known value per field rather than whichever
+    // packet landed last.
+    raw: snapshotIsFresher ? { ...prevEntry?.raw, ...normalized } : { ...normalized, ...prevEntry?.raw },
+  };
+}
+
 interface UseVehicleLocationsProps {
   vehicles: VehicleMapEntry[];
   token: string | null;
@@ -83,6 +142,12 @@ export function useVehicleLocations({
   // fields the bulk /vehicles list never carries (satellites, battery voltage,
   // GSM operator, engine metadata, ...) instead of leaving them blank until
   // the fleet-wide 30s poll or the first WS packet for this vehicle arrives.
+  //
+  // NOTE: VehicleController::show() takes no Request and so ignores `view`
+  // entirely — it always eager-loads currentLocation, which is why this works.
+  // The backend's VehicleView enum has no `telemetry` case either, so if `view`
+  // is ever wired into show() behind that enum's validation, this call starts
+  // returning 422 and every field below goes blank.
   const { data: selectedVehicleSnapshot } = useQuery({
     queryKey: ["vehicle", selectedVehicleId, "telemetry"],
     queryFn: () => getVehicleById(selectedVehicleId!, { view: "telemetry" }),
@@ -97,37 +162,10 @@ export function useVehicleLocations({
     const normalized = normalizeTelemetry(flat);
     if (!normalized) return;
 
-    setLocations((prev) => {
-      const prevEntry = prev[selectedVehicleId];
-      const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
-      const snapshotTs = normalized.timestamp_utc || normalized.gps_datetime;
-      const snapshotUpdateMs = snapshotTs ? new Date(snapshotTs).getTime() : 0;
-      // A WS packet (or the bulk-list seed) may have already landed and be
-      // newer than this one-off snapshot — never let it clobber fresher data.
-      if (prevEntry && prevUpdateMs > snapshotUpdateMs) return prev;
-
-      return {
-        ...prev,
-        [selectedVehicleId]: {
-          ...prevEntry,
-          ...normalized,
-          // This snapshot is "last stored location," not "online right now" —
-          // leave connectivity state to the bulk-list seed / WS status stream
-          // rather than asserting online/offline from a single REST read.
-          status: prevEntry?.status ?? normalized.status,
-          statusSinceMs: prevEntry?.statusSinceMs ?? Date.now(),
-          is_online: prevEntry?.is_online ?? true,
-          lastUpdate: snapshotTs ?? prevEntry?.lastUpdate,
-          fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
-          fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
-          ignition:
-            normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
-              ? true
-              : (prevEntry?.ignition ?? false),
-          raw: normalized,
-        },
-      };
-    });
+    setLocations((prev) => ({
+      ...prev,
+      [selectedVehicleId]: mergeTelemetrySnapshot(prev[selectedVehicleId], normalized),
+    }));
   }, [selectedVehicleSnapshot, selectedVehicleId]);
 
   const pushIfSelected = (idKey: string, event: string, payload: any) => {

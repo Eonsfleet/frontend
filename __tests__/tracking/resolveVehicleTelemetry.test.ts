@@ -95,3 +95,103 @@ describe('resolveVehicleTelemetry fleet-channel payload', () => {
     expect(resolved.confidence).toBe(12)
   })
 })
+
+describe('current_location telemetry reaches the Details tab', () => {
+  // The exact relationships.current_location payload GET /vehicles/{id} returns
+  // (TelemetryFormatHelper::fromVehicleLocation), flattened by the tracking hook
+  // the way normalizeTelemetry does — metadata hoisted to the top level.
+  const currentLocation = {
+    device_imei: '862288040123456',
+    latitude: 6.5244,
+    longitude: 3.3792,
+    speed: 0,
+    ignition: 'on',
+    movement: 'off',
+    altitude: 42,
+    heading: 90,
+    satellites: 7,
+    address: 'Ikeja, Lagos',
+    protocol_name: 'teltonika',
+    fuel_level_liters: 48.5,
+    fuel_level_percent: 62,
+    odometer: 128400,
+    timestamp_utc: '2026-08-30T12:00:00+00:00',
+    // Hoisted out of metadata by normalizeTelemetry, units stripped.
+    engine_rpm: 850,
+    engine_rpm_obd: 860,
+    engine_temperature: 88,
+    battery_voltage: 4.15,
+    external_voltage: 13.8,
+    battery_current: 0.42,
+    door_status: 'closed',
+    driving_state: 'idling',
+    oil_level: 78,
+    load_weight: 1200,
+    eco_score: 82,
+    fuel_rate: 2.4,
+    fuel_consumed: 12.5,
+    fuel_used_gps: 11.9,
+    fuel_level_obd: 61,
+    fuel_source: 'can',
+    total_mileage: 128400,
+    trip_odometer: 42,
+    odometer_source: 'can',
+    active_gsm_operator: 62130,
+    confidence: 0.98,
+    gps_confidence: 0.95,
+    idling: true,
+    jamming: false,
+    immobilizer: false,
+    unplug: false,
+    sleep_mode: false,
+  }
+
+  // No WS packet has arrived yet — the panel has only the REST snapshot, which
+  // is exactly the state a just-selected vehicle is in.
+  const resolved = resolveVehicleTelemetry({
+    vehicle: {
+      plate: 'ABC-123-XD',
+      raw: currentLocation,
+      speed: currentLocation.speed,
+      lat: currentLocation.latitude,
+      lng: currentLocation.longitude,
+    } as any,
+    telemetry: null,
+    deviceStatus: 'online',
+  })
+
+  it.each([
+    ['drivingState', 'idling'],
+    ['doorStatus', 'closed'],
+    ['loadWeight', 1200],
+    ['rpm', 850],
+    ['rpmObd', 860],
+    ['oilLevel', 78],
+    ['odometer', 128400],
+    ['mileage', 128400],
+    ['tripOdo', 42],
+    ['odoSource', 'can'],
+    ['fuelRate', 2.4],
+    ['fuelConsumed', 12.5],
+    ['fuelUsedGps', 11.9],
+    ['fuelLevelObd', 61],
+    ['fuelSource', 'can'],
+    ['extV', 13.8],
+    ['batteryCurrent', 0.42],
+    ['ecoScore', 82],
+    ['altitude', 42],
+    ['gpsConfidence', 0.95],
+    ['protocol', 'teltonika'],
+    ['confidence', 0.98],
+    ['satellites', 7],
+    ['gsmOperator', 62130],
+    ['engineTemp', 88],
+  ])('surfaces %s from current_location alone', (field, expected) => {
+    expect(resolved[field as keyof typeof resolved]).toBe(expected)
+  })
+
+  it('raises the idling alert chip from the snapshot', () => {
+    expect(resolved.idling).toBe(true)
+    expect(resolved.jamming).toBe(false)
+  })
+})
