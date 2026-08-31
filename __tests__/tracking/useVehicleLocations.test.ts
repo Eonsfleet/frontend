@@ -161,6 +161,33 @@ describe('useVehicleLocations lastUpdate/lastPacket timestamp', () => {
   })
 })
 
+// Hoisted so their identity is stable across renders: the fleet-seed effect keys
+// off the `vehicles` array, and rebuilding it inline on every render would loop.
+const SEEDED_FLEET = [
+  {
+    id: '42',
+    attributes: {
+      registration_number: 'ABC-123-XD',
+      device_status: 'active',
+      last_packet_received_at: '2026-07-03T13:05:00+01:00',
+      speed: 0,
+      location: { latitude: 6.5, longitude: 3.4 },
+    },
+  },
+] as any
+
+const SEEDED_FLEET_MOVING = [
+  {
+    id: '42',
+    attributes: {
+      device_status: 'active',
+      last_packet_received_at: '2026-07-03T13:05:00+01:00',
+      speed: 12,
+      location: { latitude: 6.6, longitude: 3.5 },
+    },
+  },
+] as any
+
 describe('useVehicleLocations selection-triggered snapshot seed', () => {
   it('seeds satellites/battery/GSM fields from GET /vehicles/{id}?view=telemetry the instant a vehicle is selected, ahead of any WS packet', async () => {
     const { getVehicleById } = await import('@/lib/api/vehicles')
@@ -188,6 +215,101 @@ describe('useVehicleLocations selection-triggered snapshot seed', () => {
     await waitFor(() => expect(result.current.locations['42']?.satellites).toBe(6))
     expect(result.current.locations['42'].battery_voltage).toBe(4.15)
     expect(result.current.locations['42'].active_gsm_operator).toBe(62179)
+  })
+
+  it('lands the extended current_location telemetry even when the fleet seed already recorded a newer receipt time', async () => {
+    const { getVehicleById } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleById).mockResolvedValueOnce({
+      message: 'ok',
+      data: {
+        id: '42',
+        attributes: { registration_number: 'ABC-123-XD', last_packet_received_at: '2026-07-03T13:05:00+01:00' },
+        relationships: {
+          current_location: {
+            latitude: 6.5,
+            longitude: 3.4,
+            speed: 0,
+            altitude: 42,
+            satellites: 7,
+            protocol_name: 'teltonika',
+            // The GPS fix's own clock -- always behind the receipt time above,
+            // which is what the fleet seed writes to lastUpdate.
+            timestamp_utc: '2026-07-03T12:00:00+00:00',
+            metadata: {
+              engine_rpm: 850,
+              battery_voltage: '4.15v',
+              door_status: 'closed',
+              active_gsm_operator: 62130,
+              total_mileage: 128400,
+            },
+          },
+        },
+      },
+    } as any)
+
+    const { subscribePrivate } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () =>
+        useVehicleLocations({
+          ...baseProps,
+          vehicles: SEEDED_FLEET,
+          subscribePrivate,
+          selectedVehicleId: '42',
+        }),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.locations['42']?.engine_rpm).toBe(850))
+    const entry = result.current.locations['42']
+    expect(entry.satellites).toBe(7)
+    expect(entry.battery_voltage).toBe(4.15)
+    expect(entry.door_status).toBe('closed')
+    expect(entry.active_gsm_operator).toBe(62130)
+    expect(entry.total_mileage).toBe(128400)
+    expect(entry.altitude).toBe(42)
+    expect(entry.protocol_name).toBe('teltonika')
+    // raw is the telemetry resolver's last-resort lookup -- it must be the rich
+    // payload, not the two-field position the map feed seeds.
+    expect(entry.raw.engine_rpm).toBe(850)
+  })
+
+  it('keeps the fleet seed\'s newer receipt time as lastUpdate rather than winding it back to the GPS clock', async () => {
+    const { getVehicleById } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehicleById).mockResolvedValueOnce({
+      message: 'ok',
+      data: {
+        id: '42',
+        attributes: {},
+        relationships: {
+          current_location: {
+            latitude: 6.5,
+            longitude: 3.4,
+            timestamp_utc: '2026-07-03T12:00:00+00:00',
+            metadata: { engine_rpm: 850 },
+          },
+        },
+      },
+    } as any)
+
+    const { subscribePrivate } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () =>
+        useVehicleLocations({
+          ...baseProps,
+          vehicles: SEEDED_FLEET_MOVING,
+          subscribePrivate,
+          selectedVehicleId: '42',
+        }),
+      { wrapper: Wrapper },
+    )
+
+    await waitFor(() => expect(result.current.locations['42']?.engine_rpm).toBe(850))
+    const entry = result.current.locations['42']
+    expect(entry.lastUpdate).toBe('2026-07-03T13:05:00+01:00')
+    // The fresher seed still owns every field it actually carries.
+    expect(entry.speed).toBe(12)
+    expect(entry.lat).toBe(6.6)
+    expect(entry.lng).toBe(3.5)
   })
 
   it('never lets the one-off snapshot overwrite a newer WS packet that already arrived', async () => {
