@@ -36,6 +36,19 @@ export interface Geofence {
         schedule: GeofenceSchedule | null
     }
     relationships: {
-        vehicles?: { data: { id: string; type: 'vehicles' }[] }
+        vehicles?: {
+            id: number
+            display_number: string | null
+            registration_number: string
+            device_id: string
+            status: string
+            current_location?: {
+                latitude: number
+                longitude: number
+                gps_datetime: string
+                speed: number
+                address: string | null
+            } | null
+        }[]
     }
 }

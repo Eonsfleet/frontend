@@ -97,10 +97,10 @@ export default function EditGeofencePage() {
                 ...prev,
                 vehicle_ids: assignedVehiclesData.data.map((v: any) => v.id.toString()),
             }))
-        } else if (geofenceData?.data?.relationships?.vehicles?.data) {
+        } else if (geofenceData?.data?.relationships?.vehicles) {
             setFormData(prev => ({
                 ...prev,
-                vehicle_ids: geofenceData.data.relationships.vehicles!.data.map((v: any) => v.id.toString()),
+                vehicle_ids: geofenceData.data.relationships.vehicles!.map((v: any) => v.id.toString()),
             }))
         }
     }, [assignedVehiclesData, geofenceData])
