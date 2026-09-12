@@ -1,15 +1,20 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Search, ChevronDown } from "lucide-react";
+import { X, Search, ChevronDown, Check, ChevronsUpDown } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { LocationAutocomplete } from "@/components/ui/LocationAutocomplete";
+import { cn } from "@/lib/utils";
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
+import type { Cluster, Geofence } from "@/types";
 
 export interface FilterState {
   search: string;
-  group: string; // cluster id or "all"
+  /** Cluster ids to include; empty array means "All Clusters". */
+  clusterIds: string[];
   statuses: string[]; // ['moving', 'idle', 'stopped', 'offline']
   locationType: "all" | "radius";
   radiusKm: number;
@@ -24,7 +29,7 @@ export interface FilterState {
 
 export const initialFilterState: FilterState = {
   search: "",
-  group: "all",
+  clusterIds: [],
   statuses: ["moving", "idle", "stopped", "offline"],
   locationType: "all",
   radiusKm: 10,
@@ -37,12 +42,111 @@ export const initialFilterState: FilterState = {
   viewType: "listing",
 };
 
+export interface ActiveFilterBadge {
+  id: string;
+  label: string;
+  clear: () => void;
+}
+
+/**
+ * One removable "chip" per active filter value. Shared by the filter drawer's
+ * own summary and the always-visible chip row above the asset list, so the
+ * two never describe active filters differently.
+ */
+export function getActiveFilterBadges(
+  filters: FilterState,
+  clusters: Cluster[],
+  geofences: Geofence[],
+  onApplyFilters: (filters: FilterState) => void,
+): ActiveFilterBadge[] {
+  const badges: ActiveFilterBadge[] = [];
+
+  if (filters.search) {
+    badges.push({
+      id: "search",
+      label: `"${filters.search}"`,
+      clear: () => onApplyFilters({ ...filters, search: "" }),
+    });
+  }
+  if (filters.clusterIds.length > 0) {
+    filters.clusterIds.forEach((clusterId) => {
+      const cName = clusters.find((c) => String(c.id) === clusterId)?.attributes?.name || `Cluster ${clusterId}`;
+      badges.push({
+        id: `cluster-${clusterId}`,
+        label: cName,
+        clear: () =>
+          onApplyFilters({
+            ...filters,
+            clusterIds: filters.clusterIds.filter((id) => id !== clusterId),
+          }),
+      });
+    });
+  }
+  if (filters.statuses.length < 4) {
+    filters.statuses.forEach((status) => {
+      badges.push({
+        id: `status-${status}`,
+        label: status.charAt(0).toUpperCase() + status.slice(1),
+        clear: () =>
+          onApplyFilters({
+            ...filters,
+            statuses: filters.statuses.filter((s) => s !== status),
+          }),
+      });
+    });
+  }
+  if (filters.locationType === "radius" && filters.locationName) {
+    badges.push({
+      id: "location",
+      label: `${filters.locationName.split(",")[0]} (${filters.radiusKm}km)`,
+      clear: () =>
+        onApplyFilters({
+          ...filters,
+          locationType: "all",
+          locationCoords: null,
+          locationName: "",
+        }),
+    });
+  }
+  if (filters.geofenceId !== "all") {
+    const gName = geofences.find((g) => String(g.id) === filters.geofenceId)?.attributes?.name || "Geofence";
+    badges.push({
+      id: "geofence",
+      label: gName,
+      clear: () => onApplyFilters({ ...filters, geofenceId: "all" }),
+    });
+  }
+  if (filters.vehicleModel !== "all") {
+    badges.push({
+      id: "vehicleModel",
+      label: filters.vehicleModel,
+      clear: () => onApplyFilters({ ...filters, vehicleModel: "all" }),
+    });
+  }
+  if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
+    badges.push({
+      id: "speedRange",
+      label: `${filters.speedRange[0]}-${filters.speedRange[1]} km/h`,
+      clear: () => onApplyFilters({ ...filters, speedRange: [0, 120] }),
+    });
+  }
+  if (filters.fuelLevel !== "all") {
+    badges.push({
+      id: "fuelLevel",
+      label: `Fuel: ${filters.fuelLevel.toUpperCase()}`,
+      clear: () => onApplyFilters({ ...filters, fuelLevel: "all" }),
+    });
+  }
+
+  return badges;
+}
+
 interface FilterPanelDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vehicles: VehicleMapEntry[];
-  clusters: any[];
-  geofences: any[];
+  clusters: Cluster[];
+  geofences: Geofence[];
   filters: FilterState;
   onApplyFilters: (filters: FilterState) => void;
   onResetFilters: () => void;
@@ -59,6 +163,7 @@ export function FilterPanelDrawer({
   onResetFilters,
 }: FilterPanelDrawerProps) {
   const [tempFilters, setTempFilters] = useState<FilterState>(filters);
+  const [clusterPopoverOpen, setClusterPopoverOpen] = useState(false);
 
   // Sync temp filters with external filters when drawer opens
   useEffect(() => {
@@ -97,6 +202,20 @@ export function FilterPanelDrawer({
     }
   };
 
+  const handleClusterToggle = (clusterId: string, checked: boolean) => {
+    const current = [...tempFilters.clusterIds];
+    if (checked) {
+      if (!current.includes(clusterId)) {
+        updateTempFilter("clusterIds", [...current, clusterId]);
+      }
+    } else {
+      updateTempFilter(
+        "clusterIds",
+        current.filter((id) => id !== clusterId)
+      );
+    }
+  };
+
   const handleApply = () => {
     onApplyFilters(tempFilters);
     onOpenChange(false);
@@ -108,74 +227,10 @@ export function FilterPanelDrawer({
   };
 
   // Get active filter count & details for tags display
-  const activeFilters = useMemo(() => {
-    const badges: { id: string; label: string; clear: () => void }[] = [];
-
-    if (filters.search) {
-      badges.push({
-        id: "search",
-        label: `"${filters.search}"`,
-        clear: () => onApplyFilters({ ...filters, search: "" }),
-      });
-    }
-    if (filters.statuses.length < 4) {
-      filters.statuses.forEach((status) => {
-        badges.push({
-          id: `status-${status}`,
-          label: status.charAt(0).toUpperCase() + status.slice(1),
-          clear: () =>
-            onApplyFilters({
-              ...filters,
-              statuses: filters.statuses.filter((s) => s !== status),
-            }),
-        });
-      });
-    }
-    if (filters.locationType === "radius" && filters.locationName) {
-      badges.push({
-        id: "location",
-        label: `${filters.locationName.split(",")[0]} (${filters.radiusKm}km)`,
-        clear: () =>
-          onApplyFilters({
-            ...filters,
-            locationType: "all",
-            locationCoords: null,
-            locationName: "",
-          }),
-      });
-    }
-    if (filters.geofenceId !== "all") {
-      const gName = geofences.find((g) => String(g.id) === filters.geofenceId)?.attributes?.name || "Geofence";
-      badges.push({
-        id: "geofence",
-        label: gName,
-        clear: () => onApplyFilters({ ...filters, geofenceId: "all" }),
-      });
-    }
-    if (filters.vehicleModel !== "all") {
-      badges.push({
-        id: "vehicleModel",
-        label: filters.vehicleModel,
-        clear: () => onApplyFilters({ ...filters, vehicleModel: "all" }),
-      });
-    }
-    if (filters.speedRange[0] > 0 || filters.speedRange[1] < 120) {
-      badges.push({
-        id: "speedRange",
-        label: `${filters.speedRange[0]}-${filters.speedRange[1]} km/h`,
-        clear: () => onApplyFilters({ ...filters, speedRange: [0, 120] }),
-      });
-    }
-    if (filters.fuelLevel !== "all") {
-      badges.push({
-        id: "fuelLevel",
-        label: `Fuel: ${filters.fuelLevel.toUpperCase()}`,
-        clear: () => onApplyFilters({ ...filters, fuelLevel: "all" }),
-      });
-    }
-
-    return badges;
-  }, [filters, clusters, geofences, onApplyFilters]);
+  const activeFilters = useMemo(
+    () => getActiveFilterBadges(filters, clusters, geofences, onApplyFilters),
+    [filters, clusters, geofences, onApplyFilters],
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -305,6 +360,78 @@ export function FilterPanelDrawer({
                 })}
               </div>
             </div>
+
+            {/* Cluster Multiselect */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Cluster
+              </label>
+              {clusters.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No clusters available.</p>
+              ) : (
+                <Popover open={clusterPopoverOpen} onOpenChange={setClusterPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      role="combobox"
+                      className="w-full flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-left min-h-[44px]"
+                    >
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {tempFilters.clusterIds.length > 0 ? (
+                          tempFilters.clusterIds.slice(0, 2).map((id) => (
+                            <span
+                              key={id}
+                              className="text-[11px] font-semibold bg-white border border-slate-200 rounded-full px-2 py-0.5"
+                            >
+                              {clusters.find((c) => String(c.id) === id)?.attributes?.name || `Cluster ${id}`}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-500">All Clusters</span>
+                        )}
+                        {tempFilters.clusterIds.length > 2 && (
+                          <span className="text-[11px] text-slate-400">
+                            +{tempFilters.clusterIds.length - 2} more
+                          </span>
+                        )}
+                      </div>
+                      <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search clusters..." />
+                      <CommandList className="max-h-[280px]">
+                        <CommandEmpty>No clusters found.</CommandEmpty>
+                        <CommandGroup>
+                          {clusters.map((cluster) => {
+                            const clusterId = String(cluster.id);
+                            const isChecked = tempFilters.clusterIds.includes(clusterId);
+                            return (
+                              <CommandItem
+                                key={clusterId}
+                                onSelect={() => handleClusterToggle(clusterId, !isChecked)}
+                              >
+                                <div
+                                  className={cn(
+                                    "mr-2 h-4 w-4 rounded border flex items-center justify-center transition-colors",
+                                    isChecked ? "bg-blue-600 border-blue-600" : "bg-white border-slate-300",
+                                  )}
+                                >
+                                  {isChecked && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <span className="text-sm font-medium">
+                                  {cluster.attributes?.name || `Cluster ${clusterId}`}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
           </div>
 
           {/* Location Section */}
@@ -372,7 +499,7 @@ export function FilterPanelDrawer({
                   <option value="all">All Geofences</option>
                   {geofences.map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.attributes?.name || g.name || `Geofence ${g.id}`}
+                      {g.attributes?.name || `Geofence ${g.id}`}
                     </option>
                   ))}
                 </select>

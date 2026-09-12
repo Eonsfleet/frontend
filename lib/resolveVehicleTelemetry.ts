@@ -14,7 +14,7 @@ export interface ResolvedVehicleTelemetryInput {
     make?: string;
     model?: string;
     speed?: number;
-    fuel?: number;
+    fuel?: number | null;
     fuel_liters?: number;
     temp?: number;
     status?: string;
@@ -81,7 +81,9 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     altitude: loc?.altitude ?? null,
     movement: loc?.movement ?? null,
     speed: loc?.speed ?? rel?.speed ?? 0,
-    fuel: loc?.fuel ?? loc?.fuel_level_percent ?? 0,
+    // Missing fuel data stays null (not 0) so callers can render "unavailable"
+    // instead of misreading "no sensor reading" as "empty tank".
+    fuel: loc?.fuel ?? loc?.fuel_level_percent ?? null,
     fuel_liters: loc?.fuel_liters ?? loc?.fuel_level_liters,
     fuel_consumed: loc?.fuel_consumed ?? (loc?.metadata as any)?.fuel_consumed ?? null,
     fuel_used_gps: loc?.fuel_used_gps ?? (loc?.metadata as any)?.fuel_used_gps ?? null,
@@ -345,7 +347,8 @@ export function resolveVehicleTelemetry({
   const isDeviceOnline =
     deviceStatus === "online" ? true : deviceStatus === "offline" ? false : vehicle?.status !== "offline";
 
-  const fuelColor = (liveFuel ?? 0) < 20 ? "bg-rose-500" : (liveFuel ?? 0) < 40 ? "bg-amber-500" : "bg-emerald-500";
+  const fuelColor =
+    liveFuel == null ? "bg-slate-300" : liveFuel < 20 ? "bg-rose-500" : liveFuel < 40 ? "bg-amber-500" : "bg-emerald-500";
   const ecoColor =
     liveEcoScore == null ? "" : liveEcoScore >= 70 ? "text-emerald-600" : liveEcoScore >= 40 ? "text-amber-600" : "text-rose-600";
   const ecoRingColor =

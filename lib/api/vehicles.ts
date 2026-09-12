@@ -42,6 +42,9 @@ export interface VehicleMapEntry {
     registration_number: string;
     model?: string;
     device_status?: string;
+    is_online?: boolean;
+    /** Cluster the vehicle is assigned to, or null when unassigned. */
+    cluster_id?: number | string | null;
     last_packet_received_at?: string | null;
     speed?: number | null;
     location?: { latitude: number; longitude: number } | null;
