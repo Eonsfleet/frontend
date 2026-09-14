@@ -62,23 +62,17 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     ].filter(item => {
         if (!item.show) return false
         if (isOwner && !item.ownerAllowed) return false
-        if (isExpiredTrial) return ['/profile', '/settings/clusters'].includes(item.href)
+        if (isExpiredTrial) return item.href === '/profile'
         return true
     })
 
     const ownerBlocked = isOwnerRestricted(pathname)
-    const isStandaloneSettingsPage = pathname === '/settings/clusters'
 
     return (
         <RoleGate
             allowedRoles={['administrator', 'fleet_manager', 'owner']}
             fallbackMessage="Organizational settings and user management are restricted to Fleet Managers and Administrators."
         >
-            {isStandaloneSettingsPage ? (
-                <div className="h-full overflow-y-auto bg-slate-50">
-                    <main className="min-w-0 p-6 lg:p-8">{children}</main>
-                </div>
-            ) : (
             <div className="flex h-full flex-col lg:flex-row bg-slate-50">
                 {/* Secondary Sidebar Navigation */}
                 <aside className="w-full lg:w-[280px] shrink-0 border-r border-slate-200 bg-white shadow-[1px_0_2px_rgba(0,0,0,0.02)] h-auto lg:h-[calc(100vh-64px)] overflow-y-auto">
@@ -145,7 +139,6 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                     ) : children}
                 </main>
             </div>
-            )}
         </RoleGate>
     )
 }
