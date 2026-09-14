@@ -35,6 +35,7 @@ export function GeofenceBuilder({
         vehicle_ids: [] as string[],
     })
     const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined)
+    const [errors, setErrors] = useState<{ name?: string; shape?: string }>({})
 
     const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
         queryKey: ['vehicles-builder', { per_page: 100 }],
@@ -44,20 +45,20 @@ export function GeofenceBuilder({
 
     const { mutate: save, isPending } = useMutation({
         mutationFn: async () => {
-            if (!formData.shape) throw new Error('Please draw a boundary on the map.')
-            if (!formData.name.trim()) throw new Error('Geofence name is required.')
+            const shape = formData.shape
+            if (!shape) throw new Error('Please draw a boundary on the map.')
 
             const payload: any = {
                 name: formData.name.trim(),
                 location: formData.location_name.trim(),
                 trigger_type: formData.alert_type,
                 speed: formData.speed,
-                type: formData.shape.type,
-                coordinates: formData.shape.coordinates,
+                type: shape.type,
+                coordinates: shape.coordinates,
                 is_active: true,
             }
-            if (formData.shape.type === 'circle' && formData.shape.radius != null) {
-                payload.radius = formData.shape.radius
+            if (shape.type === 'circle' && shape.radius != null) {
+                payload.radius = shape.radius
             }
 
             const created = await createGeofence(payload)
@@ -74,12 +75,28 @@ export function GeofenceBuilder({
             queryClient.invalidateQueries({ queryKey: ['geofences'] })
             setFormData({ name: '', location_name: '', alert_type: 'both', speed: 0, shape: null, vehicle_ids: [] as string[] })
             setMapCenter(undefined)
+            setErrors({})
             onClose()
         },
         onError: (err: any) => {
             toast.error(extractApiError(err, 'Failed to create geofence.'))
         },
     })
+
+    const handleActivate = () => {
+        const nextErrors: { name?: string; shape?: string } = {}
+        if (!formData.name.trim()) {
+            nextErrors.name = 'Zone name is required.'
+        }
+        if (!formData.shape) {
+            nextErrors.shape = 'Draw a boundary on the map before activating.'
+        }
+        setErrors(nextErrors)
+        if (Object.keys(nextErrors).length > 0) {
+            return
+        }
+        save()
+    }
 
     const toggleVehicle = (id: string) => {
         setFormData(prev => ({
@@ -123,10 +140,22 @@ export function GeofenceBuilder({
                             <input
                                 type="text"
                                 placeholder="E.G. MAIN WAREHOUSE"
-                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                className={cn(
+                                    "w-full bg-white border rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none",
+                                    errors.name ? "border-red-500" : "border-slate-200"
+                                )}
+                                aria-invalid={!!errors.name}
                                 value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, name: e.target.value })
+                                    if (errors.name && e.target.value.trim()) {
+                                        setErrors((prev) => ({ ...prev, name: undefined }))
+                                    }
+                                }}
                             />
+                            {errors.name && (
+                                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{errors.name}</p>
+                            )}
                         </div>
 
                         {/* Location Section */}
@@ -154,10 +183,10 @@ export function GeofenceBuilder({
                             <input
                                 type="number"
                                 min={0}
-                                placeholder="0 = No limit"
+                                placeholder="0"
                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
-                                value={formData.speed}
-                                onChange={(e) => setFormData({ ...formData, speed: Number(e.target.value) })}
+                                value={formData.speed === 0 ? '' : formData.speed}
+                                onChange={(e) => setFormData({ ...formData, speed: e.target.value === '' ? 0 : Number(e.target.value) })}
                             />
                         </div>
 
@@ -212,8 +241,14 @@ export function GeofenceBuilder({
                         </div>
 
                         {/* Spatial Data Summary */}
-                        <div className="p-4 rounded-2xl bg-blue-600/5 border border-blue-600/10 space-y-2">
-                            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Spatial Summary</label>
+                        <div className={cn(
+                            "p-4 rounded-2xl border space-y-2",
+                            errors.shape ? "bg-red-50 border-red-200" : "bg-blue-600/5 border-blue-600/10"
+                        )}>
+                            <label className={cn(
+                                "text-[9px] font-black uppercase tracking-widest",
+                                errors.shape ? "text-red-500" : "text-blue-600"
+                            )}>Spatial Summary</label>
                             <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
                                 <span>TYPE:</span>
                                 <span className="text-blue-600 uppercase">{formData.shape?.type || 'UNSET'}</span>
@@ -224,12 +259,15 @@ export function GeofenceBuilder({
                                     <span className="text-blue-600">{(formData.shape.radius / 1000).toFixed(2)} KM</span>
                                 </div>
                             )}
+                            {errors.shape && (
+                                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{errors.shape}</p>
+                            )}
                         </div>
                     </div>
 
                     <div className="p-8 space-y-3">
                         <button
-                            onClick={() => save()}
+                            onClick={handleActivate}
                             disabled={isPending}
                             className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all disabled:opacity-60 disabled:shadow-none"
                         >
@@ -258,7 +296,12 @@ export function GeofenceBuilder({
                     <div className="h-full w-full">
                         <GeofenceMapEditor
                             height="100%"
-                            onChange={(shape) => setFormData((prev) => ({ ...prev, shape }))}
+                            onChange={(shape) => {
+                                setFormData((prev) => ({ ...prev, shape }))
+                                if (shape) {
+                                    setErrors((prev) => ({ ...prev, shape: undefined }))
+                                }
+                            }}
                             vehicles={vehiclesData?.data?.filter(v => formData.vehicle_ids.includes(v.id.toString())) || []}
                             center={mapCenter}
                         />

@@ -295,9 +295,9 @@ export default function FleetAnalyticsPage() {
                         <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Top Vehicles by Distance</CardTitle>
                         <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Highest mileage assets in period</CardDescription>
                     </CardHeader>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto overflow-y-auto max-h-105">
                         <table className="w-full text-left border-collapse">
-                            <thead>
+                            <thead className="sticky top-0 z-10 bg-slate-50">
                                 <tr className="bg-slate-50/50">
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Distance</th>
@@ -331,9 +331,9 @@ export default function FleetAnalyticsPage() {
                         <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">Asset Performance</CardTitle>
                         <CardDescription className="text-[10px] uppercase font-bold text-slate-400 mt-1">Individual fleet asset efficiency scores</CardDescription>
                     </CardHeader>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto overflow-y-auto max-h-105">
                         <table className="w-full text-left border-collapse">
-                            <thead>
+                            <thead className="sticky top-0 z-10 bg-slate-50">
                                 <tr className="bg-slate-50/50">
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle</th>
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Score</th>

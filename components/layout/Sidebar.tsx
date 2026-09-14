@@ -113,7 +113,7 @@ const NAV_GROUPS: NavGroup[] = [
         trialAllowed: true,
       },
       {
-        href: "/settings/clusters",
+        href: "/clusters",
         label: "Clusters",
         icon: Network,
         permission: null,
