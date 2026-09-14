@@ -62,7 +62,15 @@ import {
 import { cn } from "@/lib/utils";
 import * as vehicleApi from "@/lib/api/vehicles";
 import { Badge } from "@/components/ui/badge";
-import { useClusterFleetStats } from "@/hooks/useClusterFleetStats";
+import { usePaginatedClusters } from "@/hooks/useClusterFleetStats";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export default function ClustersPage() {
   const router = useRouter();
@@ -80,8 +88,15 @@ export default function ClustersPage() {
   const [usersPopoverOpen, setUsersPopoverOpen] = useState(false);
   const [vehiclesPopoverOpen, setVehiclesPopoverOpen] = useState(false);
   const [deletingCluster, setDeletingCluster] = useState<any>(null);
+  const [page, setPage] = useState(1);
 
-  const { clusters: clusterStats, isLoading: isStatsLoading } = useClusterFleetStats();
+  const {
+    clusters: clusterStats,
+    isLoading: isStatsLoading,
+    currentPage,
+    lastPage,
+    total: totalClusters,
+  } = usePaginatedClusters(page);
 
   const { data: userData } = useQuery({
     queryKey: ["settings-users-all"],
@@ -99,6 +114,7 @@ export default function ClustersPage() {
   const createMutation = useMutation({
     mutationFn: (data: any) => api.createCluster(data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
       queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster provisioned successfully");
       handleClose();
@@ -109,6 +125,7 @@ export default function ClustersPage() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => api.updateCluster(editingCluster?.id, data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
       queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster updated successfully");
       handleClose();
@@ -153,6 +170,7 @@ export default function ClustersPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string | number) => api.deleteCluster(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
       queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster deleted successfully");
       setDeletingCluster(null);
@@ -614,12 +632,16 @@ export default function ClustersPage() {
                       <p className="text-lg font-black text-slate-900 tabular-nums">{cluster.total}</p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
                     </div>
-                    <div className="rounded-lg bg-emerald-50 py-2.5">
-                      <p className="text-lg font-black text-emerald-600 tabular-nums">{cluster.online}</p>
+                    <div className={cn("rounded-lg bg-emerald-50 py-2.5", cluster.isCountPending && "animate-pulse")}>
+                      <p className="text-lg font-black text-emerald-600 tabular-nums">
+                        {cluster.isCountPending ? "—" : cluster.online}
+                      </p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Online</p>
                     </div>
-                    <div className="rounded-lg bg-blue-50 py-2.5">
-                      <p className="text-lg font-black text-blue-600 tabular-nums">{cluster.offline}</p>
+                    <div className={cn("rounded-lg bg-blue-50 py-2.5", cluster.isCountPending && "animate-pulse")}>
+                      <p className="text-lg font-black text-blue-600 tabular-nums">
+                        {cluster.isCountPending ? "—" : cluster.offline}
+                      </p>
                       <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Offline</p>
                     </div>
                   </div>
@@ -627,7 +649,7 @@ export default function ClustersPage() {
                   <div className="mt-4 h-1.5 rounded-full bg-blue-100 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all"
-                      style={{ width: `${onlineRate}%` }}
+                      style={{ width: cluster.isCountPending ? 0 : `${onlineRate}%` }}
                     />
                   </div>
 
@@ -636,12 +658,70 @@ export default function ClustersPage() {
                       <Users2 className="h-3.5 w-3.5 text-slate-400" />
                       {cluster.totalStaff} Staff
                     </span>
-                    <span className="text-slate-400">{onlineRate.toFixed(0)}% online</span>
+                    <span className="text-slate-400">
+                      {cluster.isCountPending ? "Loading…" : `${onlineRate.toFixed(0)}% online`}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {!isStatsLoading && lastPage > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <p className="text-sm text-slate-500">
+            Showing <span className="font-medium text-slate-900">{clusterStats.length}</span> of{" "}
+            <span className="font-medium text-slate-900">{totalClusters}</span> clusters
+          </p>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) setPage(currentPage - 1);
+                  }}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(5, lastPage) }, (_, i) => {
+                let pageNum = i + 1;
+                if (lastPage > 5 && currentPage > 3) {
+                  pageNum = currentPage - 2 + i;
+                  if (pageNum > lastPage) pageNum = lastPage - 4 + i;
+                }
+                if (pageNum <= 0 || pageNum > lastPage) return null;
+                return (
+                  <PaginationItem key={pageNum}>
+                    <PaginationLink
+                      href="#"
+                      isActive={currentPage === pageNum}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPage(pageNum);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      {pageNum}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < lastPage) setPage(currentPage + 1);
+                  }}
+                  className={currentPage === lastPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
 

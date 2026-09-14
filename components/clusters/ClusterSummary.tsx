@@ -2,6 +2,7 @@
 
 import { Card } from '@/components/ui/card'
 import { Truck, UserCircle, Users2, Wifi, WifiOff } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export function ClusterSummary({
     total,
@@ -9,12 +10,14 @@ export function ClusterSummary({
     offline,
     totalStaff,
     manager,
+    isCountPending = false,
 }: {
     total: number
     online: number
     offline: number
     totalStaff: number
     manager: string | null
+    isCountPending?: boolean
 }) {
     const onlineRate = total > 0 ? (online / total) * 100 : 0
     const offlineRate = total > 0 ? (offline / total) * 100 : 0
@@ -26,18 +29,18 @@ export function ClusterSummary({
                 <p className="text-xl font-black text-slate-900 tabular-nums">{total}</p>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Total Assets</p>
             </Card>
-            <Card className="border-slate-200 shadow-sm p-4 flex flex-col items-center text-center">
+            <Card className={cn("border-slate-200 shadow-sm p-4 flex flex-col items-center text-center", isCountPending && "animate-pulse")}>
                 <Wifi className="h-4 w-4 text-emerald-500 mb-1.5" />
-                <p className="text-xl font-black text-emerald-600 tabular-nums">{online}</p>
+                <p className="text-xl font-black text-emerald-600 tabular-nums">{isCountPending ? "—" : online}</p>
                 <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest mt-0.5">
-                    Online ({onlineRate.toFixed(0)}%)
+                    {isCountPending ? "Online" : `Online (${onlineRate.toFixed(0)}%)`}
                 </p>
             </Card>
-            <Card className="border-slate-200 shadow-sm p-4 flex flex-col items-center text-center">
+            <Card className={cn("border-slate-200 shadow-sm p-4 flex flex-col items-center text-center", isCountPending && "animate-pulse")}>
                 <WifiOff className="h-4 w-4 text-blue-500 mb-1.5" />
-                <p className="text-xl font-black text-blue-600 tabular-nums">{offline}</p>
+                <p className="text-xl font-black text-blue-600 tabular-nums">{isCountPending ? "—" : offline}</p>
                 <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">
-                    Offline ({offlineRate.toFixed(0)}%)
+                    {isCountPending ? "Offline" : `Offline (${offlineRate.toFixed(0)}%)`}
                 </p>
             </Card>
             <Card className="border-slate-200 shadow-sm p-4 flex flex-col items-center text-center">
