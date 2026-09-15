@@ -308,7 +308,7 @@ export function TrackingSidebar({
                         className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800">
+                          <span className="text-xs font-bold text-slate-800 uppercase">
                             {cluster.name}
                           </span>
                           <span className="text-[10px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">

@@ -24,7 +24,7 @@ export default function ClusterDetailPage() {
         enabled: !!id,
     })
 
-    const { vehicles, isLoading: isVehiclesLoading } = useClusterVehicles(id)
+    const { vehicles, isCountPending } = useClusterVehicles(id)
 
     const { data: usersResponse, isLoading: isStaffLoading } = useQuery({
         queryKey: ['cluster-staff-pool'],
@@ -45,12 +45,13 @@ export default function ClusterDetailPage() {
             speed: Number(v.relationships?.current_location?.speed ?? v.attributes?.speed ?? 0) || 0,
         }),
     ).length
-    const total = vehicles.length
-    const offline = total - online
+    // The cluster record already carries its own vehicle count — show it
+    // immediately instead of waiting on the org-wide vehicle page-walk that
+    // online/offline still depend on.
+    const total = cluster?.attributes.total_vehicles ?? vehicles.length
+    const offline = vehicles.length - online
 
-    const isLoading = isClusterLoading || isVehiclesLoading
-
-    if (isLoading) {
+    if (isClusterLoading) {
         return (
             <div className="p-8 flex flex-col items-center justify-center min-h-[400px] space-y-4">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -96,6 +97,7 @@ export default function ClusterDetailPage() {
                 offline={offline}
                 totalStaff={attr?.total_users ?? staff.length}
                 manager={attr?.manager ?? null}
+                isCountPending={isCountPending}
             />
 
             <Tabs defaultValue="assets" className="w-full">
@@ -115,7 +117,7 @@ export default function ClusterDetailPage() {
                 </TabsList>
 
                 <TabsContent value="assets" className="pt-6 outline-none">
-                    <ClusterAssetList vehicles={vehicles} />
+                    <ClusterAssetList vehicles={vehicles} isCountPending={isCountPending} />
                 </TabsContent>
 
                 <TabsContent value="staff" className="pt-6 outline-none">
