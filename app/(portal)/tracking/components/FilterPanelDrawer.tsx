@@ -73,7 +73,7 @@ export function getActiveFilterBadges(
       const cName = clusters.find((c) => String(c.id) === clusterId)?.attributes?.name || `Cluster ${clusterId}`;
       badges.push({
         id: `cluster-${clusterId}`,
-        label: cName,
+        label: cName.toUpperCase(),
         clear: () =>
           onApplyFilters({
             ...filters,
@@ -380,7 +380,7 @@ export function FilterPanelDrawer({
                           tempFilters.clusterIds.slice(0, 2).map((id) => (
                             <span
                               key={id}
-                              className="text-[11px] font-semibold bg-white border border-slate-200 rounded-full px-2 py-0.5"
+                              className="text-[11px] font-semibold bg-white border border-slate-200 rounded-full px-2 py-0.5 uppercase"
                             >
                               {clusters.find((c) => String(c.id) === id)?.attributes?.name || `Cluster ${id}`}
                             </span>
@@ -419,7 +419,7 @@ export function FilterPanelDrawer({
                                 >
                                   {isChecked && <Check className="w-3 h-3 text-white" />}
                                 </div>
-                                <span className="text-sm font-medium">
+                                <span className="text-sm font-medium uppercase">
                                   {cluster.attributes?.name || `Cluster ${clusterId}`}
                                 </span>
                               </CommandItem>

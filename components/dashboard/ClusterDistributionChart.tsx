@@ -12,6 +12,7 @@ import {
     LabelList
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 export interface ClusterDistribution {
     name: string
@@ -32,7 +33,7 @@ function ClusterTooltip({ active, payload, label }: any) {
 
     return (
         <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-lg text-xs min-w-40">
-            <p className="font-black text-slate-900 mb-2 uppercase tracking-tight text-[11px]">{label}</p>
+            <p className="font-black text-slate-900 mb-2 uppercase tracking-tight text-[11px]">{String(label).toUpperCase()}</p>
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-4">
                     <span className="text-slate-500">Total</span>
@@ -62,6 +63,14 @@ function ClusterTooltip({ active, payload, label }: any) {
     )
 }
 
+function ClusterAxisTick({ x, y, payload }: any) {
+    return (
+        <text x={x} y={y} dy={10} textAnchor="middle" fill="#475569" fontSize={11} fontWeight={700}>
+            {String(payload.value).toUpperCase()}
+        </text>
+    )
+}
+
 /** Total value rendered above each stacked bar — the one figure worth labeling directly. */
 function TotalLabel(props: any) {
     const { x, y, width, value } = props
@@ -82,12 +91,14 @@ export function ClusterDistributionChart({
     data,
     title = "Asset Distribution by Cluster",
     description = "Total, online and offline assets per cluster",
-    height = 340
+    height = 340,
+    isCountPending = false
 }: {
     data: ClusterDistribution[]
     title?: string
     description?: string
     height?: number
+    isCountPending?: boolean
 }) {
     const sorted = [...data].sort((a, b) => b.total - a.total)
     const mostOffline = sorted.length > 0
@@ -99,12 +110,14 @@ export function ClusterDistributionChart({
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 shrink-0">
                 <div>
                     <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight">{title}</CardTitle>
-                    <CardDescription className="text-[10px] mt-0.5">{description}</CardDescription>
+                    <CardDescription className="text-[10px] mt-0.5">
+                        {isCountPending ? "Loading counts…" : description}
+                    </CardDescription>
                 </div>
-                {mostOffline && mostOffline.offline > 0 && (
+                {!isCountPending && mostOffline && mostOffline.offline > 0 && (
                     <div className="text-right shrink-0">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Highest Offline Rate</p>
-                        <p className="text-xs font-bold text-blue-600">
+                        <p className="text-xs font-bold text-blue-600 uppercase">
                             {mostOffline.name} · {((mostOffline.offline / mostOffline.total) * 100).toFixed(0)}%
                         </p>
                     </div>
@@ -116,7 +129,7 @@ export function ClusterDistributionChart({
                         No cluster data available
                     </div>
                 ) : (
-                    <div className="h-full overflow-x-auto overflow-y-hidden">
+                    <div className={cn("h-full overflow-x-auto overflow-y-hidden", isCountPending && "animate-pulse")}>
                         <div style={{ width: Math.max(sorted.length * 90, 100), height }}>
                             <ResponsiveContainer>
                                 <BarChart data={sorted} margin={{ top: 24, right: 10, left: 0, bottom: 0 }} barCategoryGap={6} barGap={0}>
@@ -125,8 +138,7 @@ export function ClusterDistributionChart({
                                         dataKey="name"
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fontSize: 11, fill: '#475569', fontWeight: 700 }}
-                                        dy={10}
+                                        tick={<ClusterAxisTick />}
                                         interval={0}
                                     />
                                     <YAxis

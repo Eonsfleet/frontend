@@ -113,9 +113,34 @@ export const createRole = async (data: { name: string; permissions: string[] }):
 }
 
 // Clusters
-export const getClusters = async (params?: { page?: number; per_page?: number }): Promise<{ data: { clusters: Cluster[] } }> => {
+export const getClusters = async (params?: { page?: number; per_page?: number }): Promise<{ data: { clusters: Cluster[]; pagination: Paginated<Cluster>['pagination'] } }> => {
     const response = await apiClient.get('/clusters', { params })
     return response.data
+}
+
+/**
+ * Pages through GET /clusters and returns every cluster in the org. The
+ * default per_page is small (10) — callers that need the full cluster list
+ * (dashboard/cluster-stats aggregation, filter dropdowns) must not call
+ * getClusters() with no params, or they'll silently see only the first page.
+ */
+export const getClustersBatched = async (): Promise<Cluster[]> => {
+    const perPage = 100
+    const first = await getClusters({ page: 1, per_page: perPage })
+    const lastPage = first.data.pagination?.lastPage ?? first.data.pagination?.last_page ?? 1
+    let allClusters = [...first.data.clusters]
+
+    if (lastPage > 1) {
+        const remainingPages = Array.from({ length: lastPage - 1 }, (_, i) => i + 2)
+        const remainingResponses = await Promise.all(
+            remainingPages.map((page) => getClusters({ page, per_page: perPage }))
+        )
+        for (const response of remainingResponses) {
+            allClusters = allClusters.concat(response.data.clusters)
+        }
+    }
+
+    return allClusters
 }
 
 export const getCluster = async (id: string | number): Promise<{ message: string, data: { cluster: Cluster } }> => {

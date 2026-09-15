@@ -26,9 +26,9 @@ import {
 import * as dashboardApi from "@/lib/api/dashboard";
 import * as trackingApi from "@/lib/api/tracking";
 import * as vehicleApi from "@/lib/api/vehicles";
-import * as settingsApi from "@/lib/api/settings";
 import { useAuthStore } from "@/store/authStore";
 import { matchesStatusBucket } from "@/lib/vehicleStatus";
+import { useClusterFleetStats } from "@/hooks/useClusterFleetStats";
 
 export default function DashboardPage() {
   const [isFleetModalOpen, setIsFleetModalOpen] = useState(false);
@@ -98,21 +98,11 @@ export default function DashboardPage() {
     refetchInterval: REFETCH_INTERVAL_MAP,
   });
 
-  // Full org vehicle list (not capped like the map query) — needed so
-  // connectivity counts and cluster totals reflect every asset, not just
-  // the first page used for map markers.
-  const { data: allVehicles } = useQuery({
-    queryKey: ["dashboard-vehicles-all"],
-    queryFn: () => vehicleApi.getVehiclesBatched({}),
-    enabled: !!token,
-    staleTime: STALE_TIME_REALTIME,
-  });
-
-  const { data: clustersData } = useQuery({
-    queryKey: ["dashboard-clusters"],
-    queryFn: () => settingsApi.getClusters(),
-    enabled: !!token,
-  });
+  // Full org vehicle list + per-cluster stats — shared with the Clusters
+  // module via the same React Query keys, so navigating between /dashboard
+  // and /clusters reuses one fetch instead of paying the full sequential
+  // getVehiclesBatched page-walk twice.
+  const { clusters: clusterStats, allVehicles } = useClusterFleetStats(!!token);
 
   // Normalize Activity Logs
   const normalizedActivities = useMemo(() => {
@@ -241,42 +231,14 @@ export default function DashboardPage() {
     );
   }, [vehicleStatusData]);
 
-  // Per-cluster asset distribution — groups the full vehicle list by
-  // relationships.cluster.id and buckets each vehicle as online/offline via
-  // the same lib/vehicleStatus.ts definition used above and in Live Tracking,
-  // so cluster totals can never disagree with the connectivity chart.
-  const clusterDistribution: ClusterDistribution[] = useMemo(() => {
-    const clusters = clustersData?.data?.clusters || [];
-    const vehicles = allVehicles || [];
-
-    const byCluster = new Map<string, { name: string; online: number; offline: number }>();
-    for (const cluster of clusters) {
-      byCluster.set(String(cluster.id), { name: cluster.attributes.name, online: 0, offline: 0 });
-    }
-
-    for (const v of vehicles) {
-      const clusterId = v.relationships?.cluster?.id;
-      if (!clusterId) continue;
-      const entry = byCluster.get(String(clusterId));
-      if (!entry) continue;
-
-      const loc = v.relationships?.current_location;
-      const input = {
-        status: v.attributes?.status,
-        is_online: v.attributes?.is_online ?? false,
-        speed: Number(loc?.speed ?? v.attributes?.speed ?? 0) || 0,
-      };
-      if (matchesStatusBucket("online", input)) entry.online++;
-      else entry.offline++;
-    }
-
-    return Array.from(byCluster.values()).map((c) => ({
-      name: c.name,
-      total: c.online + c.offline,
-      online: c.online,
-      offline: c.offline,
-    }));
-  }, [clustersData, allVehicles]);
+  // Per-cluster asset distribution — sourced directly from the shared
+  // useClusterFleetStats hook (same computation the Clusters module uses),
+  // so cluster totals can never disagree between Dashboard and /clusters.
+  const clusterDistribution: ClusterDistribution[] = useMemo(
+    () => clusterStats.map((c) => ({ name: c.name, total: c.total, online: c.online, offline: c.offline })),
+    [clusterStats],
+  );
+  const isClusterCountPending = clusterStats.some((c) => c.isCountPending);
 
   // Normalize Alerts Data
   const normalizedAlerts: AlertItem[] = useMemo(() => {
@@ -445,7 +407,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[420px]">
         <VehicleStatusChart data={dynamicStatusData} />
         <div className="lg:col-span-2 h-full">
-          <ClusterDistributionChart data={clusterDistribution} height={280} />
+          <ClusterDistributionChart data={clusterDistribution} height={280} isCountPending={isClusterCountPending} />
         </div>
       </div>
 

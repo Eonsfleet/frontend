@@ -277,21 +277,26 @@ export const getVehiclesLocations = async (params?: {
 export const getVehiclesBatched = async (
   params: ListVehiclesParams = {},
 ): Promise<Vehicle[]> => {
-  let allVehicles: Vehicle[] = [];
-  let currentPage = 1;
-  let lastPage = 1;
+  const per_page = 500;
 
-  do {
-    const response = await getVehicles({
-      ...params,
-      page: currentPage,
-      per_page: 500,
-    });
-    allVehicles = [...allVehicles, ...response.data];
-    lastPage =
-      response.pagination.last_page ?? response.pagination.lastPage ?? 1;
-    currentPage++;
-  } while (currentPage <= lastPage);
+  // Page 1 tells us how many pages exist — fetch it alone first, then fire
+  // every remaining page in parallel instead of one round trip at a time.
+  // For a large fleet (thousands of vehicles across several 500-row pages)
+  // this turns N sequential round trips into effectively one.
+  const first = await getVehicles({ ...params, page: 1, per_page });
+  const lastPage = first.pagination.last_page ?? first.pagination.lastPage ?? 1;
+
+  let allVehicles: Vehicle[] = [...first.data];
+
+  if (lastPage > 1) {
+    const remainingPages = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
+    const remainingResponses = await Promise.all(
+      remainingPages.map((page) => getVehicles({ ...params, page, per_page })),
+    );
+    for (const response of remainingResponses) {
+      allVehicles = allVehicles.concat(response.data);
+    }
+  }
 
   // Pages can overlap when the backend's result set shifts between requests
   // (e.g. a vehicle updated mid-fetch reorders pages), which duplicates a

@@ -35,7 +35,7 @@ function statusInput(vehicle: Vehicle) {
     }
 }
 
-export function ClusterAssetList({ vehicles }: { vehicles: Vehicle[] }) {
+export function ClusterAssetList({ vehicles, isCountPending = false }: { vehicles: Vehicle[]; isCountPending?: boolean }) {
     const [filter, setFilter] = useState<AssetFilter>('all')
     const [page, setPage] = useState(1)
 
@@ -94,9 +94,11 @@ export function ClusterAssetList({ vehicles }: { vehicles: Vehicle[] }) {
             <div className="mt-2">
                 {filtered.length === 0 ? (
                     <div className="py-16 text-center text-sm text-slate-400">
-                        {vehicles.length === 0
-                            ? 'No assets are currently assigned to this cluster.'
-                            : 'No assets match the selected filter.'}
+                        {isCountPending
+                            ? 'Loading assets…'
+                            : vehicles.length === 0
+                                ? 'No assets are currently assigned to this cluster.'
+                                : 'No assets match the selected filter.'}
                     </div>
                 ) : (
                     <>
