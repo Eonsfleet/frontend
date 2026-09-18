@@ -24,11 +24,12 @@ import {
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getClusters } from '@/lib/api/settings'
+import { getClustersBatched } from '@/lib/api/settings'
 import { assignCluster } from '@/lib/api/vehicles'
 import { toast } from 'sonner'
 import { LayoutGrid, Loader2, Check, ChevronsUpDown } from 'lucide-react'
 import { cn, extractApiError } from '@/lib/utils'
+import { STALE_TIME_STATIC } from '@/lib/config'
 
 interface AssignClusterDialogProps {
     vehicleId: string | number
@@ -42,10 +43,11 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
     const [selectedClusterId, setSelectedClusterId] = React.useState<string>('')
     const queryClient = useQueryClient()
 
-    const { data: clustersResponse, isLoading: isLoadingClusters } = useQuery({
-        queryKey: ['clusters-list-simple'],
-        queryFn: () => getClusters({ per_page: 100 }),
+    const { data: clusters = [], isLoading: isLoadingClusters } = useQuery({
+        queryKey: ['cluster-fleet-stats-clusters'],
+        queryFn: () => getClustersBatched(),
         enabled: isOpen,
+        staleTime: STALE_TIME_STATIC,
     })
 
     const { mutate: doAssign, isPending: isAssigning } = useMutation({
@@ -54,6 +56,8 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
             toast.success(data.message || 'Cluster assigned successfully')
             queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId.toString()] })
             queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+            queryClient.invalidateQueries({ queryKey: ['cluster-fleet-stats-clusters'] })
+            queryClient.invalidateQueries({ queryKey: ['clusters-page'] })
             onClose()
         },
         onError: (error: any) => {
@@ -69,8 +73,6 @@ export function AssignClusterDialog({ vehicleId, vehicleReg, isOpen, onClose }: 
         doAssign()
     }
 
-    const rawClusters = clustersResponse?.data?.clusters || clustersResponse?.data || []
-    const clusters = Array.isArray(rawClusters) ? rawClusters : []
     const selectedCluster = clusters.find((c: any) => c.id.toString() === selectedClusterId)
 
     return (

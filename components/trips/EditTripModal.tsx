@@ -29,7 +29,7 @@ import {
     Navigation,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useActiveVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { getDrivers } from '@/lib/api/drivers'
 import { updateTrip, calculateTripEstimate } from '@/lib/api/trips'
 import { toast } from 'sonner'
@@ -119,11 +119,7 @@ export function EditTripModal({ isOpen, onClose, trip }: EditTripModalProps) {
     }, [isOpen, trip?.id])
 
     // ── Data queries ─────────────────────────────────────────────────────────
-    const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: 100, status: 'active' }),
-        enabled: isOpen,
-    })
+    const { data: vehiclesData, isLoading: isLoadingVehicles } = useActiveVehiclesDropdown(isOpen)
 
     const { data: driversData, isLoading: isLoadingDrivers } = useQuery({
         queryKey: ['drivers-list-simple'],

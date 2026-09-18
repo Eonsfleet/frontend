@@ -23,8 +23,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getVehicles, assignDriver } from "@/lib/api/vehicles";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { assignDriver } from "@/lib/api/vehicles";
+import { useVehiclesDropdown } from "@/hooks/useVehiclesDropdown";
 import { toast } from "sonner";
 import { Car, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { cn, extractApiError } from "@/lib/utils";
@@ -46,11 +47,7 @@ export function AssignVehicleDialog({
   const [selectedVehicleId, setSelectedVehicleId] = React.useState<string>("");
   const queryClient = useQueryClient();
 
-  const { data: vehiclesResponse, isLoading: isLoadingVehicles } = useQuery({
-    queryKey: ["vehicles-list-simple"],
-    queryFn: () => getVehicles({ per_page: 100 }),
-    enabled: isOpen,
-  });
+  const { data: vehiclesResponse, isLoading: isLoadingVehicles } = useVehiclesDropdown(isOpen);
 
   const { mutate: doAssign, isPending: isAssigning } = useMutation({
     mutationFn: () => assignDriver(selectedVehicleId, driverId),

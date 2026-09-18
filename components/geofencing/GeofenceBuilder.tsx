@@ -4,9 +4,9 @@ import React, { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { Save, Bell, Navigation, Info, Loader2 } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createGeofence, bulkAssignVehicles } from '@/lib/api/geofencing'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { MultiVehicleSelector } from '@/components/shared/MultiVehicleSelector'
 import { LocationAutocomplete } from '@/components/ui/LocationAutocomplete'
 import { toast } from 'sonner'
@@ -37,11 +37,7 @@ export function GeofenceBuilder({
     const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined)
     const [errors, setErrors] = useState<{ name?: string; shape?: string }>({})
 
-    const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-builder', { per_page: 100 }],
-        queryFn: () => getVehicles({ per_page: 100 }),
-        enabled: isOpen,
-    })
+    const { data: vehiclesData, isLoading: isLoadingVehicles } = useVehiclesDropdown(isOpen)
 
     const { mutate: save, isPending } = useMutation({
         mutationFn: async () => {

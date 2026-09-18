@@ -47,8 +47,10 @@ export default function DevicesPage() {
 
   // Fetched separately (and batched across all pages) purely to join a device's
   // identifier against the vehicle it's mounted on — no dedicated backend join exists.
+  // Shared key: same full-org vehicle list used wherever "every vehicle" is needed
+  // (e.g. cluster asset tables), so this never pays for its own fetch when cached.
   const { data: vehicles } = useQuery({
-    queryKey: ["vehicles-batched-for-device-join"],
+    queryKey: ["vehicles-all-full"],
     queryFn: () => getVehiclesBatched({}),
     enabled: !!token,
     staleTime: 5 * 60 * 1000,
