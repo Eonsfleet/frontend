@@ -25,8 +25,8 @@ export function MaintenanceHeatmap({ data = [] }: { data?: MaintenanceDay[] }) {
     }
 
     return (
-        <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[400px]">
-            <CardHeader className="pb-4">
+        <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+            <CardHeader className="pb-4 shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
                         <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
@@ -45,7 +45,7 @@ export function MaintenanceHeatmap({ data = [] }: { data?: MaintenanceDay[] }) {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-6">
+            <CardContent className="p-6 pt-0 space-y-6 flex-1 min-h-0 overflow-y-auto scrollbar-hide">
                 <div className="grid grid-cols-7 gap-2">
                     {data.map((day, idx) => {
                         const isSelected = selectedDate && isSameDay(day.date, selectedDate);
