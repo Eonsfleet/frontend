@@ -26,8 +26,8 @@ import {
 import * as dashboardApi from "@/lib/api/dashboard";
 import * as trackingApi from "@/lib/api/tracking";
 import * as vehicleApi from "@/lib/api/vehicles";
+import * as analyticsApi from "@/lib/api/analytics";
 import { useAuthStore } from "@/store/authStore";
-import { matchesStatusBucket } from "@/lib/vehicleStatus";
 import { useClusterFleetStats } from "@/hooks/useClusterFleetStats";
 
 export default function DashboardPage() {
@@ -93,6 +93,17 @@ export default function DashboardPage() {
   const { data: dashboardVehicles } = useQuery({
     queryKey: ["dashboard-vehicles-map"],
     queryFn: () => vehicleApi.getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
+    enabled: !!token,
+    staleTime: STALE_TIME_REALTIME,
+    refetchInterval: REFETCH_INTERVAL_MAP,
+  });
+
+  // Shared with /analytics and /analytics/gps via the same query key — device
+  // connectivity counts come straight from the backend's own tally instead of
+  // being derived from a (page-capped) vehicle list.
+  const { data: deviceStatus } = useQuery({
+    queryKey: ["gps-device-status"],
+    queryFn: () => analyticsApi.getDeviceStatusSummary(),
     enabled: !!token,
     staleTime: STALE_TIME_REALTIME,
     refetchInterval: REFETCH_INTERVAL_MAP,
@@ -169,29 +180,16 @@ export default function DashboardPage() {
   const avgEfficiency = efficiencyData?.efficiency || "0%";
   const recentIncidentsCount = incidentsData?.count || "0";
 
-  // Connectivity summary — derived per-vehicle via the same lib/vehicleStatus.ts
-  // taxonomy Live Tracking uses (so "online"/"offline" can never disagree between
-  // the Dashboard and the Tracking map), from the map feed already fetched above
-  // for the live map (dashboardVehicles) rather than a second vehicle fetch.
+  // Connectivity summary — sourced directly from GET /analytics/gps/device-status,
+  // the backend's own device-connectivity tally, rather than derived from a vehicle list.
   const dynamicDeviceStatusData = useMemo(() => {
-    const vehicles = dashboardVehicles?.data || [];
-    let online = 0;
-    let offline = 0;
-    for (const v of vehicles) {
-      const loc = v.relationships?.current_location;
-      const input = {
-        status: v.attributes?.status,
-        is_online: v.attributes?.is_online ?? false,
-        speed: Number(loc?.speed ?? v.attributes?.speed ?? 0) || 0,
-      };
-      if (matchesStatusBucket("online", input)) online++;
-      else offline++;
-    }
+    const online = deviceStatus?.online ?? 0;
+    const offline = deviceStatus?.offline ?? 0;
     return [
       { name: "Online", value: online, color: "#10b981" },
       { name: "Offline", value: offline, color: "#2563eb" },
     ];
-  }, [dashboardVehicles]);
+  }, [deviceStatus]);
 
   const dynamicVehicleStats = [
     { label: "Active", value: metrics.moving_assets, color: "bg-emerald-500" },
@@ -405,25 +403,33 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 2: operational status overview — vehicle status + cluster distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[420px]">
-        <VehicleStatusChart data={dynamicStatusData} />
-        <div className="lg:col-span-2 h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-105">
+        <div className="h-105 lg:h-full">
+          <VehicleStatusChart data={dynamicStatusData} />
+        </div>
+        <div className="lg:col-span-2 h-105 lg:h-full">
           <ClusterDistributionChart data={clusterDistribution} height={280} isCountPending={isClusterCountPending} />
         </div>
       </div>
 
       {/* Row 3: maintenance forecast, live alerts, device connectivity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-100">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-100">
         {/* <DashboardMap locations={normalizedMapLocations} /> */}
-        <MaintenanceHeatmap data={normalizedForecast} />
+        <div className="h-100 lg:h-full">
+          <MaintenanceHeatmap data={normalizedForecast} />
+        </div>
         {/* <ActivityFeed activities={normalizedActivities} />   */}
-        <AlertsPanel alerts={normalizedAlerts} />
-        <VehicleStatusChart
-          data={dynamicDeviceStatusData}
-          title="Device Status"
-          description="GPS tracker heartbeat monitoring"
-          showSummary
-        />
+        <div className="h-100 lg:h-full">
+          <AlertsPanel alerts={normalizedAlerts} />
+        </div>
+        <div className="h-100 lg:h-full">
+          <VehicleStatusChart
+            data={dynamicDeviceStatusData}
+            title="Device Status"
+            description="GPS tracker heartbeat monitoring"
+            showSummary
+          />
+        </div>
       </div>
 
       <FleetOverviewModal
