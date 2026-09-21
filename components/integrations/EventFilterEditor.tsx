@@ -1,6 +1,5 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
 import { Check, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -8,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { getVehicles } from '@/lib/api/vehicles'
-import { PAGE_SIZE_DROPDOWN, STALE_TIME_STATIC } from '@/lib/config'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { cn } from '@/lib/utils'
 
 /**
@@ -47,11 +45,7 @@ export function EventFilterEditor({
     onChange: (next: EventFilterMap) => void
     isEditing: boolean
 }) {
-    const { data, isLoading } = useQuery({
-        queryKey: ['vehicles-for-webhook-filters'],
-        queryFn: () => getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
-        staleTime: STALE_TIME_STATIC,
-    })
+    const { data, isLoading } = useVehiclesDropdown()
 
     const vehicles = (data?.data ?? []).map((v) => ({
         id: Number(v.id),

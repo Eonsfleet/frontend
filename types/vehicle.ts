@@ -62,6 +62,8 @@ export interface Cluster {
         name: string
         description: string | null
         total_vehicles: number
+        active_vehicles: number
+        inactive_vehicles: number
         total_users: number
         manager: string | null
         created_at: string

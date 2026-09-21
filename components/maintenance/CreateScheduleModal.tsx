@@ -46,7 +46,7 @@ import {
   getChecklistTemplates,
   createChecklistItem,
 } from "@/lib/api/maintenance";
-import { getVehicles } from "@/lib/api/vehicles";
+import { useVehiclesDropdown } from "@/hooks/useVehiclesDropdown";
 import { getVendors } from "@/lib/api/vendors";
 import { toast } from "sonner";
 import { cn, extractApiError } from "@/lib/utils";
@@ -110,11 +110,7 @@ export function CreateMaintenanceScheduleModal({
   }, [preselectedVehicleId]);
 
   // Queries
-  const { data: vehicleData } = useQuery({
-    queryKey: ["vehicles-lite"],
-    queryFn: () => getVehicles({ per_page: 100 }),
-    enabled: open,
-  });
+  const { data: vehicleData } = useVehiclesDropdown(open);
 
   const { data: vendorData } = useQuery({
     queryKey: ["vendors-lite"],

@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob, transitionMaintenanceJob, deleteMaintenanceJob } from '@/lib/api/maintenance'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -312,11 +312,7 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const [form, setForm] = React.useState({ vehicle_id: '', title: '', description: '', fault_category: '', cost_estimate: '' })
     const isSpecialist = can('administrator') || can('*') || usePermission().role === 'fleet_manager'
 
-    const { data: vehiclesData } = useQuery({
-        queryKey: ['vehicles-jobs-modal'],
-        queryFn: () => getVehicles({ per_page: 100 }),
-        enabled: open,
-    })
+    const { data: vehiclesData } = useVehiclesDropdown(open)
 
     const { mutate: create, isPending } = useMutation({
         mutationFn: () => createMaintenanceJob({

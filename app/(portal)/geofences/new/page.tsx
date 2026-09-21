@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, Loader2, Save } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { createGeofence } from '@/lib/api/geofencing'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { toast } from 'sonner'
 import { GeofenceMap } from '@/components/geofencing/GeofenceMap'
 import { extractApiError } from '@/lib/utils'
@@ -33,10 +33,7 @@ export default function NewGeofencePage() {
         vehicle_ids: [] as string[]
     })
 
-    const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: 100 }),
-    })
+    const { data: vehiclesData, isLoading: isLoadingVehicles } = useVehiclesDropdown()
 
     const { mutate: handleSave, isPending } = useMutation({
         mutationFn: async (payload: any) => {

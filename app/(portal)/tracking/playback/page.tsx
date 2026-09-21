@@ -10,8 +10,9 @@ import { useUIStore } from '@/store/uiStore'
 import * as vehicleApi from '@/lib/api/vehicles'
 import * as driversApi from '@/lib/api/drivers'
 import * as tripApi from '@/lib/api/trips'
-import { getClusters } from '@/lib/api/settings'
+import { getClustersBatched } from '@/lib/api/settings'
 import { getGeofences } from '@/lib/api/geofencing'
+import { STALE_TIME_STATIC } from '@/lib/config'
 import type { PlaybackEventType } from '@/types'
 import { DEFAULT_THRESHOLDS, type DrivingBehaviourThresholds } from '@/lib/playback/derive'
 import type { PlaybackSpeed } from '@/lib/playback/interpolation'
@@ -79,11 +80,11 @@ export default function PlaybackPage() {
   })
   const vehicles = useMemo(() => vehiclesData?.data ?? [], [vehiclesData])
 
-  const { data: clustersData } = useQuery({
-    queryKey: ['playback-clusters'],
-    queryFn: () => getClusters({ per_page: 100 }),
+  const { data: clusters = [] } = useQuery({
+    queryKey: ['cluster-fleet-stats-clusters'],
+    queryFn: () => getClustersBatched(),
+    staleTime: STALE_TIME_STATIC,
   })
-  const clusters = clustersData?.data?.clusters ?? []
 
   const { data: driversData } = useQuery({
     queryKey: ['playback-drivers'],

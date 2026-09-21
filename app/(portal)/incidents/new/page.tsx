@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { createIncident } from '@/lib/api/incidents'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -147,10 +147,7 @@ export default function NewIncidentPage() {
     })
     const [witnesses, setWitnesses] = useState<Witness[]>([])
 
-    const { data: vehiclesData } = useQuery({
-        queryKey: ['vehicles-list'],
-        queryFn: () => getVehicles({ per_page: 100 }),
-    })
+    const { data: vehiclesData } = useVehiclesDropdown()
 
     const { mutate: submit, isPending } = useMutation({
         mutationFn: () => createIncident({
