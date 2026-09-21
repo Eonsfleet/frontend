@@ -63,6 +63,7 @@ import { cn } from "@/lib/utils";
 import * as vehicleApi from "@/lib/api/vehicles";
 import { Badge } from "@/components/ui/badge";
 import { usePaginatedClusters } from "@/hooks/useClusterFleetStats";
+import { STALE_TIME_STATIC } from "@/lib/config";
 import {
   Pagination,
   PaginationContent,
@@ -99,13 +100,15 @@ export default function ClustersPage() {
   } = usePaginatedClusters(page);
 
   const { data: userData } = useQuery({
-    queryKey: ["settings-users-all"],
+    queryKey: ["users-list-simple"],
     queryFn: () => api.getUsers({ per_page: 100 }),
+    staleTime: STALE_TIME_STATIC,
   });
 
   const { data: vehiclesData } = useQuery({
-    queryKey: ["settings-vehicles-all"],
+    queryKey: ["vehicles-list-simple"],
     queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
+    staleTime: STALE_TIME_STATIC,
   });
 
   const users = userData?.data?.users || [];
@@ -632,16 +635,12 @@ export default function ClustersPage() {
                       <p className="text-lg font-black text-slate-900 tabular-nums">{cluster.total}</p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
                     </div>
-                    <div className={cn("rounded-lg bg-emerald-50 py-2.5", cluster.isCountPending && "animate-pulse")}>
-                      <p className="text-lg font-black text-emerald-600 tabular-nums">
-                        {cluster.isCountPending ? "—" : cluster.online}
-                      </p>
+                    <div className="rounded-lg bg-emerald-50 py-2.5">
+                      <p className="text-lg font-black text-emerald-600 tabular-nums">{cluster.online}</p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Online</p>
                     </div>
-                    <div className={cn("rounded-lg bg-blue-50 py-2.5", cluster.isCountPending && "animate-pulse")}>
-                      <p className="text-lg font-black text-blue-600 tabular-nums">
-                        {cluster.isCountPending ? "—" : cluster.offline}
-                      </p>
+                    <div className="rounded-lg bg-blue-50 py-2.5">
+                      <p className="text-lg font-black text-blue-600 tabular-nums">{cluster.offline}</p>
                       <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Offline</p>
                     </div>
                   </div>
@@ -649,7 +648,7 @@ export default function ClustersPage() {
                   <div className="mt-4 h-1.5 rounded-full bg-blue-100 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all"
-                      style={{ width: cluster.isCountPending ? 0 : `${onlineRate}%` }}
+                      style={{ width: `${onlineRate}%` }}
                     />
                   </div>
 
@@ -658,9 +657,7 @@ export default function ClustersPage() {
                       <Users2 className="h-3.5 w-3.5 text-slate-400" />
                       {cluster.totalStaff} Staff
                     </span>
-                    <span className="text-slate-400">
-                      {cluster.isCountPending ? "Loading…" : `${onlineRate.toFixed(0)}% online`}
-                    </span>
+                    <span className="text-slate-400">{onlineRate.toFixed(0)}% online</span>
                   </div>
                 </CardContent>
               </Card>

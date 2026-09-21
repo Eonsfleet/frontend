@@ -10,7 +10,7 @@ import { useClusterVehicles } from '@/hooks/useClusterFleetStats'
 import { ClusterSummary } from '@/components/clusters/ClusterSummary'
 import { ClusterAssetList } from '@/components/clusters/ClusterAssetList'
 import { ClusterStaffList } from '@/components/clusters/ClusterStaffList'
-import { matchesStatusBucket } from '@/lib/vehicleStatus'
+import { STALE_TIME_STATIC } from '@/lib/config'
 import type { UserProfile } from '@/types/user'
 
 export default function ClusterDetailPage() {
@@ -22,13 +22,15 @@ export default function ClusterDetailPage() {
         queryKey: ['cluster', id],
         queryFn: () => settingsApi.getCluster(id),
         enabled: !!id,
+        staleTime: STALE_TIME_STATIC,
     })
 
-    const { vehicles, isCountPending } = useClusterVehicles(id)
+    const { vehicles, isLoading: isVehiclesLoading } = useClusterVehicles(id)
 
     const { data: usersResponse, isLoading: isStaffLoading } = useQuery({
         queryKey: ['cluster-staff-pool'],
         queryFn: () => settingsApi.getUsers({ per_page: 100 }),
+        staleTime: STALE_TIME_STATIC,
     })
 
     const cluster = clusterResponse?.data?.cluster
@@ -38,18 +40,11 @@ export default function ClusterDetailPage() {
         (u) => String(u.relationships?.cluster?.id) === String(id),
     )
 
-    const online = vehicles.filter((v) =>
-        matchesStatusBucket('online', {
-            status: v.attributes?.status,
-            is_online: v.attributes?.is_online ?? false,
-            speed: Number(v.relationships?.current_location?.speed ?? v.attributes?.speed ?? 0) || 0,
-        }),
-    ).length
-    // The cluster record already carries its own vehicle count — show it
-    // immediately instead of waiting on the org-wide vehicle page-walk that
-    // online/offline still depend on.
-    const total = cluster?.attributes.total_vehicles ?? vehicles.length
-    const offline = vehicles.length - online
+    // Active/inactive/total all come straight from the cluster record — the
+    // backend already computes these, no need to walk the vehicle list.
+    const total = attr?.total_vehicles ?? 0
+    const online = attr?.active_vehicles ?? 0
+    const offline = attr?.inactive_vehicles ?? 0
 
     if (isClusterLoading) {
         return (
@@ -97,7 +92,6 @@ export default function ClusterDetailPage() {
                 offline={offline}
                 totalStaff={attr?.total_users ?? staff.length}
                 manager={attr?.manager ?? null}
-                isCountPending={isCountPending}
             />
 
             <Tabs defaultValue="assets" className="w-full">
@@ -117,7 +111,7 @@ export default function ClusterDetailPage() {
                 </TabsList>
 
                 <TabsContent value="assets" className="pt-6 outline-none">
-                    <ClusterAssetList vehicles={vehicles} isCountPending={isCountPending} />
+                    <ClusterAssetList vehicles={vehicles} isCountPending={isVehiclesLoading} />
                 </TabsContent>
 
                 <TabsContent value="staff" className="pt-6 outline-none">

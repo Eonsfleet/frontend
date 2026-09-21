@@ -98,11 +98,11 @@ export default function DashboardPage() {
     refetchInterval: REFETCH_INTERVAL_MAP,
   });
 
-  // Full org vehicle list + per-cluster stats — shared with the Clusters
-  // module via the same React Query keys, so navigating between /dashboard
-  // and /clusters reuses one fetch instead of paying the full sequential
-  // getVehiclesBatched page-walk twice.
-  const { clusters: clusterStats, allVehicles } = useClusterFleetStats(!!token);
+  // Per-cluster stats — shared with the Clusters module via the same React
+  // Query key, so navigating between /dashboard and /clusters reuses one
+  // fetch. Counts come straight from each cluster's own record (backend-
+  // computed), so this never waits on a vehicle fetch.
+  const { clusters: clusterStats, isLoading: isClusterStatsLoading } = useClusterFleetStats(!!token);
 
   // Normalize Activity Logs
   const normalizedActivities = useMemo(() => {
@@ -170,10 +170,11 @@ export default function DashboardPage() {
   const recentIncidentsCount = incidentsData?.count || "0";
 
   // Connectivity summary — derived per-vehicle via the same lib/vehicleStatus.ts
-  // taxonomy Live Tracking uses, so "online"/"offline" can never disagree
-  // between the Dashboard and the Tracking map for the same fleet.
+  // taxonomy Live Tracking uses (so "online"/"offline" can never disagree between
+  // the Dashboard and the Tracking map), from the map feed already fetched above
+  // for the live map (dashboardVehicles) rather than a second vehicle fetch.
   const dynamicDeviceStatusData = useMemo(() => {
-    const vehicles = allVehicles || [];
+    const vehicles = dashboardVehicles?.data || [];
     let online = 0;
     let offline = 0;
     for (const v of vehicles) {
@@ -190,7 +191,7 @@ export default function DashboardPage() {
       { name: "Online", value: online, color: "#10b981" },
       { name: "Offline", value: offline, color: "#2563eb" },
     ];
-  }, [allVehicles]);
+  }, [dashboardVehicles]);
 
   const dynamicVehicleStats = [
     { label: "Active", value: metrics.moving_assets, color: "bg-emerald-500" },
@@ -238,7 +239,7 @@ export default function DashboardPage() {
     () => clusterStats.map((c) => ({ name: c.name, total: c.total, online: c.online, offline: c.offline })),
     [clusterStats],
   );
-  const isClusterCountPending = clusterStats.some((c) => c.isCountPending);
+  const isClusterCountPending = isClusterStatsLoading;
 
   // Normalize Alerts Data
   const normalizedAlerts: AlertItem[] = useMemo(() => {
