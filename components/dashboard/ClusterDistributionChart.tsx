@@ -130,7 +130,7 @@ export function ClusterDistributionChart({
                     </div>
                 ) : (
                     <div className={cn("h-full overflow-x-auto overflow-y-hidden", isCountPending && "animate-pulse")}>
-                        <div style={{ width: Math.max(sorted.length * 90, 100), height }}>
+                        <div style={{ minWidth: '100%', width: Math.max(sorted.length * 90, 100), height }}>
                             <ResponsiveContainer>
                                 <BarChart data={sorted} margin={{ top: 24, right: 10, left: 0, bottom: 0 }} barCategoryGap={6} barGap={0}>
                                     <CartesianGrid strokeDasharray="none" vertical={false} stroke="#f1f5f9" />
