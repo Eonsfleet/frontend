@@ -59,12 +59,12 @@ export const VEHICLE_STATUS: Record<VehicleStatusKey, VehicleStatusConfig> = {
   offline: {
     key: "offline",
     label: "Offline",
-    dot: "bg-blue-500",
-    badge: "bg-blue-50 text-blue-700 border-blue-100",
-    solid: "bg-blue-600 border-blue-600 text-white",
-    text: "text-blue-600",
-    marker: "#2563eb",
-    ring: "#60a5fa",
+    dot: "bg-red-500",
+    badge: "bg-red-50 text-red-700 border-red-100",
+    solid: "bg-red-600 border-red-600 text-white",
+    text: "text-red-600",
+    marker: "#ef4444",
+    ring: "#fca5a5",
   },
   alarm: {
     key: "alarm",

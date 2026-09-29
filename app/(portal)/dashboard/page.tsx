@@ -187,7 +187,7 @@ export default function DashboardPage() {
     const offline = deviceStatus?.offline ?? 0;
     return [
       { name: "Online", value: online, color: "#10b981" },
-      { name: "Offline", value: offline, color: "#2563eb" },
+      { name: "Offline", value: offline, color: "#ef4444" },
     ];
   }, [deviceStatus]);
 

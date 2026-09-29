@@ -22,7 +22,7 @@ export interface ClusterDistribution {
 }
 
 const ONLINE_COLOR = '#10b981'
-const OFFLINE_COLOR = '#2563eb'
+const OFFLINE_COLOR = '#ef4444'
 
 function ClusterTooltip({ active, payload, label }: any) {
     if (!active || !payload?.length) return null
