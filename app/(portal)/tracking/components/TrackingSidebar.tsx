@@ -235,7 +235,7 @@ export function TrackingSidebar({
               [
                 { key: "all", label: "Total", value: fleetSummary.total, tint: "bg-slate-50", text: "text-slate-900", labelText: "text-slate-400" },
                 { key: "online", label: "Online", value: fleetSummary.online, tint: "bg-emerald-50", text: "text-emerald-600", labelText: "text-emerald-500" },
-                { key: "offline", label: "Offline", value: fleetSummary.offline, tint: "bg-blue-50", text: "text-blue-600", labelText: "text-blue-500" },
+                { key: "offline", label: "Offline", value: fleetSummary.offline, tint: "bg-red-50", text: "text-red-600", labelText: "text-red-500" },
                 { key: "moving", label: "Moving", value: fleetSummary.moving, tint: "bg-amber-50", text: "text-amber-600", labelText: "text-amber-500" },
                 { key: "parked", label: "Stopped", value: fleetSummary.stopped, tint: "bg-slate-100", text: "text-slate-700", labelText: "text-slate-500" },
                 { key: "alarm", label: "Alarm", value: fleetSummary.alarm, tint: "bg-purple-50", text: "text-purple-600", labelText: "text-purple-500" },

@@ -128,7 +128,7 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
             <Stat
               label="Last Update"
               value={
-                <span className="text-blue-600 font-semibold">
+                <span className="text-red-600 font-semibold">
                   Offline · Last location received {lastUpdateRelative}
                 </span>
               }
