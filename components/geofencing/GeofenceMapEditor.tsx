@@ -148,8 +148,8 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
                 <MapCenterer initialGeofence={initialGeofence} />
                 <MapPanner center={center} />
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">Carto</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; OpenStreetMap contributors'
                 />
                 <FeatureGroup>
                     <EditControl

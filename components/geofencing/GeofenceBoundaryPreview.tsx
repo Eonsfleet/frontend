@@ -63,8 +63,8 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
                 scrollWheelZoom: false,
             })
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; Carto',
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
             }).addTo(map)
 
             mapRef.current = map

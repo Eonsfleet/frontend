@@ -65,7 +65,7 @@ export default function GeofenceOverviewMap({ geofences, vehicles }: Props) {
                 scrollWheelZoom: true,
             })
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
             mapRef.current = map
 
             // Set initial view before adding layers so projection is ready

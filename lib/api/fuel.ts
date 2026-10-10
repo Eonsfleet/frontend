@@ -421,9 +421,14 @@ export const downloadFuelTransactionImportTemplate =
 
 // Uploads a filled import file for chunked, per-row reconciliation. Completion/
 // failure is reported by the backend via email; the response echoes queue status.
+// `reprocess` re-submits a file the backend already has a record of importing
+// (it 409s otherwise) -- set it only after the user confirms they want to
+// import the same spreadsheet again.
 export const importFuelTransactions = async (
   formData: FormData,
+  reprocess?: boolean,
 ): Promise<{ message: string; data?: Record<string, unknown> }> => {
+  if (reprocess) formData.append("reprocess", "true");
   const response = await apiClient.post("/import/fuel-transactions", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

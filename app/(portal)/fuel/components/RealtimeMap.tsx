@@ -77,9 +77,9 @@ function ActiveVehicleFocus({ activeId, positionRef }: { activeId: number | null
 }
 
 const LAYERS = {
-    Map: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    Map: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     Satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    Traffic: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    Traffic: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
 } as const
 type LayerKey = keyof typeof LAYERS
 

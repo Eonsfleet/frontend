@@ -59,6 +59,7 @@ export function useBatchJobPolling() {
               timers.current.delete(job.id)
               updateJob(job.id, {
                 status: 'completed',
+                outcome: result.outcome,
                 progress: 100,
                 error: result.message,
                 finishedAt: Date.now(),

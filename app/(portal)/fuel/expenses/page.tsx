@@ -55,6 +55,7 @@ import * as api from "@/lib/api/fuel";
 import { getVehicles } from "@/lib/api/vehicles";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import axios from "axios";
 import { FuelExpense } from "@/types";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -782,10 +783,10 @@ export default function FuelExpensesPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: ({ file, reprocess }: { file: File; reprocess?: boolean }) => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.importFuelTransactions(formData);
+      return api.importFuelTransactions(formData, reprocess);
     },
     onSuccess: (response) => {
       const dataImportId =
@@ -807,9 +808,12 @@ export default function FuelExpensesPage() {
         });
       }
 
-      toast.success(
+      // The request only queued the file — reconciliation hasn't run yet, so
+      // this can't claim success. The progress widget (and email report) is
+      // what tells the user whether it actually succeeded.
+      toast.message(
         response.message ||
-          "Import received. You’ll get an email report when reconciliation completes.",
+          "Import queued. You’ll get an email report when reconciliation completes.",
       );
       queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
       queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
@@ -818,10 +822,24 @@ export default function FuelExpensesPage() {
     // The request failed before any batch job could exist (e.g. the 422 file
     // validation error) — there is nothing to poll, so just surface the
     // error. No progress entry is ever created for a failed trigger request.
-    onError: (error) =>
+    onError: (error, variables) => {
+      // 409 means the backend recognizes this exact file as already imported.
+      // The message names the earlier import and explicitly invites a
+      // reprocess=true resend, so offer that instead of a dead-end error.
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.error(extractApiError(error, "This file was already imported."), {
+          action: {
+            label: "Import anyway",
+            onClick: () => importMutation.mutate({ file: variables.file, reprocess: true }),
+          },
+          duration: 15000,
+        });
+        return;
+      }
       toast.error(
         extractApiError(error, "Failed to import fuel transactions."),
-      ),
+      );
+    },
   });
 
   const exportMutation = useMutation({
@@ -1363,7 +1381,7 @@ export default function FuelExpensesPage() {
         open={importOpen}
         isPending={importMutation.isPending}
         onClose={() => setImportOpen(false)}
-        onImport={(file) => importMutation.mutate(file)}
+        onImport={(file) => importMutation.mutate({ file })}
       />
     </div>
   );

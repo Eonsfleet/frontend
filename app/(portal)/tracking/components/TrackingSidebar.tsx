@@ -2,7 +2,15 @@
 
 import { useRef, useState, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw, ChevronDown } from "lucide-react";
+import {
+  Navigation,
+  Search,
+  ChevronRight,
+  ChevronLeft,
+  SlidersHorizontal,
+  RefreshCw,
+  ChevronDown,
+} from "lucide-react";
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
 import type { StatusFilter } from "./StatusFilters";
@@ -74,9 +82,13 @@ export function TrackingSidebar({
   onApplyFilters,
   onResetFilters,
 }: TrackingSidebarProps) {
-  const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
+  const [expandedClusters, setExpandedClusters] = useState<
+    Record<string, boolean>
+  >({});
   const listParentRef = useRef<HTMLDivElement>(null);
-  const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD && viewType !== "cluster";
+  const shouldVirtualize =
+    filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD &&
+    viewType !== "cluster";
   const { isAssetListCollapsed, toggleAssetList } = useTrackingUiStore();
 
   const virtualizer = useVirtualizer({
@@ -118,7 +130,10 @@ export function TrackingSidebar({
     });
 
     filteredVehicles.forEach((v) => {
-      const cId = v.attributes.cluster_id != null ? String(v.attributes.cluster_id) : "unassigned";
+      const cId =
+        v.attributes.cluster_id != null
+          ? String(v.attributes.cluster_id)
+          : "unassigned";
       if (!map[cId]) {
         map[cId] = [];
       }
@@ -128,7 +143,10 @@ export function TrackingSidebar({
     return Object.keys(map)
       .map((cId) => ({
         id: cId,
-        name: cId === "unassigned" ? "Unassigned" : (clusterMap.get(cId) || `Cluster ${cId}`),
+        name:
+          cId === "unassigned"
+            ? "Unassigned"
+            : clusterMap.get(cId) || `Cluster ${cId}`,
         vehicles: map[cId],
       }))
       .sort((a, b) => {
@@ -151,9 +169,14 @@ export function TrackingSidebar({
     let moving = 0;
     let stopped = 0;
     let alarm = 0;
+
     for (const v of cardScopedVehicles) {
       const loc = locations[v.id];
-      const input = { status: loc?.status, is_online: loc?.is_online ?? false, speed: loc?.speed };
+      const input = {
+        status: loc?.status,
+        is_online: loc?.is_online ?? false,
+        speed: loc?.speed,
+      };
       const hasAlarm = alarmState[v.id] === true;
       if (hasAlarm) alarm++;
       if (matchesStatusBucket("online", input, hasAlarm)) online++;
@@ -161,7 +184,14 @@ export function TrackingSidebar({
       if (matchesStatusBucket("moving", input, hasAlarm)) moving++;
       else if (matchesStatusBucket("parked", input, hasAlarm)) stopped++;
     }
-    return { total: cardScopedVehicles.length, online, offline, moving, stopped, alarm };
+    return {
+      total: cardScopedVehicles.length,
+      online,
+      offline,
+      moving,
+      stopped,
+      alarm,
+    };
   }, [cardScopedVehicles, locations, alarmState]);
 
   if (isAssetListCollapsed) {
@@ -233,12 +263,54 @@ export function TrackingSidebar({
           <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-0.5">
             {(
               [
-                { key: "all", label: "Total", value: fleetSummary.total, tint: "bg-slate-50", text: "text-slate-900", labelText: "text-slate-400" },
-                { key: "online", label: "Online", value: fleetSummary.online, tint: "bg-emerald-50", text: "text-emerald-600", labelText: "text-emerald-500" },
-                { key: "offline", label: "Offline", value: fleetSummary.offline, tint: "bg-red-50", text: "text-red-600", labelText: "text-red-500" },
-                { key: "moving", label: "Moving", value: fleetSummary.moving, tint: "bg-amber-50", text: "text-amber-600", labelText: "text-amber-500" },
-                { key: "parked", label: "Stopped", value: fleetSummary.stopped, tint: "bg-slate-100", text: "text-slate-700", labelText: "text-slate-500" },
-                { key: "alarm", label: "Alarm", value: fleetSummary.alarm, tint: "bg-purple-50", text: "text-purple-600", labelText: "text-purple-500" },
+                {
+                  key: "all",
+                  label: "Total",
+                  value: fleetSummary.total,
+                  tint: "bg-slate-50",
+                  text: "text-slate-900",
+                  labelText: "text-slate-400",
+                },
+                {
+                  key: "online",
+                  label: "Online",
+                  value: fleetSummary.online,
+                  tint: "bg-emerald-50",
+                  text: "text-emerald-600",
+                  labelText: "text-emerald-500",
+                },
+                {
+                  key: "offline",
+                  label: "Offline",
+                  value: fleetSummary.offline,
+                  tint: "bg-red-50",
+                  text: "text-red-600",
+                  labelText: "text-red-500",
+                },
+                {
+                  key: "moving",
+                  label: "Moving",
+                  value: fleetSummary.moving,
+                  tint: "bg-amber-50",
+                  text: "text-amber-600",
+                  labelText: "text-amber-500",
+                },
+                {
+                  key: "parked",
+                  label: "Stopped",
+                  value: fleetSummary.stopped,
+                  tint: "bg-slate-100",
+                  text: "text-slate-700",
+                  labelText: "text-slate-500",
+                },
+                {
+                  key: "alarm",
+                  label: "Alarm",
+                  value: fleetSummary.alarm,
+                  tint: "bg-purple-50",
+                  text: "text-purple-600",
+                  labelText: "text-purple-500",
+                },
               ] as const
             ).map((card) => {
               const isActive = statusFilter === card.key;
@@ -249,11 +321,24 @@ export function TrackingSidebar({
                   className={cn(
                     "shrink-0 rounded-lg px-3 py-1.5 text-center transition-all min-w-[62px] border",
                     card.tint,
-                    isActive ? "border-blue-400" : "border-transparent hover:opacity-80",
+                    isActive
+                      ? "border-blue-400"
+                      : "border-transparent hover:opacity-80",
                   )}
                 >
-                  <p className={cn("text-xs font-black tabular-nums", card.text)}>{card.value}</p>
-                  <p className={cn("text-[8px] font-bold uppercase tracking-wider", card.labelText)}>{card.label}</p>
+                  <p
+                    className={cn("text-xs font-black tabular-nums", card.text)}
+                  >
+                    {card.value}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-[8px] font-bold uppercase tracking-wider",
+                      card.labelText,
+                    )}
+                  >
+                    {card.label}
+                  </p>
                 </button>
               );
             })}
@@ -262,7 +347,8 @@ export function TrackingSidebar({
 
         {viewMode === "all" && filteredVehicles.length !== vehicles.length && (
           <p className="mt-2 text-[11px] font-semibold text-slate-500">
-            Showing <span className="text-slate-900">{filteredVehicles.length}</span> of{" "}
+            Showing{" "}
+            <span className="text-slate-900">{filteredVehicles.length}</span> of{" "}
             <span className="text-slate-900">{vehicles.length}</span> assets
           </p>
         )}
@@ -292,7 +378,9 @@ export function TrackingSidebar({
                 <div className="p-8 text-center">
                   <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
                   <p className="text-xs font-semibold text-slate-400">
-                    {vehicles.length === 0 ? "No assets yet" : "No assets match your filters"}
+                    {vehicles.length === 0
+                      ? "No assets yet"
+                      : "No assets match your filters"}
                   </p>
                 </div>
               </div>
@@ -301,7 +389,10 @@ export function TrackingSidebar({
                 {groupedClusters.map((cluster) => {
                   const isExpanded = expandedClusters[cluster.id] !== false;
                   return (
-                    <div key={cluster.id} className="border-b border-slate-100 last:border-0">
+                    <div
+                      key={cluster.id}
+                      className="border-b border-slate-100 last:border-0"
+                    >
                       {/* Cluster Header */}
                       <button
                         onClick={() => toggleCluster(cluster.id)}
@@ -318,7 +409,9 @@ export function TrackingSidebar({
                         <ChevronDown
                           className={cn(
                             "h-4 w-4 text-slate-400 transition-transform duration-200",
-                            isExpanded ? "transform rotate-0" : "transform -rotate-90"
+                            isExpanded
+                              ? "transform rotate-0"
+                              : "transform -rotate-90",
                           )}
                         />
                       </button>
@@ -334,8 +427,16 @@ export function TrackingSidebar({
                 })}
               </div>
             ) : shouldVirtualize ? (
-              <div ref={listParentRef} className="flex-1 overflow-y-auto no-scrollbar">
-                <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              <div
+                ref={listParentRef}
+                className="flex-1 overflow-y-auto no-scrollbar"
+              >
+                <div
+                  style={{
+                    height: virtualizer.getTotalSize(),
+                    position: "relative",
+                  }}
+                >
                   {virtualizer.getVirtualItems().map((virtualRow) => (
                     <div
                       key={filteredVehicles[virtualRow.index].id}
@@ -361,18 +462,24 @@ export function TrackingSidebar({
         ) : (
           <div className="flex-1 overflow-y-auto no-scrollbar">
             {isLoadingTrips ? (
-              Array.from({ length: 6 }).map((_, i) => <AssetCardSkeleton key={i} />)
+              Array.from({ length: 6 }).map((_, i) => (
+                <AssetCardSkeleton key={i} />
+              ))
             ) : ongoingTripsData.length === 0 ? (
               <div className="p-8 text-center">
                 <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                <p className="text-xs font-semibold text-slate-400">No ongoing missions</p>
+                <p className="text-xs font-semibold text-slate-400">
+                  No ongoing missions
+                </p>
               </div>
             ) : (
               ongoingTripsData.map((trip) => (
                 <TripListItem
                   key={trip.id}
                   trip={trip}
-                  isSelected={String(selectedVehicleId) === String(trip.vehicleId)}
+                  isSelected={
+                    String(selectedVehicleId) === String(trip.vehicleId)
+                  }
                   locations={locations}
                   onSelect={() => {
                     if (trip.vehicleId) {
