@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { Search, Users, CheckCircle2, ChevronRight, X, Filter, Truck, Loader2 } from 'lucide-react'
 import { cn, extractApiError } from '@/lib/utils'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import * as vehicleApi from '@/lib/api/vehicles'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import * as geofencingApi from '@/lib/api/geofencing'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { toast } from 'sonner'
 
 const MOCK_VEHICLES = [
@@ -30,11 +30,7 @@ export function BulkAssignmentModal({
     const [searchTerm, setSearchTerm] = useState('')
     const queryClient = useQueryClient()
 
-    const { data: vehiclesData, isLoading } = useQuery({
-        queryKey: ['vehicles', { per_page: 100 }],
-        queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
-        enabled: isOpen
-    })
+    const { data: vehiclesData, isLoading } = useVehiclesDropdown(isOpen)
 
     const assignMutation = useMutation({
         mutationFn: (ids: string[]) => geofencingApi.bulkAssignVehicles(geofenceId!, ids),

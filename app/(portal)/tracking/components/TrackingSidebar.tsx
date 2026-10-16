@@ -2,19 +2,33 @@
 
 import { useRef, useState, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Navigation, Search, ChevronRight, ChevronLeft, SlidersHorizontal, RefreshCw, ChevronDown } from "lucide-react";
+import {
+  Navigation,
+  Search,
+  ChevronRight,
+  ChevronLeft,
+  SlidersHorizontal,
+  RefreshCw,
+  ChevronDown,
+} from "lucide-react";
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
-import { StatusFilters, StatusFilter } from "./StatusFilters";
+import type { StatusFilter } from "./StatusFilters";
 import { VehicleListItem } from "./VehicleListItem";
 import { TripListItem } from "./TripListItem";
 import { AssetCardSkeleton } from "./AssetCardSkeleton";
 import { VIRTUALIZE_LIST_THRESHOLD } from "@/lib/config";
 import { useTrackingUiStore } from "@/store/trackingUiStore";
+import { matchesStatusBucket } from "@/lib/vehicleStatus";
+import type { Cluster, Geofence } from "@/types";
+import { ActiveFilterChips } from "./ActiveFilterChips";
+import type { FilterState } from "./FilterPanelDrawer";
 
 interface TrackingSidebarProps {
   viewMode: "all" | "focused";
   vehicles: VehicleMapEntry[];
+  /** Every active filter applied EXCEPT status — what the summary cards count against. */
+  cardScopedVehicles: VehicleMapEntry[];
   filteredVehicles: VehicleMapEntry[];
   locations: Record<string, any>;
   selectedVehicleId: string | null;
@@ -33,12 +47,17 @@ interface TrackingSidebarProps {
   onOpenFilterDrawer: () => void;
   onRefresh: () => void;
   viewType: "listing" | "cluster";
-  clusters: any[];
+  clusters: Cluster[];
+  geofences: Geofence[];
+  filters: FilterState;
+  onApplyFilters: (filters: FilterState) => void;
+  onResetFilters: () => void;
 }
 
 export function TrackingSidebar({
   viewMode,
   vehicles,
+  cardScopedVehicles,
   filteredVehicles,
   locations,
   selectedVehicleId,
@@ -58,10 +77,18 @@ export function TrackingSidebar({
   onRefresh,
   viewType,
   clusters,
+  geofences,
+  filters,
+  onApplyFilters,
+  onResetFilters,
 }: TrackingSidebarProps) {
-  const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
+  const [expandedClusters, setExpandedClusters] = useState<
+    Record<string, boolean>
+  >({});
   const listParentRef = useRef<HTMLDivElement>(null);
-  const shouldVirtualize = filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD && viewType !== "cluster";
+  const shouldVirtualize =
+    filteredVehicles.length > VIRTUALIZE_LIST_THRESHOLD &&
+    viewType !== "cluster";
   const { isAssetListCollapsed, toggleAssetList } = useTrackingUiStore();
 
   const virtualizer = useVirtualizer({
@@ -93,31 +120,79 @@ export function TrackingSidebar({
     }));
   };
 
-  // view=map carries no cluster relationship, so grouping always yields a
-  // single "Unassigned" bucket — degraded but not broken.
   const groupedClusters = useMemo(() => {
     if (viewType !== "cluster") return [];
 
     const map: Record<string, VehicleMapEntry[]> = {};
     const clusterMap = new Map<string, string>();
     clusters.forEach((c) => {
-      clusterMap.set(String(c.id), c.attributes?.name || c.name || `Cluster ${c.id}`);
+      clusterMap.set(String(c.id), c.attributes?.name || `Cluster ${c.id}`);
     });
 
     filteredVehicles.forEach((v) => {
-      const cId = "unassigned";
+      const cId =
+        v.attributes.cluster_id != null
+          ? String(v.attributes.cluster_id)
+          : "unassigned";
       if (!map[cId]) {
         map[cId] = [];
       }
       map[cId].push(v);
     });
 
-    return Object.keys(map).map((cId) => ({
-      id: cId,
-      name: cId === "unassigned" ? "Unassigned" : (clusterMap.get(cId) || `Cluster ${cId}`),
-      vehicles: map[cId],
-    }));
+    return Object.keys(map)
+      .map((cId) => ({
+        id: cId,
+        name:
+          cId === "unassigned"
+            ? "Unassigned"
+            : clusterMap.get(cId) || `Cluster ${cId}`,
+        vehicles: map[cId],
+      }))
+      .sort((a, b) => {
+        if (a.id === "unassigned") return 1;
+        if (b.id === "unassigned") return -1;
+        return b.vehicles.length - a.vehicles.length;
+      });
   }, [filteredVehicles, clusters, viewType]);
+
+  // Totals scoped to every active filter EXCEPT status (cardScopedVehicles),
+  // so clicking one status card doesn't collapse the others to zero — they
+  // stay comparable, while cluster/geofence/fuel/etc. filters still narrow
+  // the numbers as expected. Connectivity (online/offline) and movement
+  // (moving/stopped-parked) are independent dimensions — a vehicle
+  // contributes to exactly one bucket in each row, never both counted
+  // against a single combined status.
+  const fleetSummary = useMemo(() => {
+    let online = 0;
+    let offline = 0;
+    let moving = 0;
+    let stopped = 0;
+    let alarm = 0;
+
+    for (const v of cardScopedVehicles) {
+      const loc = locations[v.id];
+      const input = {
+        status: loc?.status,
+        is_online: loc?.is_online ?? false,
+        speed: loc?.speed,
+      };
+      const hasAlarm = alarmState[v.id] === true;
+      if (hasAlarm) alarm++;
+      if (matchesStatusBucket("online", input, hasAlarm)) online++;
+      else offline++;
+      if (matchesStatusBucket("moving", input, hasAlarm)) moving++;
+      else if (matchesStatusBucket("parked", input, hasAlarm)) stopped++;
+    }
+    return {
+      total: cardScopedVehicles.length,
+      online,
+      offline,
+      moving,
+      stopped,
+      alarm,
+    };
+  }, [cardScopedVehicles, locations, alarmState]);
 
   if (isAssetListCollapsed) {
     return (
@@ -183,21 +258,115 @@ export function TrackingSidebar({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+
+        {viewMode === "all" && (
+          <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-0.5">
+            {(
+              [
+                {
+                  key: "all",
+                  label: "Total",
+                  value: fleetSummary.total,
+                  tint: "bg-slate-50",
+                  text: "text-slate-900",
+                  labelText: "text-slate-400",
+                },
+                {
+                  key: "online",
+                  label: "Online",
+                  value: fleetSummary.online,
+                  tint: "bg-emerald-50",
+                  text: "text-emerald-600",
+                  labelText: "text-emerald-500",
+                },
+                {
+                  key: "offline",
+                  label: "Offline",
+                  value: fleetSummary.offline,
+                  tint: "bg-red-50",
+                  text: "text-red-600",
+                  labelText: "text-red-500",
+                },
+                {
+                  key: "moving",
+                  label: "Moving",
+                  value: fleetSummary.moving,
+                  tint: "bg-amber-50",
+                  text: "text-amber-600",
+                  labelText: "text-amber-500",
+                },
+                {
+                  key: "parked",
+                  label: "Stopped",
+                  value: fleetSummary.stopped,
+                  tint: "bg-slate-100",
+                  text: "text-slate-700",
+                  labelText: "text-slate-500",
+                },
+                {
+                  key: "alarm",
+                  label: "Alarm",
+                  value: fleetSummary.alarm,
+                  tint: "bg-purple-50",
+                  text: "text-purple-600",
+                  labelText: "text-purple-500",
+                },
+              ] as const
+            ).map((card) => {
+              const isActive = statusFilter === card.key;
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => setStatusFilter(isActive ? "all" : card.key)}
+                  className={cn(
+                    "shrink-0 rounded-lg px-3 py-1.5 text-center transition-all min-w-[62px] border",
+                    card.tint,
+                    isActive
+                      ? "border-blue-400"
+                      : "border-transparent hover:opacity-80",
+                  )}
+                >
+                  <p
+                    className={cn("text-xs font-black tabular-nums", card.text)}
+                  >
+                    {card.value}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-[8px] font-bold uppercase tracking-wider",
+                      card.labelText,
+                    )}
+                  >
+                    {card.label}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {viewMode === "all" && filteredVehicles.length !== vehicles.length && (
+          <p className="mt-2 text-[11px] font-semibold text-slate-500">
+            Showing{" "}
+            <span className="text-slate-900">{filteredVehicles.length}</span> of{" "}
+            <span className="text-slate-900">{vehicles.length}</span> assets
+          </p>
+        )}
       </div>
+
+      {viewMode === "all" && (
+        <ActiveFilterChips
+          filters={filters}
+          clusters={clusters}
+          geofences={geofences}
+          onApplyFilters={onApplyFilters}
+          onResetFilters={onResetFilters}
+        />
+      )}
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {viewMode === "all" ? (
           <>
-            <div className="px-4 pt-2">
-              <StatusFilters
-                vehicles={vehicles}
-                locations={locations}
-                alarmState={alarmState}
-                statusFilter={statusFilter}
-                onStatusChange={setStatusFilter}
-              />
-            </div>
-
             {isLoadingVehicles ? (
               <div className="flex-1 overflow-y-auto no-scrollbar">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -209,7 +378,9 @@ export function TrackingSidebar({
                 <div className="p-8 text-center">
                   <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
                   <p className="text-xs font-semibold text-slate-400">
-                    {vehicles.length === 0 ? "No assets yet" : "No assets match your filters"}
+                    {vehicles.length === 0
+                      ? "No assets yet"
+                      : "No assets match your filters"}
                   </p>
                 </div>
               </div>
@@ -218,14 +389,17 @@ export function TrackingSidebar({
                 {groupedClusters.map((cluster) => {
                   const isExpanded = expandedClusters[cluster.id] !== false;
                   return (
-                    <div key={cluster.id} className="border-b border-slate-100 last:border-0">
+                    <div
+                      key={cluster.id}
+                      className="border-b border-slate-100 last:border-0"
+                    >
                       {/* Cluster Header */}
                       <button
                         onClick={() => toggleCluster(cluster.id)}
                         className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800">
+                          <span className="text-xs font-bold text-slate-800 uppercase">
                             {cluster.name}
                           </span>
                           <span className="text-[10px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">
@@ -235,7 +409,9 @@ export function TrackingSidebar({
                         <ChevronDown
                           className={cn(
                             "h-4 w-4 text-slate-400 transition-transform duration-200",
-                            isExpanded ? "transform rotate-0" : "transform -rotate-90"
+                            isExpanded
+                              ? "transform rotate-0"
+                              : "transform -rotate-90",
                           )}
                         />
                       </button>
@@ -251,8 +427,16 @@ export function TrackingSidebar({
                 })}
               </div>
             ) : shouldVirtualize ? (
-              <div ref={listParentRef} className="flex-1 overflow-y-auto no-scrollbar">
-                <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              <div
+                ref={listParentRef}
+                className="flex-1 overflow-y-auto no-scrollbar"
+              >
+                <div
+                  style={{
+                    height: virtualizer.getTotalSize(),
+                    position: "relative",
+                  }}
+                >
                   {virtualizer.getVirtualItems().map((virtualRow) => (
                     <div
                       key={filteredVehicles[virtualRow.index].id}
@@ -278,18 +462,24 @@ export function TrackingSidebar({
         ) : (
           <div className="flex-1 overflow-y-auto no-scrollbar">
             {isLoadingTrips ? (
-              Array.from({ length: 6 }).map((_, i) => <AssetCardSkeleton key={i} />)
+              Array.from({ length: 6 }).map((_, i) => (
+                <AssetCardSkeleton key={i} />
+              ))
             ) : ongoingTripsData.length === 0 ? (
               <div className="p-8 text-center">
                 <Navigation className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-                <p className="text-xs font-semibold text-slate-400">No ongoing missions</p>
+                <p className="text-xs font-semibold text-slate-400">
+                  No ongoing missions
+                </p>
               </div>
             ) : (
               ongoingTripsData.map((trip) => (
                 <TripListItem
                   key={trip.id}
                   trip={trip}
-                  isSelected={String(selectedVehicleId) === String(trip.vehicleId)}
+                  isSelected={
+                    String(selectedVehicleId) === String(trip.vehicleId)
+                  }
                   locations={locations}
                   onSelect={() => {
                     if (trip.vehicleId) {

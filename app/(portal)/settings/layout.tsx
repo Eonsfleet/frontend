@@ -4,7 +4,7 @@ import React, { useEffect } from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Building2, Users, Shield, Network, UserCircle, ArrowLeft } from 'lucide-react'
+import { Building2, Users, Shield, UserCircle, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAccessControl, TRIAL_EXPIRED_ALLOWED_PATHS } from '@/hooks/useAccessControl'
@@ -40,7 +40,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
             p => pathname === p || pathname.startsWith(p + '/')
         )
         if (!allowed) {
-            router.replace('/billing')
+            router.replace('/subscription')
         }
     }, [isExpiredTrial, pathname, router])
 
@@ -58,12 +58,11 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'My Profile', href: '/profile', icon: UserCircle, show: true, ownerAllowed: true },
         { name: 'Organization', href: '/settings', icon: Building2, show: true, ownerAllowed: false },
         { name: 'User Management', href: '/settings/users', icon: Users, show: true, ownerAllowed: false },
-        { name: 'Clusters (Groups)', href: '/settings/clusters', icon: Network, show: true, ownerAllowed: true },
         { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' as Capability, ownerAllowed: false },
     ].filter(item => {
         if (!item.show) return false
         if (isOwner && !item.ownerAllowed) return false
-        if (isExpiredTrial) return ['/profile', '/settings/clusters'].includes(item.href)
+        if (isExpiredTrial) return item.href === '/profile'
         return true
     })
 
@@ -96,7 +95,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                 return (
                                     <Link
                                         key={item.name}
-                                        href={isLocked ? '/billing' : item.href}
+                                        href={isLocked ? '/subscription' : item.href}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group whitespace-nowrap lg:whitespace-normal
                                             ${isActive
                                                 ? 'bg-slate-100 text-slate-900 font-semibold shadow-sm border border-slate-200'

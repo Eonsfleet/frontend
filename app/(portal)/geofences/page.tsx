@@ -9,7 +9,7 @@ import { GeofenceBuilder } from '../../../components/geofencing/GeofenceBuilder'
 import { Plus, List, Map as MapIcon, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getGeofences } from '@/lib/api/geofencing'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { QueryError } from '@/components/shared/QueryError'
 import { PAGE_SIZE_DROPDOWN } from '@/lib/config'
 import { GeofenceFilters, GeofenceFilterState } from '@/components/geofencing/GeofenceFilters'
@@ -39,11 +39,7 @@ export default function GeofencesPage() {
         enabled: view === 'map',
     })
 
-    const { data: vehiclesData } = useQuery({
-        queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: PAGE_SIZE_DROPDOWN }),
-        enabled: view === 'map',
-    })
+    const { data: vehiclesData } = useVehiclesDropdown(view === 'map')
 
     const allGeofences = allGeofencesData?.data?.geofences || []
 

@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { UpgradeGate } from '@/components/shared/UpgradeGate'
 import { getGeofenceById, updateGeofence, getGeofenceVehicles, bulkAssignVehicles } from '@/lib/api/geofencing'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { toast } from 'sonner'
 import { extractApiError } from '@/lib/utils'
 
@@ -58,10 +58,7 @@ export default function EditGeofencePage() {
         queryFn: () => getGeofenceById(id),
     })
 
-    const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: 100 }),
-    })
+    const { data: vehiclesData, isLoading: isLoadingVehicles } = useVehiclesDropdown()
 
     const { data: assignedVehiclesData } = useQuery({
         queryKey: ['geofence-vehicles', id],
@@ -97,10 +94,10 @@ export default function EditGeofencePage() {
                 ...prev,
                 vehicle_ids: assignedVehiclesData.data.map((v: any) => v.id.toString()),
             }))
-        } else if (geofenceData?.data?.relationships?.vehicles?.data) {
+        } else if (geofenceData?.data?.relationships?.vehicles) {
             setFormData(prev => ({
                 ...prev,
-                vehicle_ids: geofenceData.data.relationships.vehicles!.data.map((v: any) => v.id.toString()),
+                vehicle_ids: geofenceData.data.relationships.vehicles!.map((v: any) => v.id.toString()),
             }))
         }
     }, [assignedVehiclesData, geofenceData])

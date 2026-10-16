@@ -17,6 +17,12 @@ export function ImportExportProgress() {
   if (jobs.length === 0) return null
 
   const activeCount = jobs.filter((j) => j.status === 'processing').length
+  // A finished job can still need attention (failed, or completed with nothing
+  // actually imported) -- "complete" would overstate that, so the header only
+  // claims success when every finished job's outcome backs it up.
+  const needsAttention = jobs.some(
+    (j) => j.status === 'failed' || (j.status === 'completed' && (j.outcome === 'empty' || j.outcome === 'partial')),
+  )
 
   return (
     <div className="fixed bottom-5 right-5 z-[60] w-[340px] max-w-[calc(100vw-2.5rem)]">
@@ -29,11 +35,17 @@ export function ImportExportProgress() {
           <div className="flex items-center gap-2">
             {activeCount > 0 ? (
               <Loader2 className="h-4 w-4 animate-spin text-[#0055FF]" />
+            ) : needsAttention ? (
+              <CheckCircle2 className="h-4 w-4 text-amber-500" />
             ) : (
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             )}
             <span className="text-[11px] font-black uppercase italic tracking-wide text-slate-900">
-              {activeCount > 0 ? `${activeCount} job${activeCount > 1 ? 's' : ''} in progress` : 'Jobs complete'}
+              {activeCount > 0
+                ? `${activeCount} job${activeCount > 1 ? 's' : ''} in progress`
+                : needsAttention
+                  ? 'Job Update'
+                  : 'Jobs Complete'}
             </span>
           </div>
           {isMinimized ? (
@@ -57,6 +69,10 @@ export function ImportExportProgress() {
 
 function JobRow({ job, onDismiss }: { job: BatchJob; onDismiss: () => void }) {
   const Icon = job.kind === 'import' ? Upload : Download
+  // A completed job with outcome 'empty' or 'partial' did not fully succeed even
+  // though it finished running, so it's flagged like a warning rather than a plain
+  // success — same treatment as ImportDialog's result screens.
+  const isWarning = job.status === 'completed' && (job.outcome === 'empty' || job.outcome === 'partial')
 
   return (
     <div className="rounded-xl px-2 py-2.5 hover:bg-slate-50">
@@ -67,7 +83,9 @@ function JobRow({ job, onDismiss }: { job: BatchJob; onDismiss: () => void }) {
             job.status === 'failed'
               ? 'bg-rose-50 text-rose-500'
               : job.status === 'completed'
-                ? 'bg-emerald-50 text-emerald-600'
+                ? isWarning
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'bg-emerald-50 text-emerald-600'
                 : 'bg-blue-50 text-[#0055FF]',
           )}
         >
@@ -101,7 +119,9 @@ function JobRow({ job, onDismiss }: { job: BatchJob; onDismiss: () => void }) {
           )}
 
           {job.status === 'completed' && (
-            <p className="mt-0.5 text-[11px] text-emerald-600">Completed successfully.</p>
+            <p className={cn('mt-0.5 text-[11px]', isWarning ? 'text-amber-600' : 'text-emerald-600')}>
+              {job.error ?? (job.outcome === 'empty' ? 'Nothing was imported.' : 'Completed successfully.')}
+            </p>
           )}
 
           {job.status === 'failed' && (

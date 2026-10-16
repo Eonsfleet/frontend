@@ -26,7 +26,7 @@ export function MiniLocationMap({ lat, lng }: { lat: number; lng: number }) {
                 className="h-full w-full"
                 style={{ background: '#e5e7eb' }}
             >
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap" />
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
                 <Marker position={[lat, lng]} icon={pin()} />
             </MapContainer>
         </div>

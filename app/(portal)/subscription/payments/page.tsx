@@ -1,73 +1,116 @@
 'use client'
 
-import Link from 'next/link'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Receipt, Loader2, Eye, Download } from 'lucide-react'
+import { Loader2, Receipt } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { QueryError } from '@/components/shared/QueryError'
-import { EmptyState } from '@/components/shared/subscription/EmptyState'
-import { PaymentStatusBadge } from '@/components/shared/subscription/StatusBadges'
-import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
 import { BillingDateDisplay } from '@/components/shared/subscription/BillingDateDisplay'
-import * as api from '@/lib/api/billing-groups'
+import { EmptyState } from '@/components/shared/subscription/EmptyState'
+import { MoneyDisplay } from '@/components/shared/subscription/MoneyDisplay'
+import { PaymentStatusBadge } from '@/components/shared/subscription/StatusBadges'
+import * as billing from '@/lib/api/billing'
+import type { PaymentStatus } from '@/types/subscription'
+
+type StatusFilter = 'all' | PaymentStatus
+
+const API_STATUS: Partial<Record<PaymentStatus, string>> = {
+    PENDING: 'pending',
+    PROCESSING: 'processing',
+    SUCCESSFUL: 'successful',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled',
+    REFUNDED: 'refunded',
+    PARTIALLY_REFUNDED: 'partially_refunded',
+}
 
 export default function SubscriptionPaymentsPage() {
-    const { data: payments, isLoading, isError, refetch } = useQuery({
-        queryKey: ['subscription-payments'],
-        queryFn: api.getSubscriptionPayments,
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+    const transactionsQuery = useQuery({
+        queryKey: ['subscription-transactions', statusFilter],
+        queryFn: () => billing.getSubscriptionTransactions({
+            page: 1,
+            per_page: 50,
+            status: statusFilter === 'all' ? undefined : API_STATUS[statusFilter],
+        }),
     })
 
+    const transactions = useMemo(() => transactionsQuery.data?.data.data ?? [], [transactionsQuery.data])
+    const summary = useMemo(() => {
+        const successful = transactions.filter((item) => billing.normalizePaymentStatus(item.attributes.status) === 'SUCCESSFUL')
+        return {
+            count: transactionsQuery.data?.data.meta.total ?? transactions.length,
+            successful: successful.length,
+            amount: successful.reduce((sum, item) => sum + Number(item.attributes.amount ?? 0), 0),
+            currency: transactions[0]?.attributes.currency ?? 'NGN',
+        }
+    }, [transactions, transactionsQuery.data?.data.meta.total])
+
     return (
-        <div className="max-w-6xl space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Payments</h1>
-                <p className="mt-1 text-sm text-slate-500">Payment history across all invoices. Provider payloads are not exposed here.</p>
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#0055FF]">Payment ledger</p>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Payments</h1>
+                    <p className="mt-1 text-sm text-slate-500">Track subscription payment references, methods, provider status, and settlement dates.</p>
+                </div>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+                    <SelectTrigger className="h-9 w-48 bg-white text-xs">
+                        <SelectValue placeholder="All statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="PENDING">Pending</SelectItem>
+                        <SelectItem value="PROCESSING">Processing</SelectItem>
+                        <SelectItem value="SUCCESSFUL">Successful</SelectItem>
+                        <SelectItem value="FAILED">Failed</SelectItem>
+                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                        <SelectItem value="REFUNDED">Refunded</SelectItem>
+                        <SelectItem value="PARTIALLY_REFUNDED">Partially refunded</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
-            <Card className="overflow-hidden border-slate-200 shadow-sm">
-                {isError ? (
-                    <div className="p-6"><QueryError message="Failed to load payments." onRetry={refetch} /></div>
-                ) : isLoading ? (
-                    <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
-                ) : !payments || payments.length === 0 ? (
-                    <EmptyState icon={Receipt} title="No payments yet" description="Payments made toward your invoices will appear here." />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <Summary label="Transactions" value={summary.count.toLocaleString()} />
+                <Summary label="Successful" value={summary.successful.toLocaleString()} />
+                <Summary label="Settled amount" value={<MoneyDisplay value={billing.toMoney(summary.amount, summary.currency)} />} />
+            </div>
+
+            <Card className="border-0 shadow-none">
+                {transactionsQuery.isError ? (
+                    <div className="p-6"><QueryError message="Failed to load payments." onRetry={transactionsQuery.refetch} /></div>
+                ) : transactionsQuery.isLoading ? (
+                    <div className="flex justify-center p-12"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+                ) : transactions.length === 0 ? (
+                    <EmptyState icon={Receipt} title="No payments found" description="Subscription payment records will appear here after payment initialization or settlement." />
                 ) : (
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
-                                <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        <div className="overflow-x-auto rounded-lg bg-white">
+                            <table className="min-w-[860px] w-full text-left text-sm">
+                                <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                     <tr>
-                                        <th className="px-5 py-3.5">Payment reference</th>
-                                        <th className="px-5 py-3.5">Invoice</th>
-                                        <th className="px-5 py-3.5">Date</th>
-                                        <th className="px-5 py-3.5">Method</th>
-                                        <th className="px-5 py-3.5 text-right">Amount</th>
-                                        <th className="px-5 py-3.5">Provider</th>
-                                        <th className="px-5 py-3.5">Status</th>
-                                        <th className="px-5 py-3.5 text-right">Actions</th>
+                                        <th className="px-4 py-3">Reference</th>
+                                        <th className="px-4 py-3">Plan</th>
+                                        <th className="px-4 py-3">Method</th>
+                                        <th className="px-4 py-3">Created</th>
+                                        <th className="px-4 py-3">Paid</th>
+                                        <th className="px-4 py-3 text-right">Amount</th>
+                                        <th className="px-4 py-3">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {payments.map((payment) => (
-                                        <tr key={payment.id} className="hover:bg-slate-50/50">
-                                            <td className="px-5 py-4 font-medium text-slate-800">{payment.reference}</td>
-                                            <td className="px-5 py-4">
-                                                <Link href={`/subscription/invoices/${payment.invoiceNumber}`} className="text-blue-600 hover:underline">
-                                                    {payment.invoiceNumber}
-                                                </Link>
-                                            </td>
-                                            <td className="px-5 py-4"><BillingDateDisplay date={payment.date} /></td>
-                                            <td className="px-5 py-4 text-slate-600">{payment.method}</td>
-                                            <td className="px-5 py-4 text-right"><MoneyDisplay value={payment.amount} /></td>
-                                            <td className="px-5 py-4 text-slate-600">{payment.provider}</td>
-                                            <td className="px-5 py-4"><PaymentStatusBadge status={payment.status} /></td>
-                                            <td className="px-5 py-4">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs"><Eye className="h-3.5 w-3.5" /> View</Button>
-                                                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"><Download className="h-3.5 w-3.5" /> Receipt</Button>
-                                                </div>
-                                            </td>
+                                    {transactions.map((transaction) => (
+                                        <tr key={transaction.id} className="hover:bg-slate-50/70">
+                                            <td className="px-4 py-3 font-medium text-slate-950">{transaction.attributes.reference ?? `TX-${transaction.id}`}</td>
+                                            <td className="px-4 py-3 text-slate-600">{transaction.relationships?.subscription?.plan?.name ?? 'Subscription'}</td>
+                                            <td className="px-4 py-3 capitalize text-slate-600">{transaction.attributes.payment_method ?? 'Not supplied'}</td>
+                                            <td className="px-4 py-3"><BillingDateDisplay date={transaction.attributes.created_at} /></td>
+                                            <td className="px-4 py-3">{transaction.attributes.paid_at ? <BillingDateDisplay date={transaction.attributes.paid_at} /> : 'Not paid'}</td>
+                                            <td className="px-4 py-3 text-right font-semibold"><MoneyDisplay value={billing.toMoney(transaction.attributes.amount, transaction.attributes.currency)} /></td>
+                                            <td className="px-4 py-3"><PaymentStatusBadge status={billing.normalizePaymentStatus(transaction.attributes.status)} /></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -76,6 +119,15 @@ export default function SubscriptionPaymentsPage() {
                     </CardContent>
                 )}
             </Card>
+        </div>
+    )
+}
+
+function Summary({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+        <div className="rounded-lg bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">{label}</p>
+            <div className="mt-2 text-xl font-semibold text-slate-950">{value}</div>
         </div>
     )
 }

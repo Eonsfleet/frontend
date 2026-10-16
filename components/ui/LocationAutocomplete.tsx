@@ -14,6 +14,15 @@ interface Location {
     }
 }
 
+interface NominatimSuggestion {
+    place_id: number
+    display_name: string
+    name?: string
+    lat: string
+    lon: string
+    type?: string
+}
+
 interface LocationAutocompleteProps {
     value: string
     onSelect: (location: Location) => void
@@ -30,11 +39,11 @@ export function LocationAutocomplete({
     icon
 }: LocationAutocompleteProps) {
     const [inputValue, setInputValue] = useState(value)
-    const [suggestions, setSuggestions] = useState<any[]>([])
+    const [suggestions, setSuggestions] = useState<NominatimSuggestion[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         setInputValue(value)
@@ -50,8 +59,14 @@ export function LocationAutocomplete({
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+        }
+    }, [])
+
     const fetchSuggestions = async (query: string) => {
-        if (!query || query.length < 3 || !token) {
+        if (!query || query.length < 3) {
             setSuggestions([])
             return
         }
@@ -59,21 +74,21 @@ export function LocationAutocomplete({
         setIsLoading(true)
         try {
             const response = await axios.get(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
+                'https://nominatim.openstreetmap.org/search',
                 {
                     params: {
-                        access_token: token,
-                        autocomplete: true,
+                        q: query,
+                        format: 'jsonv2',
+                        addressdetails: 1,
                         limit: 5,
-                        country: 'NG', // Focusing on Nigeria as per project context
-                        types: 'address,poi,place'
+                        countrycodes: 'ng',
                     }
                 }
             )
-            setSuggestions(response.data.features || [])
+            setSuggestions(response.data || [])
             setIsOpen(true)
         } catch (error) {
-            console.error('Error fetching Mapbox suggestions:', error)
+            console.error('Error fetching OpenStreetMap suggestions:', error)
         } finally {
             setIsLoading(false)
         }
@@ -83,22 +98,25 @@ export function LocationAutocomplete({
         const val = e.target.value
         setInputValue(val)
 
-        // Debounce
-        const timeoutId = setTimeout(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        debounceRef.current = setTimeout(() => {
             fetchSuggestions(val)
         }, 500)
-        return () => clearTimeout(timeoutId)
     }
 
-    const handleSelect = (feature: any) => {
+    const handleSelect = (feature: NominatimSuggestion) => {
+        const latitude = Number(feature.lat)
+        const longitude = Number(feature.lon)
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+
         const location: Location = {
-            name: feature.place_name,
+            name: feature.display_name,
             coords: {
-                longitude: feature.center[0],
-                latitude: feature.center[1]
+                longitude,
+                latitude,
             }
         }
-        setInputValue(feature.place_name)
+        setInputValue(feature.display_name)
         setSuggestions([])
         setIsOpen(false)
         onSelect(location)
@@ -151,7 +169,7 @@ export function LocationAutocomplete({
                     <div className="max-h-[300px] overflow-y-auto overflow-x-hidden p-1">
                         {suggestions.map((feature) => (
                             <button
-                                key={feature.id}
+                                key={feature.place_id}
                                 onClick={() => handleSelect(feature)}
                                 className="w-full flex items-start gap-3 p-3 hover:bg-slate-50 transition-colors rounded-lg text-left group"
                             >
@@ -160,17 +178,17 @@ export function LocationAutocomplete({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-bold text-slate-900 truncate">
-                                        {feature.text}
+                                        {feature.name || feature.display_name.split(',')[0]}
                                     </p>
                                     <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
-                                        {feature.place_name}
+                                        {feature.display_name}
                                     </p>
                                 </div>
                             </button>
                         ))}
                     </div>
                     <div className="p-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Powered by Mapbox</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Powered by OpenStreetMap</span>
                     </div>
                 </div>
             )}

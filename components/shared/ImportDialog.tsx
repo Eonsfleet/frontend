@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Download, Upload, CheckCircle2, XCircle, Loader2, FileSpreadsheet, AlertTriangle } from 'lucide-react'
-import { downloadTemplate, importFile, getBatchStatus, EntityType, ImportModel } from '@/lib/api/import-export'
+import { downloadTemplate, importFile, getDataImportStatus, EntityType, ImportModel, ImportRowCounts } from '@/lib/api/import-export'
 import { toast } from 'sonner'
 
 interface ImportDialogProps {
@@ -18,6 +18,12 @@ interface ImportDialogProps {
 }
 
 type Step = 'template' | 'upload' | 'processing'
+// 'finished' = every row created/updated. 'finished-partial' = some rows made it
+// in but others were skipped/failed/duplicates. 'finished-empty' = the job
+// completed but nothing was actually created or updated (e.g. every row was a
+// duplicate) -- distinct from both success and failure so the user isn't told
+// "imported" when nothing changed.
+type BatchStatus = 'running' | 'finished' | 'finished-partial' | 'finished-empty' | 'failed'
 
 const ENTITY_LABELS: Record<EntityType, string> = {
     vehicles: 'Vehicles',
@@ -47,9 +53,10 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
     const [step, setStep] = useState<Step>('template')
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [uploadPct, setUploadPct] = useState(0)
-    const [batchId, setBatchId] = useState<string | null>(null)
     const [batchProgress, setBatchProgress] = useState(0)
-    const [batchStatus, setBatchStatus] = useState<'running' | 'finished' | 'failed'>('running')
+    const [batchStatus, setBatchStatus] = useState<BatchStatus>('running')
+    const [resultCounts, setResultCounts] = useState<ImportRowCounts | null>(null)
+    const [resultMessage, setResultMessage] = useState<string | null>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -62,9 +69,10 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
         setStep('template')
         setSelectedFile(null)
         setUploadPct(0)
-        setBatchId(null)
         setBatchProgress(0)
         setBatchStatus('running')
+        setResultCounts(null)
+        setResultMessage(null)
         setIsUploading(false)
         if (pollRef.current) clearInterval(pollRef.current)
     }
@@ -103,15 +111,22 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
     const startPolling = (id: string) => {
         pollRef.current = setInterval(async () => {
             try {
-                const status = await getBatchStatus(id)
+                const status = await getDataImportStatus(id)
                 setBatchProgress(status.progress ?? 0)
 
-                if (status.status === 'finished') {
+                if (status.status === 'completed') {
                     clearInterval(pollRef.current!)
-                    setBatchStatus('finished')
+                    setResultCounts(status.counts)
+                    setResultMessage(status.message)
+                    setBatchStatus(
+                        status.outcome === 'empty' ? 'finished-empty' :
+                        status.outcome === 'partial' ? 'finished-partial' :
+                        'finished'
+                    )
                     onComplete?.()
-                } else if (status.status === 'cancelled' || status.status === 'failed' || status.failedJobs > 0) {
+                } else if (status.status === 'failed') {
                     clearInterval(pollRef.current!)
+                    setResultMessage(status.message)
                     setBatchStatus('failed')
                 }
             } catch {
@@ -127,8 +142,7 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
         setBatchProgress(0)
         try {
             const result = await importFile(model, selectedFile, setUploadPct)
-            setBatchId(result.batch_id)
-            startPolling(result.batch_id)
+            startPolling(String(result.data_import_id))
         } catch {
             toast.error('Upload failed. Please check the file format and try again.')
             setIsUploading(false)
@@ -253,9 +267,49 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
                                     <p className="text-[11px] text-slate-400 mt-1">All records have been processed successfully.</p>
                                 </div>
                                 <Badge className="bg-emerald-50 text-emerald-700 border-none">Import Complete</Badge>
+                                {resultCounts && <ImportResultBreakdown counts={resultCounts} />}
                                 <Button className="w-full rounded-xl bg-blue-600 hover:bg-blue-700" onClick={handleClose}>
                                     Done
                                 </Button>
+                            </div>
+                        )}
+
+                        {batchStatus === 'finished-partial' && (
+                            <div className="space-y-4 text-center">
+                                <AlertTriangle className="h-14 w-14 text-amber-500 mx-auto" />
+                                <div>
+                                    <p className="font-black text-slate-900 uppercase italic">{label} Partially Imported</p>
+                                    <p className="text-[11px] text-slate-400 mt-1">
+                                        {resultMessage ?? 'Some records were created or updated, others were skipped or failed.'}
+                                    </p>
+                                </div>
+                                <Badge className="bg-amber-50 text-amber-700 border-none">Completed with issues</Badge>
+                                {resultCounts && <ImportResultBreakdown counts={resultCounts} />}
+                                <Button className="w-full rounded-xl bg-blue-600 hover:bg-blue-700" onClick={handleClose}>
+                                    Done
+                                </Button>
+                            </div>
+                        )}
+
+                        {batchStatus === 'finished-empty' && (
+                            <div className="space-y-4 text-center">
+                                <AlertTriangle className="h-14 w-14 text-amber-500 mx-auto" />
+                                <div>
+                                    <p className="font-black text-slate-900 uppercase italic">Nothing Was Imported</p>
+                                    <p className="text-[11px] text-slate-400 mt-1">
+                                        {resultMessage ?? 'The file was processed, but no records were created or updated — every row was skipped or invalid.'}
+                                    </p>
+                                </div>
+                                <Badge className="bg-amber-50 text-amber-700 border-none">0 records imported</Badge>
+                                {resultCounts && <ImportResultBreakdown counts={resultCounts} />}
+                                <div className="flex gap-3">
+                                    <Button variant="outline" className="flex-1 rounded-xl" onClick={handleClose}>
+                                        Close
+                                    </Button>
+                                    <Button className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700" onClick={reset}>
+                                        Try a different file
+                                    </Button>
+                                </div>
                             </div>
                         )}
 
@@ -264,7 +318,9 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
                                 <XCircle className="h-14 w-14 text-rose-500 mx-auto" />
                                 <div>
                                     <p className="font-black text-slate-900 uppercase italic">Import Failed</p>
-                                    <p className="text-[11px] text-slate-400 mt-1">Some or all records could not be processed. Check the file and try again.</p>
+                                    <p className="text-[11px] text-slate-400 mt-1">
+                                        {resultMessage ?? 'Some or all records could not be processed. Check the file and try again.'}
+                                    </p>
                                 </div>
                                 <div className="flex gap-3">
                                     <Button variant="outline" className="flex-1 rounded-xl" onClick={handleClose}>
@@ -280,5 +336,32 @@ export function ImportDialog({ open, onOpenChange, entity, model, onComplete }: 
                 )}
             </DialogContent>
         </Dialog>
+    )
+}
+
+// Row-count breakdown shown under the result banner so "completed" always comes
+// with a concrete tally of what actually happened, not just a status word.
+function ImportResultBreakdown({ counts }: { counts: ImportRowCounts }) {
+    const items: { label: string; value: number }[] = [
+        { label: 'Created', value: counts.createdCount },
+        { label: 'Updated', value: counts.updatedCount },
+        { label: 'Skipped', value: counts.skippedRows },
+        { label: 'Duplicates', value: counts.duplicateRows },
+        { label: 'Failed', value: counts.failedRows },
+    ].filter((item) => item.value > 0)
+
+    if (items.length === 0) return null
+
+    return (
+        <div className="flex flex-wrap justify-center gap-2">
+            {items.map((item) => (
+                <span
+                    key={item.label}
+                    className="text-[10px] font-bold uppercase tracking-widest bg-slate-50 text-slate-600 border border-slate-200 rounded-full px-2.5 py-1"
+                >
+                    {item.value} {item.label}
+                </span>
+            ))}
+        </div>
     )
 }

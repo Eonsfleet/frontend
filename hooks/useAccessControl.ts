@@ -15,9 +15,9 @@ export const TRIAL_EXPIRED_ALLOWED_PATHS = [
     '/dashboard',
     '/vehicles',
     '/drivers',
-    '/settings/clusters',
+    '/clusters',
     '/profile',
-    '/billing',
+    '/subscription',
 ]
 
 export function useAccessControl() {

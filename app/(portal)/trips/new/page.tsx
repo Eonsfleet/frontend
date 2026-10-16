@@ -28,7 +28,7 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getVehicles } from '@/lib/api/vehicles'
+import { useActiveVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { getDrivers } from '@/lib/api/drivers'
 import { createTrip, calculateTripEstimate, generateTripRoute } from '@/lib/api/trips'
 import { toast } from 'sonner'
@@ -79,10 +79,7 @@ export default function NewTripPage() {
         console.log('📍 Waypoints state updated:', waypoints)
     }, [waypoints])
 
-    const { data: vehiclesData, isLoading: isLoadingVehicles } = useQuery({
-        queryKey: ['vehicles-list-simple'],
-        queryFn: () => getVehicles({ per_page: 100, status: 'active' }),
-    })
+    const { data: vehiclesData, isLoading: isLoadingVehicles } = useActiveVehiclesDropdown()
 
     const { data: driversData, isLoading: isLoadingDrivers } = useQuery({
         queryKey: ['drivers-list-simple'],

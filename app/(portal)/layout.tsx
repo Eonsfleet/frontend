@@ -35,7 +35,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             p => pathname === p || pathname.startsWith(p + '/')
         )
         if (!allowed) {
-            router.replace('/billing')
+            router.replace('/subscription')
         }
     }, [subscriptionStatus, pathname, router])
 

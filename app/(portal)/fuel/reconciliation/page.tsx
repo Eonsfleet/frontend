@@ -1,373 +1,504 @@
 'use client'
 
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import {
-    Loader2, AlertTriangle, CheckCircle, PlayCircle,
-} from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import * as api from '@/lib/api/fuel'
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import {
+    Ban,
+    CheckCircle2,
+    Eye,
+    FileSearch,
+    Loader2,
+    MoreHorizontal,
+    RefreshCw,
+    ShieldCheck,
+    SlidersHorizontal,
+    XCircle,
+} from 'lucide-react'
 import { toast } from 'sonner'
-import { FuelReconciliationDiscrepancy } from '@/types'
-import { extractApiError } from '@/lib/utils'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
+import { QueryError } from '@/components/shared/QueryError'
+import { FuelTabs } from '../components/FuelTabs'
+import {
+    acceptFuelReconciliation,
+    approveReconciledFuelExpense,
+    getFuelReconciliationDetail,
+    getFuelReconciliationSummary,
+    getFuelReconciliations,
+    investigateFuelReconciliation,
+    rejectFuelReconciliation,
+    rejectReconciledFuelExpense,
+    type FuelPagination,
+    type FuelReconciliationListParams,
+} from '@/lib/api/fuel'
+import type { FuelReconciliationReviewItem, FuelReviewConfidence, FuelReviewStatus } from '@/types'
+import { cn, extractApiError } from '@/lib/utils'
 
-// ── Standardized Table Pagination ───────────────────────────────────────────
+const PAGE_SIZE = 25
 
-interface TablePaginationProps {
-    pagination?: {
-        current_page: number
-        last_page: number
-        total: number
-    }
-    onPageChange: (page: number) => void
-    variant?: 'default' | 'simple'
+type ActionKind = 'accept' | 'reject' | 'investigate' | 'approve_expense' | 'reject_expense'
+
+interface ReviewFilters {
+    status: 'all' | FuelReviewStatus
+    confidence: 'all' | FuelReviewConfidence
+    reviewed: 'all' | 'yes' | 'no'
+    from: string
+    to: string
+    sortBy: NonNullable<FuelReconciliationListParams['sort_by']>
+    page: number
 }
 
-function TablePagination({ pagination, onPageChange, variant = 'default' }: TablePaginationProps) {
-    if (!pagination || pagination.last_page <= 1) return null
+const initialFilters: ReviewFilters = {
+    status: 'all',
+    confidence: 'all',
+    reviewed: 'no',
+    from: '',
+    to: '',
+    sortBy: 'attention',
+    page: 1,
+}
 
-    if (variant === 'simple') {
-        return (
-            <div className="flex items-center justify-between pt-4">
-                <p className="text-xs text-slate-500 font-medium">Page {pagination.current_page} of {pagination.last_page}</p>
-                <div className="flex gap-2">
-                    <Button
-                        size="sm" variant="outline"
-                        className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page <= 1}
-                        onClick={() => onPageChange(pagination.current_page - 1)}
-                    >
-                        Previous
-                    </Button>
-                    <Button
-                        size="sm" variant="outline"
-                        className="h-8 px-3 text-xs"
-                        disabled={pagination.current_page >= pagination.last_page}
-                        onClick={() => onPageChange(pagination.current_page + 1)}
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
-        )
+const confidenceClass: Record<FuelReviewConfidence, string> = {
+    high: 'bg-emerald-50 text-emerald-700',
+    medium: 'bg-amber-50 text-amber-700',
+    low: 'bg-orange-50 text-orange-700',
+    none: 'bg-slate-100 text-slate-600',
+}
+
+const statusClass: Record<FuelReviewStatus, string> = {
+    proposed: 'bg-blue-50 text-blue-700',
+    confirmed: 'bg-emerald-50 text-emerald-700',
+    rejected: 'bg-rose-50 text-rose-700',
+    unmatched: 'bg-slate-100 text-slate-600',
+    superseded: 'bg-slate-100 text-slate-500',
+}
+
+function money(amount: number, currency = 'NGN') {
+    return `${currency} ${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+}
+
+function dateLabel(value: unknown) {
+    if (typeof value !== 'string' || !value) return '-'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? '-' : format(date, 'MMM d, yyyy h:mm a')
+}
+
+function textValue(value: unknown) {
+    if (value == null || value === '') return '-'
+    return String(value)
+}
+
+function paginationOf(pagination?: FuelPagination) {
+    return {
+        current: pagination?.current_page ?? pagination?.current ?? 1,
+        lastPage: pagination?.last_page ?? pagination?.lastPage ?? 1,
+        perPage: pagination?.per_page ?? pagination?.perPage ?? PAGE_SIZE,
+        total: pagination?.total ?? 0,
     }
+}
+
+function asParams(filters: ReviewFilters): FuelReconciliationListParams {
+    return {
+        status: filters.status === 'all' ? undefined : [filters.status],
+        confidence: filters.confidence === 'all' ? undefined : [filters.confidence],
+        reviewed: filters.reviewed === 'all' ? undefined : filters.reviewed,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        sort_by: filters.sortBy,
+        page: filters.page,
+        per_page: PAGE_SIZE,
+    }
+}
+
+function SummaryCards({ from, to }: { from: string; to: string }) {
+    const { data, isLoading } = useQuery({
+        queryKey: ['fuel-reconciliation-summary', { from, to }],
+        queryFn: () => getFuelReconciliationSummary({ from: from || undefined, to: to || undefined }),
+    })
+    const summary = data?.data
+    const buckets = summary?.by_status ?? {}
 
     return (
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">
-                Page {pagination.current_page} of {pagination.last_page} &nbsp;·&nbsp; {pagination.total} records
-            </p>
-            <div className="flex gap-2">
-                <Button
-                    size="sm" variant="outline"
-                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page <= 1}
-                    onClick={() => onPageChange(pagination.current_page - 1)}
-                >
-                    Previous
-                </Button>
-                <Button
-                    size="sm" variant="outline"
-                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider"
-                    disabled={pagination.current_page >= pagination.last_page}
-                    onClick={() => onPageChange(pagination.current_page + 1)}
-                >
-                    Next
-                </Button>
-            </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <MetricCard title="Total spend" value={summary ? money(summary.total_spend, summary.currency) : '-'} loading={isLoading} />
+            <MetricCard title="Verified" value={money(buckets.verified_by_device?.amount ?? 0, summary?.currency)} sub={`${buckets.verified_by_device?.transactions ?? 0} records`} loading={isLoading} tone="emerald" />
+            <MetricCard title="Needs review" value={money(buckets.awaiting_review?.amount ?? 0, summary?.currency)} sub={`${buckets.awaiting_review?.transactions ?? 0} records`} loading={isLoading} tone="amber" />
+            <MetricCard title="No support" value={money(buckets.no_supporting_refill?.amount ?? 0, summary?.currency)} sub={`${buckets.no_supporting_refill?.transactions ?? 0} records`} loading={isLoading} />
         </div>
     )
 }
 
-// ── Dispute dialog ────────────────────────────────────────────────────────────
+function MetricCard({ title, value, sub, loading, tone = 'slate' }: { title: string; value: string; sub?: string; loading?: boolean; tone?: 'slate' | 'emerald' | 'amber' }) {
+    const toneClass = tone === 'emerald' ? 'text-emerald-700' : tone === 'amber' ? 'text-amber-700' : 'text-slate-900'
+    return (
+        <Card className="border-0 shadow-none">
+            <CardContent className="p-4">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</p>
+                {loading ? <div className="h-8 w-28 animate-pulse rounded bg-slate-100" /> : <p className={cn('text-2xl font-bold', toneClass)}>{value}</p>}
+                {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+            </CardContent>
+        </Card>
+    )
+}
 
-const disputeSchema = z.object({ reason: z.string().min(3, 'Provide a reason.') })
-
-function DisputeDialog({ txnId, onClose }: { txnId: string | null; onClose: () => void }) {
-    const queryClient = useQueryClient()
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<{ reason: string }>({
-        resolver: zodResolver(disputeSchema),
-    })
-
-    const { mutate, isPending } = useMutation({
-        mutationFn: ({ reason }: { reason: string }) => api.disputeCardTransaction(txnId!, reason),
-        onSuccess: () => {
-            toast.success('Transaction disputed.')
-            queryClient.invalidateQueries({ queryKey: ['reconciliation-report'] })
-            queryClient.invalidateQueries({ queryKey: ['fuel-discrepancies'] })
-            reset()
-            onClose()
-        },
-        onError: (err) => toast.error(extractApiError(err)),
-    })
+function ActionDialog({
+    action,
+    item,
+    isPending,
+    onClose,
+    onSubmit,
+}: {
+    action: ActionKind | null
+    item: FuelReconciliationReviewItem | null
+    isPending: boolean
+    onClose: () => void
+    onSubmit: (reason: string) => void
+}) {
+    const [reason, setReason] = useState('')
+    const labels: Record<ActionKind, { title: string; button: string; description: string; optional?: boolean }> = {
+        accept: { title: 'Confirm Match', button: 'Confirm match', description: 'Lock the proposed device refill as the match for this purchase.', optional: true },
+        reject: { title: 'Reject Match', button: 'Reject match', description: 'Mark the proposed device refill as incorrect.' },
+        investigate: { title: 'Request Investigation', button: 'Request investigation', description: 'Leave the expense pending while someone verifies the evidence.' },
+        approve_expense: { title: 'Approve Expense', button: 'Approve expense', description: 'Approve the financial claim using the reconciliation evidence.' },
+        reject_expense: { title: 'Reject Expense', button: 'Reject expense', description: 'Reject the financial claim and record the reason.' },
+    }
+    const meta = action ? labels[action] : null
+    const reasonRequired = meta && !meta.optional
 
     return (
-        <Dialog open={!!txnId} onOpenChange={() => { reset(); onClose() }}>
+        <Dialog open={!!action && !!item} onOpenChange={(open) => { if (!open) { setReason(''); onClose() } }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Dispute Transaction</DialogTitle>
+                    <DialogTitle>{meta?.title}</DialogTitle>
+                    <DialogDescription>{meta?.description}</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit((d) => mutate(d))} className="space-y-4">
-                    <div>
-                        <Label>Reason for dispute</Label>
-                        <textarea
-                            {...register('reason')}
-                            rows={3}
-                            placeholder="e.g. Volume does not match station receipt."
-                            className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-                        />
-                        {errors.reason && <p className="text-xs text-rose-500 mt-1">{errors.reason.message}</p>}
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => { reset(); onClose() }}>Cancel</Button>
-                        <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={isPending}>
-                            {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Dispute
-                        </Button>
-                    </DialogFooter>
-                </form>
+                <div className="space-y-2">
+                    <Label>{reasonRequired ? 'Reason' : 'Note'}</Label>
+                    <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} />
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => { setReason(''); onClose() }}>Cancel</Button>
+                    <Button
+                        type="button"
+                        disabled={isPending || (reasonRequired ? reason.trim().length < 3 : false)}
+                        onClick={() => onSubmit(reason.trim())}
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {meta?.button}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+function DetailSheet({ id, onClose }: { id: number | null; onClose: () => void }) {
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['fuel-reconciliation-detail', id],
+        queryFn: () => getFuelReconciliationDetail(id!),
+        enabled: id != null,
+    })
+    const detail = data?.data.reconciliation
+    const financial = detail?.financial_evidence ?? {}
+    const device = detail?.device_evidence ?? null
+    const reasoning = detail?.engine_reasoning ?? {}
+    const vehicle = financial.vehicle as Record<string, unknown> | undefined
+    const imported = financial.import as Record<string, unknown> | undefined
+
+    return (
+        <Sheet open={id != null} onOpenChange={(open) => { if (!open) onClose() }}>
+            <SheetContent side="right" className="w-full overflow-y-auto border-0 p-0 shadow-none sm:max-w-xl">
+                <SheetHeader className="px-5 pt-5 text-left">
+                    <SheetTitle>Reconciliation Detail</SheetTitle>
+                    <SheetDescription>Financial record, device evidence, scoring, and alternatives.</SheetDescription>
+                </SheetHeader>
+                <div className="space-y-4 px-5 pb-6 pt-4">
+                    {isLoading && <div className="h-36 animate-pulse rounded-lg bg-slate-100" />}
+                    {isError && <QueryError message="Failed to load reconciliation detail." />}
+                    {detail && (
+                        <>
+                            <DetailBlock title="Financial Evidence" rows={[
+                                ['Expense', textValue(financial.fuel_expense_id)],
+                                ['Vehicle', textValue(vehicle?.registration_number)],
+                                ['Purchased', `${textValue(financial.liters)} L · ${money(Number(financial.amount ?? 0), String(financial.currency ?? 'NGN'))}`],
+                                ['Vendor', textValue(financial.vendor)],
+                                ['Reference', textValue(financial.reference)],
+                                ['Imported', dateLabel(imported?.imported_at)],
+                            ]} />
+                            <DetailBlock title="Device Evidence" rows={[
+                                ['Transaction', textValue(device?.fuel_transaction_id)],
+                                ['Detected', dateLabel(device?.detected_at)],
+                                ['Liters', `${textValue(device?.detected_liters)} L`],
+                                ['Sensor', device?.sensor_confidence != null ? `${Math.round(Number(device.sensor_confidence) * 100)}%` : '-'],
+                            ]} />
+                            <DetailBlock title="Engine Reasoning" rows={[
+                                ['Confidence', textValue(reasoning.confidence_label ?? reasoning.confidence)],
+                                ['Final score', textValue(reasoning.final_score)],
+                                ['Candidates', textValue(reasoning.candidates_considered)],
+                                ['Algorithm', textValue(reasoning.algorithm_version)],
+                                ['Explanation', textValue(reasoning.explanation)],
+                            ]} />
+                        </>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
+    )
+}
+
+function DetailBlock({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+    return (
+        <div className="rounded-lg bg-slate-50 p-4">
+            <h3 className="mb-3 text-sm font-bold text-slate-900">{title}</h3>
+            <div className="space-y-2">
+                {rows.map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[120px_1fr] gap-3 text-sm">
+                        <span className="text-slate-400">{label}</span>
+                        <span className="min-w-0 whitespace-pre-wrap break-words font-medium text-slate-700">{value}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<[string, string]>; onChange: (value: string) => void }) {
+    return (
+        <div>
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
+            <select className="mt-1.5 h-9 w-full rounded-md bg-slate-50 px-3 text-sm focus:outline-none" value={value} onChange={(event) => onChange(event.target.value)}>
+                {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+            </select>
+        </div>
+    )
+}
 
 export default function FuelReconciliationPage() {
     const queryClient = useQueryClient()
-    const [page, setPage] = useState(1)
-    const [startDate, setStartDate] = useState('')
-    const [endDate, setEndDate] = useState('')
-    const [disputeId, setDisputeId] = useState<string | null>(null)
+    const [filters, setFilters] = useState<ReviewFilters>(initialFilters)
+    const [filtersOpen, setFiltersOpen] = useState(false)
+    const [detailId, setDetailId] = useState<number | null>(null)
+    const [action, setAction] = useState<{ kind: ActionKind; item: FuelReconciliationReviewItem } | null>(null)
+    const params = useMemo(() => asParams(filters), [filters])
 
-    // Full reconciliation report for summary cards
-    const { data: reportData, isLoading: isLoadingReport } = useQuery({
-        queryKey: ['reconciliation-report', { startDate, endDate }],
-        queryFn: () => api.getReconciliationReport({
-            start_date: startDate || undefined,
-            end_date: endDate || undefined,
-        }),
+    const { data, isLoading, isError, refetch, isFetching } = useQuery({
+        queryKey: ['fuel-reconciliations', params],
+        queryFn: () => getFuelReconciliations(params),
     })
 
-    // Discrepancies list for the table
-    const { data: discData, isLoading: isLoadingDisc } = useQuery({
-        queryKey: ['fuel-discrepancies', { page, startDate, endDate }],
-        queryFn: () => api.getDiscrepancies({ page, per_page: 15, start_date: startDate || undefined, end_date: endDate || undefined }),
-    })
+    const rows = data?.data.reconciliations ?? []
+    const pagination = paginationOf(data?.data.pagination)
 
-    const { mutate: runEngine, isPending: isRunningEngine } = useMutation({
-        mutationFn: () => api.runReconciliationEngine({
-            start_date: startDate || undefined,
-            end_date: endDate || undefined,
-        }),
-        onSuccess: (res) => {
-            toast.success(`Reconciliation complete. ${res.data.matched_count} matched, ${res.data.unmatched_transactions_count} unmatched transactions.`)
-            queryClient.invalidateQueries({ queryKey: ['reconciliation-report'] })
-            queryClient.invalidateQueries({ queryKey: ['fuel-discrepancies'] })
+    const actionMutation = useMutation({
+        mutationFn: ({ kind, id, reason }: { kind: ActionKind; id: number; reason: string }) => {
+            if (kind === 'accept') return acceptFuelReconciliation(id, reason || undefined)
+            if (kind === 'reject') return rejectFuelReconciliation(id, reason)
+            if (kind === 'investigate') return investigateFuelReconciliation(id, reason)
+            if (kind === 'approve_expense') return approveReconciledFuelExpense(id, reason)
+            return rejectReconciledFuelExpense(id, reason)
         },
-        onError: (err) => toast.error(extractApiError(err)),
-    })
-
-    const { mutate: resolveDisc } = useMutation({
-        mutationFn: (id: string) => api.approveCardTransaction(id),
-        onSuccess: () => {
-            toast.success('Transaction approved.')
-            queryClient.invalidateQueries({ queryKey: ['fuel-discrepancies'] })
-            queryClient.invalidateQueries({ queryKey: ['reconciliation-report'] })
+        onSuccess: (response) => {
+            toast.success(response.message)
+            setAction(null)
+            queryClient.invalidateQueries({ queryKey: ['fuel-reconciliations'] })
+            queryClient.invalidateQueries({ queryKey: ['fuel-reconciliation-summary'] })
+            queryClient.invalidateQueries({ queryKey: ['fuel-expenses'] })
         },
-        onError: (err) => toast.error(extractApiError(err)),
+        onError: (error) => toast.error(extractApiError(error)),
     })
 
-    const summary = reportData?.data?.summary
-    const discrepancies: FuelReconciliationDiscrepancy[] = discData?.data?.discrepancies ?? []
-    const pagination = discData?.data?.pagination
-
-    const getDiscStatusBadge = (status: string) => {
-        switch (status) {
-            case 'resolved': return <Badge className="bg-emerald-100 text-emerald-800 border-none text-[10px]">Resolved</Badge>
-            case 'disputed': return <Badge className="bg-amber-100 text-amber-800 border-none text-[10px]">Disputed</Badge>
-            default: return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">Needs Review</Badge>
-        }
-    }
+    const updateFilters = (next: Partial<ReviewFilters>) => setFilters((current) => ({ ...current, ...next }))
+    const activeFilterCount = [
+        filters.status !== 'all' ? filters.status : undefined,
+        filters.confidence !== 'all' ? filters.confidence : undefined,
+        filters.reviewed !== 'no' ? filters.reviewed : undefined,
+        filters.from,
+        filters.to,
+        filters.sortBy !== 'attention' ? filters.sortBy : undefined,
+    ].filter(Boolean).length
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reconciliation Engine</h1>
-                    <p className="text-slate-500 mt-1">Match fuel card charges to expense records and flag discrepancies.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reconciliation Queue</h1>
+                    <p className="mt-1 text-slate-500">Review V2 fuel matches and approve expenses from one ledger.</p>
                 </div>
-                <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                    onClick={() => runEngine()}
-                    disabled={isRunningEngine}
-                >
-                    {isRunningEngine
-                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running...</>
-                        : <><PlayCircle className="mr-2 h-4 w-4" /> Run Auto-match</>
-                    }
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200" onClick={() => setFiltersOpen(true)}>
+                        <SlidersHorizontal className="h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <span className="ml-0.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-9 gap-2 border-0 bg-slate-100 shadow-none hover:bg-slate-200" onClick={() => refetch()} disabled={isFetching}>
+                        {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
+                    </Button>
+                </div>
             </div>
 
-            {/* Date filters */}
-            <Card className="shadow-sm border-slate-200">
-                <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-3 items-center">
-                        <span className="text-sm font-medium text-slate-600">Period:</span>
-                        <Input type="date" className="h-9 w-36 bg-slate-50 border-slate-200 text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                        <span className="text-slate-400">→</span>
-                        <Input type="date" className="h-9 w-36 bg-slate-50 border-slate-200 text-sm" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                        {(startDate || endDate) && (
-                            <Button variant="ghost" size="sm" className="h-9 text-slate-500" onClick={() => { setStartDate(''); setEndDate('') }}>Clear</Button>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+            <FuelTabs active="Reconciliation" />
+            <SummaryCards from={filters.from} to={filters.to} />
 
-            {/* Summary cards */}
-            {isLoadingReport ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {[1, 2, 3].map(i => (
-                        <Card key={i} className="shadow-sm border-slate-200 animate-pulse">
-                            <CardContent className="p-5 h-20" />
-                        </Card>
-                    ))}
-                </div>
-            ) : summary ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Card className="shadow-sm border-emerald-200 bg-emerald-50/40">
-                        <CardContent className="p-5">
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Matched</p>
-                            <p className="text-3xl font-bold text-emerald-700">{summary.matched_count}</p>
-                            <p className="text-xs text-emerald-600 mt-1">transactions reconciled</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="shadow-sm border-amber-200 bg-amber-50/40">
-                        <CardContent className="p-5">
-                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Unmatched Transactions</p>
-                            <p className="text-3xl font-bold text-amber-700">{summary.unmatched_transactions_count}</p>
-                            <p className="text-xs text-amber-600 mt-1">card txns without expenses</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="shadow-sm border-rose-200 bg-rose-50/40">
-                        <CardContent className="p-5">
-                            <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider mb-1">Variance Flagged</p>
-                            <p className="text-3xl font-bold text-rose-700">{summary.variance_flagged_count}</p>
-                            <p className="text-xs text-rose-600 mt-1">volume discrepancies detected</p>
-                        </CardContent>
-                    </Card>
-                </div>
-            ) : null}
-
-            {/* Discrepancies table */}
-            <Card className="shadow-sm border-slate-200">
-                <CardHeader className="bg-white border-b border-slate-100 py-4">
-                    <div className="flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                        <div>
-                            <CardTitle className="text-base font-semibold text-slate-900">Discrepancies Requiring Review</CardTitle>
-                            <CardDescription className="mt-0.5">Transactions where billed volume significantly exceeds reported consumption.</CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {isLoadingDisc ? (
-                        <div className="flex flex-col items-center justify-center p-12 text-slate-500">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-                            <p>Loading discrepancies...</p>
-                        </div>
-                    ) : (
+            {isError ? (
+                <QueryError message="Failed to load reconciliation queue." onRetry={refetch} />
+            ) : (
+                <Card className="overflow-hidden border-0 shadow-none">
+                    <CardContent className="p-0">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-200">
+                            <table className="w-full min-w-[980px] text-left text-sm">
+                                <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                                     <tr>
-                                        <th className="px-6 py-3.5">Date</th>
-                                        <th className="px-6 py-3.5">Merchant</th>
-                                        <th className="px-6 py-3.5 whitespace-nowrap">Vol (L)</th>
-                                        <th className="px-6 py-3.5">Amount</th>
-                                        <th className="px-6 py-3.5">Status</th>
-                                        <th className="px-6 py-3.5 text-right">Resolution</th>
+                                        <th className="px-6 py-4">Expense</th>
+                                        <th className="px-6 py-4">Vehicle</th>
+                                        <th className="px-6 py-4">Evidence</th>
+                                        <th className="px-6 py-4">Variance</th>
+                                        <th className="px-6 py-4">Confidence</th>
+                                        <th className="px-6 py-4">Decision</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {discrepancies.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                                                <div className="flex flex-col items-center justify-center">
-                                                    <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center mb-3">
-                                                        <CheckCircle className="h-6 w-6 text-emerald-500" />
-                                                    </div>
-                                                    <p className="font-medium text-slate-900">Everything Reconciled</p>
-                                                    <p className="text-sm mt-1">No discrepancies found for this period.</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        discrepancies.map((item) => (
-                                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                                                    {format(new Date(item.attributes.transaction_date), 'MMM dd, yyyy')}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-medium text-slate-900">{item.attributes.merchant_name}</div>
-                                                    <div className="text-xs text-slate-400 capitalize">{item.attributes.provider}</div>
-                                                </td>
-                                                <td className="px-6 py-4 font-mono font-medium text-slate-700">
-                                                    {(item.attributes.volume_liters ?? 0).toFixed(2)} L
-                                                </td>
-                                                <td className="px-6 py-4 font-mono font-medium text-slate-900">
-                                                    ₦{(item.attributes.amount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {getDiscStatusBadge(item.attributes.status)}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    {item.attributes.status === 'needs_review' && (
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <Button
-                                                                size="sm" variant="outline"
-                                                                className="h-8 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                                                                onClick={() => resolveDisc(item.id)}
-                                                            >
-                                                                Approve Match
-                                                            </Button>
-                                                            <Button
-                                                                size="sm" variant="outline"
-                                                                className="h-8 border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100"
-                                                                onClick={() => setDisputeId(item.id)}
-                                                            >
-                                                                Dispute
-                                                            </Button>
-                                                        </div>
-                                                    )}
-                                                    {item.attributes.status !== 'needs_review' && (
-                                                        <span className="text-xs text-slate-400 italic px-2">Actioned</span>
-                                                    )}
-                                                </td>
+                                <tbody>
+                                    {isLoading ? (
+                                        Array.from({ length: 6 }).map((_, index) => (
+                                            <tr key={index}>
+                                                <td colSpan={7} className="px-6 py-4"><div className="h-14 animate-pulse rounded bg-slate-100" /></td>
                                             </tr>
                                         ))
-                                    )}
+                                    ) : rows.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-6 py-20 text-center text-slate-400">No reconciliation records match the selected filters.</td>
+                                        </tr>
+                                    ) : rows.map((row) => {
+                                        const attrs = row.attributes
+                                        const vehicle = row.relationships.vehicle
+                                        return (
+                                            <tr key={row.id} className="transition-colors even:bg-slate-50/40 hover:bg-slate-50">
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-slate-900">EXP-{row.fuel_expense_id}</div>
+                                                    <div className="mt-0.5 font-mono text-[11px] font-medium text-slate-400">{money(attrs.amount, attrs.currency)}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold uppercase text-slate-900">{vehicle?.registration_number ?? 'UNKNOWN'}</div>
+                                                    <div className="text-[11px] font-medium text-slate-400">{vehicle?.model ?? 'No model'} · {row.relationships.driver?.name ?? 'No driver'}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-semibold text-slate-800">{attrs.imported_liters ?? '-'} L imported</div>
+                                                    <div className="text-[11px] text-slate-400">{attrs.device_liters ?? '-'} L device · {attrs.time_difference_minutes ?? '-'} min</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-mono font-semibold text-slate-800">{attrs.variance_percent != null ? `${Number(attrs.variance_percent).toFixed(2)}%` : '-'}</div>
+                                                    <div className="text-[11px] text-slate-400">{attrs.liters_difference ?? '-'} L difference</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <Badge className={cn('border-0', confidenceClass[attrs.confidence])}>{attrs.confidence_label}</Badge>
+                                                    {attrs.would_auto_approve && <div className="mt-1 text-[11px] font-medium text-emerald-600">Eligible by evidence</div>}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <Badge className={cn('border-0', statusClass[attrs.status])}>{attrs.status_label}</Badge>
+                                                    <div className="mt-1 text-[11px] text-slate-400">{attrs.decided_by === 'person' ? 'Human locked' : 'System proposed'}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={`Open actions for expense ${row.fuel_expense_id}`}>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-52">
+                                                            <DropdownMenuItem onClick={() => setDetailId(row.id)}>
+                                                                <Eye className="mr-2 h-4 w-4" /> View evidence
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'accept', item: row })}>
+                                                                <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /> Confirm match
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'reject', item: row })}>
+                                                                <XCircle className="mr-2 h-4 w-4 text-rose-600" /> Reject match
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'investigate', item: row })}>
+                                                                <FileSearch className="mr-2 h-4 w-4 text-amber-600" /> Investigate
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'approve_expense', item: row })}>
+                                                                <ShieldCheck className="mr-2 h-4 w-4 text-blue-600" /> Approve expense
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setAction({ kind: 'reject_expense', item: row })}>
+                                                                <Ban className="mr-2 h-4 w-4 text-rose-600" /> Reject expense
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
                                 </tbody>
                             </table>
                         </div>
-                    )}
+                        <div className="flex items-center justify-between bg-slate-50/70 px-6 py-4 text-sm text-slate-500">
+                            <span>{pagination.total} records · page {pagination.current} of {pagination.lastPage}</span>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="outline" disabled={pagination.current <= 1} onClick={() => updateFilters({ page: pagination.current - 1 })}>Previous</Button>
+                                <Button size="sm" variant="outline" disabled={pagination.current >= pagination.lastPage} onClick={() => updateFilters({ page: pagination.current + 1 })}>Next</Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
-                    <TablePagination pagination={pagination} onPageChange={setPage} />
-                </CardContent>
-            </Card>
-
-            <DisputeDialog txnId={disputeId} onClose={() => setDisputeId(null)} />
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <SheetContent side="right" className="w-full border-0 p-0 shadow-none sm:max-w-md">
+                    <SheetHeader className="px-5 pt-5 text-left">
+                        <SheetTitle>Reconciliation Filters</SheetTitle>
+                        <SheetDescription>Refine by evidence confidence, decision state, review state, and date.</SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-5 px-5 pb-5 pt-4">
+                        <FilterSelect label="Status" value={filters.status} onChange={(value) => updateFilters({ status: value as ReviewFilters['status'], page: 1 })} options={[['all', 'All'], ['proposed', 'Proposed'], ['confirmed', 'Confirmed'], ['rejected', 'Rejected'], ['unmatched', 'Unmatched']]} />
+                        <FilterSelect label="Confidence" value={filters.confidence} onChange={(value) => updateFilters({ confidence: value as ReviewFilters['confidence'], page: 1 })} options={[['all', 'All'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['none', 'None']]} />
+                        <FilterSelect label="Reviewed" value={filters.reviewed} onChange={(value) => updateFilters({ reviewed: value as ReviewFilters['reviewed'], page: 1 })} options={[['all', 'All'], ['no', 'Awaiting review'], ['yes', 'Reviewed']]} />
+                        <FilterSelect label="Sort" value={filters.sortBy} onChange={(value) => updateFilters({ sortBy: value as ReviewFilters['sortBy'], page: 1 })} options={[['attention', 'Attention'], ['exposure', 'Exposure'], ['variance', 'Variance'], ['oldest', 'Oldest'], ['confidence', 'Confidence']]} />
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">From</Label>
+                                <Input type="date" className="mt-1.5 h-9 border-0 bg-slate-50" value={filters.from} onChange={(event) => updateFilters({ from: event.target.value, page: 1 })} />
+                            </div>
+                            <div>
+                                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">To</Label>
+                                <Input type="date" className="mt-1.5 h-9 border-0 bg-slate-50" value={filters.to} onChange={(event) => updateFilters({ to: event.target.value, page: 1 })} />
+                            </div>
+                        </div>
+                        <Button type="button" variant="outline" className="h-9 w-full border-0 bg-slate-100 shadow-none" onClick={() => setFilters(initialFilters)}>Reset Filters</Button>
+                    </div>
+                </SheetContent>
+            </Sheet>
+            <DetailSheet id={detailId} onClose={() => setDetailId(null)} />
+            <ActionDialog
+                action={action?.kind ?? null}
+                item={action?.item ?? null}
+                isPending={actionMutation.isPending}
+                onClose={() => setAction(null)}
+                onSubmit={(reason) => {
+                    if (action) actionMutation.mutate({ kind: action.kind, id: action.item.id, reason })
+                }}
+            />
         </div>
     )
 }

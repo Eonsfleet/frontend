@@ -96,7 +96,7 @@ export function GeofenceList({ searchTerm = '', statusFilter }: GeofenceListProp
                     </div>
                 ) : (
                     geofences.map((item) => {
-                        const vehicleCount = item.relationships?.vehicles?.data?.length ?? 0
+                        const vehicleCount = item.relationships?.vehicles?.length ?? 0
                         return (
                             <div key={item.id} className="bg-white rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-100 transition-all group overflow-hidden flex flex-col">
                                 <div className="p-6 flex-1">

@@ -44,6 +44,25 @@ import { MobileAssetSheet } from "./components/MobileAssetSheet";
 import { cn, normalizeTelemetry } from "@/lib/utils";
 import { matchesStatusBucket, type StatusBucket } from "@/lib/vehicleStatus";
 
+const TRACKING_FILTERS_STORAGE_KEY = "tracking-filters-v1";
+
+/** Hydrates saved filter selections from a prior session. Falls back to
+ * defaults on first visit, a private/blocked storage context, or a stored
+ * shape that no longer matches the current FilterState (e.g. after a field
+ * was renamed) — a stale value must never crash the page. */
+function loadStoredFilters(): FilterState {
+  if (typeof window === "undefined") return initialFilterState;
+  try {
+    const raw = window.localStorage.getItem(TRACKING_FILTERS_STORAGE_KEY);
+    if (!raw) return initialFilterState;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return initialFilterState;
+    return { ...initialFilterState, ...parsed };
+  } catch {
+    return initialFilterState;
+  }
+}
+
 export default function TrackingPage() {
   const isAssetListCollapsed = useTrackingUiStore(
     (s) => s.isAssetListCollapsed,
@@ -64,7 +83,7 @@ export default function TrackingPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterState>(initialFilterState);
+  const [filters, setFilters] = useState<FilterState>(() => loadStoredFilters());
   const [showGeofences, setShowGeofences] = useState(false);
   const [zoomResetKey, setZoomResetKey] = useState(0);
 
@@ -75,6 +94,8 @@ export default function TrackingPage() {
     initialCenter: { lat: 6.5244, lng: 3.3792 },
     initialZoom: 12,
     styleKey: mapStyle,
+    preferredProviderKind: "leaflet",
+    tileSource: "google",
   });
 
   const router = useRouter();
@@ -273,9 +294,21 @@ export default function TrackingPage() {
     }
   }, [filters.statuses]);
 
+  // Persist filter selections so returning to Live Tracking restores the
+  // same view instead of resetting to "All" every time.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TRACKING_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+    } catch {
+      // Storage can be unavailable (private browsing, quota) — filters just
+      // won't persist this session, which is a safe degradation.
+    }
+  }, [filters]);
+
   const isFilterActive = useMemo(() => {
     return (
       filters.search !== "" ||
+      filters.clusterIds.length > 0 ||
       filters.statuses.length < 4 ||
       filters.locationType === "radius" ||
       filters.geofenceId !== "all" ||
@@ -359,27 +392,29 @@ export default function TrackingPage() {
 
   // Everything except the search query — shared by the sidebar list (search
   // narrows further, below) and the map (search never hides pins; it only
-  // highlights matches, see searchMatchIds), so status/group/etc. filters stay
-  // in effect for the map while free-text search doesn't affect what's plotted.
-  // Group/cluster, vehicle type, vehicle make, and vehicle-year-from filters
-  // were dropped: GET /vehicles?view=map (the panel/map feed) carries none of
-  // relationships.cluster, body_type/type, make, or year — there's no data left
-  // to filter on for this page. Status/radius/geofence/model/speed/fuel all
-  // still work since their source fields remain in the view=map response.
+  // highlights matches, see searchMatchIds), so status/cluster/etc. filters
+  // stay in effect for the map while free-text search doesn't affect what's
+  // plotted. Vehicle type, make, and year filters stay dropped: GET
+  // /vehicles?view=map (the panel/map feed) carries none of body_type/type,
+  // make, or year — there's no data left to filter on for this page. Cluster
+  // filtering now works too, since view=map's attributes.cluster_id is real.
   const applyNonSearchFilters = useCallback(
-    (vehiclesToFilter: VehicleMapEntry[]) => {
+    (vehiclesToFilter: VehicleMapEntry[], options?: { skipStatus?: boolean }) => {
       let result = vehiclesToFilter;
 
       // Status filter — resolve each vehicle through the SAME canonical status
       // logic the sidebar cards / panels / markers use (matchesStatusBucket →
       // resolveStatusKey), so a vehicle can never fall into a filter bucket whose
       // label disagrees with the status shown on its card. "all" is the full set of
-      // buckets, so only actually-narrowed filters run this pass.
+      // buckets, so only actually-narrowed filters run this pass. skipStatus lets
+      // the summary cards compute against every OTHER active filter while still
+      // comparing all statuses against each other, instead of collapsing to the
+      // single bucket a status card click just selected.
       const ALL_STATUS_BUCKETS = ["moving", "idle", "stopped", "offline"];
       const isNarrowed =
         filters.statuses.length > 0 &&
         !ALL_STATUS_BUCKETS.every((b) => filters.statuses.includes(b));
-      if (isNarrowed) {
+      if (isNarrowed && !options?.skipStatus) {
         result = result.filter((v: VehicleMapEntry) => {
           const loc = locations[v.id];
           const isOnline = loc?.is_online ?? false;
@@ -393,6 +428,15 @@ export default function TrackingPage() {
             matchesStatusBucket(bucket as StatusBucket, input, hasAlarm),
           );
         });
+      }
+
+      // Cluster filter — OR within the selected clusters, ANDed with every
+      // other filter group. Vehicles with no cluster assignment never match a
+      // narrowed cluster filter (they only show up when "All Clusters" is set).
+      if (filters.clusterIds.length > 0) {
+        result = result.filter((v: VehicleMapEntry) =>
+          filters.clusterIds.includes(String(v.attributes.cluster_id)),
+        );
       }
 
       // Location & Radius filter
@@ -440,11 +484,14 @@ export default function TrackingPage() {
         });
       }
 
-      // Fuel Level
+      // Fuel Level — vehicles with no fuel reading are excluded from every
+      // band rather than defaulting to 0%, so "no data" is never
+      // misread as "Low".
       if (filters.fuelLevel !== "all") {
         result = result.filter((v: VehicleMapEntry) => {
           const loc = locations[v.id];
-          const fuel = loc?.fuel_level_percent ?? 0;
+          const fuel = loc?.fuel_level_percent;
+          if (fuel == null) return false;
           if (filters.fuelLevel === "low") return fuel < 20;
           if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
           if (filters.fuelLevel === "high") return fuel > 70;
@@ -469,6 +516,14 @@ export default function TrackingPage() {
   // sidebar list (below) narrows via the server-searched result.
   const mapVehicles = useMemo(
     () => applyNonSearchFilters(vehicles),
+    [vehicles, applyNonSearchFilters],
+  );
+
+  // Summary-card totals: every active filter EXCEPT status, so clicking a
+  // status card (Moving/Stopped/etc.) narrows the list below without also
+  // collapsing the other cards to zero — they stay comparable at all times.
+  const cardScopedVehicles = useMemo(
+    () => applyNonSearchFilters(vehicles, { skipStatus: true }),
     [vehicles, applyNonSearchFilters],
   );
 
@@ -572,7 +627,7 @@ export default function TrackingPage() {
   // as "search location" — most vehicles never have an address (it's only
   // populated by reverse-geocoding the currently-selected vehicle), so it
   // worked only when searching a plate number. Now a real place search via
-  // LocationAutocomplete's Mapbox suggestions — it hands back the selected
+  // LocationAutocomplete's place suggestions — it hands back the selected
   // place's coordinates directly, no vehicle lookup involved.
   const handleLocationSelect = useCallback(
     (coords: { latitude: number; longitude: number }) => {
@@ -647,6 +702,7 @@ export default function TrackingPage() {
           <TrackingSidebar
             viewMode={viewMode}
             vehicles={vehicles}
+            cardScopedVehicles={cardScopedVehicles}
             filteredVehicles={filteredVehicles}
             locations={locations}
             selectedVehicleId={selectedVehicleId}
@@ -666,6 +722,10 @@ export default function TrackingPage() {
             onRefresh={() => fleet.refresh()}
             viewType={filters.viewType}
             clusters={clusters}
+            geofences={geofences}
+            filters={filters}
+            onApplyFilters={setFilters}
+            onResetFilters={() => setFilters(initialFilterState)}
           />
         </div>
 

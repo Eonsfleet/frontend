@@ -2,6 +2,7 @@ import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TrackingSidebar } from '@/app/(portal)/tracking/components/TrackingSidebar'
+import { initialFilterState } from '@/app/(portal)/tracking/components/FilterPanelDrawer'
 
 const toggleAssetList = vi.fn()
 vi.mock('@/store/trackingUiStore', () => ({
@@ -15,6 +16,7 @@ const vehicles = [
 const baseProps = {
   viewMode: 'all' as const,
   vehicles,
+  cardScopedVehicles: vehicles,
   filteredVehicles: vehicles,
   locations: { '1': { status: 'in_transit', is_online: true, speed: 58 } },
   alarmState: {},
@@ -29,13 +31,15 @@ const baseProps = {
   ongoingTripsData: [],
   onReplayVehicle: vi.fn(),
   isLoadingTrips: false,
-  selectedClusterIds: [],
-  onOpenClusterModal: vi.fn(),
   onRefresh: vi.fn(),
   isFilterActive: false,
   onOpenFilterDrawer: vi.fn(),
   viewType: 'listing' as const,
   clusters: [],
+  geofences: [],
+  filters: initialFilterState,
+  onApplyFilters: vi.fn(),
+  onResetFilters: vi.fn(),
 }
 
 describe('TrackingSidebar', () => {
@@ -54,8 +58,8 @@ describe('TrackingSidebar', () => {
 
   it('renders filter, refresh, and collapse controls inline with the Assets header', () => {
     render(<TrackingSidebar {...baseProps} />)
-    fireEvent.click(screen.getByLabelText('Filter by cluster'))
-    expect(baseProps.onOpenClusterModal).toHaveBeenCalled()
+    fireEvent.click(screen.getByLabelText('Filter assets'))
+    expect(baseProps.onOpenFilterDrawer).toHaveBeenCalled()
     fireEvent.click(screen.getByLabelText('Re-sync fleet data'))
     expect(baseProps.onRefresh).toHaveBeenCalled()
     fireEvent.click(screen.getByLabelText('Collapse asset list'))

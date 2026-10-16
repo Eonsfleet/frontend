@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -14,6 +15,7 @@ import {
   Plus,
   MapPin,
   Users,
+  Users2,
   Truck,
   MoreVertical,
   Edit2,
@@ -21,10 +23,7 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
-  Search,
   EyeIcon,
-  Calendar,
-  UserCircle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/lib/api/settings";
@@ -44,7 +43,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,8 +62,19 @@ import {
 import { cn } from "@/lib/utils";
 import * as vehicleApi from "@/lib/api/vehicles";
 import { Badge } from "@/components/ui/badge";
+import { usePaginatedClusters } from "@/hooks/useClusterFleetStats";
+import { STALE_TIME_STATIC } from "@/lib/config";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-export default function ClustersManagementPage() {
+export default function ClustersPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCluster, setEditingCluster] = useState<any>(null);
@@ -79,59 +88,37 @@ export default function ClustersManagementPage() {
   const [managerPopoverOpen, setManagerPopoverOpen] = useState(false);
   const [usersPopoverOpen, setUsersPopoverOpen] = useState(false);
   const [vehiclesPopoverOpen, setVehiclesPopoverOpen] = useState(false);
-  const [viewingClusterId, setViewingClusterId] = useState<string | null>(
-    null,
-  );
   const [deletingCluster, setDeletingCluster] = useState<any>(null);
+  const [page, setPage] = useState(1);
 
-  const { data: clusterData, isLoading } = useQuery({
-    queryKey: ["settings-clusters"],
-    queryFn: () => api.getClusters(),
-  });
-
-  const { data: clusterDetailData, isLoading: isLoadingDetail } = useQuery({
-    queryKey: ["cluster-detail", viewingClusterId],
-    queryFn: () => api.getCluster(viewingClusterId!),
-    enabled: !!viewingClusterId,
-  });
+  const {
+    clusters: clusterStats,
+    isLoading: isStatsLoading,
+    currentPage,
+    lastPage,
+    total: totalClusters,
+  } = usePaginatedClusters(page);
 
   const { data: userData } = useQuery({
-    queryKey: ["settings-users-all"],
+    queryKey: ["users-list-simple"],
     queryFn: () => api.getUsers({ per_page: 100 }),
+    staleTime: STALE_TIME_STATIC,
   });
 
   const { data: vehiclesData } = useQuery({
-    queryKey: ["settings-vehicles-all"],
+    queryKey: ["vehicles-list-simple"],
     queryFn: () => vehicleApi.getVehicles({ per_page: 100 }),
+    staleTime: STALE_TIME_STATIC,
   });
 
   const users = userData?.data?.users || [];
   const vehicles = vehiclesData?.data || [];
 
-  // Fallback safely whether list is nested heavily or flat, we will iterate
-  const clustersList =
-    (clusterData?.data as any)?.clusters ||
-    (Array.isArray(clusterData?.data) ? clusterData.data : []);
-
-  // Response shape: { data: { cluster: { id, attributes: {...} } } }
-  const viewingCluster = (clusterDetailData?.data as any)?.cluster;
-  const viewingAttr = viewingCluster?.attributes || {};
-
-  const formatClusterDate = (value?: string | null) => {
-    if (!value) return "—";
-    const parsed = new Date(value.replace(" ", "T"));
-    if (isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
   const createMutation = useMutation({
     mutationFn: (data: any) => api.createCluster(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings-clusters"] });
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
+      queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster provisioned successfully");
       handleClose();
     },
@@ -141,7 +128,8 @@ export default function ClustersManagementPage() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => api.updateCluster(editingCluster?.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings-clusters"] });
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
+      queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster updated successfully");
       handleClose();
     },
@@ -165,7 +153,7 @@ export default function ClustersManagementPage() {
     setEditingCluster(cluster);
     setFormData({
       name: attr.name || "",
-      location: attr.description || "", // Mapping description to location field
+      location: attr.description || "",
       manager_id: attr.manager_id ? String(attr.manager_id) : "",
       user_ids: (attr.user_ids || []).map(String),
       vehicle_ids: (attr.vehicle_ids || []).map(String),
@@ -185,7 +173,8 @@ export default function ClustersManagementPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string | number) => api.deleteCluster(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings-clusters"] });
+      queryClient.invalidateQueries({ queryKey: ["clusters-page"] });
+      queryClient.invalidateQueries({ queryKey: ["cluster-fleet-stats-clusters"] });
       toast.success("Cluster deleted successfully");
       setDeletingCluster(null);
     },
@@ -193,15 +182,14 @@ export default function ClustersManagementPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="p-8 pb-16 space-y-6 bg-slate-50 min-h-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Vehicle Clusters
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase italic">
+            Clusters
           </h1>
-          <p className="text-slate-500 mt-1">
-            Group vehicles and drivers geographically to restrict manager
-            visibility.
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+            Fleet Distribution • Cluster Operations Overview
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -563,7 +551,7 @@ export default function ClustersManagementPage() {
                 onClick={() => {
                   const payload = {
                     name: formData.name,
-                    description: formData.location, // Mapping location state to description payload
+                    description: formData.location,
                     manager_id: formData.manager_id
                       ? Number(formData.manager_id)
                       : undefined,
@@ -587,284 +575,152 @@ export default function ClustersManagementPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {isLoading ? (
-          <div className="col-span-full py-20 flex justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
-          </div>
-        ) : (
-          clustersList.map((cluster: any) => (
-            <Card key={cluster.id} className="shadow-sm border-slate-200">
-              <CardHeader className="bg-white border-b border-slate-100 flex flex-row items-start justify-between pb-4">
-                <div>
-                  <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <Network className="w-5 h-5 text-indigo-500" />
-                    {cluster.name || cluster.attributes?.name}
-                  </CardTitle>
-                  <CardDescription className="flex items-center gap-1.5 mt-1.5 text-slate-500">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {cluster.attributes?.description || "No description"}
-                  </CardDescription>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>Cluster Actions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setViewingClusterId(String(cluster.id))}
-                    >
-                      <EyeIcon className="w-4 h-4 mr-2 text-slate-500" /> View
-                      Cluster
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleEdit(cluster)}>
-                      <Edit2 className="w-4 h-4 mr-2 text-slate-500" /> Edit
-                      Metadata
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
-                      onClick={() => setDeletingCluster(cluster)}
-                    >
-                      <Trash className="w-4 h-4 mr-2" /> Delete Cluster
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="flex divide-x divide-slate-100 rounded-b-xl overflow-hidden bg-slate-50">
-                  <div className="flex-1 p-4 flex flex-col items-center justify-center text-center">
-                    <Truck className="w-5 h-5 text-slate-400 mb-1" />
-                    <span className="text-2xl font-extrabold text-slate-900">
-                      {cluster.attributes?.total_vehicles || 0}
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
-                      Active Vehicles
-                    </span>
-                  </div>
-                  <div className="flex-1 p-4 flex flex-col items-center justify-center text-center bg-white">
-                    <Users className="w-5 h-5 text-slate-400 mb-1" />
-                    <span className="text-sm font-semibold text-slate-900 truncate max-w-[100px] mt-2">
-                      {cluster.attributes?.manager || (
-                        <span className="text-slate-400 italic font-normal">
-                          Unassigned
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mt-1">
-                      Lead Manager
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-      {!isLoading && clustersList.length === 0 && (
+      {isStatsLoading ? (
+        <div className="h-64 flex items-center justify-center text-slate-400 text-sm">
+          Loading clusters...
+        </div>
+      ) : clusterStats.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
           <p className="text-slate-500">
             No clusters defined. All fleet data is globally visible.
           </p>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {clusterStats.map((cluster) => {
+            const onlineRate = cluster.total > 0 ? (cluster.online / cluster.total) * 100 : 0;
+            return (
+              <Card key={cluster.id} className="shadow-sm border-slate-200 hover:border-blue-200 transition-colors">
+                <CardHeader className="bg-white border-b border-slate-100 flex flex-row items-start justify-between pb-4">
+                  <div className="min-w-0">
+                    <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                      <Network className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span className="truncate">{cluster.name}</span>
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-1.5 mt-1.5 text-slate-500">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{cluster.manager || "No manager assigned"}</span>
+                    </CardDescription>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Cluster Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => router.push(`/clusters/${cluster.id}`)}>
+                        <EyeIcon className="w-4 h-4 mr-2 text-slate-500" /> View Cluster
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit({ id: cluster.id, attributes: { name: cluster.name, manager: cluster.manager } })}>
+                        <Edit2 className="w-4 h-4 mr-2 text-slate-500" /> Edit Metadata
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+                        onClick={() => setDeletingCluster({ id: cluster.id, name: cluster.name })}
+                      >
+                        <Trash className="w-4 h-4 mr-2" /> Delete Cluster
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardHeader>
+                <CardContent
+                  className="p-5 cursor-pointer"
+                  onClick={() => router.push(`/clusters/${cluster.id}`)}
+                >
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-slate-50 py-2.5">
+                      <p className="text-lg font-black text-slate-900 tabular-nums">{cluster.total}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 py-2.5">
+                      <p className="text-lg font-black text-emerald-600 tabular-nums">{cluster.online}</p>
+                      <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Online</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 py-2.5">
+                      <p className="text-lg font-black text-blue-600 tabular-nums">{cluster.offline}</p>
+                      <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest">Offline</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${onlineRate}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <Users2 className="h-3.5 w-3.5 text-slate-400" />
+                      {cluster.totalStaff} Staff
+                    </span>
+                    <span className="text-slate-400">{onlineRate.toFixed(0)}% online</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
-      <Dialog
-        open={!!viewingClusterId}
-        onOpenChange={(open) => !open && setViewingClusterId(null)}
-      >
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-          {isLoadingDetail ? (
-            <>
-              <DialogHeader className="p-6 border-b border-slate-100">
-                <DialogTitle>Cluster Details</DialogTitle>
-                <DialogDescription>
-                  Fetching the latest cluster snapshot…
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-20 flex flex-col items-center justify-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Loading cluster
-                </span>
-              </div>
-            </>
-          ) : viewingCluster ? (
-            <>
-              <DialogHeader className="p-6 border-b border-slate-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                    <Network className="w-5 h-5 text-indigo-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <DialogTitle className="text-lg font-bold text-slate-900 capitalize truncate">
-                      {viewingAttr.name || "Untitled Cluster"}
-                    </DialogTitle>
-                    <DialogDescription className="flex items-center gap-1.5 mt-0.5 text-slate-500">
-                      <MapPin className="w-3.5 h-3.5 shrink-0" />
-                      {viewingAttr.description || "No regional description"}
-                    </DialogDescription>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="ml-auto shrink-0 bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider"
-                  >
-                    Cluster #{viewingCluster.id}
-                  </Badge>
-                </div>
-              </DialogHeader>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                {/* Stat tiles */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col items-center text-center">
-                    <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center mb-2">
-                      <Truck className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <span className="text-2xl font-extrabold text-slate-900 leading-none">
-                      {viewingAttr.total_vehicles ?? 0}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mt-1.5">
-                      Vehicles
-                    </span>
-                  </div>
-                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col items-center text-center">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center mb-2">
-                      <Users className="w-4 h-4 text-indigo-600" />
-                    </div>
-                    <span className="text-2xl font-extrabold text-slate-900 leading-none">
-                      {viewingAttr.total_users ?? 0}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mt-1.5">
-                      Users
-                    </span>
-                  </div>
-                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col items-center text-center">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center mb-2">
-                      <UserCircle className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <span
-                      className="text-sm font-bold text-slate-900 leading-tight truncate max-w-full mt-1"
-                      title={viewingAttr.manager || undefined}
-                    >
-                      {viewingAttr.manager || (
-                        <span className="text-slate-400 italic font-normal">
-                          Unassigned
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mt-1.5">
-                      Lead Manager
-                    </span>
-                  </div>
-                </div>
-
-                {/* Metadata */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Cluster Record
-                    </span>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <span className="text-sm text-slate-500 flex items-center gap-2">
-                        <Network className="w-3.5 h-3.5 text-slate-400" />
-                        Cluster Name
-                      </span>
-                      <span className="text-sm font-semibold text-slate-900 capitalize">
-                        {viewingAttr.name || "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <span className="text-sm text-slate-500 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        Regional Description
-                      </span>
-                      <span className="text-sm font-semibold text-slate-900">
-                        {viewingAttr.description || (
-                          <span className="text-slate-400 italic font-normal">
-                            Not provided
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <span className="text-sm text-slate-500 flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        Created
-                      </span>
-                      <span className="text-sm font-semibold text-slate-900">
-                        {formatClusterDate(viewingAttr.created_at)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <span className="text-sm text-slate-500 flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        Last Updated
-                      </span>
-                      <span className="text-sm font-semibold text-slate-900">
-                        {formatClusterDate(viewingAttr.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {(viewingAttr.total_vehicles ?? 0) === 0 &&
-                  (viewingAttr.total_users ?? 0) === 0 && (
-                    <div className="text-center py-4 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-                      <p className="text-xs text-slate-400">
-                        This cluster is empty. Edit it to assign vehicles and
-                        users.
-                      </p>
-                    </div>
-                  )}
-              </div>
-
-              <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
-                <Button
-                  variant="outline"
-                  onClick={() => setViewingClusterId(null)}
-                >
-                  Close
-                </Button>
-                <Button
-                  className="bg-slate-900 hover:bg-slate-800"
-                  onClick={() => {
-                    setViewingClusterId(null);
-                    handleEdit(viewingCluster);
+      {!isStatsLoading && lastPage > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <p className="text-sm text-slate-500">
+            Showing <span className="font-medium text-slate-900">{clusterStats.length}</span> of{" "}
+            <span className="font-medium text-slate-900">{totalClusters}</span> clusters
+          </p>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) setPage(currentPage - 1);
                   }}
-                >
-                  <Edit2 className="w-4 h-4 mr-2" /> Edit Cluster
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <>
-              <DialogHeader className="p-6 border-b border-slate-100">
-                <DialogTitle>Cluster Details</DialogTitle>
-                <DialogDescription>
-                  Something went wrong while loading this cluster.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="text-center py-12 text-sm text-slate-500">
-                Failed to load cluster details. Please try again.
-              </div>
-              <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
-                <Button
-                  variant="outline"
-                  onClick={() => setViewingClusterId(null)}
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(5, lastPage) }, (_, i) => {
+                let pageNum = i + 1;
+                if (lastPage > 5 && currentPage > 3) {
+                  pageNum = currentPage - 2 + i;
+                  if (pageNum > lastPage) pageNum = lastPage - 4 + i;
+                }
+                if (pageNum <= 0 || pageNum > lastPage) return null;
+                return (
+                  <PaginationItem key={pageNum}>
+                    <PaginationLink
+                      href="#"
+                      isActive={currentPage === pageNum}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPage(pageNum);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      {pageNum}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < lastPage) setPage(currentPage + 1);
+                  }}
+                  className={currentPage === lastPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
 
       <Dialog
         open={!!deletingCluster}
@@ -880,9 +736,7 @@ export default function ClustersManagementPage() {
                 <DialogTitle>Delete this cluster?</DialogTitle>
                 <DialogDescription className="mt-1.5">
                   <span className="font-semibold text-slate-700 capitalize">
-                    {deletingCluster?.name ||
-                      deletingCluster?.attributes?.name ||
-                      "This cluster"}
+                    {deletingCluster?.name || "This cluster"}
                   </span>{" "}
                   will be permanently removed. Vehicles and users assigned to
                   it will become globally visible. This action cannot be

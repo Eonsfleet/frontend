@@ -119,10 +119,29 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
             }
           />
         </div>
-        <Stat label="Address" value={address} />
+        <Stat
+          label={statusKey === "offline" ? "Last Known Address" : "Address"}
+          value={address}
+        />
         <div className="mt-2">
-          <Stat label="Last Update" value={lastUpdateRelative} />
+          {statusKey === "offline" ? (
+            <Stat
+              label="Last Update"
+              value={
+                <span className="text-red-600 font-semibold">
+                  Offline · Last location received {lastUpdateRelative}
+                </span>
+              }
+            />
+          ) : (
+            <Stat label="Last Update" value={lastUpdateRelative} />
+          )}
         </div>
+        {statusKey === "offline" && (
+          <p className="mt-1.5 text-[10px] text-slate-400 italic">
+            This vehicle is offline — the pinned position is its last known location, not necessarily where it is now.
+          </p>
+        )}
       </CardShell>
 
       <CardShell icon={Cpu} title="Device Status">

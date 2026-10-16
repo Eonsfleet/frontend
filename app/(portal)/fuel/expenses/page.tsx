@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ import {
   Link2Off,
   Trash2,
   ExternalLink,
+  GitCompare,
 } from "lucide-react";
 import {
   Dialog,
@@ -53,6 +55,7 @@ import * as api from "@/lib/api/fuel";
 import { getVehicles } from "@/lib/api/vehicles";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import axios from "axios";
 import { FuelExpense } from "@/types";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -780,31 +783,37 @@ export default function FuelExpensesPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: ({ file, reprocess }: { file: File; reprocess?: boolean }) => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.importFuelTransactions(formData);
+      return api.importFuelTransactions(formData, reprocess);
     },
     onSuccess: (response) => {
-      const batchId =
+      const dataImportId =
         (response.data?.data_import_id ?? response.data?.fuel_import_id) != null
           ? String(response.data?.data_import_id ?? response.data?.fuel_import_id)
           : null;
 
-      // Only ever show progress once the API confirms a pollable batch job
-      // exists — a 2xx with no batch id has nothing to track.
-      if (batchId) {
+      // Only ever show progress once the API confirms a pollable import exists —
+      // a 2xx with no import id has nothing to track. This is the import
+      // record's id, polled at /data-imports/{id}: it is not a batch id, and
+      // sending it to /batch/{id} is what used to 404 the progress widget.
+      if (dataImportId) {
         addImportExportJob({
-          id: `fuel-import-${batchId}`,
-          batchId,
+          id: `fuel-import-${dataImportId}`,
+          source: "data_import",
+          sourceId: dataImportId,
           kind: "import",
           label: "Fuel transactions import",
         });
       }
 
-      toast.success(
+      // The request only queued the file — reconciliation hasn't run yet, so
+      // this can't claim success. The progress widget (and email report) is
+      // what tells the user whether it actually succeeded.
+      toast.message(
         response.message ||
-          "Import received. You’ll get an email report when reconciliation completes.",
+          "Import queued. You’ll get an email report when reconciliation completes.",
       );
       queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
       queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
@@ -813,10 +822,24 @@ export default function FuelExpensesPage() {
     // The request failed before any batch job could exist (e.g. the 422 file
     // validation error) — there is nothing to poll, so just surface the
     // error. No progress entry is ever created for a failed trigger request.
-    onError: (error) =>
+    onError: (error, variables) => {
+      // 409 means the backend recognizes this exact file as already imported.
+      // The message names the earlier import and explicitly invites a
+      // reprocess=true resend, so offer that instead of a dead-end error.
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.error(extractApiError(error, "This file was already imported."), {
+          action: {
+            label: "Import anyway",
+            onClick: () => importMutation.mutate({ file: variables.file, reprocess: true }),
+          },
+          duration: 15000,
+        });
+        return;
+      }
       toast.error(
         extractApiError(error, "Failed to import fuel transactions."),
-      ),
+      );
+    },
   });
 
   const exportMutation = useMutation({
@@ -913,6 +936,16 @@ export default function FuelExpensesPage() {
               <Download className="mr-2 h-4 w-4" />
             )}{" "}
             Export CSV
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-0 bg-slate-100 shadow-none"
+          >
+            <Link href="/fuel/reconciliation">
+              <GitCompare className="mr-2 h-4 w-4" /> Review Matches
+            </Link>
           </Button>
           <Button
             size="sm"
@@ -1126,6 +1159,11 @@ export default function FuelExpensesPage() {
                           <ReconciliationBadge
                             status={exp.attributes.reconciliation_status}
                           />
+                          {exp.attributes.reason && (
+                            <div className="mt-1 max-w-56 whitespace-normal text-[11px] leading-4 text-slate-400">
+                              {exp.attributes.reason}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <StatusBadge status={exp.attributes.status} />
@@ -1343,7 +1381,7 @@ export default function FuelExpensesPage() {
         open={importOpen}
         isPending={importMutation.isPending}
         onClose={() => setImportOpen(false)}
-        onImport={(file) => importMutation.mutate(file)}
+        onImport={(file) => importMutation.mutate({ file })}
       />
     </div>
   );
