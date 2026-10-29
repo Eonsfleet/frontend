@@ -14,6 +14,7 @@ import { StatCard } from '@/components/dashboard/StatCard'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { AnalyticsFilterBar } from '@/components/analytics/AnalyticsFilterBar'
+import { GpsReportTabs } from '@/components/analytics/telemetry/GpsReportTabs'
 
 export default function GpsAnalyticsPage() {
     const searchParams = useSearchParams()
@@ -88,6 +89,8 @@ export default function GpsAnalyticsPage() {
                 </div>
             </div>
 
+            <GpsReportTabs />
+
             <AnalyticsFilterBar reportType="gps.driving-summary" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -104,10 +107,12 @@ export default function GpsAnalyticsPage() {
                     description="Success rate across routes"
                 />
                 <StatCard
-                    title="Avg Trip Dist"
-                    value={`${tripSummary?.avg_distance_km?.toFixed(1) || 0} km`}
+                    title="Device Trips"
+                    value={tripSummary?.device_trips !== undefined ? tripSummary.device_trips.toLocaleString() : '—'}
                     icon={MapPin}
-                    description="Per completed route"
+                    description={tripSummary?.device_trips
+                        ? `Avg ${(tripSummary.device_trip_distance_km / tripSummary.device_trips).toFixed(1)} km per trip${tripSummary.device_trips_partial ? ' · last 60 days only' : ''}`
+                        : 'Trips the trackers recorded'}
                 />
                 <StatCard
                     title="Top Breach Zones"

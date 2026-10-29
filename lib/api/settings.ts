@@ -394,6 +394,13 @@ export interface OrgPolicies {
     maintenance_approaching_km: number
     maintenance_approaching_days: number
     maintenance_escalation_hours: number
+    // Utilization (backend reports phase 4): working hours are the time outside
+    // the after-hours window, on these ISO days (1 = Monday), e.g. "1,2,3,4,5".
+    working_days?: string
+    utilization_under_pct?: number
+    utilization_over_pct?: number
+    // Opts the organization into SOS, crash, harsh driving, power cut, towing and dwell alerts.
+    telemetry_extended_alerts?: boolean
 }
 
 export const getPolicies = async (): Promise<{ data: OrgPolicies }> => {

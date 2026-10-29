@@ -12,7 +12,7 @@ import * as z from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/lib/api/settings'
 import { toast } from 'sonner'
-import { Loader2, Gauge, Timer, Moon, Info } from 'lucide-react'
+import { Loader2, Gauge, Timer, Moon, Info, CalendarClock, Siren } from 'lucide-react'
 import { QueryError } from '@/components/shared/QueryError'
 import { extractApiError } from '@/lib/utils'
 
@@ -22,7 +22,24 @@ const fleetRulesSchema = z.object({
     after_hours_enabled: z.boolean(),
     after_hours_start: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM format'),
     after_hours_end: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM format'),
+    working_days: z.array(z.number().int().min(1).max(7)).min(1, 'Choose at least one day'),
+    utilization_under_pct: z.number().int().min(0).max(100),
+    utilization_over_pct: z.number().int().min(0).max(100),
+    telemetry_extended_alerts: z.boolean(),
+}).refine(v => v.utilization_over_pct >= v.utilization_under_pct, {
+    message: 'Must be at least the under-used threshold',
+    path: ['utilization_over_pct'],
 })
+
+const DAYS = [
+    { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' }, { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' }, { value: 6, label: 'Sat' }, { value: 7, label: 'Sun' },
+]
+
+const parseDays = (value?: string): number[] => {
+    const days = (value ?? '1,2,3,4,5,6,7').split(',').map(Number).filter(d => d >= 1 && d <= 7)
+    return days.length > 0 ? days : [1, 2, 3, 4, 5, 6, 7]
+}
 
 type FleetRulesValues = z.infer<typeof fleetRulesSchema>
 
@@ -49,6 +66,10 @@ export default function FleetRulesPage() {
             after_hours_enabled: false,
             after_hours_start: '22:00',
             after_hours_end: '06:00',
+            working_days: [1, 2, 3, 4, 5, 6, 7],
+            utilization_under_pct: 20,
+            utilization_over_pct: 90,
+            telemetry_extended_alerts: false,
         },
     })
 
@@ -60,12 +81,16 @@ export default function FleetRulesPage() {
                 after_hours_enabled: data.data.after_hours_enabled,
                 after_hours_start: data.data.after_hours_start,
                 after_hours_end: data.data.after_hours_end,
+                working_days: parseDays(data.data.working_days),
+                utilization_under_pct: data.data.utilization_under_pct ?? 20,
+                utilization_over_pct: data.data.utilization_over_pct ?? 90,
+                telemetry_extended_alerts: Boolean(data.data.telemetry_extended_alerts),
             })
         }
     }, [data, reset])
 
     const { mutate, isPending } = useMutation({
-        mutationFn: (values: FleetRulesValues) => api.updatePolicies(values),
+        mutationFn: (values: FleetRulesValues) => api.updatePolicies({ ...values, working_days: [...values.working_days].sort().join(',') }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['org-policies'] })
             toast.success('Fleet rules saved')
@@ -76,6 +101,8 @@ export default function FleetRulesPage() {
     })
 
     const afterHoursEnabled = watch('after_hours_enabled')
+    const afterHoursStart = watch('after_hours_start')
+    const afterHoursEnd = watch('after_hours_end')
 
     if (isLoading) {
         return (
@@ -255,6 +282,93 @@ export default function FleetRulesPage() {
                             </p>
                         )}
                     </CardContent>
+                </Card>
+
+                {/* Utilization */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-white border-b border-slate-100 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                                <CalendarClock className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-base font-bold text-slate-900">Working Hours &amp; Utilization</CardTitle>
+                                <CardDescription>
+                                    Utilization is engine time inside working hours: {afterHoursEnd}–{afterHoursStart}, the time outside the after-hours window
+                                    {afterHoursEnabled ? '' : ' (used for utilization even while after-hours alerts are off)'}. Vehicles can have their own hours.
+                                </CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-5">
+                        <div className="space-y-2">
+                            <Label className="text-sm font-semibold text-slate-700">Working days</Label>
+                            <Controller
+                                name="working_days"
+                                control={control}
+                                render={({ field }) => (
+                                    <div className="flex flex-wrap gap-2">
+                                        {DAYS.map(d => {
+                                            const on = field.value.includes(d.value)
+                                            return (
+                                                <button
+                                                    key={d.value}
+                                                    type="button"
+                                                    onClick={() => field.onChange(on ? field.value.filter(v => v !== d.value) : [...field.value, d.value])}
+                                                    className={`h-9 w-12 rounded-md border text-sm font-medium ${on ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            />
+                            {errors.working_days && <p className="text-xs text-red-500">{errors.working_days.message}</p>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-6 max-w-sm">
+                            <div className="space-y-2">
+                                <Label htmlFor="utilization_under_pct" className="text-sm font-semibold text-slate-700">Under-used below</Label>
+                                <div className="flex shadow-sm rounded-md">
+                                    <Input id="utilization_under_pct" type="number" min={0} max={100} {...register('utilization_under_pct', { valueAsNumber: true })} className="rounded-r-none border-r-0 focus-visible:ring-0" />
+                                    <div className="flex items-center px-3 border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-sm rounded-r-md">%</div>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="utilization_over_pct" className="text-sm font-semibold text-slate-700">Over-used above</Label>
+                                <div className="flex shadow-sm rounded-md">
+                                    <Input id="utilization_over_pct" type="number" min={0} max={100} {...register('utilization_over_pct', { valueAsNumber: true })} className="rounded-r-none border-r-0 focus-visible:ring-0" />
+                                    <div className="flex items-center px-3 border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-sm rounded-r-md">%</div>
+                                </div>
+                                {errors.utilization_over_pct && <p className="text-xs text-red-500">{errors.utilization_over_pct.message}</p>}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* New telemetry alerts */}
+                <Card className="shadow-sm border-slate-200">
+                    <CardHeader className="bg-white border-b border-slate-100 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+                                <Siren className="h-4 w-4 text-orange-500" />
+                            </div>
+                            <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base font-bold text-slate-900">Safety &amp; Driving Alerts</CardTitle>
+                                    <Controller
+                                        name="telemetry_extended_alerts"
+                                        control={control}
+                                        render={({ field }) => <Switch checked={field.value} onCheckedChange={field.onChange} />}
+                                    />
+                                </div>
+                                <CardDescription>
+                                    Notify on SOS, crash, harsh braking, acceleration and cornering, power cut, towing and geofence dwell time. Off by default;
+                                    these events are recorded in Alarms &amp; Events either way.
+                                </CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
                 </Card>
 
                 {/* Footer */}

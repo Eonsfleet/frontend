@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { getVehicleById, deleteVehicle } from '@/lib/api/vehicles'
 import { VehicleDetails } from '@/components/vehicles/VehicleDetails'
+import { VehicleTelemetrySetupCard } from '@/components/analytics/telemetry/VehicleTelemetrySetupCard'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Edit, Trash2, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -104,6 +105,8 @@ export default function VehicleDetailPage() {
             </div>
 
             <VehicleDetails vehicle={vehicle} />
+
+            <VehicleTelemetrySetupCard vehicleId={id} />
 
             <VehicleModal
                 isOpen={isEditModalOpen}
