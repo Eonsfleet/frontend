@@ -199,6 +199,22 @@ const REPORT_TYPE_GROUPS = [
     ],
   },
   {
+    // Read from the telemetry reporting store (60 days) and the fuel sources;
+    // the same reports as on the GPS, alarms, fuel and utilization screens.
+    group: "Telemetry (trips, alarms, fuel by source, utilization)",
+    options: [
+      { value: "gps.trips", label: "Trip Summary (Every Trip, Fuel, Speeding)" },
+      { value: "gps.daily", label: "Daily Driving Summary Per Vehicle" },
+      { value: "gps.stops", label: "Stops (Place, Geofence, Duration)" },
+      { value: "gps.devices", label: "Tracker Status (Online, Power, Offline Time)" },
+      { value: "gps.scheduled-trips", label: "Scheduled Trips vs Actual Driving" },
+      { value: "events.list", label: "Alarms & Events" },
+      { value: "events.counts", label: "Alarms & Events Per Vehicle (per 100 km)" },
+      { value: "fuel.source-report", label: "Fuel by Source (Estimate, Sensor, Purchases)" },
+      { value: "fleet.utilization-report", label: "Utilization Against Working Hours" },
+    ],
+  },
+  {
     group: "Insights (AI)",
     options: [
       {
@@ -210,6 +226,9 @@ const REPORT_TYPE_GROUPS = [
 ];
 
 const ALL_REPORT_TYPES = REPORT_TYPE_GROUPS.flatMap((g) => g.options);
+
+/** Telemetry reports keep 60 days; the fuel report's estimates and purchases go further back. */
+const SIXTY_DAY_TYPES = ["gps.trips", "gps.daily", "gps.stops", "gps.devices", "gps.scheduled-trips", "events.list", "events.counts", "fleet.utilization-report"];
 
 const FILTER_OPTIONS = [
   { value: "7d", label: "Last 7 Days" },
@@ -588,6 +607,11 @@ function ReportsCentralPage() {
                       </button>
                     ))}
                   </div>
+                  {SIXTY_DAY_TYPES.includes(exportType) && ["90d", "1y"].includes(exportFilter) && (
+                    <p className="text-[10px] text-amber-700">
+                      Telemetry is kept for 60 days: this export covers the last 60 days only.
+                    </p>
+                  )}
                 </div>
 
                 {/* Format */}

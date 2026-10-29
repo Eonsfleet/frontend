@@ -11,17 +11,21 @@ import {
   Wrench,
   ShieldAlert,
   Map,
+  Siren,
+  Clock,
 } from "lucide-react";
 import { UpgradeGate } from "@/components/shared/UpgradeGate";
 
 const navItems = [
   { name: "Overview", href: "/analytics", icon: LayoutDashboard },
   { name: "Fleet Utilization", href: "/analytics/fleet", icon: Truck },
+  { name: "Utilization by Hours", href: "/analytics/fleet/working-hours", icon: Clock },
   { name: "Driver Performance", href: "/analytics/drivers", icon: Users },
   // { name: 'Fuel Intelligence', href: '/analytics/fuel', icon: Activity },
   { name: "Maintenance", href: "/analytics/maintenance", icon: Wrench },
   { name: "Incidents", href: "/analytics/incidents", icon: ShieldAlert },
   { name: "GPS & Routes", href: "/analytics/gps", icon: Map },
+  { name: "Alarms & Events", href: "/analytics/alarms", icon: Siren },
 ];
 
 export default function AnalyticsLayout({
@@ -49,7 +53,7 @@ export default function AnalyticsLayout({
           </div>
           <nav className="p-2 space-y-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || (item.href === "/analytics/gps" && pathname.startsWith("/analytics/gps/"));
               return (
                 <Link
                   key={item.name}
