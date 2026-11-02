@@ -251,6 +251,13 @@ export const getEvents = (f: ReportFilters) => page<EventRow>('/analytics/events
 export const getEventCounts = (f: ReportFilters & { group_by?: 'vehicle' | 'driver' | 'category' | 'kind' }) => page<EventCountRow, { group_by: string }>('/analytics/events/counts', f)
 export const getEventTrend = (f: ReportFilters) => page<EventTrendRow, { interval: 'day' | 'week' }>('/analytics/events/trend', f)
 
+/**
+ * Any catalogued report's rows on screen, from the endpoint its catalog entry
+ * names (the catalog writes it with the /v1 prefix, which the client adds).
+ */
+export const previewReport = (endpoint: string, f: ReportFilters & Record<string, unknown> = {}) =>
+    page<Record<string, unknown>, Record<string, unknown>>(endpoint.replace(/^\/v1/, ''), f)
+
 /** The longest route history the backend answers on screen (else 422). */
 export const ROUTE_MAX_DAYS = 3
 
