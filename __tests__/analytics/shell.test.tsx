@@ -30,11 +30,9 @@ describe('analytics shell and navigation', () => {
         expect(screen.getByRole('link', { name: 'Alarms & Events' })).toHaveAttribute('href', '/analytics/alarms?filter=7d&vehicle_id=4')
     })
 
-    it('renders the page content and a tester switch only when given one', () => {
-        const { rerender } = render(<AnalyticsShell><p>page</p></AnalyticsShell>)
+    it('renders the page content under the tabs, with no version switch', () => {
+        render(<AnalyticsShell><p>page</p></AnalyticsShell>)
         expect(screen.getByText('page')).toBeInTheDocument()
-        expect(screen.queryByText(/previous version/)).not.toBeInTheDocument()
-        rerender(<AnalyticsShell switcher={<a href="?ui=legacy">Switch to previous version</a>}><p>page</p></AnalyticsShell>)
-        expect(screen.getByText(/previous version/)).toBeInTheDocument()
+        expect(screen.queryByText(/previous version|Preview/i)).not.toBeInTheDocument()
     })
 })

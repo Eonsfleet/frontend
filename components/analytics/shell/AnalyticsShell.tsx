@@ -11,7 +11,7 @@ import { ANALYTICS_TABS, isTabActive, tabHref } from '@/lib/analytics/navigation
  * so every tab stays reachable on a phone (the old sidebar was hidden below
  * the md breakpoint). The page scrolls as one document; no nested scroll area.
  */
-export function AnalyticsShell({ children, switcher }: { children: ReactNode; switcher?: ReactNode }) {
+export function AnalyticsShell({ children }: { children: ReactNode }) {
     const pathname = usePathname()
     const search = useSearchParams()
     const activeRef = useRef<HTMLAnchorElement | null>(null)
@@ -30,7 +30,6 @@ export function AnalyticsShell({ children, switcher }: { children: ReactNode; sw
                             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Analytics</h1>
                             <p className="mt-0.5 text-sm text-an-muted">How your fleet is doing, what needs attention, and where to look next.</p>
                         </div>
-                        {switcher}
                     </div>
 
                     <nav aria-label="Analytics sections" className="-mx-4 mt-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">

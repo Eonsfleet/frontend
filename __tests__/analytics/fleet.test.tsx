@@ -26,23 +26,7 @@ vi.mock('@/lib/api/analyticsFleet', () => fleet)
 const tele = vi.hoisted(() => ({ getTrips: vi.fn(), getTrackers: vi.fn(), getEventCounts: vi.fn() }))
 vi.mock('@/lib/api/telemetryReports', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/api/telemetryReports')>()), ...tele }))
 
-// The old page reads the same fleet endpoints through the untyped client.
-vi.mock('@/lib/api/analytics', async (importOriginal) => {
-    const real = await importOriginal<typeof import('@/lib/api/analytics')>()
-    const stubs = Object.fromEntries(Object.keys(real).map((k) => [k, vi.fn().mockResolvedValue(undefined)]))
-    return {
-        ...stubs,
-        getFleetUtilizationSummary: vi.fn().mockResolvedValue({ total_vehicles: 10, active_vehicles: 4, devices_reporting: 6, utilization_rate_pct: 40, reporting_rate_pct: 60, total_distance_km: 321.5 }),
-        getFleetAvailabilitySnapshot: vi.fn().mockResolvedValue({ total: 10, by_status: { active: 4 } }),
-        getFleetAvailabilityTrend: vi.fn().mockResolvedValue({ trend: [], total_vehicles: 10, activity_source: 'gps_odometer' }),
-        getFleetVehicleList: vi.fn().mockResolvedValue([]),
-        getFleetTopVehicles: vi.fn().mockResolvedValue({}),
-        getFleetAssetPerformance: vi.fn().mockResolvedValue({}),
-    }
-})
-
 import { FleetV2 } from '@/components/analytics/fleet/FleetV2'
-import LegacyFleet from '@/components/analytics/legacy/LegacyFleet'
 
 const summary = (over = {}) => ({
     total_vehicles: 10, active_vehicles: 4, devices_reporting: 6, utilization_rate_pct: 40, reporting_rate_pct: 60,
@@ -214,21 +198,5 @@ describe('busiest vehicles', () => {
         tele.getTrips.mockResolvedValue(tripsPage({ extra: { totals: { trips: 1, duration_s: 1, idle_s: 0, distance_km: 1, litres: null, litres_source: null, max_speed_kmh: null }, vehicles: [vehicle(1, 'ABC-1', 1, 60, 0), vehicle(2, 'ZERO', 0, 0, 0)] } }))
         renderWithClient(<FleetV2 />)
         await waitFor(() => expect(names()).toEqual(['ABC-1']))
-    })
-})
-
-describe('new Fleet tab against the existing page, on the same backend data', () => {
-    it('reports the same vehicles, active vehicles and utilization rate', async () => {
-        const old = renderWithClient(<LegacyFleet />)
-        expect(await old.findByText('4 / 10')).toBeInTheDocument()
-        expect(old.getByText('40%')).toBeInTheDocument()
-        old.unmount()
-
-        renderWithClient(<FleetV2 />)
-        const activity = await screen.findByRole('region', { name: 'Fleet activity' })
-        await within(activity).findByText('Active in period')
-        expect(within(activity).getByText('4')).toBeInTheDocument()
-        expect(within(activity).getByText('10')).toBeInTheDocument()
-        expect(within(activity).getByText('40% of the fleet')).toBeInTheDocument()
     })
 })
