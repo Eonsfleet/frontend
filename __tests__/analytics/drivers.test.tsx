@@ -267,9 +267,11 @@ describe('Drivers tab: one driver', () => {
         expect(replace).toHaveBeenCalledWith('/analytics/drivers?filter=7d', { scroll: false })
     })
 
-    it('chooses a driver from the picker by filtering to them', async () => {
+    it('has one driver dropdown, in the filter bar, and choosing a driver there opens that driver’s page', async () => {
         renderWithClient(<DriversV2 />)
-        fireEvent.click(screen.getByRole('button', { name: 'Look at one driver' }))
+        expect(screen.queryByRole('button', { name: 'Look at one driver' })).not.toBeInTheDocument()
+        expect(screen.getAllByRole('button', { name: /^Drivers filter/ })).toHaveLength(1)
+        fireEvent.click(screen.getByRole('button', { name: /^Drivers filter/ }))
         fireEvent.click(await screen.findByText('Tunde Bello'))
         expect(replace).toHaveBeenCalledWith('/analytics/drivers?driver_ids=2', { scroll: false })
     })

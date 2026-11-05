@@ -17,7 +17,6 @@ import { resolveDates, serializeFilters } from '@/lib/analytics/filters'
 import { buildReportLink } from '@/lib/analytics/reportLinks'
 import { formatDuration, formatNumber } from '@/components/analytics/telemetry/format'
 import { DriverFocus } from './DriverFocus'
-import { DriverFocusPicker } from './DriverFocusPicker'
 import { ExpiryChart, InspectionStrip } from './charts'
 
 const PERIODS = ['7d', '30d'] as const
@@ -54,15 +53,12 @@ type Metric = (typeof METRICS)[number]['id']
  * its units are verified.
  */
 export function DriversV2() {
-    const { filters, update } = useAnalyticsFilters()
+    const { filters } = useAnalyticsFilters()
+    // One driver in the Drivers filter (or a click on a bar) opens that driver's own page.
     const focusId = filters.driverIds.length === 1 ? filters.driverIds[0] : null
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-3">
-                <DriverFocusPicker selected={focusId} onSelect={(id) => update({ driverIds: id ? [id] : [] })} />
-                {focusId === null && <p className="text-sm text-an-muted">Pick a driver to see their own page, or click a bar below.</p>}
-            </div>
             <AnalyticsFilterBar compare={false} presets={PERIODS} custom={false} />
             <FreshnessBar />
             {focusId !== null ? <DriverFocus driverId={focusId} /> : <DriversOverview />}
@@ -122,6 +118,7 @@ function DriversOverview() {
 
     return (
         <div className="space-y-5">
+            <p className="text-sm text-an-muted">Choose one driver in the Drivers filter, or click a bar, to see that driver&apos;s own page.</p>
             <div className="grid gap-4 lg:grid-cols-2">
                 <WidgetFrame
                     title={`Drivers by ${selected.label.toLowerCase()}`}
