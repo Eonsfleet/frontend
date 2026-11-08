@@ -257,3 +257,53 @@ describe('alarms and events as one card', () => {
         expect(telemetry.getEventTrend).not.toHaveBeenCalled()
     })
 })
+
+describe('fleet health with the corrected backend', () => {
+    const fixed = (over = {}) => ({
+        score: 72.4, rating: 'good', status: 'ok', total_vehicles: 20, computed_at: '2026-11-03T09:00:00Z',
+        components: { vehicle_active_rate: 80, maintenance_compliance: 70, incident_free_rate: 90, fuel_efficiency_score: 55 },
+        missing: [], weights: { vehicle_active_rate: 0.3, maintenance_compliance: 0.3, incident_free_rate: 0.2, fuel_efficiency_score: 0.2 }, ...over,
+    })
+
+    it('shows the overall score and its rating when the backend says every factor had data, and states the weights it gave', async () => {
+        api.getFleetHealthScore.mockResolvedValue(fixed())
+        renderWithClient(<HealthPanel filters={filtersFrom()} />)
+        expect(await screen.findByText('72')).toBeInTheDocument()
+        expect(screen.getByText('Good')).toBeInTheDocument()
+        expect(screen.getByText(/weights the four factors 30%, 30%, 20% and 20%/)).toBeInTheDocument()
+        // The old-backend caveats no longer apply.
+        expect(screen.queryByText(/Completed schedules are currently counted as overdue/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Reads 100 when there is no fuel data/)).not.toBeInTheDocument()
+    })
+
+    it('shows "No data" for a factor the backend could not measure, draws no bar for it, and shows no overall score', async () => {
+        api.getFleetHealthScore.mockResolvedValue(fixed({
+            score: null, rating: null, status: 'insufficient_data', missing: ['fuel_efficiency_score'],
+            components: { vehicle_active_rate: 80, maintenance_compliance: 70, incident_free_rate: 90, fuel_efficiency_score: null },
+        }))
+        renderWithClient(<HealthPanel filters={filtersFrom()} />)
+        expect(await screen.findByText('No data')).toBeInTheDocument()
+        expect(screen.queryByRole('meter', { name: 'Fuel efficiency' })).not.toBeInTheDocument()
+        expect(screen.getAllByRole('meter')).toHaveLength(3)
+        expect(screen.getByText(/No overall score yet: there is no data for fuel efficiency/)).toBeInTheDocument()
+        expect(screen.queryByText('out of 100')).not.toBeInTheDocument()
+    })
+
+    it('treats an empty fleet as empty', async () => {
+        api.getFleetHealthScore.mockResolvedValue(fixed({
+            score: null, rating: null, status: 'empty_fleet', total_vehicles: 0, missing: ['vehicle_active_rate', 'maintenance_compliance', 'incident_free_rate', 'fuel_efficiency_score'],
+            components: { vehicle_active_rate: null, maintenance_compliance: null, incident_free_rate: null, fuel_efficiency_score: null },
+        }))
+        renderWithClient(<HealthPanel filters={filtersFrom()} />)
+        expect(await screen.findByText(/No vehicles yet/)).toBeInTheDocument()
+        expect(screen.queryByRole('meter')).not.toBeInTheDocument()
+    })
+
+    it('still withholds the score from an older backend that sends no status', async () => {
+        api.getFleetHealthScore.mockResolvedValue({ score: 72, rating: 'good', total_vehicles: 20, computed_at: '2026-11-03T09:00:00Z', components: { vehicle_active_rate: 80, maintenance_compliance: 70, incident_free_rate: 90, fuel_efficiency_score: 100 } })
+        renderWithClient(<HealthPanel filters={filtersFrom()} />)
+        expect(await screen.findByText('Vehicles in service')).toBeInTheDocument()
+        expect(screen.queryByText('out of 100')).not.toBeInTheDocument()
+        expect(screen.getByText(/Completed schedules are currently counted as overdue/)).toBeInTheDocument()
+    })
+})

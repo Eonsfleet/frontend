@@ -8,18 +8,33 @@
 
 export type HealthRating = 'excellent' | 'good' | 'fair' | 'poor'
 
-/** Each component is 0–100. The fleet-wide score takes no filters. */
+/**
+ * Each component is 0-100, or null when there is nothing to measure it from.
+ * The fleet-wide score takes no filters.
+ */
 export interface FleetHealthComponents {
-    vehicle_active_rate: number
-    maintenance_compliance: number
-    incident_free_rate: number
-    fuel_efficiency_score: number
+    vehicle_active_rate: number | null
+    maintenance_compliance: number | null
+    incident_free_rate: number | null
+    fuel_efficiency_score: number | null
 }
 
+export type HealthStatus = 'ok' | 'insufficient_data' | 'empty_fleet'
+
+/**
+ * `status`, `missing` and `weights` come from the corrected backend. An older
+ * backend sends neither: its score counted completed schedules as overdue and
+ * scored missing fuel data as perfect, so without `status` the overall score is
+ * not shown. With the corrected backend, `score` is null unless every factor has
+ * data (`status` is then 'ok').
+ */
 export interface FleetHealthScore {
-    score: number
-    rating: HealthRating
+    score: number | null
+    rating: HealthRating | null
+    status?: HealthStatus
     components: FleetHealthComponents
+    missing?: (keyof FleetHealthComponents)[]
+    weights?: Record<keyof FleetHealthComponents, number>
     total_vehicles: number
     computed_at: string
 }
