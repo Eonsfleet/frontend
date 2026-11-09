@@ -280,3 +280,89 @@ export interface InspectionSummary {
     data: InspectionRow[]
     totals: { inspections: number; with_defects: number | null; drivers: number }
 }
+
+// ── Incidents (incidents/type-distribution, priority-distribution, resolution-time, by-vehicle) ──
+
+/** All-time counts per incident type, most common first. */
+export interface IncidentTypeRow {
+    type: string | null
+    count: number
+}
+
+export interface IncidentPriorityRow {
+    priority: string | null
+    count: number
+}
+
+/**
+ * Average days from an incident's creation to its LAST UPDATE, over resolved and
+ * closed incidents. The backend has no resolved-at date, so any later edit moves
+ * the end point: this is not a true time to resolve.
+ */
+export interface IncidentResolution {
+    overall_avg_days: number | null
+    by_type: { type: string | null; avg_days: number | null; count: number }[]
+}
+
+export interface IncidentVehicleRow {
+    vehicle_id: number
+    registration_number: string | null
+    make: string | null
+    model: string | null
+    incident_count: number
+}
+
+// ── Maintenance (maintenance/schedule-compliance, cost-report, workflow-report, workshop-summary; insights/predictive-maintenance) ──
+
+/**
+ * Only the summary is typed. `overdue` and `upcoming_14d` count open schedules (finished
+ * ones are never overdue or upcoming); `current` is everything else, finished included.
+ * `compliance_rate` is current over total, so it also drops schedules due within 14 days:
+ * it is not read, because it is not a measure of being on schedule.
+ */
+export interface ScheduleSummary {
+    total: number
+    overdue: number
+    upcoming_14d: number
+    current: number
+}
+
+/** Amounts are kobo (naira x 100), as the field names say. Closed jobs only, dated by their last update. */
+export interface MaintenanceCost {
+    total_cost_kobo: number
+    period: { start: string; end: string }
+    trend: { period: string; total_kobo: number; jobs_count: number }[]
+    by_vehicle: { vehicle_id: number; registration_number: string | null; total_kobo: number; jobs_count: number }[]
+}
+
+/** All-time job counts for seven stages; jobs in any other status (for example rejected) are not listed. */
+export interface MaintenanceWorkflow {
+    by_status: { status: string; count: number }[]
+    avg_turnaround_days: number | null
+}
+
+/** All-time. `total_cost_kobo` is closed jobs only. */
+export interface WorkshopSummary {
+    total_jobs: number
+    in_progress: number
+    pending_verification: number
+    closed: number
+    total_cost_kobo: number
+    avg_vendor_rating: number | null
+}
+
+export interface UpcomingMaintenance {
+    schedule_id: number
+    title: string | null
+    due_date: string
+    days_until_due: number
+    expected_odometer: number | null
+    vehicle: { id: number; registration_number: string | null; make: string | null; model: string | null } | null
+}
+
+/** Schedules due in the next 30 days (at most 50 listed), and how many open ones are already overdue (all time). */
+export interface MaintenanceDue {
+    upcoming_count: number
+    overdue_count: number
+    upcoming: UpcomingMaintenance[]
+}

@@ -10,9 +10,8 @@ import { parseFilters } from './filters'
  * What a tab can take from the current filters depends on the page behind it:
  *   v2         understands every filter
  *   telemetry  reads filter (1d/7d/30d/60d), start_date, end_date and one vehicle_id
- *   legacy     reads filter (7d/30d/90d/1y) only
  */
-export type TabKind = 'v2' | 'telemetry' | 'legacy'
+export type TabKind = 'v2' | 'telemetry'
 
 export interface AnalyticsTab {
     id: string
@@ -30,8 +29,8 @@ export const ANALYTICS_TABS: AnalyticsTab[] = [
     { id: 'overview', label: 'Overview', href: '/analytics', icon: LayoutDashboard, kind: 'v2' },
     { id: 'fleet', label: 'Fleet', href: '/analytics/fleet', icon: Truck, kind: 'v2', prefix: '/analytics/fleet', alsoActiveOn: ['/analytics/gps'] },
     { id: 'drivers', label: 'Drivers', href: '/analytics/drivers', icon: Users, kind: 'v2', prefix: '/analytics/drivers' },
-    { id: 'maintenance', label: 'Maintenance', href: '/analytics/maintenance', icon: Wrench, kind: 'legacy', prefix: '/analytics/maintenance' },
-    { id: 'incidents', label: 'Incidents', href: '/analytics/incidents', icon: ShieldAlert, kind: 'legacy', prefix: '/analytics/incidents' },
+    { id: 'maintenance', label: 'Maintenance', href: '/analytics/maintenance', icon: Wrench, kind: 'v2', prefix: '/analytics/maintenance' },
+    { id: 'incidents', label: 'Incidents', href: '/analytics/incidents', icon: ShieldAlert, kind: 'v2', prefix: '/analytics/incidents' },
     { id: 'alarms', label: 'Alarms & Events', href: '/analytics/alarms', icon: Siren, kind: 'telemetry', prefix: '/analytics/alarms' },
 ]
 
@@ -41,7 +40,6 @@ export const isTabActive = (tab: AnalyticsTab, pathname: string): boolean => {
     return tab.prefix ? under(tab.prefix) || pathname === tab.href : pathname === tab.href
 }
 
-const LEGACY_PERIODS = ['7d', '30d', '90d', '1y']
 const TELEMETRY_PERIODS = ['1d', '7d', '30d', '60d']
 
 /**
@@ -60,7 +58,7 @@ export function tabHref(tab: AnalyticsTab, search: { toString(): string }): stri
         }
     } else {
         const filters = parseFilters(from)
-        const allowed = tab.kind === 'telemetry' ? TELEMETRY_PERIODS : LEGACY_PERIODS
+        const allowed = TELEMETRY_PERIODS
         // Only a period the URL really carries is passed on: an unset one must stay unset,
         // or this page's default would be overridden by the Overview's.
         const explicit = from.has('filter') || from.has('start_date')
@@ -68,11 +66,11 @@ export function tabHref(tab: AnalyticsTab, search: { toString(): string }): stri
             // nothing to carry
         } else if (filters.range.kind === 'preset' && allowed.includes(filters.range.preset)) {
             out.set('filter', filters.range.preset)
-        } else if (filters.range.kind === 'custom' && tab.kind === 'telemetry') {
+        } else if (filters.range.kind === 'custom') {
             out.set('start_date', filters.range.start)
             out.set('end_date', filters.range.end)
         }
-        if (tab.kind === 'telemetry' && filters.vehicleIds.length === 1) out.set('vehicle_id', String(filters.vehicleIds[0]))
+        if (filters.vehicleIds.length === 1) out.set('vehicle_id', String(filters.vehicleIds[0]))
     }
 
     const qs = out.toString()

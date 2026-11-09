@@ -21,32 +21,26 @@ describe('analytics tabs', () => {
         expect(isTabActive(tab('drivers'), '/analytics/driversX')).toBe(false)
     })
 
-    it('carries every filter to the Overview', () => {
-        expect(tabHref(tab('overview'), 'filter=90d&compare=prev&vehicle_ids=1,2&page=4')).toBe('/analytics?filter=90d&compare=prev&vehicle_ids=1%2C2')
+    it('carries every filter to every rebuilt tab, because each understands them', () => {
+        const query = 'filter=90d&compare=prev&vehicle_ids=1,2&driver_ids=5&page=4'
+        expect(tabHref(tab('overview'), query)).toBe('/analytics?filter=90d&compare=prev&vehicle_ids=1%2C2&driver_ids=5')
+        for (const id of ['fleet', 'drivers', 'maintenance', 'incidents']) {
+            expect(tabHref(tab(id), 'filter=30d&driver_ids=5&cluster_ids=2')).toBe(`${tab(id).href}?filter=30d&cluster_ids=2&driver_ids=5`)
+        }
     })
 
-    it('carries only a period the destination can read, so it never silently becomes its default', () => {
-        expect(tabHref(tab('incidents'), 'filter=90d')).toBe('/analytics/incidents?filter=90d')
-        expect(tabHref(tab('incidents'), 'filter=60d')).toBe('/analytics/incidents')
+    it('carries only a period the Alarms page can read, so it never silently becomes its default', () => {
         expect(tabHref(tab('alarms'), 'filter=60d')).toBe('/analytics/alarms?filter=60d')
         expect(tabHref(tab('alarms'), 'filter=1y')).toBe('/analytics/alarms')
     })
 
-    it('carries custom dates and a single vehicle to telemetry tabs only', () => {
+    it('carries custom dates and a single vehicle to Alarms only', () => {
         expect(tabHref(tab('alarms'), 'start_date=2026-10-01&end_date=2026-10-05&vehicle_ids=7')).toBe('/analytics/alarms?start_date=2026-10-01&end_date=2026-10-05&vehicle_id=7')
         expect(tabHref(tab('alarms'), 'vehicle_ids=7,8')).toBe('/analytics/alarms')
-        expect(tabHref(tab('incidents'), 'start_date=2026-10-01&end_date=2026-10-05&vehicle_ids=7')).toBe('/analytics/incidents')
     })
 
-    it('carries every filter to Fleet and Drivers, which understand them all', () => {
-        expect(tabHref(tab('fleet'), 'filter=7d&vehicle_ids=1,2&driver_ids=5&page=3')).toBe('/analytics/fleet?filter=7d&vehicle_ids=1%2C2&driver_ids=5')
-        expect(tabHref(tab('drivers'), 'filter=30d&driver_ids=5&cluster_ids=2')).toBe('/analytics/drivers?filter=30d&cluster_ids=2&driver_ids=5')
-    })
-})
-
-describe('analytics tabs without a period in the URL', () => {
-    it('leave the destination on its own default instead of imposing one', () => {
-        expect(tabHref(ANALYTICS_TABS.find((t) => t.id === 'alarms')!, '')).toBe('/analytics/alarms')
-        expect(tabHref(ANALYTICS_TABS.find((t) => t.id === 'incidents')!, 'vehicle_ids=3')).toBe('/analytics/incidents')
+    it('leaves Alarms on its own default period when the URL has none', () => {
+        expect(tabHref(tab('alarms'), '')).toBe('/analytics/alarms')
+        expect(tabHref(tab('alarms'), 'driver_ids=3')).toBe('/analytics/alarms')
     })
 })

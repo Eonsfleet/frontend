@@ -25,6 +25,15 @@ export type WidgetId =
     | 'fleet-trips'
     | 'fleet-trackers'
     | 'fleet-alarms'
+    | 'maintenance-schedules'
+    | 'maintenance-due'
+    | 'maintenance-cost'
+    | 'maintenance-workflow'
+    | 'maintenance-workshop'
+    | 'incidents-types'
+    | 'incidents-priority'
+    | 'incidents-resolution'
+    | 'incidents-vehicles'
     | 'drivers-trips'
     | 'drivers-incidents'
     | 'drivers-telemetry'
@@ -75,6 +84,15 @@ const WIDGETS: Record<WidgetId, Support> = {
     'fleet-trips': { scope: { kind: 'telemetry' }, entities: ['vehicles', 'clusters', 'drivers'], compare: false },
     'fleet-trackers': { scope: { kind: 'snapshot', note: 'Current status' }, entities: ['vehicles', 'clusters'], compare: false },
     'fleet-alarms': { scope: { kind: 'telemetry' }, entities: ['vehicles', 'clusters', 'drivers'], compare: false },
+    'maintenance-schedules': { scope: { kind: 'fixed', note: 'Open schedules; finished ones are not overdue' }, entities: [], compare: false },
+    'maintenance-due': { scope: { kind: 'fixed', note: 'Due in the next 30 days; overdue is all time' }, entities: [], compare: false },
+    'maintenance-cost': { scope: { kind: 'legacy' }, entities: [], compare: false },
+    'maintenance-workflow': { scope: { kind: 'fixed', note: 'All time' }, entities: [], compare: false },
+    'maintenance-workshop': { scope: { kind: 'fixed', note: 'All time' }, entities: [], compare: false },
+    'incidents-types': { scope: { kind: 'fixed', note: 'All time' }, entities: [], compare: false },
+    'incidents-priority': { scope: { kind: 'fixed', note: 'All time' }, entities: [], compare: false },
+    'incidents-resolution': { scope: { kind: 'fixed', note: 'All time, resolved and closed incidents' }, entities: [], compare: false },
+    'incidents-vehicles': { scope: { kind: 'fixed', note: 'All time' }, entities: [], compare: false },
     'drivers-trips': { scope: { kind: 'legacy' }, entities: [], compare: false },
     'drivers-incidents': { scope: { kind: 'fixed', note: 'Last 90 days' }, entities: [], compare: false },
     'drivers-telemetry': { scope: { kind: 'telemetry' }, entities: ['vehicles', 'clusters', 'drivers'], compare: false },
