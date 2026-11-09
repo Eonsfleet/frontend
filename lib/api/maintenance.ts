@@ -563,6 +563,7 @@ export const createMaintenanceJob = async (data: {
   fault_category: string;
   cost_estimate_kobo: number;
   driver_id?: number | string;
+  attachments?: string[];
 }): Promise<MaintenanceJobDetailResponse> => {
   const response = await apiClient.post<MaintenanceJobDetailResponse>(
     "/maintenance/jobs",

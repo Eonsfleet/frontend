@@ -88,10 +88,11 @@ export default function MaintenanceDashboardPage() {
 
     const filterOptions = [
         { label: 'All Cycles', value: undefined },
-        { label: 'Pending', value: 'pending' },
         { label: 'Upcoming', value: 'upcoming' },
         { label: 'Overdue', value: 'overdue' },
+        { label: 'Rescheduled', value: 'rescheduled' },
         { label: 'Completed', value: 'completed' },
+        { label: 'Cancelled', value: 'cancelled' },
     ]
 
     return (

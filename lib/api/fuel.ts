@@ -115,6 +115,7 @@ export const deleteFuelExpense = async (id: string | number): Promise<void> => {
 
 export const approveFuelExpense = async (
   id: string | number,
+  reason?: string,
 ): Promise<{
   message: string;
   data: {
@@ -122,7 +123,10 @@ export const approveFuelExpense = async (
     attributes: { status: string; approved_at: string };
   };
 }> => {
-  const response = await apiClient.post(`/fuel-expenses/${id}/approve`);
+  const response = await apiClient.post(
+    `/fuel-expenses/${id}/approve`,
+    reason ? { reason } : undefined,
+  );
   return response.data;
 };
 

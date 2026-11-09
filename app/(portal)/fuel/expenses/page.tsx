@@ -310,6 +310,95 @@ function RejectDialog({
   );
 }
 
+// ── Approve reason dialog ────────────────────────────────────────────────────
+// Shown when the backend refuses an approval because there is no device
+// evidence for the expense and a permanent reason is required.
+
+function ApproveDialog({
+  expenseId,
+  onClose,
+  onApproved,
+}: {
+  expenseId: string | number | null;
+  onClose: () => void;
+  onApproved: () => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<{ reason: string }>({
+    resolver: zodResolver(rejectSchema),
+  });
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: ({ reason }: { reason: string }) =>
+      api.approveFuelExpense(expenseId!, reason),
+    onSuccess: () => {
+      toast.success("Expense approved.");
+      onApproved();
+      reset();
+      onClose();
+    },
+    onError: (err) => toast.error(extractApiError(err)),
+  });
+
+  return (
+    <Dialog
+      open={!!expenseId}
+      onOpenChange={() => {
+        reset();
+        onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Approve Expense</DialogTitle>
+          <DialogDescription>
+            This expense has no device evidence. Your reason is kept with the
+            record permanently.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit((d) => mutate(d))} className="space-y-4">
+          <div>
+            <Label htmlFor="approve-reason">Approval Reason</Label>
+            <textarea
+              id="approve-reason"
+              {...register("reason")}
+              rows={3}
+              placeholder="e.g. Verified against the signed fuel receipt."
+              className="mt-1.5 w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
+            />
+            {errors.reason && (
+              <p className="text-xs text-rose-500 mt-1">
+                {errors.reason.message}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{" "}
+              Approve
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DeleteExpenseDialog({
   expense,
   isPending,
@@ -703,6 +792,7 @@ export default function FuelExpensesPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
+  const [approveId, setApproveId] = useState<string | number | null>(null);
   const [deleteExpense, setDeleteExpense] = useState<FuelExpense | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -758,7 +848,19 @@ export default function FuelExpensesPage() {
       toast.success("Expense approved.");
       refreshFuelExpenses();
     },
-    onError: (err) => toast.error(extractApiError(err)),
+    onError: (err, id) => {
+      // No device evidence: the backend requires a reason, so ask for one.
+      const res = (err as any)?.response;
+      if (
+        res?.status === 422 &&
+        res?.data?.errors?.[0]?.code === "BUSINESS_RULE_VIOLATION" &&
+        /reason/i.test(res?.data?.message ?? "")
+      ) {
+        setApproveId(id);
+        return;
+      }
+      toast.error(extractApiError(err));
+    },
   });
 
   const { mutate: handleUnlink, isPending: isUnlinking } = useMutation({
@@ -1369,6 +1471,11 @@ export default function FuelExpensesPage() {
       </Sheet>
       <LogExpenseDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RejectDialog expenseId={rejectId} onClose={() => setRejectId(null)} />
+      <ApproveDialog
+        expenseId={approveId}
+        onClose={() => setApproveId(null)}
+        onApproved={refreshFuelExpenses}
+      />
       <DeleteExpenseDialog
         expense={deleteExpense}
         isPending={deleteMutation.isPending}

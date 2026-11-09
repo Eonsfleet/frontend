@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { uploadFile } from '@/lib/api/documents'
 import { getMaintenanceJobs, getMaintenanceStats, createMaintenanceJob, transitionMaintenanceJob, deleteMaintenanceJob } from '@/lib/api/maintenance'
 import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { Card, CardContent } from '@/components/ui/card'
@@ -54,7 +55,8 @@ import {
     Wrench,
     CheckCircle2,
     Clock,
-    Trash2
+    Trash2,
+    X
 } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
 import { cn, extractApiError } from '@/lib/utils'
@@ -306,27 +308,74 @@ export default function MaintenanceJobBoardPage() {
     )
 }
 
+const MAX_PHOTOS = 5
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024
+
 function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
     const queryClient = useQueryClient()
     const { can } = usePermission()
     const [form, setForm] = React.useState({ vehicle_id: '', title: '', description: '', fault_category: '', cost_estimate: '' })
+    const [vehiclePickerOpen, setVehiclePickerOpen] = React.useState(false)
+    const [categoryPickerOpen, setCategoryPickerOpen] = React.useState(false)
+    const [photos, setPhotos] = React.useState<{ file: File; preview: string }[]>([])
+    const fileInputRef = React.useRef<HTMLInputElement>(null)
     const isSpecialist = can('administrator') || can('*') || usePermission().role === 'fleet_manager'
 
     const { data: vehiclesData } = useVehiclesDropdown(open)
 
+    const addPhotos = (files: FileList | null) => {
+        if (!files) return
+        const accepted: { file: File; preview: string }[] = []
+        for (const file of Array.from(files)) {
+            if (!file.type.startsWith('image/')) {
+                toast.error(`${file.name} is not an image.`)
+            } else if (file.size > MAX_PHOTO_BYTES) {
+                toast.error(`${file.name} is larger than 5MB.`)
+            } else {
+                accepted.push({ file, preview: URL.createObjectURL(file) })
+            }
+        }
+        setPhotos(prev => {
+            const room = MAX_PHOTOS - prev.length
+            if (accepted.length > room) toast.error(`You can attach up to ${MAX_PHOTOS} photos.`)
+            accepted.slice(room).forEach(p => URL.revokeObjectURL(p.preview))
+            return [...prev, ...accepted.slice(0, room)]
+        })
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    const removePhoto = (index: number) => {
+        setPhotos(prev => {
+            URL.revokeObjectURL(prev[index].preview)
+            return prev.filter((_, i) => i !== index)
+        })
+    }
+
+    const clearPhotos = () => {
+        setPhotos(prev => {
+            prev.forEach(p => URL.revokeObjectURL(p.preview))
+            return []
+        })
+    }
+
     const { mutate: create, isPending } = useMutation({
-        mutationFn: () => createMaintenanceJob({
-            vehicle_id: form.vehicle_id,
-            title: form.title,
-            description: form.description,
-            fault_category: form.fault_category,
-            cost_estimate_kobo: form.cost_estimate ? Math.round(parseFloat(form.cost_estimate) * 100) : 0,
-        }),
+        mutationFn: async () => {
+            const urls = await Promise.all(photos.map(p => uploadFile(p.file, 'maintenance/').then(r => r.url)))
+            return createMaintenanceJob({
+                vehicle_id: form.vehicle_id,
+                title: form.title,
+                description: form.description,
+                fault_category: form.fault_category,
+                cost_estimate_kobo: form.cost_estimate ? Math.round(parseFloat(form.cost_estimate) * 100) : 0,
+                ...(urls.length ? { attachments: urls } : {}),
+            })
+        },
         onSuccess: () => {
             toast.success('Job created successfully.')
             queryClient.invalidateQueries({ queryKey: ['maintenance-jobs'] })
             onOpenChange(false)
             setForm({ vehicle_id: '', title: '', description: '', fault_category: '', cost_estimate: '' })
+            clearPhotos()
         },
         onError: (err: unknown) => toast.error(extractApiError(err, 'Failed to create job.')),
     })
@@ -349,7 +398,7 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2 col-span-2">
                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Strategic Asset</Label>
-                            <Popover>
+                            <Popover open={vehiclePickerOpen} onOpenChange={setVehiclePickerOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -381,6 +430,7 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
                                                         value={v.attributes.registration_number}
                                                         onSelect={() => {
                                                             setForm(f => ({ ...f, vehicle_id: v.id.toString() }))
+                                                            setVehiclePickerOpen(false)
                                                         }}
                                                         className="font-black uppercase text-[10px] py-3 px-4"
                                                     >
@@ -410,7 +460,7 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
                         </div>
                         <div className="space-y-2 col-span-2 md:col-span-1">
                             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Fault Category</Label>
-                            <Popover>
+                            <Popover open={categoryPickerOpen} onOpenChange={setCategoryPickerOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -432,7 +482,10 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
                                                     <CommandItem
                                                         key={c}
                                                         value={c}
-                                                        onSelect={() => setForm(f => ({ ...f, fault_category: c }))}
+                                                        onSelect={() => {
+                                                            setForm(f => ({ ...f, fault_category: c }))
+                                                            setCategoryPickerOpen(false)
+                                                        }}
                                                         className="font-black uppercase text-[10px] py-3 px-4"
                                                     >
                                                         <Check
@@ -466,19 +519,74 @@ function CreateJobModal({ open, onOpenChange }: { open: boolean; onOpenChange: (
                             <Textarea className="rounded-[20px] border-slate-100 bg-slate-50 min-h-[100px] font-medium text-sm p-6 focus:ring-[#0055FF]" placeholder="Describe the fault in detail..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                         </div>
                         <div className="space-y-2 col-span-2">
-                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Photo Evidence (Optional)</Label>
-                            <div className="border-2 border-dashed border-slate-100 rounded-[20px] p-8 flex flex-col items-center justify-center gap-2 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                                <div className="h-10 w-10 rounded-full bg-white shadow-sm flex items-center justify-center">
-                                    <Plus className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Attach Images</p>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Photo Evidence (Optional)</Label>
+                                {photos.length > 0 && photos.length < MAX_PHOTOS && (
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isPending}
+                                        className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition-colors"
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Add More
+                                    </button>
+                                )}
                             </div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={e => addPhotos(e.target.files)}
+                            />
+                            {photos.length > 0 && (
+                                <div className="grid grid-cols-4 gap-3">
+                                    {photos.map((p, i) => (
+                                        <div key={p.preview} className="relative aspect-square rounded-2xl overflow-hidden bg-slate-100 group">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={p.preview} alt={p.file.name} className="h-full w-full object-cover" />
+                                            <button
+                                                type="button"
+                                                aria-label={`Remove ${p.file.name}`}
+                                                onClick={() => removePhoto(i)}
+                                                disabled={isPending}
+                                                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {photos.length === 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    onDragOver={e => e.preventDefault()}
+                                    onDrop={e => {
+                                        e.preventDefault()
+                                        addPhotos(e.dataTransfer.files)
+                                    }}
+                                    disabled={isPending}
+                                    className="w-full border-2 border-dashed border-slate-100 rounded-[20px] p-8 flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+                                >
+                                    <div className="h-10 w-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                                        <Plus className="h-5 w-5 text-slate-400" />
+                                    </div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        Attach Images
+                                    </p>
+                                    <p className="text-[9px] text-slate-300">Up to {MAX_PHOTOS} images, 5MB each</p>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
-                <DialogFooter className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
+                <DialogFooter className="p-8 bg-slate-50 border-t border-slate-100 flex-row items-center justify-end gap-4">
                     <Button variant="ghost" onClick={() => onOpenChange(false)} className="font-black uppercase text-[10px] tracking-[0.2em] text-slate-400 hover:bg-slate-100 rounded-xl px-6">Discard</Button>
-                    <Button onClick={() => create()} disabled={isPending || !canSubmit} className="bg-slate-900 hover:bg-black text-white px-10 h-14 rounded-[18px] font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all hover:-translate-y-1">
+                    <Button onClick={() => create()} disabled={isPending || !canSubmit} className="bg-slate-900 hover:bg-black text-white px-10 min-w-[180px] h-14 rounded-[18px] font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl transition-all hover:-translate-y-1">
                         {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirm Order'}
                     </Button>
                 </DialogFooter>
