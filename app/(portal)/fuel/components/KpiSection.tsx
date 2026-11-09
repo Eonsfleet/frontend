@@ -42,7 +42,7 @@ export function KpiSection({ kpi, isLoading }: KpiSectionProps) {
                 value={`${fmtNumber(kpi.totalFuelUsedLiters)} L`}
                 icon={Fuel}
                 accent="green"
-                subtitle="Measured usage"
+                subtitle="Measured and estimated"
             />
             <FuelKpiCard
                 title="Total Fuel Cost"
@@ -59,11 +59,11 @@ export function KpiSection({ kpi, isLoading }: KpiSectionProps) {
                 subtitle="Fleet average"
             />
             <FuelKpiCard
-                title="Total Refills"
+                title="Consumption Segments"
                 value={`${kpi.totalRefills}`}
                 icon={FuelIcon}
                 accent="orange"
-                subtitle="Detected segments"
+                subtitle="Top consumers, not refills"
             />
             <FuelKpiCard
                 title="Total Vehicles"

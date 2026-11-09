@@ -7,16 +7,14 @@
  * getFuelRateTrend (Fuel Level Trend / Fuel Flow Rate charts — fleet-wide
  * when no vehicle is selected, scoped to the selected vehicle otherwise;
  * vehicle_id is simply omitted from the request rather than skipping the
- * fetch, same convention as getFuelEvents). Fields the fuel API does not
- * expose — driver, group, engine status, speed, odometer, fuel-flow rate,
- * engine hours, recent events, GSM signal — are filled with deterministic,
- * clearly-flagged mock values keyed off the vehicle id so they are stable
- * and swappable later.
+ * fetch, same convention as getFuelEvents). A field the API does not give is
+ * left out or shown as unknown. Nothing here is filled with a made-up value: a
+ * fleet manager acts on these numbers.
  */
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format, subHours } from 'date-fns'
+import { format } from 'date-fns'
 import { getFuelEvents, getFuelLevelTrend, getFuelRateTrend, getFuelVehiclesRealtime, type FuelEventApiItem, type FuelLevelTrendFilter, type FuelLevelTrendPoint, type FuelRateTrendFilter } from '@/lib/api/fuel'
 import type { FuelVehicle } from '@/types/fuel'
 import type { VehicleMovement } from './useFuelOverview'
@@ -35,8 +33,6 @@ export interface RealtimeVehicle {
     speedKmh: number
     odometerKm: number | null
     position: [number, number] | null
-    /** 0–4 bars — mock GSM signal strength. */
-    signal: number
 }
 
 function toNumber(value: unknown): number | null {
@@ -60,13 +56,22 @@ function isVehicleOnline(v: RealtimeVehicleSource): boolean {
 
 function deriveStatus(online: boolean, speedKmh: number): VehicleMovement {
     if (!online) return 'offline'
-    return speedKmh > 0 ? 'moving' : 'idle'
+    return speedKmh > 0 ? 'moving' : 'parked'
+}
+
+/** A level figure when the API sent a real number; null otherwise, never 0. */
+export function levelFigure(value: unknown, digits: number): number | null {
+    if (value === null || value === undefined || value === '') return null
+    const number = Number(value)
+    return Number.isFinite(number) ? Number(number.toFixed(digits)) : null
 }
 
 function mapRealtimeVehicle(v: RealtimeVehicleSource, index: number, live?: FuelLiveOverride): RealtimeVehicle {
     const id = toNumber(v.id) ?? index
     const online = live?.isOnline ?? isVehicleOnline(v)
-    const speedKmh = live?.speedKmh ?? 0
+    // The live packet's speed, else the speed the vehicle list carries; absent both,
+    // 0 (parked). It used to default an online vehicle to "idle" with no evidence.
+    const speedKmh = live?.speedKmh ?? toNumber(v.attributes.speed ?? v.relationships?.current_location?.speed) ?? 0
     const fuelLevel = fuelLevelFor(v)
     const position: [number, number] | null =
         live?.lat != null && live?.lng != null ? [live.lat, live.lng] : vehiclePosition(v)
@@ -74,13 +79,13 @@ function mapRealtimeVehicle(v: RealtimeVehicleSource, index: number, live?: Fuel
         id,
         registration: formatVehicleRegistration(v.attributes.registration_number),
         model: formatVehicleMakeModel(v.attributes.make, v.attributes.model),
-        fuelPercent: live?.fuelPercent ?? (fuelLevel ? Math.round(fuelLevel.fuel_level_percent) : null),
-        fuelLiters: live?.fuelLiters ?? (fuelLevel ? Number(fuelLevel.fuel_level_liters.toFixed(1)) : null),
+        fuelPercent: live?.fuelPercent ?? levelFigure(fuelLevel?.fuel_level_percent, 0),
+        // fuel_level_liters is null for a percent-only vehicle: it threw on toFixed, and 0 would be a lie.
+        fuelLiters: live?.fuelLiters ?? levelFigure(fuelLevel?.fuel_level_liters, 1),
         status: deriveStatus(online, speedKmh),
         speedKmh,
         odometerKm: null,
         position,
-        signal: online ? 2 + ((id + index) % 3) : 0,
     }
 }
 
@@ -92,9 +97,6 @@ export interface RealtimeKpis {
     onlinePercent: number
     lowFuelCount: number
     totalFuelLiters: number
-    todayConsumptionLiters: number
-    avgEfficiency: number
-    activeRefuels: number
 }
 
 // ── Selected-vehicle detail ──────────────────────────────────────────────────
@@ -131,7 +133,7 @@ export interface TrendPoint {
 
 export interface FuelEvent {
     id: string
-    kind: 'refill_started' | 'refill_completed' | 'low' | 'drain' | 'idle'
+    kind: 'refill_started' | 'refill_completed' | 'low' | 'drain' | 'idle' | 'other'
     title: string
     time: string
     detail: string
@@ -214,17 +216,6 @@ function buildDetail(v: RealtimeVehicle, raw: RealtimeVehicleSource | undefined)
     }
 }
 
-function mockEvents(seed: number): FuelEvent[] {
-    const base = new Date()
-    return [
-        { id: `${seed}-1`, kind: 'refill_started', title: 'Fuel Refill Started', time: format(subHours(base, 5), 'MMM d, yyyy hh:mm a'), detail: 'Total 80.0 L' },
-        { id: `${seed}-2`, kind: 'refill_completed', title: 'Fuel Refill Completed', time: format(subHours(base, 24), 'MMM d, yyyy hh:mm a'), detail: 'Total 120.0 L' },
-        { id: `${seed}-3`, kind: 'low', title: 'Fuel Level Low', time: format(subHours(base, 30), 'MMM d, yyyy hh:mm a'), detail: 'Fuel 15% (12.2 L)' },
-        { id: `${seed}-4`, kind: 'drain', title: 'Unauthorized Drain Detected', time: format(subHours(base, 40), 'MMM d, yyyy hh:mm a'), detail: 'Fuel drained 8.5 L' },
-        { id: `${seed}-5`, kind: 'idle', title: 'Idle Alert', time: format(subHours(base, 46), 'MMM d, yyyy hh:mm a'), detail: 'Idle for 45 mins' },
-    ]
-}
-
 function eventRows(payload: Awaited<ReturnType<typeof getFuelEvents>> | undefined): FuelEventApiItem[] {
     const data = payload?.data
     if (Array.isArray(data)) return data
@@ -253,7 +244,8 @@ function eventKind(value: unknown): FuelEvent['kind'] {
     if (type.includes('refill')) return 'refill_started'
     if (type.includes('low')) return 'low'
     if (type.includes('drain') || type.includes('theft') || type.includes('leak')) return 'drain'
-    return 'idle'
+    if (type.includes('idle')) return 'idle'
+    return 'other'
 }
 
 function mapFuelEvent(item: FuelEventApiItem, index: number, showRegistration = true): FuelEvent {
@@ -409,9 +401,6 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
             onlinePercent: total ? Math.round((online / total) * 100) : 0,
             lowFuelCount: lowFuel,
             totalFuelLiters: Math.round(totalFuel),
-            todayConsumptionLiters: 1245,
-            avgEfficiency: 4.35,
-            activeRefuels: 3,
         }
     }, [vehicles])
 
@@ -464,9 +453,9 @@ export function useFuelRealtime(selectedId: number | null, levelTrendFilter: Fue
     })
 
     const events = useMemo<FuelEvent[]>(() => {
-        const rows = eventRows(eventsQuery.data)
-        if (rows.length > 0) return rows.map((row, i) => mapFuelEvent(row, i, activeId == null))
-        return mockEvents(activeId ?? 0)
+        // No events is an empty list. It used to be filled with five invented ones,
+        // including "Unauthorized Drain Detected, 8.5 L".
+        return eventRows(eventsQuery.data).map((row, i) => mapFuelEvent(row, i, activeId == null))
     }, [activeId, eventsQuery.data])
 
     const eventsPagination = useMemo(() => eventPagination(eventsQuery.data), [eventsQuery.data])

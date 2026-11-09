@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Activity, Fuel, Gauge, Radio, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Activity, Fuel, Radio, RefreshCw, TriangleAlert } from 'lucide-react'
 import { FuelTabs } from '../components/FuelTabs'
 import { RealtimeVehicleRail } from '../components/RealtimeVehicleRail'
 import { RealtimeMap } from '../components/RealtimeMap'
@@ -69,12 +69,11 @@ export default function FuelRealtimePage() {
 
             <FuelTabs active="Real-time Tracking" />
 
-            <div className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
                 <RealtimeStat label="Online Vehicles" value={`${kpis.online}/${kpis.total}`} icon={Radio} tone="blue" />
                 <RealtimeStat label="Online Rate" value={`${kpis.onlinePercent}%`} icon={Activity} tone="emerald" />
                 <RealtimeStat label="Low Fuel" value={kpis.lowFuelCount.toLocaleString()} icon={TriangleAlert} tone="amber" />
                 <RealtimeStat label="Total Fuel" value={`${kpis.totalFuelLiters.toLocaleString()} L`} icon={Fuel} tone="blue" />
-                <RealtimeStat label="Avg Efficiency" value={`${kpis.avgEfficiency.toFixed(2)} km/L`} icon={Gauge} tone="slate" />
             </div>
 
             <div

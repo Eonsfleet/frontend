@@ -92,6 +92,8 @@ export interface VehicleRow {
   lat: number | null;
   lng: number | null;
   status: VehicleMovement;
+  /** When the vehicle's fuel level was last reported, or null when the API gives no time. */
+  lastSeen: string | null;
 }
 
 const FUEL_BANDS = [
@@ -110,13 +112,34 @@ export interface DistributionBand {
   percent: number;
 }
 
+/** A vehicle whose reported level is low: a real reading, with the time it was reported. */
 export interface LowFuelAlert {
   id: number;
   registration: string;
+  model: string;
   fuelPercent: number;
-  fuelLiters: number;
-  location: string;
+  fuelLiters: number | null;
+  /** When the level was reported, formatted, or an em dash. */
   time: string;
+}
+
+/** At or below this percent a vehicle is listed as low on fuel. */
+export const LOW_FUEL_PERCENT = 20;
+
+/** The lowest vehicles by reported level. Nothing is invented: no reading, no row. */
+export function lowFuelVehicles(vehicles: VehicleRow[], limit = 5): LowFuelAlert[] {
+  return vehicles
+    .filter((v) => v.fuelPercent != null && v.fuelPercent <= LOW_FUEL_PERCENT)
+    .sort((a, b) => (a.fuelPercent ?? 0) - (b.fuelPercent ?? 0))
+    .slice(0, limit)
+    .map((v) => ({
+      id: v.id,
+      registration: v.registration,
+      model: v.model,
+      fuelPercent: v.fuelPercent ?? 0,
+      fuelLiters: v.fuelLiters,
+      time: formatLastSeen(v.lastSeen),
+    }));
 }
 
 export interface TopConsumer {
@@ -185,7 +208,29 @@ function deriveStatus(v: FuelVehicle): VehicleMovement {
   return Number.isFinite(speed) && speed > 0 ? "moving" : "parked";
 }
 
-function mapVehicleRow(v: FuelVehicle): VehicleRow {
+/** The time the vehicle's fuel level was last reported, from whichever field the API fills. */
+function lastSeenOf(v: FuelVehicle): string | null {
+  return (
+    v.fuel_level?.last_updated ??
+    v.fuel_metrics?.last_updated ??
+    v.fuel_data?.live_metric_updated_at ??
+    null
+  );
+}
+
+/** A level or litre figure when the API sent a real number; null otherwise, never 0. */
+function figureOrNull(value: unknown, digits: number): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(digits)) : null;
+}
+
+/** "03:45 PM" for a report time, or an em dash when there is none: never the current time. */
+export function formatLastSeen(value: string | null | undefined): string {
+  return formatDateOrFallback(value, "hh:mm a");
+}
+
+export function mapVehicleRow(v: FuelVehicle): VehicleRow {
   const online = v.attributes.device_online;
   const status: VehicleMovement = deriveStatus(v);
   const coordinates = v.attributes.coordinates;
@@ -197,19 +242,15 @@ function mapVehicleRow(v: FuelVehicle): VehicleRow {
     registration: formatVehicleRegistration(v.attributes.registration_number),
     model: formatVehicleMakeModel(v.attributes.make, v.attributes.model),
     chassis: v.attributes.device_imei ?? "—",
-    fuelPercent: v.fuel_level
-      ? Math.round(v.fuel_level.fuel_level_percent)
-      : null,
-    fuelLiters: v.fuel_level
-      ? Number(
-          finiteNumberOrFallback(v.fuel_level.fuel_level_liters).toFixed(1),
-        )
-      : null,
+    fuelPercent: figureOrNull(v.fuel_level?.fuel_level_percent, 0),
+    // Unknown litres are unknown: finiteNumberOrFallback turned them into "0.0 L".
+    fuelLiters: figureOrNull(v.fuel_level?.fuel_level_liters, 1),
     online,
     location: null,
     lat,
     lng,
     status,
+    lastSeen: lastSeenOf(v),
   };
 }
 
@@ -306,6 +347,7 @@ export function useFuelOverview(
   const vehiclesQuery = useQuery({
     queryKey: ["fuel-overview", "vehicles", vehicleParams],
     queryFn: () => getFuelVehiclesRealtime(vehicleParams),
+    refetchInterval: 30_000,
   });
 
   const distributionQuery = useQuery({
@@ -404,35 +446,10 @@ export function useFuelOverview(
     return appendNoReadingBand(bands, total);
   }, [distributionQuery.data, totalFuelVehicles, vehicles]);
 
-  const lowFuelAlerts = useMemo<LowFuelAlert[]>(() => {
-    // Prefer real theft/abnormality incidents that carry a location; supplement
-    // with the lowest-fuel vehicles from the live list.
-    const fromIncidents: LowFuelAlert[] = (theft?.incidents ?? [])
-      .slice(0, 3)
-      .map((i) => ({
-        id: i.alert_id,
-        registration: formatVehicleRegistration(i.registration_number),
-        fuelPercent: Math.max(0, Math.round(100 - i.confidence * 100)),
-        fuelLiters: Number(finiteNumberOrFallback(i.liters_lost).toFixed(1)),
-        location: i.location?.address ?? "—",
-        time: formatDateOrFallback(i.occurred_at, "hh:mm a"),
-      }));
-    if (fromIncidents.length >= 3) return fromIncidents;
-
-    const lowest = vehicles
-      .filter((v) => v.fuelPercent != null && v.fuelPercent <= 25)
-      .sort((a, b) => (a.fuelPercent ?? 0) - (b.fuelPercent ?? 0))
-      .slice(0, 3 - fromIncidents.length)
-      .map<LowFuelAlert>((v) => ({
-        id: v.id,
-        registration: v.registration,
-        fuelPercent: v.fuelPercent ?? 0,
-        fuelLiters: v.fuelLiters ?? 0,
-        location: "—",
-        time: format(new Date(), "hh:mm a"),
-      }));
-    return [...fromIncidents, ...lowest];
-  }, [theft, vehicles]);
+  // The old card mixed theft incidents in with a made-up percentage
+  // (100 - confidence) and stamped filler rows with the current time. It now
+  // lists real low readings only; suspected loss gets its own place.
+  const lowFuelAlerts = useMemo<LowFuelAlert[]>(() => lowFuelVehicles(vehicles), [vehicles]);
 
   const topConsumers = useMemo<TopConsumer[]>(() => {
     // Cost per litre derived from cost-report (Σ cost / Σ litres) so the top-consumers
@@ -463,6 +480,8 @@ export function useFuelOverview(
   return {
     kpi,
     vehicles,
+    /** When the vehicle list was last fetched (ms); 0 before the first fetch. */
+    vehiclesUpdatedAt: vehiclesQuery.dataUpdatedAt,
     distribution,
     lowFuelAlerts,
     topConsumers,

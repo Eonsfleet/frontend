@@ -5,7 +5,6 @@ import { Search, SlidersHorizontal, Truck, Check } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { SignalBars } from './SignalBars'
 import type { RealtimeVehicle } from './useFuelRealtime'
 import type { VehicleMovement } from './useFuelOverview'
 
@@ -203,12 +202,11 @@ export function RealtimeVehicleRail({ vehicles, activeId, onSelect, isLoading }:
                                     <span className="text-[10px] text-slate-400">{v.fuelLiters ?? '—'} L</span>
                                 </div>
 
-                                {/* Status + signal */}
+                                {/* Status */}
                                 <div className="flex w-14 shrink-0 flex-col items-end gap-1">
                                     <span className={cn('inline-flex items-center gap-1 text-[11px] font-medium', status.text)}>
                                         <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} /> {status.label}
                                     </span>
-                                    <SignalBars strength={v.signal} />
                                 </div>
                             </button>
                         )

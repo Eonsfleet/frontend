@@ -13,6 +13,7 @@ import { LowFuelAlertsCard } from "./components/LowFuelAlertsCard";
 import { TrendChartCard } from "./components/TrendChartCard";
 import { TopConsumersCard } from "./components/TopConsumersCard";
 import {
+  formatLastSeen,
   useFuelOverview,
   useFuelTrends,
   type FuelOverviewRange,
@@ -64,6 +65,7 @@ export default function FuelOverviewPage() {
   const {
     kpi,
     vehicles,
+    vehiclesUpdatedAt,
     distribution,
     lowFuelAlerts,
     topConsumers,
@@ -84,7 +86,6 @@ export default function FuelOverviewPage() {
   // Map markers: fuel-capable vehicle positions from /vehicles?has_fuel=true,
   // plus abnormality incidents that carry coordinates.
   const markers = useMemo<MapMarkerPoint[]>(() => {
-    const lastUpdated = format(new Date(), "hh:mm a");
     const vehicleMarkers: MapMarkerPoint[] = vehicles
       .filter((v) => v.lat != null && v.lng != null)
       .map((v) => ({
@@ -99,7 +100,7 @@ export default function FuelOverviewPage() {
           fuelPercent: v.fuelPercent,
           fuelLiters: v.fuelLiters,
           location: v.location ?? "—",
-          lastUpdated,
+          lastUpdated: formatLastSeen(v.lastSeen),
         },
       }));
     const incidentMarkers: MapMarkerPoint[] = theftIncidents
@@ -128,6 +129,7 @@ export default function FuelOverviewPage() {
               <RealtimeTrackingCard
                 markers={markers}
                 vehicles={vehicles}
+                updatedAt={vehiclesUpdatedAt}
                 onViewVehicle={(vehicleId) =>
                   router.push(`/vehicles/${vehicleId}`)
                 }

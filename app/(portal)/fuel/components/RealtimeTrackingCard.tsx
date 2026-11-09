@@ -9,11 +9,13 @@ interface RealtimeTrackingCardProps {
     markers: MapMarkerPoint[]
     /** For the List View tab. */
     vehicles: VehicleRow[]
+    /** When the vehicle list was last fetched (ms). 0 until the first fetch. */
+    updatedAt?: number
     /** Navigate to a vehicle's detail page from the map overlay. */
     onViewVehicle?: (vehicleId: number) => void
 }
 
-export function RealtimeTrackingCard({ markers, vehicles, onViewVehicle }: RealtimeTrackingCardProps) {
+export function RealtimeTrackingCard({ markers, vehicles, updatedAt = 0, onViewVehicle }: RealtimeTrackingCardProps) {
     const positionedVehicles = markers.filter((marker) => marker.vehicleId != null).length
 
     return (
@@ -22,16 +24,15 @@ export function RealtimeTrackingCard({ markers, vehicles, onViewVehicle }: Realt
                 <div>
                     <div className="flex items-center gap-3">
                         <h2 className="text-base font-bold text-slate-900">Fleet Fuel Map</h2>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Live
-                        </span>
                     </div>
                     <p className="mt-1 text-[12px] font-medium text-slate-400">
                         {positionedVehicles}/{vehicles.length} vehicles have current location data
                     </p>
                 </div>
+                {/* When this list was fetched, not the clock: the old "Live" badge and
+                    "Last updated: now" made a stale vehicle look current. */}
                 <span className="text-[11px] font-medium text-slate-400 sm:pt-1">
-                    Last updated: {format(new Date(), 'hh:mm:ss a')}
+                    {updatedAt > 0 ? `Refreshed ${format(new Date(updatedAt), 'hh:mm:ss a')} · each vehicle shows its own report time` : 'Loading…'}
                 </span>
             </div>
 

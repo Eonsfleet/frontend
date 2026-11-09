@@ -12,6 +12,7 @@ const EVENT_META: Record<FuelEvent['kind'], { icon: LucideIcon; iconClass: strin
     low: { icon: AlertTriangle, iconClass: 'bg-rose-50 text-rose-500' },
     drain: { icon: AlertTriangle, iconClass: 'bg-rose-50 text-rose-500' },
     idle: { icon: Timer, iconClass: 'bg-amber-50 text-amber-500' },
+    other: { icon: Info, iconClass: 'bg-slate-100 text-slate-500' },
 }
 
 interface RecentFuelEventsCardProps {
