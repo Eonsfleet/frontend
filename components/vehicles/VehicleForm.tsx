@@ -1,18 +1,28 @@
 'use client'
 
 import React from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import {
     Form,
     FormControl,
+    FormDescription,
     FormField,
     FormItem,
     FormLabel,
     FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import {
+    estimationDefaults,
+    estimationPayload,
+    MAX_CONSUMPTION_L_PER_100KM,
+    MAX_IDLE_L_PER_HOUR,
+    rateError,
+    type EstimationPayload,
+} from '@/lib/fuel-estimation'
 import {
     Select,
     SelectContent,
@@ -24,6 +34,13 @@ import { Button } from '@/components/ui/button'
 import { Vehicle } from '@/types'
 import { Loader2, LayoutGrid, Cpu, Gauge, Thermometer, Droplet, ClipboardList } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
+/** A rate typed as text: blank is allowed, anything else must be above 0 and within the limit. */
+const optionalRate = (max: number, label: string) =>
+    z.string().optional().superRefine((value, ctx) => {
+        const message = rateError(value, max, label)
+        if (message) ctx.addIssue({ code: 'custom', message })
+    })
 
 const vehicleSchema = z.object({
     registration_number: z.string().min(1, 'Registration number is required').regex(/^\S+$/, 'No spaces allowed in registration number'),
@@ -43,6 +60,9 @@ const vehicleSchema = z.object({
     fuel_capacity: z.coerce.number().optional(),
     fuel_capacity_unit: z.string().optional(),
     fuel_sensor_conversion_factor: z.coerce.number().optional(),
+    fuel_estimation_enabled: z.boolean(),
+    estimated_liters_per_100km: optionalRate(MAX_CONSUMPTION_L_PER_100KM, 'Consumption'),
+    estimated_idle_liters_per_hour: optionalRate(MAX_IDLE_L_PER_HOUR, 'Idle burn'),
     tire_psi: z.object({
         front_left: z.coerce.number().optional(),
         front_right: z.coerce.number().optional(),
@@ -53,9 +73,12 @@ const vehicleSchema = z.object({
 
 type VehicleFormValues = z.infer<typeof vehicleSchema>
 
+/** What the form hands on: the rates as numbers, and null where they were left blank. */
+export type VehicleSubmission = Omit<VehicleFormValues, keyof EstimationPayload> & EstimationPayload
+
 interface VehicleFormProps {
     initialData?: Vehicle
-    onSubmit: (data: VehicleFormValues) => void
+    onSubmit: (data: VehicleSubmission) => void
     isLoading?: boolean
     onCancel?: () => void
 }
@@ -83,6 +106,7 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             fuel_capacity: initialData.attributes.fuel_capacity || 0,
             fuel_capacity_unit: initialData.attributes.fuel_capacity_unit || 'L',
             fuel_sensor_conversion_factor: initialData.attributes.fuel_sensor_conversion_factor || 0,
+            ...estimationDefaults(initialData.attributes),
             tire_psi: initialData.attributes.tire_psi || {
                 front_left: 32,
                 front_right: 32,
@@ -107,6 +131,7 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             fuel_capacity: 0,
             fuel_capacity_unit: 'L',
             fuel_sensor_conversion_factor: 0,
+            ...estimationDefaults(),
             tire_psi: {
                 front_left: 32,
                 front_right: 32,
@@ -116,9 +141,11 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
         }
     })
 
+    const estimationEnabled = useWatch({ control: form.control, name: 'fuel_estimation_enabled' })
+
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(values => onSubmit({ ...values, ...estimationPayload(values) }))} className="space-y-6">
                 <Tabs defaultValue="general" className="w-full">
                     <TabsList className="grid grid-cols-3 mb-6">
                         <TabsTrigger value="general">General Info</TabsTrigger>
@@ -405,6 +432,56 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
                                     </FormItem>
                                 )}
                             />
+                            <div className="md:col-span-2 space-y-4 rounded-2xl border border-slate-200 p-4">
+                                <FormField
+                                    control={form.control}
+                                    name="fuel_estimation_enabled"
+                                    render={({ field }) => (
+                                        <FormItem className="flex items-start justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <FormLabel>Estimate fuel use</FormLabel>
+                                                <FormDescription>
+                                                    For vehicles whose tracker reports no fuel level, fuel use is estimated from distance and idling time. Turn this off to stop estimating for this vehicle.
+                                                </FormDescription>
+                                            </div>
+                                            <FormControl>
+                                                <Switch checked={field.value} onCheckedChange={field.onChange} aria-label="Estimate fuel use" />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="estimated_liters_per_100km"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Consumption (L/100 km)</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" inputMode="decimal" step="0.1" min="0" placeholder="Typical for this make and model" disabled={!estimationEnabled} {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="estimated_idle_liters_per_hour"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Idle burn (L/hour)</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" inputMode="decimal" step="0.1" min="0" placeholder="Typical for this make and model" disabled={!estimationEnabled} {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    Your own figures win. Leave a rate blank to use the typical figure for this vehicle&apos;s make and model, when one is on file. With neither, no fuel estimate is made for it. Changes reach fuel reports within the hour.
+                                </p>
+                            </div>
                         </div>
                     </TabsContent>
 
