@@ -230,6 +230,9 @@ const params = (f: object = {}) => {
     return out
 }
 
+/** The same serializer, for other report-style endpoints (analyticsDrivers.ts). */
+export { params as reportParams }
+
 const get = async <T,>(url: string, filters: object = {}): Promise<T> => {
     const res = await apiClient.get(url, { params: params(filters), paramsSerializer: { indexes: null } })
     return res.data?.data ?? res.data

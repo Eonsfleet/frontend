@@ -7,6 +7,7 @@ import { CalendarClock, Columns3, History, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getReportCatalog } from "@/lib/api/reports";
 import { getReport } from "@/lib/reports/registry";
+import { HUB_FILTER_PARAMS, settingsFromSearch } from "@/lib/analytics/reportLinks";
 import { useReportLists } from "@/lib/reports/useReportLists";
 import { CatalogTab } from "./CatalogTab";
 import { ExportDialog, type ReportSettings } from "./ExportDialog";
@@ -42,12 +43,17 @@ export function ReportsHub() {
   const [initial, setInitial] = useState<ReportSettings | undefined>();
   const [draft, setDraft] = useState<ScheduleDraft | null>(null);
 
+  // A link from Analytics arrives with the period and vehicles to open the report with.
+  const linked = useMemo(() => settingsFromSearch(search), [search]);
+
   const go = useCallback((changes: Record<string, string | null>) => {
     const next = new URLSearchParams(search.toString());
     for (const [key, value] of Object.entries(changes)) {
       if (value === null) next.delete(key);
       else next.set(key, value);
     }
+    // Those settings belong to the arrival only; any later navigation drops them.
+    for (const key of HUB_FILTER_PARAMS) next.delete(key);
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }, [router, pathname, search]);
 
@@ -107,7 +113,7 @@ export function ReportsHub() {
 
       <ExportDialog
         type={openType}
-        initial={initial}
+        initial={initial ?? linked}
         canScopeVehicles={!!openType && vehicleTypes.has(openType)}
         sixtyDays={!!openType && catalogByType.get(openType)?.window === "60d"}
         onClose={() => go({ report: null })}
