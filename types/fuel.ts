@@ -283,12 +283,17 @@ export interface FuelAbnormality {
         unit: string
         location: { lat: number; lng: number; address: string } | null
         confidence: number
-        status: 'active' | 'acknowledged' | 'resolved' | 'false_positive'
+        status: 'new' | 'active' | 'acknowledged' | 'resolved' | 'false_positive'
         acknowledged_by: number | null
         acknowledged_at: string | null
         resolved_by: number | null
         resolved_at: string | null
         resolution_notes: string | null
+        /** Who owns the alert, and whether an investigation is open on it. */
+        assigned_to?: number | null
+        assigned_at?: string | null
+        investigation_opened_at?: string | null
+        investigation_notes?: string | null
     }
     relationships: {
         vehicle: { id: number; name: string | null; registration_number: string }

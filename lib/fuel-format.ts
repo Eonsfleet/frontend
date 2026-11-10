@@ -84,3 +84,10 @@ export function changeSentiment(
   if (Math.abs(percent) < 1) return "flat";
   return percent > 0 === higherIsBad ? "bad" : "good";
 }
+
+/** Whole minutes between an ISO time and `now`, never negative; null when the time is missing or unreadable. */
+export function ageMinutes(iso: string | null | undefined, now: number): number | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  return Number.isFinite(at) ? Math.max(0, Math.floor((now - at) / 60000)) : null;
+}

@@ -133,7 +133,6 @@ export function useFuelBoard(filters: FuelScopeFilters, pollMs = 30_000): FuelBo
     }, [token, organization?.attributes?.identifier, organization?.id, subscribePrivate, queryClient])
 
     const merged = useMemo(
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         () => applyLiveOverrides(query.data?.vehicles ?? [], overrides),
         [query.data, overrides],
     )
