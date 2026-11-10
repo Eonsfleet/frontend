@@ -1,3 +1,5 @@
+import type { UserProfile } from './user'
+
 export interface Device {
     id: number
     serial_number: string
@@ -66,12 +68,19 @@ export interface Cluster {
         inactive_vehicles: number
         total_users: number
         manager: string | null
+        /** Name of the account that created the cluster */
+        creator?: string | null
         created_at: string
         updated_at: string
         // For creation/form handling
         manager_id?: string | number
         user_ids?: (string | number)[]
         vehicle_ids?: (string | number)[]
+    }
+    /** Only present on GET /clusters/:id */
+    relationships?: {
+        users?: UserProfile[]
+        vehicles?: Vehicle[]
     }
 }
 
@@ -160,6 +169,8 @@ export interface VehicleRestLocation {
     speed?: number | null
     protocol_type?: string | null
     last_packet_received_at?: string | null
+    /** Server-side packet ingestion time (UTC) */
+    timestamp_utc?: string | null
     created_at?: string | null
 }
 
