@@ -212,6 +212,116 @@ export const getFuelOverviewSummary = async (
   return response.data.data;
 };
 
+// ── Analytics (history) ──────────────────────────────────────────────────────
+
+export interface FuelAnalyticsParams {
+  from?: string;
+  to?: string;
+  vehicle_ids?: number[];
+  cluster_id?: number;
+  bucket?: "day" | "week" | "month";
+}
+
+export interface FuelAnalyticsTotals {
+  litres_used: number | null;
+  litres_measured: number | null;
+  litres_estimated: number | null;
+  distance_km: number | null;
+  l_per_100km: number | null;
+  km_per_litre: number | null;
+  vehicles_with_usage: number;
+  days_with_usage: number;
+  refill_count: number;
+  refilled_litres: number | null;
+  purchase_count: number;
+  purchased_litres: number | null;
+  spend: number | null;
+  price_per_litre: number | null;
+}
+
+export interface FuelAnalyticsBucket {
+  date: string;
+  litres: number | null;
+  distance_km: number | null;
+  l_per_100km: number | null;
+  refilled_litres: number | null;
+  refills: number;
+  purchased_litres: number | null;
+  spend: number | null;
+}
+
+export interface FuelAnalyticsLevelPoint {
+  at: string;
+  litres: number | null;
+  percent: number | null;
+}
+
+export interface FuelAnalyticsRefill {
+  id: number;
+  vehicle_id: number;
+  registration_number: string | null;
+  at: string;
+  litres: number;
+  source: string | null;
+  matched_purchase: boolean;
+}
+
+export interface FuelAnalyticsDrain {
+  id: number;
+  vehicle_id: number;
+  registration_number: string | null;
+  at: string;
+  amount: number | null;
+  unit: string | null;
+  status: string;
+  type: string;
+}
+
+export interface FuelAnalyticsVehicleRow {
+  vehicle_id: number;
+  registration_number: string | null;
+  make: string | null;
+  model: string | null;
+  days: number;
+  litres: number;
+  distance_km: number | null;
+  l_per_100km: number | null;
+  km_per_litre: number | null;
+  refilled_litres: number | null;
+  refills: number;
+  purchased_litres: number | null;
+  spend: number | null;
+  basis: "measured" | "estimated";
+}
+
+export interface FuelAnalytics {
+  period: { from: string; to: string; days: number; bucket: "day" | "week" | "month" };
+  vehicles: number;
+  totals: FuelAnalyticsTotals;
+  series: FuelAnalyticsBucket[];
+  /** Only when one to five vehicles were chosen. */
+  levels: Array<{
+    vehicle_id: number;
+    registration_number: string | null;
+    step_seconds: number;
+    points: FuelAnalyticsLevelPoint[];
+  }> | null;
+  refills: FuelAnalyticsRefill[];
+  drains: FuelAnalyticsDrain[];
+  by_vehicle: FuelAnalyticsVehicleRow[];
+  generated_at: string;
+}
+
+export const getFuelAnalytics = async (
+  params: FuelAnalyticsParams = {},
+): Promise<FuelAnalytics> => {
+  const response = await apiClient.get<{ data: FuelAnalytics }>(
+    "/fuel/analytics",
+    { params },
+  );
+  return response.data.data;
+};
+
 // ── Budgets ──────────────────────────────────────────────────────────────────
 
 export interface BudgetProposal {
