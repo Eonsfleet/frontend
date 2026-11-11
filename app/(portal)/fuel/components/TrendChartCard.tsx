@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import type { TrendPoint } from './useFuelOverview'
+
+export interface TrendPoint {
+    date: string
+    value: number
+}
 
 export interface TrendFilterOption {
     label: string

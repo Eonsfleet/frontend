@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { getFuelSettings, updateFuelSettings } from '@/lib/api/fuel'
 import { extractApiError } from '@/lib/utils'
@@ -110,6 +111,11 @@ export default function FuelSettingsPage() {
                 </div>
 
                 <div className="space-y-6 xl:order-3">
+                    <Link href="/fuel/settings/budgets" className="block rounded-2xl bg-white p-4 hover:bg-slate-50">
+                        <p className="text-sm font-semibold text-slate-900">Fuel budgets</p>
+                        <p className="mt-1 text-sm text-slate-500">Set a monthly litre budget for each vehicle. The Overview tracks use against it.</p>
+                        <p className="mt-2 text-sm font-medium text-blue-700">Manage budgets →</p>
+                    </Link>
                     <div id="fuel-alerts">
                         <AlertsNotificationsCard
                             value={form.alerts}
