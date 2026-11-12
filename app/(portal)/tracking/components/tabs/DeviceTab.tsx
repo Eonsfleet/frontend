@@ -46,7 +46,8 @@ export function DeviceTab({ device, resolved, deviceInfoData }: DeviceTabProps) 
       />
       <TelemetryRow label="Temperature" value={resolved.engineTemp != null ? `${resolved.engineTemp}°C` : null} />
       <TelemetryRow label="Has Fuel Sensor" value={yesNo(attrs.has_fuel)} />
-      <TelemetryRow label="Device Health" value={resolved.isDeviceOnline ? "Healthy" : "Attention needed"} />
+      {/* The connection state is all this knows; "healthy" would claim more than that. */}
+      <TelemetryRow label="Connection" value={resolved.isDeviceOnline ? "Online" : "Offline"} />
     </div>
   );
 }
