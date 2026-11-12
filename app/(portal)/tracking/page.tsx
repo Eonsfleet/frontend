@@ -679,6 +679,19 @@ export default function TrackingPage() {
       featureName="Live Tracking"
       description="Monitor your fleet in real-time with precise telemetry and location data."
     >
+      {fleet.error != null && (
+        // The fleet list failed to load or refresh. Without this the map is empty or quietly out of date,
+        // which looks like "no vehicles" or "nothing has moved".
+        <div
+          role="alert"
+          className="fixed left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 shadow"
+        >
+          {fleet.vehicles.length === 0 ? "Vehicles could not be loaded." : "Vehicles could not be refreshed; the positions shown may be out of date."}
+          <button type="button" onClick={() => fleet.refresh()} className="font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div
         ref={containerRef}
         className={cn(

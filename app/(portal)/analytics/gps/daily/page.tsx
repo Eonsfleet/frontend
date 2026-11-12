@@ -28,7 +28,7 @@ const columns: Column<DailyRow>[] = [
 
 function DailyReport() {
     const { filters } = useReportFilters()
-    const { data, isLoading } = useQuery({ queryKey: ['telemetry-daily', filters], queryFn: () => reports.getDailyDriving(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['telemetry-daily', filters], queryFn: () => reports.getDailyDriving(filters) })
     const t = data?.extra.totals
 
     return (
@@ -44,7 +44,7 @@ function DailyReport() {
                 <Figure label="Speeding episodes" value={t?.speeding_count ?? dash} />
                 <Figure label="Alarms" value={t?.alarm_count ?? dash} />
             </div>
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => `${r.vehicle_id}-${r.date}`} empty="No driving recorded in this period." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => `${r.vehicle_id}-${r.date}`} empty="No driving recorded in this period." />
         </div>
     )
 }

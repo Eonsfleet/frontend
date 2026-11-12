@@ -150,11 +150,13 @@ export interface Column<T> {
 }
 
 /** A paged report table; the page lives in the URL with the other filters. */
-export function ReportTable<T>({ columns, rows, meta, isLoading, empty = 'Nothing recorded in this period.', rowKey }: {
+export function ReportTable<T>({ columns, rows, meta, isLoading, isError, empty = 'Nothing recorded in this period.', rowKey }: {
     columns: Column<T>[]
     rows?: T[]
     meta?: ReportMeta
     isLoading?: boolean
+    /** The report could not be loaded: say so, instead of "nothing recorded". */
+    isError?: boolean
     empty?: string
     rowKey: (row: T, index: number) => string | number
 }) {
@@ -181,7 +183,14 @@ export function ReportTable<T>({ columns, rows, meta, isLoading, empty = 'Nothin
                                 </TableCell>
                             </TableRow>
                         )}
-                        {!isLoading && (rows ?? []).length === 0 && (
+                        {!isLoading && isError && (rows ?? []).length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={columns.length} className="py-12 text-center text-sm text-red-600" role="alert">
+                                    This report could not be loaded. Try again in a moment; the data is not missing.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        {!isLoading && !isError && (rows ?? []).length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={columns.length} className="py-12 text-center text-sm text-slate-400">{empty}</TableCell>
                             </TableRow>

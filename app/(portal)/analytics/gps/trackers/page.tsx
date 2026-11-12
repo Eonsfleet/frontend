@@ -34,7 +34,7 @@ const columns: Column<TrackerRow>[] = [
 
 function TrackersReport() {
     const { filters } = useReportFilters()
-    const { data, isLoading } = useQuery({ queryKey: ['telemetry-trackers', filters], queryFn: () => reports.getTrackers(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['telemetry-trackers', filters], queryFn: () => reports.getTrackers(filters) })
     const t = data?.extra.totals
 
     return (
@@ -47,7 +47,7 @@ function TrackersReport() {
                 <Figure label="Online" value={t ? t.online.toLocaleString() : dash} />
                 <Figure label="Offline" value={t ? t.offline.toLocaleString() : dash} />
             </div>
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => r.device_id} empty="No trackers." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.device_id} empty="No trackers." />
             <p className="text-[10px] text-slate-400">
                 Connection is the tracker&apos;s link to the telemetry platform, a separate fact from reporting: a parked tracker can be connected and quiet.
             </p>

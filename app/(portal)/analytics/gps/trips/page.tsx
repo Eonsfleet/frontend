@@ -45,7 +45,7 @@ const columns: Column<TripRow>[] = [
 
 function TripsReport() {
     const { filters } = useReportFilters()
-    const { data, isLoading } = useQuery({ queryKey: ['telemetry-trips', filters], queryFn: () => reports.getTrips(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['telemetry-trips', filters], queryFn: () => reports.getTrips(filters) })
     const totals = data?.extra.totals
 
     return (
@@ -61,7 +61,7 @@ function TripsReport() {
                 <Figure label="Idle time" value={formatDuration(totals?.idle_s)} note="Trackers without ignition are not counted" />
                 <Figure label="Fuel" value={totals ? <Litres litres={totals.litres} source={totals.litres_source} /> : dash} />
             </div>
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => r.id} empty="No trips recorded in this period." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.id} empty="No trips recorded in this period." />
             <p className="text-[10px] text-slate-400">* Distance from a sparse or gappy GPS path may be low.</p>
         </div>
     )

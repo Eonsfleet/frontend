@@ -28,7 +28,7 @@ const columns: Column<StopRow>[] = [
 
 function StopsReport() {
     const { filters } = useReportFilters()
-    const { data, isLoading } = useQuery({ queryKey: ['telemetry-stops', filters], queryFn: () => reports.getStops(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['telemetry-stops', filters], queryFn: () => reports.getStops(filters) })
     const t = data?.extra.totals
 
     return (
@@ -42,7 +42,7 @@ function StopsReport() {
                 <Figure label="Time stopped" value={formatDuration(t?.duration_s)} />
                 <Figure label="Idling while stopped" value={formatDuration(t?.idle_s)} />
             </div>
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => r.id} empty="No stops recorded in this period." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.id} empty="No stops recorded in this period." />
         </div>
     )
 }
