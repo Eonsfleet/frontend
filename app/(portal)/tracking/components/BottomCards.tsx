@@ -14,7 +14,7 @@ import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
-import { formatLitres } from "@/lib/fuel-format";
+import { formatFuelLevel } from "@/lib/fuel-format";
 
 interface BottomCardsProps {
   selectedVehicle: any;
@@ -164,13 +164,13 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
                     />
                   </div>
                   <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                    {resolved.fuelLiters != null ? formatLitres(Number(resolved.fuelLiters), resolved.fuelBasis === "calculated" ? "calculated" : "measured") : `${resolved.fuel}%`}
+                    {formatFuelLevel(resolved.fuel, resolved.fuelLiters, resolved.fuelBasis)}
                   </span>
                 </div>
               ) : resolved.fuelLiters != null ? (
                 // Litres with no percentage: nothing to draw a bar from, but the level is known.
                 <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                  {formatLitres(Number(resolved.fuelLiters), resolved.fuelBasis === "calculated" ? "calculated" : "measured")}
+                  {formatFuelLevel(null, resolved.fuelLiters, resolved.fuelBasis)}
                 </span>
               ) : (
                 <span className="text-slate-300 font-normal italic">—</span>

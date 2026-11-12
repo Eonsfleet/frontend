@@ -3,7 +3,7 @@
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-import { formatLitres } from "@/lib/fuel-format";
+import { formatFuelLevel } from "@/lib/fuel-format";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
@@ -32,7 +32,7 @@ function VehicleListItemImpl({
   const lastUpdate = useRelativeTime(loc?.lastPacket || loc?.lastUpdate);
   const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
   const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
-  const fuelLitresText = fuelL != null ? formatLitres(Number(fuelL), loc?.fuel_basis === "calculated" ? "calculated" : "measured") : null;
+  const fuelText = formatFuelLevel(fuelPct, fuelL, loc?.fuel_basis);
 
   return (
     <div
@@ -84,16 +84,14 @@ function VehicleListItemImpl({
                   style={{ width: `${fuelPct}%` }}
                 />
               </div>
-              <span className="text-[10px] font-bold text-slate-500">
-                {fuelLitresText ?? `${fuelPct}%`}
-              </span>
+              <span className="text-[10px] font-bold text-slate-500">{fuelText}</span>
             </div>
             <p className="text-[10px] text-slate-300">{lastUpdate}</p>
           </div>
-        ) : fuelLitresText != null ? (
+        ) : fuelText != null ? (
           // A tank reported in litres with no percentage: show the litres, no bar to fill.
           <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] font-bold text-slate-500">{fuelLitresText}</span>
+            <span className="text-[10px] font-bold text-slate-500">{fuelText}</span>
             <p className="text-[10px] text-slate-300">{lastUpdate}</p>
           </div>
         ) : (

@@ -307,8 +307,14 @@ export function resolveVehicleTelemetry({
   const liveSleepMode = meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
   const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
   const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
-  const liveDrivingState =
+  // What the device reported, if anything. obd_status stays "---" without it.
+  const reportedDrivingState =
     meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle?.driving_state;
+  // The device rarely sends one; derive a state from the position when it does not, so the Driving State row
+  // is not empty for a vehicle that is plainly moving, idling or parked.
+  const liveDrivingState =
+    reportedDrivingState ??
+    (liveStatus === "offline" ? null : liveStatus === "in_transit" ? "Moving" : liveStatus === "idle" || liveStatus === "stopped" ? "Idling" : liveStatus ? "Parked" : null);
 
   const currentBatteryV =
     meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle?.voltage;
@@ -322,8 +328,17 @@ export function resolveVehicleTelemetry({
   const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
   const liveEngineTemp =
     meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? null;
-  const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
-  const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
+  const liveRssi = meta.rssi ?? telemetry?.rssi ?? raw.rssi ?? null;
+  // hdop only looked in meta and the live packet, never in raw, which is where the snapshot's metadata
+  // lands once flattened, so it stayed empty even when the backend sent it.
+  const liveHdop = meta.hdop ?? telemetry?.hdop ?? raw.hdop ?? null;
+  const livePdop = meta.pdop ?? telemetry?.pdop ?? raw.pdop ?? null;
+  // The device's own 1-5 scale, not dBm.
+  const liveGsmSignal = meta.gsm_signal ?? telemetry?.gsm_signal ?? raw.gsm_signal ?? null;
+  const liveBatteryLevel = meta.battery_level ?? telemetry?.battery_level ?? raw.battery_level ?? null;
+  const liveEngineLoad = meta.engine_load ?? telemetry?.engine_load ?? raw.engine_load ?? null;
+  const liveThrottle = meta.throttle ?? telemetry?.throttle ?? raw.throttle ?? null;
+  const liveCoolantTemp = meta.coolant_temperature ?? telemetry?.coolant_temperature ?? raw.coolant_temperature ?? null;
   // GSM operator code (MCC+MNC) — the closest thing to a "network/carrier" signal
   // the ingest pipeline actually broadcasts (see EXTENDED_METADATA_KEYS on the
   // backend); there's no separate carrier-name field, so it's shown as-is.
@@ -378,7 +393,7 @@ export function resolveVehicleTelemetry({
     battery_voltage: liveBatteryV || "---",
     signal_strength:
       liveRssi != null ? `${liveRssi} dBm` : liveSatellites != null ? `${liveSatellites} Sats` : vehicle?.signal || "---",
-    obd_status: liveDrivingState || "---",
+    obd_status: reportedDrivingState || "---",
   };
 
   return {
@@ -387,6 +402,12 @@ export function resolveVehicleTelemetry({
     heading: liveHeading,
     ignition: liveIgnition,
     ignitionKnown: liveIgnitionKnown,
+    pdop: livePdop,
+    gsmSignal: liveGsmSignal,
+    batteryLevel: liveBatteryLevel,
+    engineLoad: liveEngineLoad,
+    throttle: liveThrottle,
+    coolantTemp: liveCoolantTemp,
     movement: liveMovement,
     status: liveStatus,
     lat: liveLat,
