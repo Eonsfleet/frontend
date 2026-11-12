@@ -68,7 +68,7 @@ function RouteHistory() {
                 </p>
             )}
             {vehicleId > 0 && !tooLong && (
-                <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={(r, i) => `${r.at}-${i}`} empty="No GPS points in this period." />
+                <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={!!error} rowKey={(r, i) => `${r.at}-${i}`} empty="No GPS points in this period." />
             )}
         </div>
     )

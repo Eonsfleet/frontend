@@ -68,7 +68,7 @@ const columns = (grouped: boolean): Column<FuelReportRow>[] => [
 function FuelBySource() {
     const { filters, set, value } = useReportFilters('30d')
     const group = (value('group') ?? 'vehicle') as (typeof GROUPS)[number]['value']
-    const { data, isLoading } = useQuery({ queryKey: ['fuel-by-source', filters, group], queryFn: () => reports.getFuelReport({ ...filters, group }) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['fuel-by-source', filters, group], queryFn: () => reports.getFuelReport({ ...filters, group }) })
     const totals = data?.extra.totals
     const litres = (source: string) => totals?.by_source.find(s => s.source === source)
 
@@ -102,6 +102,7 @@ function FuelBySource() {
                 rows={data?.data}
                 meta={data?.meta}
                 isLoading={isLoading}
+                isError={isError}
                 rowKey={r => `${r.vehicle_id}-${r.period ?? 'all'}`}
                 empty="No fuel recorded in this period."
             />

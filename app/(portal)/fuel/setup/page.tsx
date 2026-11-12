@@ -17,7 +17,7 @@ function FuelSetup() {
     const { filters, set, value } = useReportFilters()
     const incomplete = value('incomplete') === '1'
     const [editing, setEditing] = useState<VehicleSetup | null>(null)
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isError } = useQuery({
         queryKey: ['fleet-setup', filters.page, incomplete],
         queryFn: () => reports.getFleetSetup({ page: filters.page, per_page: 25, incomplete }),
     })
@@ -76,6 +76,7 @@ function FuelSetup() {
                 rows={data?.data}
                 meta={data ? { ...data.meta, from: '', to: '', timezone: '', partial: false, available_from: null } : undefined}
                 isLoading={isLoading}
+                isError={isError}
                 rowKey={r => r.vehicle_id}
                 empty={incomplete ? 'Nothing to do on this page.' : 'No vehicles.'}
             />

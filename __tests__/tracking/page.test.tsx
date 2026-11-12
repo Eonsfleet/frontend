@@ -78,6 +78,14 @@ describe('TrackingPage grid shell', () => {
     expect(await screen.findByText('ABC-123-XD')).toBeInTheDocument()
   })
 
+  it('says so when the fleet list cannot be loaded, instead of an empty map', async () => {
+    const { getVehiclesMapPage } = await import('@/lib/api/vehicles')
+    vi.mocked(getVehiclesMapPage).mockRejectedValueOnce(new Error('network'))
+    render(<TrackingPage />, { wrapper: Wrapper })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Vehicles could not be loaded.')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
   it('does not render the removed floating SelectedVehicleBar quick-action pill', async () => {
     render(<TrackingPage />, { wrapper: Wrapper })
     await screen.findByText('ABC-123-XD')

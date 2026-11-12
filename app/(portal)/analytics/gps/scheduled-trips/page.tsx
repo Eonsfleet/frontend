@@ -42,7 +42,7 @@ const columns: Column<ScheduledTripRow>[] = [
 
 function ScheduledTrips() {
     const { filters } = useReportFilters()
-    const { data, isLoading } = useQuery({ queryKey: ['telemetry-scheduled', filters], queryFn: () => reports.getScheduledTrips(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['telemetry-scheduled', filters], queryFn: () => reports.getScheduledTrips(filters) })
 
     return (
         <div className="p-8 pb-16 space-y-6 bg-slate-50 min-h-full">
@@ -50,7 +50,7 @@ function ScheduledTrips() {
             <GpsReportTabs />
             <ReportToolbar reportType="gps.scheduled-trips" />
             <PartialNotice meta={data?.meta} />
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => r.id} empty="No scheduled trips in this period." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.id} empty="No scheduled trips in this period." />
         </div>
     )
 }

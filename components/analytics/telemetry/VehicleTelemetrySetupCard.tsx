@@ -92,7 +92,10 @@ export function VehicleTelemetrySetupCard({ vehicleId }: { vehicleId: string | n
         queryFn: () => reports.getVehicleSetup(vehicleId),
         retry: false,
     })
-    if (isLoading || isError || !setup) return null
+    if (isLoading) return null
+    // A failed read is said, not hidden: the card vanishing looks like "this vehicle has no setup issues".
+    if (isError) return <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">Tracker setup could not be loaded.</p>
+    if (!setup) return null
     const accuracy = ACCURACY[setup.fuel_accuracy]
     const tracker = setup.tracker
     const editable = tracker && (tracker.protocol === 'teltonika' || tracker.protocol === 'gt06')
