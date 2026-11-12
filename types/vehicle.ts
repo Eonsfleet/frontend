@@ -34,6 +34,13 @@ export interface VehicleAttributes {
     fuel_capacity?: number
     fuel_capacity_unit?: string
     fuel_sensor_conversion_factor?: number
+    /** The vehicle's own fuel estimation rates; null means the make and model's typical figure applies. */
+    fuel_estimation?: {
+        enabled: boolean
+        liters_per_100km: number | null
+        idle_liters_per_hour: number | null
+        distance_correction_factor?: number | null
+    }
     tire_psi?: {
         front_left: number
         front_right: number
@@ -291,5 +298,9 @@ export interface VehiclePayload {
     fuel_capacity?: number
     fuel_capacity_unit?: string
     fuel_sensor_conversion_factor?: number
+    fuel_estimation_enabled?: boolean
+    /** null clears the vehicle's own rate, so the make and model's typical figure applies. */
+    estimated_liters_per_100km?: number | null
+    estimated_idle_liters_per_hour?: number | null
     tire_psi?: VehicleAttributes['tire_psi']
 }

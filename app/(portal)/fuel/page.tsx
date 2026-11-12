@@ -1,191 +1,79 @@
-"use client";
+'use client'
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { QueryError } from "@/components/shared/QueryError";
-import { OverviewHeader } from "./components/OverviewHeader";
-import { KpiSection } from "./components/KpiSection";
-import { RealtimeTrackingCard } from "./components/RealtimeTrackingCard";
-import { VehicleListCard } from "./components/VehicleListCard";
-import { FuelDistributionCard } from "./components/FuelDistributionCard";
-import { LowFuelAlertsCard } from "./components/LowFuelAlertsCard";
-import { TrendChartCard } from "./components/TrendChartCard";
-import { TopConsumersCard } from "./components/TopConsumersCard";
-import {
-  useFuelOverview,
-  useFuelTrends,
-  type FuelOverviewRange,
-} from "./components/useFuelOverview";
-import type { MapMarkerPoint } from "./components/FuelTrackingMap";
-import type { VehicleFilter } from "./components/VehicleListCard";
-import type { TopConsumersFilter } from "./components/TopConsumersCard";
-import type { TrendFilterOption } from "./components/TrendChartCard";
+import { useMemo, useState } from 'react'
+import { QueryError } from '@/components/shared/QueryError'
+import type { FuelOverviewParams } from '@/lib/api/fuelPage'
+import { FuelTabs } from './components/FuelTabs'
+import { OverviewFilters, type OverviewFilterState } from './components/overview/OverviewFilters'
+import { BudgetCard, KpiCards, LossSignalsCard, QualityStrip } from './components/overview/OverviewCards'
+import { BreakdownCards, NeedsActionCard, OutliersCard, TrendCard } from './components/overview/OverviewTables'
+import { compareLabel, defaultCompare, periodFor } from './components/overview/period'
+import { useFuelOverviewSummary } from './components/overview/useFuelOverviewSummary'
+import { useFuelClusters } from './components/useFuelClusters'
 
-type TrendApiFilter = "7d" | "30d" | "90d" | "1y";
-type EfficiencyApiFilter = "daily" | "monthly" | "yearly";
-
-const CONSUMPTION_FILTER_OPTIONS: TrendFilterOption[] = [
-  { label: "Last 7 Days", value: "7d" },
-  { label: "Last 30 Days", value: "30d" },
-  { label: "Last 90 Days", value: "90d" },
-  { label: "This Year", value: "1y" },
-];
-
-const EFFICIENCY_FILTER_OPTIONS: TrendFilterOption[] = [
-  { label: "Daily", value: "daily" },
-  { label: "Monthly", value: "monthly" },
-  { label: "Yearly", value: "yearly" },
-];
-
-/** Default the range to the current month. */
-function defaultRange(): FuelOverviewRange {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return {
-    startDate: format(start, "yyyy-MM-dd"),
-    endDate: format(end, "yyyy-MM-dd"),
-  };
-}
+const initial = (): OverviewFilterState => ({ preset: 'mtd', customFrom: '', customTo: '', compare: defaultCompare('mtd') })
 
 export default function FuelOverviewPage() {
-  const router = useRouter();
-  const [range] = useState<FuelOverviewRange>(defaultRange);
-  const [vehicleSearch, setVehicleSearch] = useState("");
-  const [vehicleFilter, setVehicleFilter] = useState<VehicleFilter>("all");
-  const [consumptionFilter, setConsumptionFilter] =
-    useState<TrendApiFilter>("30d");
-  const [efficiencyFilter, setEfficiencyFilter] =
-    useState<EfficiencyApiFilter>("daily");
-  const [topConsumersFilter, setTopConsumersFilter] =
-    useState<TopConsumersFilter>("daily");
+    const [filters, setFilters] = useState<OverviewFilterState>(initial)
+    const { clusters } = useFuelClusters()
 
-  const {
-    kpi,
-    vehicles,
-    distribution,
-    lowFuelAlerts,
-    topConsumers,
-    isTopConsumersLoading,
-    theftIncidents,
-    isLoading,
-    isError,
-  } = useFuelOverview(range, {
-    vehicleSearch,
-    vehicleFilter,
-    topConsumersFilter,
-  });
-  const trends = useFuelTrends(range, {
-    consumptionPeriod: consumptionFilter,
-    efficiencyFilter,
-  });
+    const params = useMemo<FuelOverviewParams>(() => {
+        const { from, to } = periodFor(filters.preset, new Date(), { from: filters.customFrom, to: filters.customTo })
+        return { from, to, compare: filters.compare, cluster_id: filters.cluster_id, type: filters.type, make: filters.make, model: filters.model }
+    }, [filters])
+    // A half-typed custom range is not a request yet.
+    const ready = filters.preset !== 'custom' || (filters.customFrom !== '' && filters.customTo !== '')
+    const query = useFuelOverviewSummary(params, ready)
+    const data = query.data
 
-  // Map markers: fuel-capable vehicle positions from /vehicles?has_fuel=true,
-  // plus abnormality incidents that carry coordinates.
-  const markers = useMemo<MapMarkerPoint[]>(() => {
-    const lastUpdated = format(new Date(), "hh:mm a");
-    const vehicleMarkers: MapMarkerPoint[] = vehicles
-      .filter((v) => v.lat != null && v.lng != null)
-      .map((v) => ({
-        id: `vehicle-${v.id}`,
-        lat: v.lat as number,
-        lng: v.lng as number,
-        fuelPercent: v.fuelPercent,
-        vehicleId: v.id,
-        featured: {
-          registration: v.registration,
-          status: v.status.charAt(0).toUpperCase() + v.status.slice(1),
-          fuelPercent: v.fuelPercent,
-          fuelLiters: v.fuelLiters,
-          location: v.location ?? "—",
-          lastUpdated,
-        },
-      }));
-    const incidentMarkers: MapMarkerPoint[] = theftIncidents
-      .filter((i) => i.location?.lat != null && i.location?.lng != null)
-      .map((i) => ({
-        id: `incident-${i.alert_id}`,
-        lat: i.location.lat,
-        lng: i.location.lng,
-      }));
-    return [...vehicleMarkers, ...incidentMarkers];
-  }, [vehicles, theftIncidents]);
+    // Filter options come from what is loaded, plus the chosen values so they never vanish from their own lists.
+    const options = useMemo(() => {
+        const rows = data?.by_type ?? []
+        const uniq = (xs: Array<string | null | undefined>) => [...new Set(xs.filter((x): x is string => !!x))].sort()
+        return {
+            types: uniq([...rows.map((r) => r.type), filters.type]),
+            makes: uniq([...rows.map((r) => r.make), filters.make]),
+            models: uniq([...rows.map((r) => r.model), filters.model]),
+        }
+    }, [data, filters.type, filters.make, filters.model])
 
-  return (
-    <div className="space-y-6">
-      <OverviewHeader />
+    const change = (next: OverviewFilterState) => {
+        // Changing the period resets the comparison to what suits it; a chosen comparison otherwise stays.
+        setFilters(next.preset !== filters.preset ? { ...next, compare: defaultCompare(next.preset) } : next)
+    }
 
-      {isError ? (
-        <QueryError message="Failed to load fuel overview." />
-      ) : (
-        <>
-          {/* KPI summary */}
-          <KpiSection kpi={kpi} isLoading={isLoading} />
-
-          <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-12">
-            <div className="min-w-0 md:col-span-2 lg:col-span-12 xl:col-span-5">
-              <RealtimeTrackingCard
-                markers={markers}
-                vehicles={vehicles}
-                onViewVehicle={(vehicleId) =>
-                  router.push(`/vehicles/${vehicleId}`)
-                }
-              />
+    return (
+        <div className="space-y-5 pb-6">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Fuel Overview</h1>
+                <p className="mt-1 text-sm text-slate-500">What the fleet used and spent, where it went, what looks wrong and what needs doing today.</p>
             </div>
-            <div className="min-w-0 md:col-span-1 lg:col-span-7 xl:col-span-4">
-              <VehicleListCard
-                vehicles={vehicles}
-                isLoading={isLoading}
-                search={vehicleSearch}
-                filter={vehicleFilter}
-                onSearchChange={setVehicleSearch}
-                onFilterChange={setVehicleFilter}
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-3 md:col-span-1 lg:col-span-5 xl:col-span-3">
-              <FuelDistributionCard
-                bands={distribution}
-                total={kpi.totalVehicles}
-              />
-              <LowFuelAlertsCard alerts={lowFuelAlerts} className="flex-1" />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <TrendChartCard
-              title="Fuel Consumption Trend"
-              data={trends.consumption}
-              color="#3b82f6"
-              formatValue={(v) => `${v.toLocaleString()} L`}
-              filter={consumptionFilter}
-              filterOptions={CONSUMPTION_FILTER_OPTIONS}
-              isLoading={trends.isConsumptionLoading}
-              onFilterChange={(filter) =>
-                setConsumptionFilter(filter as TrendApiFilter)
-              }
-            />
-            <TrendChartCard
-              title="Fuel Efficiency (km/L)"
-              data={trends.efficiency}
-              color="#0055FF"
-              formatValue={(v) => `${v} km/L`}
-              filter={efficiencyFilter}
-              filterOptions={EFFICIENCY_FILTER_OPTIONS}
-              isLoading={trends.isEfficiencyLoading}
-              onFilterChange={(filter) =>
-                setEfficiencyFilter(filter as EfficiencyApiFilter)
-              }
-            />
-            <TopConsumersCard
-              consumers={topConsumers}
-              filter={topConsumersFilter}
-              onFilterChange={setTopConsumersFilter}
-              isLoading={isTopConsumersLoading}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  );
+            <FuelTabs active="Overview" />
+
+            <OverviewFilters value={filters} onChange={change} clusters={clusters} {...options} />
+
+            {query.isError && !data ? (
+                <QueryError message="Failed to load fuel overview." />
+            ) : !data ? (
+                <p className="rounded-2xl bg-white p-6 text-sm text-slate-500">Loading fuel overview…</p>
+            ) : (
+                <>
+                    <p className="text-sm text-slate-500">
+                        {data.period.from} to {data.period.to} · compared {compareLabel(data.previous_period.basis, data.period.days).replace('vs ', 'with ')} ({data.previous_period.from} to {data.previous_period.to})
+                    </p>
+                    <QualityStrip quality={data.quality} />
+                    <KpiCards data={data} compare={compareLabel(data.previous_period.basis, data.period.days)} />
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <BudgetCard budget={data.budget} />
+                        <LossSignalsCard loss={data.loss} />
+                    </div>
+                    <NeedsActionCard needsAction={data.needs_action} />
+                    <BreakdownCards data={data} />
+                    <OutliersCard outliers={data.outliers} />
+                    <TrendCard trend={data.trend} />
+                </>
+            )}
+        </div>
+    )
 }

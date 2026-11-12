@@ -175,3 +175,64 @@
 .fuel-record-scroll::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/*
+ * Analytics rebuild tokens. Scoped to .analytics-v2 so nothing else changes.
+ * Light is the shipped theme; the .dark block is the same set of tokens ready
+ * for when the app gets a theme switch (nothing activates .dark today).
+ */
+.analytics-v2 {
+  --an-canvas: #f8fafc;
+  --an-surface: #ffffff;
+  --an-surface-muted: #f1f5f9;
+  --an-border: #e2e8f0;
+  --an-text: #0f172a;
+  --an-muted: #64748b;
+  --an-accent: #4f46e5;
+  --an-accent-soft: #eef2ff;
+  --an-good: #059669;
+  --an-good-soft: #ecfdf5;
+  --an-warn: #b45309;
+  --an-warn-soft: #fffbeb;
+  --an-bad: #dc2626;
+  --an-bad-soft: #fef2f2;
+  --an-chart-1: #4f46e5;
+  --an-chart-2: #0ea5e9;
+  --an-chart-3: #10b981;
+  --an-chart-4: #f59e0b;
+  --an-chart-5: #ef4444;
+}
+
+.dark .analytics-v2 {
+  --an-canvas: #020617;
+  --an-surface: #0f172a;
+  --an-surface-muted: #1e293b;
+  --an-border: #334155;
+  --an-text: #f1f5f9;
+  --an-muted: #94a3b8;
+  --an-accent: #818cf8;
+  --an-accent-soft: #1e1b4b;
+  --an-good: #34d399;
+  --an-good-soft: #022c22;
+  --an-warn: #fbbf24;
+  --an-warn-soft: #451a03;
+  --an-bad: #f87171;
+  --an-bad-soft: #450a0a;
+}
+
+@theme inline {
+  --color-an-canvas: var(--an-canvas);
+  --color-an-surface: var(--an-surface);
+  --color-an-surface-muted: var(--an-surface-muted);
+  --color-an-border: var(--an-border);
+  --color-an-text: var(--an-text);
+  --color-an-muted: var(--an-muted);
+  --color-an-accent: var(--an-accent);
+  --color-an-accent-soft: var(--an-accent-soft);
+  --color-an-good: var(--an-good);
+  --color-an-good-soft: var(--an-good-soft);
+  --color-an-warn: var(--an-warn);
+  --color-an-warn-soft: var(--an-warn-soft);
+  --color-an-bad: var(--an-bad);
+  --color-an-bad-soft: var(--an-bad-soft);
+}

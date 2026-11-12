@@ -9,6 +9,8 @@ import {
     Bell,
     Settings,
     GitCompare,
+    Layers,
+    SlidersHorizontal,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,8 +28,10 @@ const TABS: FuelTab[] = [
     { label: 'Fuel Transactions', icon: Receipt, href: '/fuel/transactions' },
     { label: 'Fuel Expenses', icon: Fuel, href: '/fuel/expenses' },
     { label: 'Reconciliation', icon: GitCompare, href: '/fuel/reconciliation' },
+    { label: 'Fuel by Source', icon: Layers, href: '/fuel/by-source' },
     // { label: 'Fuel Analysis', icon: BarChart3, href: '/fuel/analysis' },
     { label: 'Fuel Alerts', icon: Bell, href: '/fuel/alerts' },
+    { label: 'Fuel Setup', icon: SlidersHorizontal, href: '/fuel/setup' },
     { label: 'Fuel Settings', icon: Settings, href: '/fuel/settings' },
 ]
 
