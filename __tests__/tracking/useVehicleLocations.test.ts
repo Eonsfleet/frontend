@@ -89,7 +89,7 @@ describe('useVehicleLocations fleet-channel id keying', () => {
     expect(result.current.locations['7']).toMatchObject({ lat: 6.5, lng: 3.4, speed: 10 })
   })
 
-  it('keys .vehicle.status.changed and .fuel.event by vehicle_id too', () => {
+  it('keys .vehicle.status.changed and .fuel_alert by vehicle_id too', () => {
     const vehicles = [
       { id: '7', attributes: { registration_number: 'ABC-123' } },
     ] as any
@@ -106,11 +106,80 @@ describe('useVehicleLocations fleet-channel id keying', () => {
     })
     expect(result.current.locations['7'].status).toBe('idle')
 
-    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel.event')!
+    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel_alert')!
     act(() => {
-      fuelHandler({ vehicle_id: '7' })
+      fuelHandler({ vehicle_id: '7', type: 'fuel_theft' })
     })
     expect(result.current.alarmState['7']).toBe(true)
+  })
+
+  it('only a drain or a leak raises the alarm, not a low tank, a refill or a sensor fault', () => {
+    const vehicles = [{ id: '7', attributes: { registration_number: 'ABC-123' } }] as any
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel_alert')!
+
+    for (const type of ['low_fuel', 'refill', 'sensor_malfunction']) {
+      act(() => fuelHandler({ vehicle_id: '7', type }))
+      expect(result.current.alarmState['7']).toBeFalsy()
+    }
+    act(() => fuelHandler({ vehicle_id: '7', type: 'fuel_leakage' }))
+    expect(result.current.alarmState['7']).toBe(true)
+  })
+
+  it('the old .fuel.event is no longer listened to: nothing broadcasts it', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    expect(handlers.has('fuel.alerts.org-1::.fuel.event')).toBe(false)
+  })
+})
+
+describe('useVehicleLocations fleet seed', () => {
+  const mapEntry = (attributes: Record<string, unknown>) => ({
+    id: '7',
+    attributes: { registration_number: 'ABC-123', location: { latitude: 6.5, longitude: 3.4 }, speed: 0, last_packet_received_at: new Date().toISOString(), ...attributes },
+  }) as any
+
+  it('takes connectivity from is_online, not from the device lifecycle status', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const offlineVehicles = [mapEntry({ device_status: 'active', is_online: false })]
+    const offline = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles: offlineVehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(offline.result.current.locations['7'].is_online).toBe(false)
+    expect(offline.result.current.locations['7'].status).toBe('offline')
+
+    const onlineVehicles = [mapEntry({ device_status: 'inactive', is_online: true })]
+    const online = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles: onlineVehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(online.result.current.locations['7'].is_online).toBe(true)
+    expect(online.result.current.locations['7'].status).toBe('parked')
+  })
+
+  it('falls back to the lifecycle status only when the feed has no is_online', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [mapEntry({ device_status: 'active' })]
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(result.current.locations['7'].is_online).toBe(true)
+  })
+
+  it('keeps how the litres were obtained', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [mapEntry({ is_online: true, fuel: { level_liters: 24, level_percent: 40, liters_basis: 'calculated' } })]
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(result.current.locations['7']).toMatchObject({ fuel: 40, fuel_liters: 24, fuel_basis: 'calculated' })
   })
 })
 

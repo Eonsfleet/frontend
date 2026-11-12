@@ -16,6 +16,7 @@ export interface ResolvedVehicleTelemetryInput {
     speed?: number;
     fuel?: number | null;
     fuel_liters?: number;
+    fuel_basis?: string | null;
     temp?: number;
     status?: string;
     voltage?: number | string;
@@ -419,6 +420,7 @@ export function resolveVehicleTelemetry({
     gpsConfidence: liveGpsConfidence,
     fuel: liveFuel,
     fuelLiters: liveFuelLiters,
+    fuelBasis: vehicle?.fuel_basis ?? null,
     fuelTankCap,
     fuelQuality,
     fuelLastUpdate,
