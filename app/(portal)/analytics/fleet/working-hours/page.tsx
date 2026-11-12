@@ -49,7 +49,7 @@ const columns: Column<UtilizationRow>[] = [
 
 function WorkingHoursUtilization() {
     const { filters } = useReportFilters('30d')
-    const { data, isLoading } = useQuery({ queryKey: ['utilization-report', filters], queryFn: () => reports.getUtilizationReport(filters) })
+    const { data, isLoading, isError } = useQuery({ queryKey: ['utilization-report', filters], queryFn: () => reports.getUtilizationReport(filters) })
     const t = data?.extra.totals
     const th = data?.extra.thresholds
 
@@ -65,7 +65,7 @@ function WorkingHoursUtilization() {
                 <Figure label="After-hours driving" value={formatDuration(t?.after_hours_s)} />
                 <Figure label="Distance" value={formatNumber(t?.distance_km, 0, 'km')} note={t ? `${t.trips.toLocaleString()} trips` : undefined} />
             </div>
-            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} rowKey={r => r.vehicle_id} empty="No vehicles with trackers." />
+            <ReportTable columns={columns} rows={data?.data} meta={data?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.vehicle_id} empty="No vehicles with trackers." />
             <p className="text-[10px] text-slate-400">
                 * The vehicle&apos;s own working hours. Organization hours, working days and the under- and over-used thresholds are set in{' '}
                 <Link href="/settings/fleet-rules" className="text-blue-600 hover:underline">Fleet Rules</Link>; maintenance downtime is in the fleet utilization overview.

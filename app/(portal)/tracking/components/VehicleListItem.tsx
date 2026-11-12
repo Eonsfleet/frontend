@@ -1,7 +1,9 @@
 "use client";
 
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
+import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { formatFuelLevel } from "@/lib/fuel-format";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
@@ -14,7 +16,7 @@ interface VehicleListItemProps {
   hasActiveAlarm?: boolean;
 }
 
-export function VehicleListItem({
+function VehicleListItemImpl({
   vehicle,
   loc,
   isSelected,
@@ -30,6 +32,7 @@ export function VehicleListItem({
   const lastUpdate = useRelativeTime(loc?.lastPacket || loc?.lastUpdate);
   const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
   const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
+  const fuelText = formatFuelLevel(fuelPct, fuelL, loc?.fuel_basis);
 
   return (
     <div
@@ -81,10 +84,14 @@ export function VehicleListItem({
                   style={{ width: `${fuelPct}%` }}
                 />
               </div>
-              <span className="text-[10px] font-bold text-slate-500">
-                {fuelL != null ? `${Number(fuelL).toFixed(1)}L` : `${fuelPct}%`}
-              </span>
+              <span className="text-[10px] font-bold text-slate-500">{fuelText}</span>
             </div>
+            <p className="text-[10px] text-slate-300">{lastUpdate}</p>
+          </div>
+        ) : fuelText != null ? (
+          // A tank reported in litres with no percentage: show the litres, no bar to fill.
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[10px] font-bold text-slate-500">{fuelText}</span>
             <p className="text-[10px] text-slate-300">{lastUpdate}</p>
           </div>
         ) : (
@@ -94,3 +101,15 @@ export function VehicleListItem({
     </div>
   );
 }
+
+/**
+ * A row re-renders only when its own vehicle, location, selection or alarm changes. The list
+ * rebuilds on every packet from any vehicle, but a location update replaces only that vehicle's
+ * entry, so the other rows keep the same objects. onSelect is left out of the comparison on
+ * purpose: it is a fresh closure on every render of the list, and what it does depends on
+ * isSelected, which is compared.
+ */
+export const VehicleListItem = memo(
+  VehicleListItemImpl,
+  (a, b) => a.vehicle === b.vehicle && a.loc === b.loc && a.isSelected === b.isSelected && a.hasActiveAlarm === b.hasActiveAlarm,
+);

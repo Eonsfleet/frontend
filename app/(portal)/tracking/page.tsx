@@ -236,6 +236,10 @@ export default function TrackingPage() {
             prevEntry?.lastPacket,
           fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
           fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+          fuel_basis:
+            normalized.fuel_level_liters != null
+              ? (normalized.fuel_level_liters_basis ?? null)
+              : prevEntry?.fuel_basis,
           raw: normalized,
         },
       };
@@ -490,7 +494,7 @@ export default function TrackingPage() {
       if (filters.fuelLevel !== "all") {
         result = result.filter((v: VehicleMapEntry) => {
           const loc = locations[v.id];
-          const fuel = loc?.fuel_level_percent;
+          const fuel = loc?.fuel ?? loc?.fuel_level_percent;
           if (fuel == null) return false;
           if (filters.fuelLevel === "low") return fuel < 20;
           if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;
@@ -675,6 +679,19 @@ export default function TrackingPage() {
       featureName="Live Tracking"
       description="Monitor your fleet in real-time with precise telemetry and location data."
     >
+      {fleet.error != null && (
+        // The fleet list failed to load or refresh. Without this the map is empty or quietly out of date,
+        // which looks like "no vehicles" or "nothing has moved".
+        <div
+          role="alert"
+          className="fixed left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 shadow"
+        >
+          {fleet.vehicles.length === 0 ? "Vehicles could not be loaded." : "Vehicles could not be refreshed; the positions shown may be out of date."}
+          <button type="button" onClick={() => fleet.refresh()} className="font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div
         ref={containerRef}
         className={cn(

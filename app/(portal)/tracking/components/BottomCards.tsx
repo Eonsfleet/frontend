@@ -14,6 +14,7 @@ import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { formatVoltage, type ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { cn } from "@/lib/utils";
+import { formatFuelLevel } from "@/lib/fuel-format";
 
 interface BottomCardsProps {
   selectedVehicle: any;
@@ -93,14 +94,6 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
   const signal = gpsSignal(resolved.satellites);
   const address = resolved.address ?? null;
 
-  const fuelDisplay =
-    resolved.fuel != null && resolved.fuelLiters != null
-      ? `${resolved.fuel}% · ${Number(resolved.fuelLiters).toFixed(1)}L`
-      : resolved.fuel != null
-        ? `${resolved.fuel}%`
-        : resolved.fuelLiters != null
-          ? `${Number(resolved.fuelLiters).toFixed(1)}L`
-          : null;
   const sim = simLabel(attrs.status ?? device?.status);
 
   return (
@@ -109,7 +102,7 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
           <Stat label="Speed" value={`${loc?.speed ?? resolved.speed ?? 0} km/h`} />
           <Stat label="Heading" value={resolved.heading != null ? `${Math.round(resolved.heading)}°` : null} />
-          <Stat label="Ignition" value={resolved.ignition ? "On" : "Off"} />
+          <Stat label="Ignition" value={resolved.ignitionKnown === false ? "Unknown" : resolved.ignition ? "On" : "Off"} />
           <Stat
             label="Status"
             value={
@@ -171,9 +164,14 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
                     />
                   </div>
                   <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                    {resolved.fuelLiters != null ? `${Number(resolved.fuelLiters).toFixed(1)}L` : `${resolved.fuel}%`}
+                    {formatFuelLevel(resolved.fuel, resolved.fuelLiters, resolved.fuelBasis)}
                   </span>
                 </div>
+              ) : resolved.fuelLiters != null ? (
+                // Litres with no percentage: nothing to draw a bar from, but the level is known.
+                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                  {formatFuelLevel(null, resolved.fuelLiters, resolved.fuelBasis)}
+                </span>
               ) : (
                 <span className="text-slate-300 font-normal italic">—</span>
               )

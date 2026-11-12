@@ -61,7 +61,7 @@ export default function FuelRealtimePage() {
             <Stat big={tv} label="Live now" value={board.summary.live} tone="emerald" />
             <Stat big={tv} label="Stale" value={board.summary.stale} tone="amber" />
             <Stat big={tv} label="Low fuel" value={board.summary.low} tone="red" />
-            <Stat big={tv} label="Sensor silent" value={board.summary.silent} />
+            <Stat big={tv} label="No reading (24 h)" value={board.summary.silent} />
         </div>
     )
 

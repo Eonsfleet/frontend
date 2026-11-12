@@ -81,7 +81,7 @@ function CountsTable({ rows }: { rows?: EventCountRow[] }) {
 
 function AlarmsReport() {
     const { filters, set, value } = useReportFilters()
-    const { data: events, isLoading } = useQuery({ queryKey: ['telemetry-events', filters], queryFn: () => reports.getEvents(filters) })
+    const { data: events, isLoading, isError } = useQuery({ queryKey: ['telemetry-events', filters], queryFn: () => reports.getEvents(filters) })
     const scope = { ...filters, page: 1 }
     const { data: counts } = useQuery({ queryKey: ['telemetry-event-counts', scope], queryFn: () => reports.getEventCounts({ ...scope, group_by: 'vehicle' }) })
     const { data: trend } = useQuery({ queryKey: ['telemetry-event-trend', scope], queryFn: () => reports.getEventTrend(scope) })
@@ -138,7 +138,7 @@ function AlarmsReport() {
                     <CountsTable rows={counts?.data} />
                 </div>
             </div>
-            <ReportTable columns={eventColumns} rows={events?.data} meta={events?.meta} isLoading={isLoading} rowKey={r => r.id} empty="No events in this period." />
+            <ReportTable columns={eventColumns} rows={events?.data} meta={events?.meta} isLoading={isLoading} isError={isError} rowKey={r => r.id} empty="No events in this period." />
             <p className="text-[10px] text-slate-400">
                 &quot;Unconfirmed&quot; marks Teltonika alarms the telemetry platform raises from the vendor&apos;s documented inputs before checking them on our tracker models.
             </p>

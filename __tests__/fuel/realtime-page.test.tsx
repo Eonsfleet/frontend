@@ -28,7 +28,7 @@ const snapshot = (over: Partial<RealtimeFuelSnapshot> = {}): RealtimeFuelSnapsho
         v(2, { level_percent: 12, level_litres: 9.6, basis: 'calculated', hours_to_empty: 1.9, range_km: 80, open_alerts: 2 }),
         v(3, { freshness: 'stale', age_minutes: 90, burn_basis: null, burn_litres_per_hour: null, hours_to_empty: null, range_km: null, basis: 'percent_only', level_litres: null }),
     ],
-    silent: [{ vehicle_id: 9, registration_number: 'LAG-9-XY', last_reading_at: '2026-11-07T10:00:00Z', age_minutes: 4300, cluster_id: null }],
+    silent: [{ vehicle_id: 9, registration_number: 'LAG-9-XY', last_reading_at: '2026-11-07T10:00:00Z', age_minutes: 4300, cluster_id: null, reason: 'sensor_silent' }],
     generated_at: new Date().toISOString(),
     ...over,
 })
@@ -63,9 +63,20 @@ describe('real-time fuel tab', () => {
         await screen.findByText('LAG-2-XY')
 
         expect(screen.queryByText('LAG-9-XY')).toBeNull()
-        fireEvent.click(screen.getByText(/Sensor silent · 1/))
+        fireEvent.click(screen.getByText(/No fuel reading in 24 h · 1/))
         expect(screen.getByText('LAG-9-XY')).toBeTruthy()
         expect(screen.getByText(/last reading 2 d ago/)).toBeTruthy()
+    })
+
+    it('says whether the tracker still reports or has gone quiet', async () => {
+        const quiet = { ...snapshot().silent[0], vehicle_id: 10, registration_number: 'LAG-10-XY', reason: 'device_silent' as const }
+        api.getFuelRealtimeSnapshot.mockResolvedValue(snapshot({ silent: [snapshot().silent[0], quiet] }))
+        renderPage()
+        await screen.findByText('LAG-2-XY')
+
+        fireEvent.click(screen.getByText(/No fuel reading in 24 h · 2/))
+        expect(screen.getByText(/Tracker reporting, no fuel level/)).toBeTruthy()
+        expect(screen.getByText(/Tracker silent/)).toBeTruthy()
     })
 
     it('opens the detail panel for the chosen vehicle', async () => {

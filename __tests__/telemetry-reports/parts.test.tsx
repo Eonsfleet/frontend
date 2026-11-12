@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({
     useSearchParams: () => new URLSearchParams(),
 }))
 
-import { Litres, PartialNotice } from '@/components/analytics/telemetry/ReportParts'
+import { Litres, PartialNotice, ReportTable, type Column } from '@/components/analytics/telemetry/ReportParts'
 import type { ReportMeta } from '@/lib/api/telemetryReports'
 
 const meta = (partial: boolean): ReportMeta => ({
@@ -33,5 +33,21 @@ describe('telemetry report parts', () => {
         rerender(<PartialNotice meta={meta(true)} />)
         expect(screen.getByText(/kept for 60 days/)).toBeInTheDocument()
         expect(screen.getByText(/01 Sept 2026|01 Sep 2026/)).toBeInTheDocument()
+    })
+
+    it('says a report could not be loaded instead of "nothing recorded"', () => {
+        const columns: Column<{ id: number }>[] = [{ key: 'id', header: 'Id', render: (r) => r.id }]
+        const { rerender } = render(<ReportTable columns={columns} rows={[]} isError rowKey={(r) => r.id} empty="Nothing recorded in this period." />)
+        expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded')
+        expect(screen.queryByText('Nothing recorded in this period.')).not.toBeInTheDocument()
+
+        // Genuinely empty: the empty message, no alert.
+        rerender(<ReportTable columns={columns} rows={[]} rowKey={(r) => r.id} empty="Nothing recorded in this period." />)
+        expect(screen.getByText('Nothing recorded in this period.')).toBeInTheDocument()
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+        // Rows already shown stay shown when a later refresh fails.
+        rerender(<ReportTable columns={columns} rows={[{ id: 7 }]} isError rowKey={(r) => r.id} />)
+        expect(screen.getByText('7')).toBeInTheDocument()
     })
 })

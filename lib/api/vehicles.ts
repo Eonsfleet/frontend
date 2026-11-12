@@ -48,7 +48,12 @@ export interface VehicleMapEntry {
     last_packet_received_at?: string | null;
     speed?: number | null;
     location?: { latitude: number; longitude: number } | null;
-    fuel?: { level_liters: number | null; level_percent: number | null } | null;
+    fuel?: {
+      level_liters: number | null;
+      level_percent: number | null;
+      /** "device": the tracker measured the litres. "calculated": from its percent level and the tank capacity. */
+      liters_basis?: "device" | "calculated" | null;
+    } | null;
   };
 }
 

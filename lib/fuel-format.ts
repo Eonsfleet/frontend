@@ -25,6 +25,24 @@ export function formatLitres(
     : text;
 }
 
+/**
+ * A tank level as a person reads it: the percentage and the litres together ("62% · 38.5 L"), whichever the
+ * device gave. Litres worked out from a percentage and the tank size carry "≈", as everywhere else. Null when
+ * the device reported neither, so a caller can show nothing rather than a zero.
+ */
+export function formatFuelLevel(
+  percent: number | null | undefined,
+  litres: number | null | undefined,
+  basis?: string | null,
+): string | null {
+  const parts: string[] = [];
+  if (percent != null && Number.isFinite(Number(percent))) parts.push(`${Math.round(Number(percent))}%`);
+  if (litres != null && Number.isFinite(Number(litres))) {
+    parts.push(formatLitres(Number(litres), basis === "calculated" ? "calculated" : "measured"));
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
+
 export function formatNaira(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return `₦${Math.round(value).toLocaleString("en-NG")}`;

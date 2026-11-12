@@ -354,7 +354,7 @@ export function PlaybackMap({
           <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-600">
             <span>Speed: {Math.round(currentMovement.speed)} km/h</span>
             <span>Heading: {Math.round(currentMovement.heading)}°</span>
-            <span>Fuel: {currentMovement.fuel_level_percent != null ? `${Math.round(currentMovement.fuel_level_percent)}%` : '—'}</span>
+            <span>Fuel: {currentMovement.fuel_level_liters != null ? `${Math.round(currentMovement.fuel_level_liters)} L` : currentMovement.fuel_level_percent != null ? `${Math.round(currentMovement.fuel_level_percent)}%` : '—'}</span>
             <span>Altitude: {currentMovement.altitude != null ? `${Math.round(currentMovement.altitude)} m` : '—'}</span>
             <span>Ignition: {boolLabel(currentMovement.ignition)}</span>
             <span>Movement: {currentFrame?.isStopped ? 'Waiting' : 'Driving'}</span>

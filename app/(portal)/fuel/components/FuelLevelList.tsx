@@ -125,14 +125,17 @@ export function FuelLevelList({ vehicles, silent, selectedId, onSelect, sort, on
                     <div className="rounded-xl border border-dashed border-slate-200 p-2">
                         <button type="button" onClick={() => setShowSilent((s) => !s)} aria-expanded={showSilent} className="flex w-full items-center gap-1.5 text-left text-sm font-medium text-slate-600">
                             {showSilent ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            Sensor silent · {silent.length}
+                            No fuel reading in 24 h · {silent.length}
                         </button>
                         {showSilent && (
                             <ul className="mt-2 space-y-1">
                                 {silent.map((s) => (
                                     <li key={s.vehicle_id} className="flex items-center justify-between text-xs text-slate-500">
                                         <span className="font-medium text-slate-700">{s.registration_number ?? `Vehicle ${s.vehicle_id}`}</span>
-                                        <span>last reading {formatAge(s.age_minutes)}</span>
+                                        <span>
+                                            {s.reason === 'sensor_silent' ? 'Tracker reporting, no fuel level' : s.reason === 'device_silent' ? 'Tracker silent' : null}
+                                            {s.reason ? ' · ' : ''}last reading {formatAge(s.age_minutes)}
+                                        </span>
                                     </li>
                                 ))}
                             </ul>

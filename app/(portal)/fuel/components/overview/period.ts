@@ -1,12 +1,13 @@
 import { addDays, endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import type { CompareBasis } from '@/lib/api/fuelPage'
 
-export type PeriodPreset = 'mtd' | 'last7' | 'last30' | 'last_month' | 'custom'
+export type PeriodPreset = 'mtd' | 'last7' | 'last30' | 'last90' | 'last_month' | 'custom'
 
 export const PERIOD_LABELS: Record<PeriodPreset, string> = {
     mtd: 'Month to date',
     last7: 'Last 7 days',
     last30: 'Last 30 days',
+    last90: 'Last 90 days',
     last_month: 'Last month',
     custom: 'Custom range',
 }
@@ -22,6 +23,8 @@ export function periodFor(preset: PeriodPreset, today: Date, custom?: { from: st
             return { from: day(addDays(today, -6)), to: day(today) }
         case 'last30':
             return { from: day(addDays(today, -29)), to: day(today) }
+        case 'last90':
+            return { from: day(addDays(today, -89)), to: day(today) }
         case 'last_month': {
             const previous = subMonths(today, 1)
             return { from: day(startOfMonth(previous)), to: day(endOfMonth(previous)) }

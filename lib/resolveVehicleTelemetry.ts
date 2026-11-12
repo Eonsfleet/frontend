@@ -16,12 +16,14 @@ export interface ResolvedVehicleTelemetryInput {
     speed?: number;
     fuel?: number | null;
     fuel_liters?: number;
+    fuel_basis?: string | null;
     temp?: number;
     status?: string;
     voltage?: number | string;
     ext_voltage?: number | string;
     signal?: string;
     ignition?: boolean;
+    ignition_known?: boolean;
     odometer?: number;
     lat?: number;
     lng?: number;
@@ -89,19 +91,21 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     fuel_used_gps: loc?.fuel_used_gps ?? (loc?.metadata as any)?.fuel_used_gps ?? null,
     fuel_level_obd: loc?.fuel_level_obd ?? (loc?.metadata as any)?.fuel_level_obd ?? null,
     fuel_source: loc?.fuel_source ?? (loc?.metadata as any)?.fuel_source ?? null,
-    temp: loc?.engine_temperature ?? 0,
+    // No reading stays absent: 0 would read as a real 0 °C.
+    temp: loc?.engine_temperature ?? undefined,
     status: loc?.status,
     voltage: loc?.battery_voltage,
     ext_voltage: loc?.external_voltage,
     satellites: loc?.satellites ?? null,
     signal: loc?.satellites != null ? `${loc.satellites} Sats` : "---",
     ignition: loc?.ignition ?? false,
+    ignition_known: loc?.ignition_known,
     // mileage_km, not odometer_km: System 2 documents odometer_km as the
     // device's own counter with an arbitrary base (one live unit reads
     // 4,121,010 km), so only its delta means anything. mileage_km is that
     // counter rebased onto the vehicle's real odometer — the one to show.
     odometer:
-      loc?.odometer ?? loc?.mileage_km ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+      loc?.mileage_km ?? loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
     gps_confidence: loc?.gps_confidence ?? null,
     lat: loc?.lat ?? rel?.latitude,
     lng: loc?.lng ?? rel?.longitude,
@@ -189,14 +193,18 @@ export function resolveVehicleTelemetry({
   const liveIgnition = telemetry
     ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
     : (vehicle?.ignition as any) === "on" || (vehicle?.ignition as any) === "1" || vehicle?.ignition === true;
+  // False only when the platform said the tracker has no ignition reading; "off" is then not a reading.
+  const liveIgnitionKnown = (telemetry?.ignition_known ?? meta.ignition_known ?? vehicle?.ignition_known) !== false;
   const liveMovement = telemetry?.movement ?? vehicle?.movement;
   const liveStatus = telemetry?.status ?? vehicle?.status;
   const liveLat = telemetry?.latitude ?? telemetry?.lat ?? vehicle?.lat;
   const liveLng = telemetry?.longitude ?? telemetry?.lng ?? vehicle?.lng;
   const liveAltitude = telemetry?.altitude ?? vehicle?.altitude ?? raw.altitude;
   const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
+  // mileage_km first: it is the device counter rebased onto the vehicle's real odometer. `odometer` is the
+  // raw counter, whose base is arbitrary (only its delta means anything), so it is the fallback.
   const liveOdo =
-    telemetry?.odometer ?? telemetry?.mileage_km ?? vehicle?.odometer ?? raw.odometer ?? raw.mileage_km;
+    telemetry?.mileage_km ?? raw.mileage_km ?? telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
   // Not every device/protocol reports engine hours — surface it only when the
   // device actually sends it rather than fabricating a value from unrelated data.
   const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;
@@ -299,8 +307,14 @@ export function resolveVehicleTelemetry({
   const liveSleepMode = meta.sleep_mode ?? telemetry?.sleep_mode ?? raw.sleep_mode;
   const liveDoorStatus = meta.door_status ?? telemetry?.door_status ?? raw.door_status;
   const liveLoadWeight = meta.load_weight ?? telemetry?.load_weight ?? raw.load_weight;
-  const liveDrivingState =
+  // What the device reported, if anything. obd_status stays "---" without it.
+  const reportedDrivingState =
     meta.driving_state ?? telemetry?.driving_state ?? raw.driving_state ?? vehicle?.driving_state;
+  // The device rarely sends one; derive a state from the position when it does not, so the Driving State row
+  // is not empty for a vehicle that is plainly moving, idling or parked.
+  const liveDrivingState =
+    reportedDrivingState ??
+    (liveStatus === "offline" ? null : liveStatus === "in_transit" ? "Moving" : liveStatus === "idle" || liveStatus === "stopped" ? "Idling" : liveStatus ? "Parked" : null);
 
   const currentBatteryV =
     meta.battery_voltage ?? telemetry?.battery_voltage ?? raw.battery_voltage ?? vehicle?.voltage;
@@ -313,9 +327,18 @@ export function resolveVehicleTelemetry({
 
   const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
   const liveEngineTemp =
-    meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? 0;
-  const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
-  const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
+    meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? null;
+  const liveRssi = meta.rssi ?? telemetry?.rssi ?? raw.rssi ?? null;
+  // hdop only looked in meta and the live packet, never in raw, which is where the snapshot's metadata
+  // lands once flattened, so it stayed empty even when the backend sent it.
+  const liveHdop = meta.hdop ?? telemetry?.hdop ?? raw.hdop ?? null;
+  const livePdop = meta.pdop ?? telemetry?.pdop ?? raw.pdop ?? null;
+  // The device's own 1-5 scale, not dBm.
+  const liveGsmSignal = meta.gsm_signal ?? telemetry?.gsm_signal ?? raw.gsm_signal ?? null;
+  const liveBatteryLevel = meta.battery_level ?? telemetry?.battery_level ?? raw.battery_level ?? null;
+  const liveEngineLoad = meta.engine_load ?? telemetry?.engine_load ?? raw.engine_load ?? null;
+  const liveThrottle = meta.throttle ?? telemetry?.throttle ?? raw.throttle ?? null;
+  const liveCoolantTemp = meta.coolant_temperature ?? telemetry?.coolant_temperature ?? raw.coolant_temperature ?? null;
   // GSM operator code (MCC+MNC) — the closest thing to a "network/carrier" signal
   // the ingest pipeline actually broadcasts (see EXTENDED_METADATA_KEYS on the
   // backend); there's no separate carrier-name field, so it's shown as-is.
@@ -363,14 +386,14 @@ export function resolveVehicleTelemetry({
   })();
 
   const batteryWarn = parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
-  const tempWarn = liveEngineTemp > 105;
+  const tempWarn = liveEngineTemp != null && liveEngineTemp > 105;
   const weakGps = liveSatellites != null && liveSatellites < 4;
 
   const health = sensorHealth || {
     battery_voltage: liveBatteryV || "---",
     signal_strength:
       liveRssi != null ? `${liveRssi} dBm` : liveSatellites != null ? `${liveSatellites} Sats` : vehicle?.signal || "---",
-    obd_status: liveDrivingState || "---",
+    obd_status: reportedDrivingState || "---",
   };
 
   return {
@@ -378,6 +401,13 @@ export function resolveVehicleTelemetry({
     speed: liveSpeed,
     heading: liveHeading,
     ignition: liveIgnition,
+    ignitionKnown: liveIgnitionKnown,
+    pdop: livePdop,
+    gsmSignal: liveGsmSignal,
+    batteryLevel: liveBatteryLevel,
+    engineLoad: liveEngineLoad,
+    throttle: liveThrottle,
+    coolantTemp: liveCoolantTemp,
     movement: liveMovement,
     status: liveStatus,
     lat: liveLat,
@@ -419,6 +449,7 @@ export function resolveVehicleTelemetry({
     gpsConfidence: liveGpsConfidence,
     fuel: liveFuel,
     fuelLiters: liveFuelLiters,
+    fuelBasis: vehicle?.fuel_basis ?? null,
     fuelTankCap,
     fuelQuality,
     fuelLastUpdate,

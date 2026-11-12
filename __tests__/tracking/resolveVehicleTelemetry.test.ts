@@ -195,3 +195,80 @@ describe('current_location telemetry reaches the Details tab', () => {
     expect(resolved.jamming).toBe(false)
   })
 })
+
+describe('a missing engine temperature', () => {
+  it('stays absent instead of becoming 0 °C, and never raises the overheat warning', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z' }, deviceStatus: null })
+    expect(resolved.engineTemp).toBeNull()
+    expect(resolved.tempWarn).toBe(false)
+  })
+
+  it('still warns when a real reading is high', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', metadata: { engine_temperature: 112 } }, deviceStatus: null })
+    expect(resolved.engineTemp).toBe(112)
+    expect(resolved.tempWarn).toBe(true)
+  })
+})
+
+describe('an ignition the tracker does not report', () => {
+  const resolve = (telemetry: Record<string, unknown>) => resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', ...telemetry }, deviceStatus: null })
+
+  it('is flagged unknown when the platform said so, in the packet or in the snapshot metadata', () => {
+    expect(resolve({ ignition: 'off', ignition_known: false }).ignitionKnown).toBe(false)
+    expect(resolve({ ignition: 'off', metadata: { ignition_known: false } }).ignitionKnown).toBe(false)
+  })
+
+  it('is known by default, and when it was reported on or off', () => {
+    expect(resolve({ ignition: 'off' }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'on', ignition_known: true }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'off', ignition_known: true }).ignitionKnown).toBe(true)
+  })
+})
+
+describe('which odometer is shown', () => {
+  it('prefers the rebased mileage over the raw device counter, whichever object holds them', () => {
+    // A packet carrying both: the counter's base is arbitrary, the mileage is the vehicle's real odometer.
+    const fromPacket = resolveVehicleTelemetry({
+      vehicle: null,
+      telemetry: { gps_datetime: '2026-11-12T10:00:00Z', odometer: 4121010, mileage_km: 84215.2 },
+      deviceStatus: null,
+    })
+    expect(fromPacket.odometer).toBe(84215.2)
+
+    // The vehicle entry keeps the snapshot's counter in odometer and the live mileage in raw.
+    const fromEntry = resolveVehicleTelemetry({
+      vehicle: { plate: 'ABC', odometer: 4121010, raw: { mileage_km: 84215.2 } } as any,
+      telemetry: null,
+      deviceStatus: null,
+    })
+    expect(fromEntry.odometer).toBe(84215.2)
+  })
+
+  it('falls back to the counter when there is no mileage', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: { plate: 'ABC', odometer: 51000 } as any, telemetry: { gps_datetime: '2026-11-12T10:00:00Z' }, deviceStatus: null })
+    expect(resolved.odometer).toBe(51000)
+  })
+})
+
+describe('readings in the snapshot reach the drawer fields', () => {
+  // The snapshot's metadata is flattened into raw by normalizeTelemetry; several fields read only meta and the
+  // live packet and never looked in raw, so they stayed empty although the backend sent them.
+  const fromSnapshot = (raw: Record<string, unknown>) => resolveVehicleTelemetry({ vehicle: { plate: 'ABC', raw } as any, telemetry: null, deviceStatus: null })
+
+  it('picks up HDOP, PDOP, GSM signal, battery level, engine load, throttle and coolant from the snapshot', () => {
+    const r = fromSnapshot({ hdop: 0.9, pdop: 1.4, gsm_signal: 4, battery_level: 87, engine_load: 41, throttle: 18, coolant_temperature: 88 })
+    expect([r.hdop, r.pdop, r.gsmSignal, r.batteryLevel, r.engineLoad, r.throttle, r.coolantTemp]).toEqual([0.9, 1.4, 4, 87, 41, 18, 88])
+  })
+
+  it('derives a driving state from the position when the device sends none, and keeps obd_status honest', () => {
+    const moving = resolveVehicleTelemetry({ vehicle: { plate: 'ABC', status: 'in_transit', raw: {} } as any, telemetry: null, deviceStatus: null })
+    expect(moving.drivingState).toBe('Moving')
+    expect(moving.health.obd_status).toBe('---')
+
+    const offline = resolveVehicleTelemetry({ vehicle: { plate: 'ABC', status: 'offline', raw: {} } as any, telemetry: null, deviceStatus: null })
+    expect(offline.drivingState).toBeNull()
+
+    const reported = fromSnapshot({ driving_state: 'Eco' })
+    expect(reported.drivingState).toBe('Eco')
+  })
+})
