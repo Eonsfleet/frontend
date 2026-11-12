@@ -1,6 +1,7 @@
 "use client";
 
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { formatLitres } from "@/lib/fuel-format";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
@@ -15,7 +16,7 @@ interface VehicleListItemProps {
   hasActiveAlarm?: boolean;
 }
 
-export function VehicleListItem({
+function VehicleListItemImpl({
   vehicle,
   loc,
   isSelected,
@@ -102,3 +103,15 @@ export function VehicleListItem({
     </div>
   );
 }
+
+/**
+ * A row re-renders only when its own vehicle, location, selection or alarm changes. The list
+ * rebuilds on every packet from any vehicle, but a location update replaces only that vehicle's
+ * entry, so the other rows keep the same objects. onSelect is left out of the comparison on
+ * purpose: it is a fresh closure on every render of the list, and what it does depends on
+ * isSelected, which is compared.
+ */
+export const VehicleListItem = memo(
+  VehicleListItemImpl,
+  (a, b) => a.vehicle === b.vehicle && a.loc === b.loc && a.isSelected === b.isSelected && a.hasActiveAlarm === b.hasActiveAlarm,
+);
