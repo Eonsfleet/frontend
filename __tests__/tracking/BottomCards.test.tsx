@@ -62,7 +62,7 @@ describe('BottomCards', () => {
     expect(await screen.findByText('VT310')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('13.800V')).toBeInTheDocument()
-    expect(screen.getByText('13.0L')).toBeInTheDocument()
+    expect(screen.getByText('13.0 L')).toBeInTheDocument()
     expect(screen.getByText('Strong')).toBeInTheDocument()
   })
 
@@ -80,15 +80,31 @@ describe('BottomCards', () => {
     expect(networkValue?.textContent).toBe('62179')
   })
 
-  it('combines fuel percent and liters into one Fuel value when both are present', () => {
+  it('shows the litres beside the bar when percent and litres are both present', () => {
     const resolvedWithFuel = { ...resolved, fuel: 62, fuelLiters: 13 }
     render(<BottomCards selectedVehicle={vehicle} resolved={resolvedWithFuel} />, { wrapper: Wrapper })
-    expect(screen.getByText('62% · 13.0L')).toBeInTheDocument()
+    expect(screen.getByText('13.0 L')).toBeInTheDocument()
   })
 
   it('reverse-geocodes the address when the device never sent a resolved address string', async () => {
     const resolvedNoAddress = { ...resolved, address: null, lat: 6.5, lng: 3.4 }
     render(<BottomCards selectedVehicle={vehicle} resolved={resolvedNoAddress} />, { wrapper: Wrapper })
     expect(await screen.findByText('Geocoded Address, Lagos')).toBeInTheDocument()
+  })
+
+  it('shows litres for a tank with no percentage, and marks calculated litres with ≈', () => {
+    const { rerender } = render(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, fuel: null, fuelLiters: 38.5, fuelBasis: 'device' }} />, { wrapper: Wrapper })
+    expect(screen.getByText('38.5 L')).toBeInTheDocument()
+    rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, fuel: 40, fuelLiters: 24, fuelBasis: 'calculated' }} />)
+    expect(screen.getByText('≈ 24.0 L')).toBeInTheDocument()
+  })
+
+  it('says Unknown, not Off, when the tracker reports no ignition', () => {
+    const { rerender } = render(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: false, ignitionKnown: false }} />, { wrapper: Wrapper })
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('Unknown')
+    rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: false, ignitionKnown: true }} />)
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('Off')
+    rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: true, ignitionKnown: true }} />)
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('On')
   })
 })

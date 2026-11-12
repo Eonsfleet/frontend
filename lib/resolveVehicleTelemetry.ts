@@ -16,12 +16,14 @@ export interface ResolvedVehicleTelemetryInput {
     speed?: number;
     fuel?: number | null;
     fuel_liters?: number;
+    fuel_basis?: string | null;
     temp?: number;
     status?: string;
     voltage?: number | string;
     ext_voltage?: number | string;
     signal?: string;
     ignition?: boolean;
+    ignition_known?: boolean;
     odometer?: number;
     lat?: number;
     lng?: number;
@@ -97,6 +99,7 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     satellites: loc?.satellites ?? null,
     signal: loc?.satellites != null ? `${loc.satellites} Sats` : "---",
     ignition: loc?.ignition ?? false,
+    ignition_known: loc?.ignition_known,
     // mileage_km, not odometer_km: System 2 documents odometer_km as the
     // device's own counter with an arbitrary base (one live unit reads
     // 4,121,010 km), so only its delta means anything. mileage_km is that
@@ -190,6 +193,8 @@ export function resolveVehicleTelemetry({
   const liveIgnition = telemetry
     ? telemetry.ignition === "on" || telemetry.ignition === "1" || telemetry.ignition === true
     : (vehicle?.ignition as any) === "on" || (vehicle?.ignition as any) === "1" || vehicle?.ignition === true;
+  // False only when the platform said the tracker has no ignition reading; "off" is then not a reading.
+  const liveIgnitionKnown = (telemetry?.ignition_known ?? meta.ignition_known ?? vehicle?.ignition_known) !== false;
   const liveMovement = telemetry?.movement ?? vehicle?.movement;
   const liveStatus = telemetry?.status ?? vehicle?.status;
   const liveLat = telemetry?.latitude ?? telemetry?.lat ?? vehicle?.lat;
@@ -379,6 +384,7 @@ export function resolveVehicleTelemetry({
     speed: liveSpeed,
     heading: liveHeading,
     ignition: liveIgnition,
+    ignitionKnown: liveIgnitionKnown,
     movement: liveMovement,
     status: liveStatus,
     lat: liveLat,
@@ -420,6 +426,7 @@ export function resolveVehicleTelemetry({
     gpsConfidence: liveGpsConfidence,
     fuel: liveFuel,
     fuelLiters: liveFuelLiters,
+    fuelBasis: vehicle?.fuel_basis ?? null,
     fuelTankCap,
     fuelQuality,
     fuelLastUpdate,

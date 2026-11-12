@@ -236,6 +236,10 @@ export default function TrackingPage() {
             prevEntry?.lastPacket,
           fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
           fuel_liters: normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+          fuel_basis:
+            normalized.fuel_level_liters != null
+              ? (normalized.fuel_level_liters_basis ?? null)
+              : prevEntry?.fuel_basis,
           raw: normalized,
         },
       };
@@ -490,7 +494,7 @@ export default function TrackingPage() {
       if (filters.fuelLevel !== "all") {
         result = result.filter((v: VehicleMapEntry) => {
           const loc = locations[v.id];
-          const fuel = loc?.fuel_level_percent;
+          const fuel = loc?.fuel ?? loc?.fuel_level_percent;
           if (fuel == null) return false;
           if (filters.fuelLevel === "low") return fuel < 20;
           if (filters.fuelLevel === "medium") return fuel >= 20 && fuel <= 70;

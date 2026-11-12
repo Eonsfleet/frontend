@@ -1,6 +1,7 @@
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
+import { getVehicleById } from '@/lib/api/vehicles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useVehicleLocations } from '@/app/(portal)/tracking/hooks/useVehicleLocations'
 
@@ -89,7 +90,7 @@ describe('useVehicleLocations fleet-channel id keying', () => {
     expect(result.current.locations['7']).toMatchObject({ lat: 6.5, lng: 3.4, speed: 10 })
   })
 
-  it('keys .vehicle.status.changed and .fuel.event by vehicle_id too', () => {
+  it('keys .vehicle.status.changed and .fuel_alert by vehicle_id too', () => {
     const vehicles = [
       { id: '7', attributes: { registration_number: 'ABC-123' } },
     ] as any
@@ -106,11 +107,80 @@ describe('useVehicleLocations fleet-channel id keying', () => {
     })
     expect(result.current.locations['7'].status).toBe('idle')
 
-    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel.event')!
+    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel_alert')!
     act(() => {
-      fuelHandler({ vehicle_id: '7' })
+      fuelHandler({ vehicle_id: '7', type: 'fuel_theft' })
     })
     expect(result.current.alarmState['7']).toBe(true)
+  })
+
+  it('only a drain or a leak raises the alarm, not a low tank, a refill or a sensor fault', () => {
+    const vehicles = [{ id: '7', attributes: { registration_number: 'ABC-123' } }] as any
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    const fuelHandler = handlers.get('fuel.alerts.org-1::.fuel_alert')!
+
+    for (const type of ['low_fuel', 'refill', 'sensor_malfunction']) {
+      act(() => fuelHandler({ vehicle_id: '7', type }))
+      expect(result.current.alarmState['7']).toBeFalsy()
+    }
+    act(() => fuelHandler({ vehicle_id: '7', type: 'fuel_leakage' }))
+    expect(result.current.alarmState['7']).toBe(true)
+  })
+
+  it('the old .fuel.event is no longer listened to: nothing broadcasts it', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    expect(handlers.has('fuel.alerts.org-1::.fuel.event')).toBe(false)
+  })
+})
+
+describe('useVehicleLocations fleet seed', () => {
+  const mapEntry = (attributes: Record<string, unknown>) => ({
+    id: '7',
+    attributes: { registration_number: 'ABC-123', location: { latitude: 6.5, longitude: 3.4 }, speed: 0, last_packet_received_at: new Date().toISOString(), ...attributes },
+  }) as any
+
+  it('takes connectivity from is_online, not from the device lifecycle status', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const offlineVehicles = [mapEntry({ device_status: 'active', is_online: false })]
+    const offline = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles: offlineVehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(offline.result.current.locations['7'].is_online).toBe(false)
+    expect(offline.result.current.locations['7'].status).toBe('offline')
+
+    const onlineVehicles = [mapEntry({ device_status: 'inactive', is_online: true })]
+    const online = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles: onlineVehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(online.result.current.locations['7'].is_online).toBe(true)
+    expect(online.result.current.locations['7'].status).toBe('parked')
+  })
+
+  it('falls back to the lifecycle status only when the feed has no is_online', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [mapEntry({ device_status: 'active' })]
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(result.current.locations['7'].is_online).toBe(true)
+  })
+
+  it('keeps how the litres were obtained', () => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [mapEntry({ is_online: true, fuel: { level_liters: 24, level_percent: 40, liters_basis: 'calculated' } })]
+    const { result } = renderHook(
+      () => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }),
+      { wrapper: Wrapper },
+    )
+    expect(result.current.locations['7']).toMatchObject({ fuel: 40, fuel_liters: 24, fuel_basis: 'calculated' })
   })
 })
 
@@ -388,5 +458,175 @@ describe('useVehicleLocations status fidelity', () => {
     const result = send({ speed: 0, ignition: 'off', movement: 'off', is_online: false })
     expect(result.current.locations['42'].is_online).toBe(false)
     expect(result.current.locations['42'].status).toBe('offline')
+  })
+})
+
+describe('useVehicleLocations REST poll against a live packet', () => {
+  const entry = (attributes: Record<string, unknown>) => ({
+    id: '42',
+    attributes: { registration_number: 'ABC-123', device_status: 'active', is_online: true, location: { latitude: 6.5, longitude: 3.4 }, speed: 0, ...attributes },
+  }) as any
+
+  const setup = () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const first = [entry({ last_packet_received_at: new Date(Date.now() - 60_000).toISOString() })]
+    const hook = renderHook(
+      (props: { vehicles: any[] }) => useVehicleLocations({ ...baseProps, vehicles: props.vehicles, subscribePrivate, selectedVehicleId: null }),
+      { initialProps: { vehicles: first }, wrapper: Wrapper },
+    )
+    const send = (data: Record<string, unknown>) => act(() => handlers.get('org.org-1.tracking::.vehicle.location.updated')!({ vehicle_id: '42', lat: 6.5, lng: 3.4, ...data }))
+    return { hook, send }
+  }
+
+  it('keeps a live idle status instead of flipping the vehicle to parked on the next poll', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true, heading: 135 })
+    expect(hook.result.current.locations['42'].status).toBe('idle')
+
+    // The next poll: the same stationary vehicle, a newer receipt time, no ignition in the feed.
+    hook.rerender({ vehicles: [entry({ last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('idle')
+  })
+
+  it('keeps the heading of the live packet; the feed has none', () => {
+    const { hook, send } = setup()
+    send({ speed: 30, ignition: 'on', movement: 'on', is_online: true, heading: 135 })
+
+    hook.rerender({ vehicles: [entry({ speed: 30, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].heading).toBe(135)
+  })
+
+  it('does not hold idle once the vehicle moves', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true })
+
+    hook.rerender({ vehicles: [entry({ speed: 40, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('in_transit')
+  })
+
+  it('does not hold idle for an offline vehicle', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true })
+
+    hook.rerender({ vehicles: [entry({ device_status: 'inactive', is_online: false, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('offline')
+  })
+})
+
+describe('useVehicleLocations ignition that is not a reading', () => {
+  it('carries ignition_known from the live packet into the location entry', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    const handler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
+
+    act(() => handler({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'off', ignition_known: false, is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(false)
+
+    act(() => handler({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'on', ignition_known: true, is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(true)
+  })
+
+  it('treats a packet that does not say as known, so older servers behave as before', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    act(() => handlers.get('org.org-1.tracking::.vehicle.location.updated')!({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'off', is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(true)
+  })
+})
+
+describe('useVehicleLocations fleet seed: moving needs 5 km/h', () => {
+  const seed = (speed: number) => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [{
+      id: '7',
+      attributes: { registration_number: 'ABC-123', device_status: 'active', is_online: true, location: { latitude: 6.5, longitude: 3.4 }, speed, last_packet_received_at: new Date().toISOString() },
+    }] as any
+    return renderHook(() => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper }).result.current.locations['7'].status
+  }
+
+  it('reads GPS drift as parked and a real speed as in transit', () => {
+    expect(seed(3)).toBe('parked')
+    expect(seed(5)).toBe('in_transit')
+  })
+})
+
+describe('useVehicleLocations geofence alarm', () => {
+  const GEOFENCE = 'location.organization.org-1::.geofence.monitor'
+
+  const setup = () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const vehicles = [{ id: '7', attributes: { registration_number: 'ABC-123' } }] as any
+    const hook = renderHook(() => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    return { hook, handlers }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('an exit clears the alarm at once', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: false }))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('clears itself after 15 minutes when the fence sends no exit, instead of staying until a reload', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(14 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+    act(() => vi.advanceTimersByTime(61_000))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('a new breach restarts the window', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    act(() => vi.advanceTimersByTime(10 * 60_000))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(10 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+    act(() => vi.advanceTimersByTime(6 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('an earlier breach timer does not clear a later alarm', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: false }))
+    act(() => vi.advanceTimersByTime(5 * 60_000))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(11 * 60_000)) // 16 minutes after the first breach
+    expect(hook.result.current.alarmState['7']).toBe(true)
+  })
+})
+
+describe('useVehicleLocations selected vehicle snapshot', () => {
+  it('reads the selected vehicle again every 30 s, so battery and RPM do not freeze', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const mocked = vi.mocked(getVehicleById)
+    mocked.mockClear()
+    const { subscribePrivate } = makeSubscribePrivate()
+    renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: '7' }), { wrapper: Wrapper })
+
+    await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000)
+    })
+    await waitFor(() => expect(mocked.mock.calls.length).toBeGreaterThanOrEqual(2))
+    vi.useRealTimers()
   })
 })

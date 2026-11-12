@@ -209,3 +209,18 @@ describe('a missing engine temperature', () => {
     expect(resolved.tempWarn).toBe(true)
   })
 })
+
+describe('an ignition the tracker does not report', () => {
+  const resolve = (telemetry: Record<string, unknown>) => resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', ...telemetry }, deviceStatus: null })
+
+  it('is flagged unknown when the platform said so, in the packet or in the snapshot metadata', () => {
+    expect(resolve({ ignition: 'off', ignition_known: false }).ignitionKnown).toBe(false)
+    expect(resolve({ ignition: 'off', metadata: { ignition_known: false } }).ignitionKnown).toBe(false)
+  })
+
+  it('is known by default, and when it was reported on or off', () => {
+    expect(resolve({ ignition: 'off' }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'on', ignition_known: true }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'off', ignition_known: true }).ignitionKnown).toBe(true)
+  })
+})
