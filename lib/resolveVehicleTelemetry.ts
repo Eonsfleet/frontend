@@ -101,7 +101,7 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     // 4,121,010 km), so only its delta means anything. mileage_km is that
     // counter rebased onto the vehicle's real odometer — the one to show.
     odometer:
-      loc?.odometer ?? loc?.mileage_km ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+      loc?.mileage_km ?? loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
     gps_confidence: loc?.gps_confidence ?? null,
     lat: loc?.lat ?? rel?.latitude,
     lng: loc?.lng ?? rel?.longitude,
@@ -195,8 +195,10 @@ export function resolveVehicleTelemetry({
   const liveLng = telemetry?.longitude ?? telemetry?.lng ?? vehicle?.lng;
   const liveAltitude = telemetry?.altitude ?? vehicle?.altitude ?? raw.altitude;
   const liveSatellites = telemetry?.satellites ?? raw.satellites ?? null;
+  // mileage_km first: it is the device counter rebased onto the vehicle's real odometer. `odometer` is the
+  // raw counter, whose base is arbitrary (only its delta means anything), so it is the fallback.
   const liveOdo =
-    telemetry?.odometer ?? telemetry?.mileage_km ?? vehicle?.odometer ?? raw.odometer ?? raw.mileage_km;
+    telemetry?.mileage_km ?? raw.mileage_km ?? telemetry?.odometer ?? vehicle?.odometer ?? raw.odometer;
   // Not every device/protocol reports engine hours — surface it only when the
   // device actually sends it rather than fabricating a value from unrelated data.
   const liveEngineHours = meta.engine_hours ?? telemetry?.engine_hours ?? raw.engine_hours ?? null;

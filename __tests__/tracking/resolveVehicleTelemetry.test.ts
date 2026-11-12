@@ -195,3 +195,28 @@ describe('current_location telemetry reaches the Details tab', () => {
     expect(resolved.jamming).toBe(false)
   })
 })
+
+describe('which odometer is shown', () => {
+  it('prefers the rebased mileage over the raw device counter, whichever object holds them', () => {
+    // A packet carrying both: the counter's base is arbitrary, the mileage is the vehicle's real odometer.
+    const fromPacket = resolveVehicleTelemetry({
+      vehicle: null,
+      telemetry: { gps_datetime: '2026-11-12T10:00:00Z', odometer: 4121010, mileage_km: 84215.2 },
+      deviceStatus: null,
+    })
+    expect(fromPacket.odometer).toBe(84215.2)
+
+    // The vehicle entry keeps the snapshot's counter in odometer and the live mileage in raw.
+    const fromEntry = resolveVehicleTelemetry({
+      vehicle: { plate: 'ABC', odometer: 4121010, raw: { mileage_km: 84215.2 } } as any,
+      telemetry: null,
+      deviceStatus: null,
+    })
+    expect(fromEntry.odometer).toBe(84215.2)
+  })
+
+  it('falls back to the counter when there is no mileage', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: { plate: 'ABC', odometer: 51000 } as any, telemetry: { gps_datetime: '2026-11-12T10:00:00Z' }, deviceStatus: null })
+    expect(resolved.odometer).toBe(51000)
+  })
+})
