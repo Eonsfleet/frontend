@@ -1,3 +1,4 @@
+import { isMovingSpeed } from "@/lib/movement"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import axios from 'axios'
@@ -48,7 +49,7 @@ export function normalizeTelemetry(telemetry: any, overrides?: any) {
 
   if (!isOnline) {
     normalized.status = 'offline'
-  } else if (normalized.status === 'in_transit' || speed > 0) {
+  } else if (normalized.status === 'in_transit' || isMovingSpeed(speed)) {
     normalized.status = 'in_transit'
   } else if (ignition === 'on' || ignition === '1' || (normalized.engine_rpm ?? 0) > 0) {
     normalized.status = 'idle'

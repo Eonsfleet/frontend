@@ -536,3 +536,19 @@ describe('useVehicleLocations ignition that is not a reading', () => {
     expect(result.current.locations['42'].ignition_known).toBe(true)
   })
 })
+
+describe('useVehicleLocations fleet seed: moving needs 5 km/h', () => {
+  const seed = (speed: number) => {
+    const { subscribePrivate } = makeSubscribePrivate()
+    const vehicles = [{
+      id: '7',
+      attributes: { registration_number: 'ABC-123', device_status: 'active', is_online: true, location: { latitude: 6.5, longitude: 3.4 }, speed, last_packet_received_at: new Date().toISOString() },
+    }] as any
+    return renderHook(() => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper }).result.current.locations['7'].status
+  }
+
+  it('reads GPS drift as parked and a real speed as in transit', () => {
+    expect(seed(3)).toBe('parked')
+    expect(seed(5)).toBe('in_transit')
+  })
+})
