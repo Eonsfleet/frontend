@@ -56,6 +56,8 @@ export interface SilentFuelVehicle {
   last_reading_at: string;
   age_minutes: number;
   cluster_id: number | null;
+  /** sensor_silent: the tracker still sends positions but no tank level. device_silent: it sends nothing. */
+  reason?: "sensor_silent" | "device_silent";
 }
 
 export interface RealtimeFuelSnapshot {
