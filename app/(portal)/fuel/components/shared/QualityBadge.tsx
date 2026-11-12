@@ -14,7 +14,7 @@ const LABEL: Record<Quality | "unknown", { text: string; title: string; tone: st
   },
   percent_only: {
     text: "% only",
-    title: "The sensor reports a percentage and the tank's capacity is not set, so there are no litres to show.",
+    title: "The sensor reports a percentage and the tank's capacity is not set or not verified, so there are no litres to show.",
     tone: "bg-slate-100 text-slate-600 ring-slate-200",
   },
   estimated: {
