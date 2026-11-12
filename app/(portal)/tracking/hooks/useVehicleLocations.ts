@@ -108,6 +108,9 @@ interface UseVehicleLocationsProps {
 /** Fuel alert types that raise the Alarm state on the map. */
 const FUEL_ALARM_TYPES = new Set(["fuel_theft", "fuel_leakage"]);
 
+/** How long a live "idle" is kept against a poll that cannot see the ignition. */
+const IDLE_KEEP_MS = 2 * 60_000;
+
 /** How long a fuel-anomaly alarm stays active if nothing else re-triggers or clears it. */
 const FUEL_ALARM_AUTO_CLEAR_MS = 10 * 60_000;
 
@@ -213,13 +216,21 @@ export function useVehicleLocations({
         const speed = v.attributes.speed ?? 0;
 
         // Derive movement status from speed — the map feed carries no explicit state.
+        const prevEntry = next[vehicleId];
+        // The feed has no ignition, so it can never say "idle". A vehicle a live packet just
+        // reported idle (engine on, not moving) would flip to "parked" on every poll and back on
+        // the next packet; keep idle while that packet is recent and the vehicle is still not moving.
+        const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+        const keepIdle =
+          prevEntry?.status === "idle" && speed === 0 && Date.now() - prevUpdateMs < IDLE_KEEP_MS;
         const derivedStatus = staleOffline || !isOnline
           ? "offline"
           : speed > 0
             ? "in_transit"
-            : "parked";
+            : keepIdle
+              ? "idle"
+              : "parked";
 
-        const prevEntry = next[vehicleId];
         const statusSinceMs =
           prevEntry?.status === derivedStatus
             ? (prevEntry?.statusSinceMs ?? Date.now())
@@ -233,7 +244,8 @@ export function useVehicleLocations({
           lat: lat ?? 0,
           lng: lng ?? 0,
           speed,
-          heading: 0,
+          // The feed has no heading. A live packet's is kept; 0 would swing the marker north.
+          heading: prevEntry?.heading ?? 0,
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,

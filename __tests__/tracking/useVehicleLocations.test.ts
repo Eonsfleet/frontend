@@ -459,3 +459,59 @@ describe('useVehicleLocations status fidelity', () => {
     expect(result.current.locations['42'].status).toBe('offline')
   })
 })
+
+describe('useVehicleLocations REST poll against a live packet', () => {
+  const entry = (attributes: Record<string, unknown>) => ({
+    id: '42',
+    attributes: { registration_number: 'ABC-123', device_status: 'active', is_online: true, location: { latitude: 6.5, longitude: 3.4 }, speed: 0, ...attributes },
+  }) as any
+
+  const setup = () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const first = [entry({ last_packet_received_at: new Date(Date.now() - 60_000).toISOString() })]
+    const hook = renderHook(
+      (props: { vehicles: any[] }) => useVehicleLocations({ ...baseProps, vehicles: props.vehicles, subscribePrivate, selectedVehicleId: null }),
+      { initialProps: { vehicles: first }, wrapper: Wrapper },
+    )
+    const send = (data: Record<string, unknown>) => act(() => handlers.get('org.org-1.tracking::.vehicle.location.updated')!({ vehicle_id: '42', lat: 6.5, lng: 3.4, ...data }))
+    return { hook, send }
+  }
+
+  it('keeps a live idle status instead of flipping the vehicle to parked on the next poll', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true, heading: 135 })
+    expect(hook.result.current.locations['42'].status).toBe('idle')
+
+    // The next poll: the same stationary vehicle, a newer receipt time, no ignition in the feed.
+    hook.rerender({ vehicles: [entry({ last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('idle')
+  })
+
+  it('keeps the heading of the live packet; the feed has none', () => {
+    const { hook, send } = setup()
+    send({ speed: 30, ignition: 'on', movement: 'on', is_online: true, heading: 135 })
+
+    hook.rerender({ vehicles: [entry({ speed: 30, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].heading).toBe(135)
+  })
+
+  it('does not hold idle once the vehicle moves', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true })
+
+    hook.rerender({ vehicles: [entry({ speed: 40, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('in_transit')
+  })
+
+  it('does not hold idle for an offline vehicle', () => {
+    const { hook, send } = setup()
+    send({ speed: 0, ignition: 'on', movement: 'off', is_online: true })
+
+    hook.rerender({ vehicles: [entry({ device_status: 'inactive', is_online: false, last_packet_received_at: new Date().toISOString() })] })
+
+    expect(hook.result.current.locations['42'].status).toBe('offline')
+  })
+})
