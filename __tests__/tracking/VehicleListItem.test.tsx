@@ -38,7 +38,20 @@ describe('VehicleListItem', () => {
   it('marks litres worked out from a percentage with ≈', () => {
     const loc = { status: 'parked', is_online: true, speed: 0, fuel: 40, fuel_liters: 24, fuel_basis: 'calculated' }
     render(<VehicleListItem vehicle={vehicle} loc={loc} isSelected={false} onSelect={vi.fn()} />)
-    expect(screen.getByText('≈ 24.0 L')).toBeInTheDocument()
+    expect(screen.getByText('40% · ≈ 24.0 L')).toBeInTheDocument()
+  })
+
+  it('shows the percentage and the litres together when the device gives both', () => {
+    const loc = { status: 'parked', is_online: true, speed: 0, fuel: 62, fuel_liters: 38.5, fuel_basis: 'device' }
+    render(<VehicleListItem vehicle={vehicle} loc={loc} isSelected={false} onSelect={vi.fn()} />)
+    expect(screen.getByText('62% · 38.5 L')).toBeInTheDocument()
+  })
+
+  it('shows just the percentage when the device gives no litres', () => {
+    const loc = { status: 'parked', is_online: true, speed: 0, fuel: 55 }
+    render(<VehicleListItem vehicle={vehicle} loc={loc} isSelected={false} onSelect={vi.fn()} />)
+    expect(screen.getByText('55%')).toBeInTheDocument()
+    expect(screen.queryByText(/ L$/)).toBeNull()
   })
 
   it('shows nothing about fuel when there is no reading, not 0', () => {

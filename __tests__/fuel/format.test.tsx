@@ -68,3 +68,21 @@ describe('badges', () => {
         expect(screen.getByText('· 2 h ago')).toBeTruthy()
     })
 })
+
+describe('formatFuelLevel', () => {
+    it('writes the percentage and the litres together, and ≈ only for calculated litres', async () => {
+        const { formatFuelLevel } = await import('@/lib/fuel-format')
+        expect(formatFuelLevel(62, 38.5, 'device')).toBe('62% · 38.5 L')
+        expect(formatFuelLevel(40, 24, 'calculated')).toBe('40% · ≈ 24.0 L')
+        expect(formatFuelLevel(55, null)).toBe('55%')
+        expect(formatFuelLevel(null, 38.5)).toBe('38.5 L')
+        expect(formatFuelLevel(61.6, 10)).toBe('62% · 10.0 L')
+    })
+
+    it('is null, not zero, when the device reported neither', async () => {
+        const { formatFuelLevel } = await import('@/lib/fuel-format')
+        expect(formatFuelLevel(null, null)).toBeNull()
+        expect(formatFuelLevel(undefined, undefined)).toBeNull()
+        expect(formatFuelLevel(Number.NaN, null)).toBeNull()
+    })
+})

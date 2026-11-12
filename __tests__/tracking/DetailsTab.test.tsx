@@ -67,4 +67,49 @@ describe('DetailsTab', () => {
     expect(screen.queryByText('Current Address')).not.toBeInTheDocument()
     expect(screen.queryByText('Battery')).not.toBeInTheDocument()
   })
+
+  it('draws only the rows the device reported, and lists the rest once instead of a column of dashes', () => {
+    render(<DetailsTab resolved={{ ...baseResolved, rpm: 1450, hdop: 0.9 }} />)
+
+    expect(screen.getByText('Engine RPM')).toBeInTheDocument()
+    expect(screen.getByText('GPS Precision (HDOP)')).toBeInTheDocument()
+    // Not drawn as rows with a dash ...
+    expect(screen.queryAllByText('—')).toHaveLength(0)
+    expect(screen.queryByText('Oil Level', { selector: 'span.uppercase' })).toBeNull()
+    // ... but named, once, as not reported.
+    const note = screen.getByTestId('not-reported')
+    expect(note).toHaveTextContent('Not reported by this device')
+    expect(note).toHaveTextContent('Oil Level')
+    expect(note).toHaveTextContent('Engine Hours')
+    expect(note.textContent).not.toMatch(/Engine RPM(?! \()/) // RPM was reported (the OBD variant was not)
+    expect(note.textContent).not.toMatch(/GPS Precision \(HDOP\)/)
+  })
+
+  it('shows the readings the platform names: load, throttle, coolant, battery level, PDOP and GSM signal', () => {
+    render(<DetailsTab resolved={{ ...baseResolved, engineLoad: 41, throttle: 18, coolantTemp: 88, batteryLevel: 87, pdop: 1.4, gsmSignal: 4, tripOdo: 12.5 } as never} />)
+
+    expect(screen.getByText('41%')).toBeInTheDocument()
+    expect(screen.getByText('18%')).toBeInTheDocument()
+    expect(screen.getByText('88°C')).toBeInTheDocument()
+    expect(screen.getByText('87%')).toBeInTheDocument()
+    expect(screen.getByText('1.4')).toBeInTheDocument()
+    expect(screen.getByText('4 of 5')).toBeInTheDocument()
+    expect(screen.getByText('12.5 km')).toBeInTheDocument()
+  })
+
+  it('shows the fuel level as percentage and litres together', () => {
+    const { rerender } = render(<DetailsTab resolved={{ ...baseResolved, fuel: 62, fuelLiters: 38.5, fuelBasis: 'device' } as never} />)
+    expect(screen.getByText('62% · 38.5 L')).toBeInTheDocument()
+
+    rerender(<DetailsTab resolved={{ ...baseResolved, fuel: 40, fuelLiters: 24, fuelBasis: 'calculated' } as never} />)
+    expect(screen.getByText('40% · ≈ 24.0 L')).toBeInTheDocument()
+  })
+
+  it('says nothing is reported, not that everything is closed or zero, for a device with no readings', () => {
+    render(<DetailsTab resolved={baseResolved} />)
+
+    expect(screen.queryByText('Door Status')).not.toBeInTheDocument()
+    expect(screen.queryByText('0 rpm')).not.toBeInTheDocument()
+    expect(screen.getByTestId('not-reported')).toHaveTextContent('Door Status')
+  })
 })

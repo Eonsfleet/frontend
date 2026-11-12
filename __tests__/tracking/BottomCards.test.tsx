@@ -62,7 +62,7 @@ describe('BottomCards', () => {
     expect(await screen.findByText('VT310')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('13.800V')).toBeInTheDocument()
-    expect(screen.getByText('13.0 L')).toBeInTheDocument()
+    expect(screen.getByText('13.0 L')).toBeInTheDocument() // litres only: this fixture has no percentage
     expect(screen.getByText('Strong')).toBeInTheDocument()
   })
 
@@ -80,10 +80,10 @@ describe('BottomCards', () => {
     expect(networkValue?.textContent).toBe('62179')
   })
 
-  it('shows the litres beside the bar when percent and litres are both present', () => {
+  it('shows the percentage and the litres together when the device gives both', () => {
     const resolvedWithFuel = { ...resolved, fuel: 62, fuelLiters: 13 }
     render(<BottomCards selectedVehicle={vehicle} resolved={resolvedWithFuel} />, { wrapper: Wrapper })
-    expect(screen.getByText('13.0 L')).toBeInTheDocument()
+    expect(screen.getByText('62% · 13.0 L')).toBeInTheDocument()
   })
 
   it('reverse-geocodes the address when the device never sent a resolved address string', async () => {
@@ -96,7 +96,7 @@ describe('BottomCards', () => {
     const { rerender } = render(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, fuel: null, fuelLiters: 38.5, fuelBasis: 'device' }} />, { wrapper: Wrapper })
     expect(screen.getByText('38.5 L')).toBeInTheDocument()
     rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, fuel: 40, fuelLiters: 24, fuelBasis: 'calculated' }} />)
-    expect(screen.getByText('≈ 24.0 L')).toBeInTheDocument()
+    expect(screen.getByText('40% · ≈ 24.0 L')).toBeInTheDocument()
   })
 
   it('says Unknown, not Off, when the tracker reports no ignition', () => {
