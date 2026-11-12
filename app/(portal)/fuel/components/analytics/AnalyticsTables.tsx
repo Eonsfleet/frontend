@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { FuelAnalytics } from '@/lib/api/fuelPage'
 import { formatLitres, formatNaira, formatNumber } from '@/lib/fuel-format'
 import { QualityBadge } from '../shared/QualityBadge'
+import { TablePager, usePaged } from './TablePager'
 
 const card = 'rounded-2xl bg-white p-4'
 const th = 'px-2 py-2 text-left text-xs font-medium text-slate-500'
@@ -15,15 +16,17 @@ function Vehicle({ id, reg }: { id: number; reg: string | null }) {
 }
 
 export function RefillsTable({ refills }: { refills: FuelAnalytics['refills'] }) {
+    const paged = usePaged(refills)
     return (
         <div className={card}>
             <h2 className="text-sm font-semibold text-slate-900">Refills detected by the tank sensor</h2>
             {refills.length === 0 ? <p className="mt-3 text-sm text-slate-500">No refills detected in this period.</p> : (
+                <>
                 <div className="mt-2 overflow-x-auto">
                     <table className="w-full min-w-[480px]">
                         <thead><tr><th className={th}>When</th><th className={th}>Vehicle</th><th className={th}>Litres</th><th className={th}>Purchase</th></tr></thead>
                         <tbody className="divide-y divide-slate-100">
-                            {refills.map((r) => (
+                            {paged.pageRows.map((r) => (
                                 <tr key={r.id}>
                                     <td className={td}>{when(r.at)}</td>
                                     <td className={td}><Vehicle id={r.vehicle_id} reg={r.registration_number} /></td>
@@ -34,12 +37,15 @@ export function RefillsTable({ refills }: { refills: FuelAnalytics['refills'] })
                         </tbody>
                     </table>
                 </div>
+                <TablePager label="Refills" paged={paged} />
+                </>
             )}
         </div>
     )
 }
 
 export function DrainsTable({ drains }: { drains: FuelAnalytics['drains'] }) {
+    const paged = usePaged(drains)
     if (drains.length === 0) return null
     return (
         <div className={card}>
@@ -48,7 +54,7 @@ export function DrainsTable({ drains }: { drains: FuelAnalytics['drains'] }) {
                 <table className="w-full min-w-[480px]">
                     <thead><tr><th className={th}>When</th><th className={th}>Vehicle</th><th className={th}>Lost</th><th className={th}>Status</th></tr></thead>
                     <tbody className="divide-y divide-slate-100">
-                        {drains.map((d) => (
+                        {paged.pageRows.map((d) => (
                             <tr key={d.id}>
                                 <td className={td}>{when(d.at)}</td>
                                 <td className={td}><Vehicle id={d.vehicle_id} reg={d.registration_number} /></td>
@@ -59,15 +65,18 @@ export function DrainsTable({ drains }: { drains: FuelAnalytics['drains'] }) {
                     </tbody>
                 </table>
             </div>
+            <TablePager label="Drains" paged={paged} />
         </div>
     )
 }
 
 export function VehicleTable({ rows }: { rows: FuelAnalytics['by_vehicle'] }) {
+    const paged = usePaged(rows)
     return (
         <div className={card}>
             <h2 className="text-sm font-semibold text-slate-900">By vehicle</h2>
             {rows.length === 0 ? <p className="mt-3 text-sm text-slate-500">No fuel usage recorded for the chosen vehicles in this period.</p> : (
+                <>
                 <div className="mt-2 overflow-x-auto">
                     <table className="w-full min-w-[760px]">
                         <thead>
@@ -77,7 +86,7 @@ export function VehicleTable({ rows }: { rows: FuelAnalytics['by_vehicle'] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {rows.map((r) => (
+                            {paged.pageRows.map((r) => (
                                 <tr key={r.vehicle_id}>
                                     <td className={td}>
                                         <Vehicle id={r.vehicle_id} reg={r.registration_number} />
@@ -95,6 +104,8 @@ export function VehicleTable({ rows }: { rows: FuelAnalytics['by_vehicle'] }) {
                         </tbody>
                     </table>
                 </div>
+                <TablePager label="Vehicles" paged={paged} />
+                </>
             )}
         </div>
     )
