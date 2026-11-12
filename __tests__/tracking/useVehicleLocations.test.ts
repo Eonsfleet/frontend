@@ -1,6 +1,7 @@
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
+import { getVehicleById } from '@/lib/api/vehicles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useVehicleLocations } from '@/app/(portal)/tracking/hooks/useVehicleLocations'
 
@@ -550,5 +551,82 @@ describe('useVehicleLocations fleet seed: moving needs 5 km/h', () => {
   it('reads GPS drift as parked and a real speed as in transit', () => {
     expect(seed(3)).toBe('parked')
     expect(seed(5)).toBe('in_transit')
+  })
+})
+
+describe('useVehicleLocations geofence alarm', () => {
+  const GEOFENCE = 'location.organization.org-1::.geofence.monitor'
+
+  const setup = () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const vehicles = [{ id: '7', attributes: { registration_number: 'ABC-123' } }] as any
+    const hook = renderHook(() => useVehicleLocations({ ...baseProps, vehicles, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    return { hook, handlers }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('an exit clears the alarm at once', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: false }))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('clears itself after 15 minutes when the fence sends no exit, instead of staying until a reload', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(14 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+    act(() => vi.advanceTimersByTime(61_000))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('a new breach restarts the window', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    act(() => vi.advanceTimersByTime(10 * 60_000))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(10 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(true)
+    act(() => vi.advanceTimersByTime(6 * 60_000))
+    expect(hook.result.current.alarmState['7']).toBe(false)
+  })
+
+  it('an earlier breach timer does not clear a later alarm', () => {
+    const { hook, handlers } = setup()
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: false }))
+    act(() => vi.advanceTimersByTime(5 * 60_000))
+    act(() => handlers.get(GEOFENCE)!({ vehicle_id: '7', in_geofenced_area: true }))
+
+    act(() => vi.advanceTimersByTime(11 * 60_000)) // 16 minutes after the first breach
+    expect(hook.result.current.alarmState['7']).toBe(true)
+  })
+})
+
+describe('useVehicleLocations selected vehicle snapshot', () => {
+  it('reads the selected vehicle again every 30 s, so battery and RPM do not freeze', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const mocked = vi.mocked(getVehicleById)
+    mocked.mockClear()
+    const { subscribePrivate } = makeSubscribePrivate()
+    renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: '7' }), { wrapper: Wrapper })
+
+    await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000)
+    })
+    await waitFor(() => expect(mocked.mock.calls.length).toBeGreaterThanOrEqual(2))
+    vi.useRealTimers()
   })
 })

@@ -118,8 +118,14 @@ function ignitionKnownOf(packet: { ignition_known?: unknown; metadata?: { igniti
 /** Fuel alert types that raise the Alarm state on the map. */
 const FUEL_ALARM_TYPES = new Set(["fuel_theft", "fuel_leakage"]);
 
+/** How often the selected vehicle's full telemetry snapshot is read again. */
+const SELECTED_SNAPSHOT_REFRESH_MS = 30_000;
+
 /** How long a live "idle" is kept against a poll that cannot see the ignition. */
 const IDLE_KEEP_MS = 2 * 60_000;
+
+/** How long a geofence alarm stays when no exit clears it. */
+const GEOFENCE_ALARM_AUTO_CLEAR_MS = 15 * 60_000;
 
 /** How long a fuel-anomaly alarm stays active if nothing else re-triggers or clears it. */
 const FUEL_ALARM_AUTO_CLEAR_MS = 10 * 60_000;
@@ -171,6 +177,9 @@ export function useVehicleLocations({
     enabled: !!selectedVehicleId,
     staleTime: 0,
     retry: false,
+    // The extended readings (battery, RPM, GSM, engine) are on no live channel, so without this they
+    // freeze at what the vehicle had when it was selected. React Query pauses it in a hidden tab.
+    refetchInterval: SELECTED_SNAPSHOT_REFRESH_MS,
   });
 
   useEffect(() => {
@@ -494,6 +503,7 @@ export function useVehicleLocations({
       },
     );
 
+    const geofenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
     const geofenceUnsubscribe = subscribePrivate(
       `location.organization.${orgIdentifier}`,
       ".geofence.monitor",
@@ -510,6 +520,23 @@ export function useVehicleLocations({
 
         setAlarmState((prev) => ({ ...prev, [idKey]: isBreach }));
         pushIfSelected(idKey, ".geofence.monitor", payload);
+
+        // The backend announces a crossing only when that fence's policy alerts on it. A fence that
+        // alerts on entry but not on exit never sends the exit that would clear this, so the vehicle
+        // would stay in the Alarm state until the page is reloaded. An exit clears it at once; if none
+        // comes, it clears after a fixed window, and a new breach restarts the window.
+        const pending = geofenceTimers.get(idKey);
+        if (pending) clearTimeout(pending);
+        geofenceTimers.delete(idKey);
+        if (isBreach) {
+          geofenceTimers.set(
+            idKey,
+            setTimeout(() => {
+              geofenceTimers.delete(idKey);
+              setAlarmState((prev) => (prev[idKey] ? { ...prev, [idKey]: false } : prev));
+            }, GEOFENCE_ALARM_AUTO_CLEAR_MS),
+          );
+        }
       },
     );
 
@@ -518,6 +545,8 @@ export function useVehicleLocations({
       if (statusUnsubscribe) statusUnsubscribe();
       if (fuelUnsubscribe) fuelUnsubscribe();
       if (geofenceUnsubscribe) geofenceUnsubscribe();
+      geofenceTimers.forEach((t) => clearTimeout(t));
+      geofenceTimers.clear();
     };
   }, [token, organization?.attributes?.identifier, subscribePrivate]);
 
