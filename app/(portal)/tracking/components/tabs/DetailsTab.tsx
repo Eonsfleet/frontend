@@ -81,7 +81,7 @@ export function DetailsTab({ resolved, todayKm }: DetailsTabProps) {
         { label: "Engine Load", value: fmt(resolved.engineLoad, "%") },
         { label: "Throttle", value: fmt(resolved.throttle, "%") },
         { label: "Coolant Temperature", value: fmt(resolved.coolantTemp, "°C") },
-        { label: "Oil Level", value: fmt(resolved.oilLevel) },
+        { label: "Oil Level", value: fmt(resolved.oilLevel, "%") },
         { label: "Engine Hours", value: fmt(resolved.engineHours, " hrs") },
       ],
     },

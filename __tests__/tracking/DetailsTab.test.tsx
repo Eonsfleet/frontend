@@ -112,4 +112,13 @@ describe('DetailsTab', () => {
     expect(screen.queryByText('0 rpm')).not.toBeInTheDocument()
     expect(screen.getByTestId('not-reported')).toHaveTextContent('Door Status')
   })
+
+  it('shows oil level, engine hours, load weight and the eco score with their units', () => {
+    render(<DetailsTab resolved={{ ...baseResolved, oilLevel: 64, engineHours: 1.5, loadWeight: 1250, ecoScore: 82.5 } as never} />)
+
+    expect(screen.getByText('64%')).toBeInTheDocument()
+    expect(screen.getByText('1.5 hrs')).toBeInTheDocument()
+    expect(screen.getByText('1250 kg')).toBeInTheDocument()
+    expect(screen.getByText('82.5/100')).toBeInTheDocument()
+  })
 })
