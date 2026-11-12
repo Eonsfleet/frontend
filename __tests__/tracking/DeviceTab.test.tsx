@@ -8,7 +8,7 @@ const baseResolved = {
 } as unknown as ResolvedVehicleTelemetry
 
 describe('DeviceTab', () => {
-  it('renders IMEI, SIM number (phone), signal quality, temperature and health', () => {
+  it('renders IMEI, SIM number (phone), signal quality, temperature and connection', () => {
     render(
       <DeviceTab
         device={{ imei: '123456789012345' } as any}
@@ -20,7 +20,14 @@ describe('DeviceTab', () => {
     expect(screen.getByText('2348012345678')).toBeInTheDocument()
     expect(screen.getByText('-70 dBm')).toBeInTheDocument()
     expect(screen.getByText('82°C')).toBeInTheDocument()
-    expect(screen.getByText('Healthy')).toBeInTheDocument()
+    expect(screen.getByText('Online')).toBeInTheDocument()
+  })
+
+  it('says Offline, not Attention needed, and shows no temperature when none was reported', () => {
+    render(<DeviceTab device={{ imei: '1' } as any} resolved={{ ...baseResolved, isDeviceOnline: false, engineTemp: null }} deviceInfoData={null} />)
+    expect(screen.getByText('Offline')).toBeInTheDocument()
+    expect(screen.queryByText('0°C')).toBeNull()
+    expect(screen.getByText('Temperature').nextElementSibling?.textContent).toBe('—')
   })
 
   it('shows an em dash for Firmware — no firmware field exists in the backend yet', () => {

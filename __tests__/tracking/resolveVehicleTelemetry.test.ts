@@ -195,3 +195,17 @@ describe('current_location telemetry reaches the Details tab', () => {
     expect(resolved.jamming).toBe(false)
   })
 })
+
+describe('a missing engine temperature', () => {
+  it('stays absent instead of becoming 0 °C, and never raises the overheat warning', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z' }, deviceStatus: null })
+    expect(resolved.engineTemp).toBeNull()
+    expect(resolved.tempWarn).toBe(false)
+  })
+
+  it('still warns when a real reading is high', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', metadata: { engine_temperature: 112 } }, deviceStatus: null })
+    expect(resolved.engineTemp).toBe(112)
+    expect(resolved.tempWarn).toBe(true)
+  })
+})

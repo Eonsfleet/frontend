@@ -89,7 +89,8 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     fuel_used_gps: loc?.fuel_used_gps ?? (loc?.metadata as any)?.fuel_used_gps ?? null,
     fuel_level_obd: loc?.fuel_level_obd ?? (loc?.metadata as any)?.fuel_level_obd ?? null,
     fuel_source: loc?.fuel_source ?? (loc?.metadata as any)?.fuel_source ?? null,
-    temp: loc?.engine_temperature ?? 0,
+    // No reading stays absent: 0 would read as a real 0 °C.
+    temp: loc?.engine_temperature ?? undefined,
     status: loc?.status,
     voltage: loc?.battery_voltage,
     ext_voltage: loc?.external_voltage,
@@ -313,7 +314,7 @@ export function resolveVehicleTelemetry({
 
   const liveBatteryCurrent = meta.battery_current ?? telemetry?.battery_current ?? raw.battery_current;
   const liveEngineTemp =
-    meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? 0;
+    meta.engine_temperature ?? telemetry?.engine_temperature ?? raw.engine_temperature ?? vehicle?.temp ?? null;
   const liveRssi = meta.rssi ?? telemetry?.rssi ?? null;
   const liveHdop = meta.hdop ?? telemetry?.hdop ?? null;
   // GSM operator code (MCC+MNC) — the closest thing to a "network/carrier" signal
@@ -363,7 +364,7 @@ export function resolveVehicleTelemetry({
   })();
 
   const batteryWarn = parsedBatteryV != null && !isNaN(parsedBatteryV) && parsedBatteryV < 11.8;
-  const tempWarn = liveEngineTemp > 105;
+  const tempWarn = liveEngineTemp != null && liveEngineTemp > 105;
   const weakGps = liveSatellites != null && liveSatellites < 4;
 
   const health = sensorHealth || {
