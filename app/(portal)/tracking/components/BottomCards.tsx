@@ -102,7 +102,7 @@ export function BottomCards({ selectedVehicle, resolved, loc, hasActiveAlarm = f
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2">
           <Stat label="Speed" value={`${loc?.speed ?? resolved.speed ?? 0} km/h`} />
           <Stat label="Heading" value={resolved.heading != null ? `${Math.round(resolved.heading)}°` : null} />
-          <Stat label="Ignition" value={resolved.ignition ? "On" : "Off"} />
+          <Stat label="Ignition" value={resolved.ignitionKnown === false ? "Unknown" : resolved.ignition ? "On" : "Off"} />
           <Stat
             label="Status"
             value={

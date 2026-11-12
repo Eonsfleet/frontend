@@ -79,6 +79,10 @@ export function mergeTelemetrySnapshot(prevEntry: any, normalized: any) {
     ignition: snapshotIsFresher
       ? normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
       : (prevEntry?.ignition ?? normalized.ignition === "on"),
+    // false when the tracker reports no ignition: the "off" above is then not a reading.
+    ignition_known: snapshotIsFresher
+      ? ignitionKnownOf(normalized)
+      : (prevEntry?.ignition_known ?? ignitionKnownOf(normalized)),
     // raw is the resolver's last-resort lookup for anything the live payloads
     // omit, so it holds the best known value per field rather than whichever
     // packet landed last.
@@ -103,6 +107,11 @@ interface UseVehicleLocationsProps {
    * per-vehicle ring buffer for every vehicle in a large fleet at once.
    */
   selectedVehicleId?: string | null;
+}
+
+/** False only when the platform said the tracker reports no ignition (a GT06 sends none). */
+function ignitionKnownOf(packet: { ignition_known?: unknown; metadata?: { ignition_known?: unknown } | null } | null | undefined): boolean {
+  return (packet?.ignition_known ?? packet?.metadata?.ignition_known) !== false;
 }
 
 /** Fuel alert types that raise the Alarm state on the map. */
@@ -432,6 +441,7 @@ export function useVehicleLocations({
                   normalized.ignition === "on" ||
                   normalized.ignition === "1" ||
                   normalized.ignition === true,
+                ignition_known: ignitionKnownOf(normalized),
                 raw: normalized,
               },
             };

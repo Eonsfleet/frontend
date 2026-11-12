@@ -98,4 +98,13 @@ describe('BottomCards', () => {
     rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, fuel: 40, fuelLiters: 24, fuelBasis: 'calculated' }} />)
     expect(screen.getByText('≈ 24.0 L')).toBeInTheDocument()
   })
+
+  it('says Unknown, not Off, when the tracker reports no ignition', () => {
+    const { rerender } = render(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: false, ignitionKnown: false }} />, { wrapper: Wrapper })
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('Unknown')
+    rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: false, ignitionKnown: true }} />)
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('Off')
+    rerender(<BottomCards selectedVehicle={vehicle} resolved={{ ...resolved, ignition: true, ignitionKnown: true }} />)
+    expect(screen.getByText('Ignition').nextElementSibling?.textContent).toBe('On')
+  })
 })
