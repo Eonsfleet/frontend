@@ -2,6 +2,7 @@
 
 import type { VehicleMapEntry } from "@/lib/api/vehicles";
 import { cn } from "@/lib/utils";
+import { formatLitres } from "@/lib/fuel-format";
 import { VEHICLE_STATUS, resolveStatusKey } from "@/lib/vehicleStatus";
 import { getVehicleTypeIcon } from "../utils";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
@@ -30,6 +31,7 @@ export function VehicleListItem({
   const lastUpdate = useRelativeTime(loc?.lastPacket || loc?.lastUpdate);
   const fuelPct = loc?.fuel ?? loc?.fuel_level_percent ?? null;
   const fuelL = loc?.fuel_liters ?? loc?.fuel_level_liters ?? null;
+  const fuelLitresText = fuelL != null ? formatLitres(Number(fuelL), loc?.fuel_basis === "calculated" ? "calculated" : "measured") : null;
 
   return (
     <div
@@ -82,9 +84,15 @@ export function VehicleListItem({
                 />
               </div>
               <span className="text-[10px] font-bold text-slate-500">
-                {fuelL != null ? `${Number(fuelL).toFixed(1)}L` : `${fuelPct}%`}
+                {fuelLitresText ?? `${fuelPct}%`}
               </span>
             </div>
+            <p className="text-[10px] text-slate-300">{lastUpdate}</p>
+          </div>
+        ) : fuelLitresText != null ? (
+          // A tank reported in litres with no percentage: show the litres, no bar to fill.
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[10px] font-bold text-slate-500">{fuelLitresText}</span>
             <p className="text-[10px] text-slate-300">{lastUpdate}</p>
           </div>
         ) : (

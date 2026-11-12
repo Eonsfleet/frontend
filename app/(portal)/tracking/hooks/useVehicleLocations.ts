@@ -75,6 +75,7 @@ export function mergeTelemetrySnapshot(prevEntry: any, normalized: any) {
     lastUpdate: snapshotIsFresher ? (snapshotTs ?? prevEntry?.lastUpdate) : (prevEntry?.lastUpdate ?? snapshotTs),
     fuel: pick(normalized.fuel_level_percent, prevEntry?.fuel),
     fuel_liters: pick(normalized.fuel_level_liters, prevEntry?.fuel_liters),
+    fuel_basis: pick(normalized.fuel_level_liters_basis, prevEntry?.fuel_basis),
     ignition: snapshotIsFresher
       ? normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
       : (prevEntry?.ignition ?? normalized.ignition === "on"),
@@ -103,6 +104,9 @@ interface UseVehicleLocationsProps {
    */
   selectedVehicleId?: string | null;
 }
+
+/** Fuel alert types that raise the Alarm state on the map. */
+const FUEL_ALARM_TYPES = new Set(["fuel_theft", "fuel_leakage"]);
 
 /** How long a fuel-anomaly alarm stays active if nothing else re-triggers or clears it. */
 const FUEL_ALARM_AUTO_CLEAR_MS = 10 * 60_000;
@@ -182,8 +186,12 @@ export function useVehicleLocations({
       vehicles.forEach((v: VehicleMapEntry) => {
         const vehicleId = String(v.id);
         const loc = v.attributes.location ?? null;
-        // view=map has no boolean is_online field — derive it from device_status.
-        const isOnline = v.attributes?.device_status === "active";
+        // Connectivity is the feed's is_online. device_status is the device's lifecycle row
+        // ("active" means set up, not "reporting"), so it only stands in when is_online is absent.
+        const isOnline =
+          typeof v.attributes?.is_online === "boolean"
+            ? v.attributes.is_online
+            : v.attributes?.device_status === "active";
         const lastPacketTs = v.attributes?.last_packet_received_at ?? null;
         const lastUpdateTs = lastPacketTs;
         const staleOffline = isStaleOffline(isOnline, lastPacketTs);
@@ -219,6 +227,7 @@ export function useVehicleLocations({
 
         const fuelPct = v.attributes.fuel?.level_percent ?? null;
         const fuelL = v.attributes.fuel?.level_liters ?? null;
+        const fuelBasis = v.attributes.fuel?.liters_basis ?? null;
 
         const restData = {
           lat: lat ?? 0,
@@ -232,6 +241,7 @@ export function useVehicleLocations({
           lastPacket: lastPacketTs,
           fuel: fuelPct != null ? Number(fuelPct) : (prevEntry?.fuel ?? null),
           fuel_liters: fuelL != null ? Number(fuelL) : (prevEntry?.fuel_liters ?? null),
+          fuel_basis: fuelL != null ? fuelBasis : (prevEntry?.fuel_basis ?? null),
           raw: prevEntry?.raw ?? loc,
         };
 
@@ -402,6 +412,10 @@ export function useVehicleLocations({
                 fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
                 fuel_liters:
                   normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+                fuel_basis:
+                  normalized.fuel_level_liters != null
+                    ? (normalized.fuel_level_liters_basis ?? null)
+                    : prevEntry?.fuel_basis,
                 ignition:
                   normalized.ignition === "on" ||
                   normalized.ignition === "1" ||
@@ -435,19 +449,22 @@ export function useVehicleLocations({
       },
     );
 
+    // The backend announces a live fuel alert as "fuel_alert" (FuelAlertBroadcast). Only a drain or
+    // a leak is an alarm here: a low tank or a refill is not, and a sensor fault is not a theft.
     const fuelUnsubscribe = subscribePrivate(
       `fuel.alerts.${orgIdentifier}`,
-      ".fuel.event",
+      ".fuel_alert",
       (alert: any) => {
+        if (!FUEL_ALARM_TYPES.has(alert?.type)) return;
         const vehicleId = alert?.vehicle_id ?? alert?.vehicleId;
         if (!vehicleId) return;
         const idKey = resolveIdKey(vehicleId);
 
         setAlarmState((prev) => ({ ...prev, [idKey]: true }));
-        pushIfSelected(idKey, ".fuel.event", alert);
+        pushIfSelected(idKey, ".fuel_alert", alert);
 
-        // Fuel anomalies don't have a distinct "resolved" event from the backend —
-        // auto-clear the alarm after a fixed window unless it's re-triggered sooner.
+        // A fuel alert has no "resolved" broadcast: clear the alarm after a fixed window
+        // unless it is raised again sooner.
         setTimeout(() => {
           setAlarmState((prev) => (prev[idKey] ? { ...prev, [idKey]: false } : prev));
         }, FUEL_ALARM_AUTO_CLEAR_MS);
