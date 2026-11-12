@@ -1,3 +1,4 @@
+import { isMovingSpeed } from "@/lib/movement";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeTelemetry } from "@/lib/utils";
@@ -231,10 +232,10 @@ export function useVehicleLocations({
         // the next packet; keep idle while that packet is recent and the vehicle is still not moving.
         const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
         const keepIdle =
-          prevEntry?.status === "idle" && speed === 0 && Date.now() - prevUpdateMs < IDLE_KEEP_MS;
+          prevEntry?.status === "idle" && !isMovingSpeed(speed) && Date.now() - prevUpdateMs < IDLE_KEEP_MS;
         const derivedStatus = staleOffline || !isOnline
           ? "offline"
-          : speed > 0
+          : isMovingSpeed(speed)
             ? "in_transit"
             : keepIdle
               ? "idle"
@@ -356,11 +357,11 @@ export function useVehicleLocations({
           // from speed alone collapsed the two, and every idling vehicle in the
           // fleet reported as parked.
           const status =
-            normalized.status ?? ((normalized.speed ?? 0) > 0 ? "in_transit" : "parked");
+            normalized.status ?? (isMovingSpeed(normalized.speed) ? "in_transit" : "parked");
           const idKey = resolveIdKey(packet.vehicle_id);
 
           if (normalized.lat != null && normalized.lng != null) {
-            const isMoving = status === "in_transit" && (normalized.speed ?? 0) > 0;
+            const isMoving = status === "in_transit" && isMovingSpeed(normalized.speed);
             if (isMoving) {
               interpolator.ingest(idKey, {
                 lat: normalized.lat,
