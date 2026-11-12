@@ -515,3 +515,24 @@ describe('useVehicleLocations REST poll against a live packet', () => {
     expect(hook.result.current.locations['42'].status).toBe('offline')
   })
 })
+
+describe('useVehicleLocations ignition that is not a reading', () => {
+  it('carries ignition_known from the live packet into the location entry', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    const handler = handlers.get('org.org-1.tracking::.vehicle.location.updated')!
+
+    act(() => handler({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'off', ignition_known: false, is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(false)
+
+    act(() => handler({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'on', ignition_known: true, is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(true)
+  })
+
+  it('treats a packet that does not say as known, so older servers behave as before', () => {
+    const { subscribePrivate, handlers } = makeSubscribePrivate()
+    const { result } = renderHook(() => useVehicleLocations({ ...baseProps, subscribePrivate, selectedVehicleId: null }), { wrapper: Wrapper })
+    act(() => handlers.get('org.org-1.tracking::.vehicle.location.updated')!({ vehicle_id: '42', lat: 6.5, lng: 3.4, speed: 0, ignition: 'off', is_online: true }))
+    expect(result.current.locations['42'].ignition_known).toBe(true)
+  })
+})
