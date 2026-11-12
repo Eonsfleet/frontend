@@ -6,6 +6,8 @@
  * elsewhere — import from here instead.
  */
 
+import { isMovingSpeed } from "@/lib/movement";
+
 export type VehicleStatusKey = "moving" | "parked" | "idle" | "offline" | "alarm";
 
 export interface VehicleStatusConfig {
@@ -112,7 +114,7 @@ export function resolveStatusKey(
   const status = (input.status || "").toLowerCase();
 
   if (!input.is_online || status === "offline") return "offline";
-  if (status === "in_transit" || (input.speed ?? 0) > 0) return "moving";
+  if (status === "in_transit" || isMovingSpeed(input.speed)) return "moving";
   if (status === "idle") return "idle";
   // "parked" and "online" (device online, no motion data yet) both render as parked
   return "parked";

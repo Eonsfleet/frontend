@@ -37,7 +37,6 @@ export function useResolvedVehicleTelemetry(
   const { telemetry, deviceStatus } = useVehicleTelemetry(
     isActive ? (vehicleId as string) : null,
     vehicle?.raw?.device_id ?? (vehicle as Record<string, unknown> | null)?.device_id as string | undefined,
-    (vehicle as Record<string, unknown> | null)?.imei as string | undefined,
   );
 
   const apiFuel = currentFuelData?.data?.fuel_level;

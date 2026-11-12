@@ -1,3 +1,4 @@
+import { isMovingSpeed } from "@/lib/movement";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeTelemetry } from "@/lib/utils";
@@ -75,9 +76,14 @@ export function mergeTelemetrySnapshot(prevEntry: any, normalized: any) {
     lastUpdate: snapshotIsFresher ? (snapshotTs ?? prevEntry?.lastUpdate) : (prevEntry?.lastUpdate ?? snapshotTs),
     fuel: pick(normalized.fuel_level_percent, prevEntry?.fuel),
     fuel_liters: pick(normalized.fuel_level_liters, prevEntry?.fuel_liters),
+    fuel_basis: pick(normalized.fuel_level_liters_basis, prevEntry?.fuel_basis),
     ignition: snapshotIsFresher
       ? normalized.ignition === "on" || normalized.ignition === "1" || normalized.ignition === true
       : (prevEntry?.ignition ?? normalized.ignition === "on"),
+    // false when the tracker reports no ignition: the "off" above is then not a reading.
+    ignition_known: snapshotIsFresher
+      ? ignitionKnownOf(normalized)
+      : (prevEntry?.ignition_known ?? ignitionKnownOf(normalized)),
     // raw is the resolver's last-resort lookup for anything the live payloads
     // omit, so it holds the best known value per field rather than whichever
     // packet landed last.
@@ -103,6 +109,23 @@ interface UseVehicleLocationsProps {
    */
   selectedVehicleId?: string | null;
 }
+
+/** False only when the platform said the tracker reports no ignition (a GT06 sends none). */
+function ignitionKnownOf(packet: { ignition_known?: unknown; metadata?: { ignition_known?: unknown } | null } | null | undefined): boolean {
+  return (packet?.ignition_known ?? packet?.metadata?.ignition_known) !== false;
+}
+
+/** Fuel alert types that raise the Alarm state on the map. */
+const FUEL_ALARM_TYPES = new Set(["fuel_theft", "fuel_leakage"]);
+
+/** How often the selected vehicle's full telemetry snapshot is read again. */
+const SELECTED_SNAPSHOT_REFRESH_MS = 30_000;
+
+/** How long a live "idle" is kept against a poll that cannot see the ignition. */
+const IDLE_KEEP_MS = 2 * 60_000;
+
+/** How long a geofence alarm stays when no exit clears it. */
+const GEOFENCE_ALARM_AUTO_CLEAR_MS = 15 * 60_000;
 
 /** How long a fuel-anomaly alarm stays active if nothing else re-triggers or clears it. */
 const FUEL_ALARM_AUTO_CLEAR_MS = 10 * 60_000;
@@ -154,6 +177,9 @@ export function useVehicleLocations({
     enabled: !!selectedVehicleId,
     staleTime: 0,
     retry: false,
+    // The extended readings (battery, RPM, GSM, engine) are on no live channel, so without this they
+    // freeze at what the vehicle had when it was selected. React Query pauses it in a hidden tab.
+    refetchInterval: SELECTED_SNAPSHOT_REFRESH_MS,
   });
 
   useEffect(() => {
@@ -182,8 +208,12 @@ export function useVehicleLocations({
       vehicles.forEach((v: VehicleMapEntry) => {
         const vehicleId = String(v.id);
         const loc = v.attributes.location ?? null;
-        // view=map has no boolean is_online field — derive it from device_status.
-        const isOnline = v.attributes?.device_status === "active";
+        // Connectivity is the feed's is_online. device_status is the device's lifecycle row
+        // ("active" means set up, not "reporting"), so it only stands in when is_online is absent.
+        const isOnline =
+          typeof v.attributes?.is_online === "boolean"
+            ? v.attributes.is_online
+            : v.attributes?.device_status === "active";
         const lastPacketTs = v.attributes?.last_packet_received_at ?? null;
         const lastUpdateTs = lastPacketTs;
         const staleOffline = isStaleOffline(isOnline, lastPacketTs);
@@ -205,13 +235,21 @@ export function useVehicleLocations({
         const speed = v.attributes.speed ?? 0;
 
         // Derive movement status from speed — the map feed carries no explicit state.
+        const prevEntry = next[vehicleId];
+        // The feed has no ignition, so it can never say "idle". A vehicle a live packet just
+        // reported idle (engine on, not moving) would flip to "parked" on every poll and back on
+        // the next packet; keep idle while that packet is recent and the vehicle is still not moving.
+        const prevUpdateMs = prevEntry?.lastUpdate ? new Date(prevEntry.lastUpdate).getTime() : 0;
+        const keepIdle =
+          prevEntry?.status === "idle" && !isMovingSpeed(speed) && Date.now() - prevUpdateMs < IDLE_KEEP_MS;
         const derivedStatus = staleOffline || !isOnline
           ? "offline"
-          : speed > 0
+          : isMovingSpeed(speed)
             ? "in_transit"
-            : "parked";
+            : keepIdle
+              ? "idle"
+              : "parked";
 
-        const prevEntry = next[vehicleId];
         const statusSinceMs =
           prevEntry?.status === derivedStatus
             ? (prevEntry?.statusSinceMs ?? Date.now())
@@ -219,12 +257,14 @@ export function useVehicleLocations({
 
         const fuelPct = v.attributes.fuel?.level_percent ?? null;
         const fuelL = v.attributes.fuel?.level_liters ?? null;
+        const fuelBasis = v.attributes.fuel?.liters_basis ?? null;
 
         const restData = {
           lat: lat ?? 0,
           lng: lng ?? 0,
           speed,
-          heading: 0,
+          // The feed has no heading. A live packet's is kept; 0 would swing the marker north.
+          heading: prevEntry?.heading ?? 0,
           status: derivedStatus,
           statusSinceMs,
           is_online: isOnline,
@@ -232,6 +272,7 @@ export function useVehicleLocations({
           lastPacket: lastPacketTs,
           fuel: fuelPct != null ? Number(fuelPct) : (prevEntry?.fuel ?? null),
           fuel_liters: fuelL != null ? Number(fuelL) : (prevEntry?.fuel_liters ?? null),
+          fuel_basis: fuelL != null ? fuelBasis : (prevEntry?.fuel_basis ?? null),
           raw: prevEntry?.raw ?? loc,
         };
 
@@ -325,11 +366,11 @@ export function useVehicleLocations({
           // from speed alone collapsed the two, and every idling vehicle in the
           // fleet reported as parked.
           const status =
-            normalized.status ?? ((normalized.speed ?? 0) > 0 ? "in_transit" : "parked");
+            normalized.status ?? (isMovingSpeed(normalized.speed) ? "in_transit" : "parked");
           const idKey = resolveIdKey(packet.vehicle_id);
 
           if (normalized.lat != null && normalized.lng != null) {
-            const isMoving = status === "in_transit" && (normalized.speed ?? 0) > 0;
+            const isMoving = status === "in_transit" && isMovingSpeed(normalized.speed);
             if (isMoving) {
               interpolator.ingest(idKey, {
                 lat: normalized.lat,
@@ -402,10 +443,15 @@ export function useVehicleLocations({
                 fuel: normalized.fuel_level_percent ?? prevEntry?.fuel,
                 fuel_liters:
                   normalized.fuel_level_liters ?? prevEntry?.fuel_liters,
+                fuel_basis:
+                  normalized.fuel_level_liters != null
+                    ? (normalized.fuel_level_liters_basis ?? null)
+                    : prevEntry?.fuel_basis,
                 ignition:
                   normalized.ignition === "on" ||
                   normalized.ignition === "1" ||
                   normalized.ignition === true,
+                ignition_known: ignitionKnownOf(normalized),
                 raw: normalized,
               },
             };
@@ -435,25 +481,29 @@ export function useVehicleLocations({
       },
     );
 
+    // The backend announces a live fuel alert as "fuel_alert" (FuelAlertBroadcast). Only a drain or
+    // a leak is an alarm here: a low tank or a refill is not, and a sensor fault is not a theft.
     const fuelUnsubscribe = subscribePrivate(
       `fuel.alerts.${orgIdentifier}`,
-      ".fuel.event",
+      ".fuel_alert",
       (alert: any) => {
+        if (!FUEL_ALARM_TYPES.has(alert?.type)) return;
         const vehicleId = alert?.vehicle_id ?? alert?.vehicleId;
         if (!vehicleId) return;
         const idKey = resolveIdKey(vehicleId);
 
         setAlarmState((prev) => ({ ...prev, [idKey]: true }));
-        pushIfSelected(idKey, ".fuel.event", alert);
+        pushIfSelected(idKey, ".fuel_alert", alert);
 
-        // Fuel anomalies don't have a distinct "resolved" event from the backend —
-        // auto-clear the alarm after a fixed window unless it's re-triggered sooner.
+        // A fuel alert has no "resolved" broadcast: clear the alarm after a fixed window
+        // unless it is raised again sooner.
         setTimeout(() => {
           setAlarmState((prev) => (prev[idKey] ? { ...prev, [idKey]: false } : prev));
         }, FUEL_ALARM_AUTO_CLEAR_MS);
       },
     );
 
+    const geofenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
     const geofenceUnsubscribe = subscribePrivate(
       `location.organization.${orgIdentifier}`,
       ".geofence.monitor",
@@ -470,6 +520,23 @@ export function useVehicleLocations({
 
         setAlarmState((prev) => ({ ...prev, [idKey]: isBreach }));
         pushIfSelected(idKey, ".geofence.monitor", payload);
+
+        // The backend announces a crossing only when that fence's policy alerts on it. A fence that
+        // alerts on entry but not on exit never sends the exit that would clear this, so the vehicle
+        // would stay in the Alarm state until the page is reloaded. An exit clears it at once; if none
+        // comes, it clears after a fixed window, and a new breach restarts the window.
+        const pending = geofenceTimers.get(idKey);
+        if (pending) clearTimeout(pending);
+        geofenceTimers.delete(idKey);
+        if (isBreach) {
+          geofenceTimers.set(
+            idKey,
+            setTimeout(() => {
+              geofenceTimers.delete(idKey);
+              setAlarmState((prev) => (prev[idKey] ? { ...prev, [idKey]: false } : prev));
+            }, GEOFENCE_ALARM_AUTO_CLEAR_MS),
+          );
+        }
       },
     );
 
@@ -478,6 +545,8 @@ export function useVehicleLocations({
       if (statusUnsubscribe) statusUnsubscribe();
       if (fuelUnsubscribe) fuelUnsubscribe();
       if (geofenceUnsubscribe) geofenceUnsubscribe();
+      geofenceTimers.forEach((t) => clearTimeout(t));
+      geofenceTimers.clear();
     };
   }, [token, organization?.attributes?.identifier, subscribePrivate]);
 

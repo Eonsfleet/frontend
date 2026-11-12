@@ -196,6 +196,35 @@ describe('current_location telemetry reaches the Details tab', () => {
   })
 })
 
+describe('a missing engine temperature', () => {
+  it('stays absent instead of becoming 0 °C, and never raises the overheat warning', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z' }, deviceStatus: null })
+    expect(resolved.engineTemp).toBeNull()
+    expect(resolved.tempWarn).toBe(false)
+  })
+
+  it('still warns when a real reading is high', () => {
+    const resolved = resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', metadata: { engine_temperature: 112 } }, deviceStatus: null })
+    expect(resolved.engineTemp).toBe(112)
+    expect(resolved.tempWarn).toBe(true)
+  })
+})
+
+describe('an ignition the tracker does not report', () => {
+  const resolve = (telemetry: Record<string, unknown>) => resolveVehicleTelemetry({ vehicle: null, telemetry: { gps_datetime: '2026-11-12T10:00:00Z', ...telemetry }, deviceStatus: null })
+
+  it('is flagged unknown when the platform said so, in the packet or in the snapshot metadata', () => {
+    expect(resolve({ ignition: 'off', ignition_known: false }).ignitionKnown).toBe(false)
+    expect(resolve({ ignition: 'off', metadata: { ignition_known: false } }).ignitionKnown).toBe(false)
+  })
+
+  it('is known by default, and when it was reported on or off', () => {
+    expect(resolve({ ignition: 'off' }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'on', ignition_known: true }).ignitionKnown).toBe(true)
+    expect(resolve({ ignition: 'off', ignition_known: true }).ignitionKnown).toBe(true)
+  })
+})
+
 describe('which odometer is shown', () => {
   it('prefers the rebased mileage over the raw device counter, whichever object holds them', () => {
     // A packet carrying both: the counter's base is arbitrary, the mileage is the vehicle's real odometer.
