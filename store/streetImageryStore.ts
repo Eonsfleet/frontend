@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { StreetImageryPoint } from "@/lib/streetImagery/types";
+import type { StreetImageryPoint, StreetImageryProviderKind } from "@/lib/streetImagery/types";
 
 export interface StreetImageryContext {
   /** e.g. the vehicle's registration number. */
@@ -18,7 +18,21 @@ export interface StreetImageryContext {
   vehicleId?: string;
 }
 
+const PROVIDER_STORAGE_KEY = "street-imagery-provider";
+
+function readStoredProvider(): StreetImageryProviderKind | null {
+  try {
+    const v = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+    return v === "google" || v === "mapillary" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 interface StreetImageryState {
+  /** The user's chosen imagery source; null = automatic (Google first). Remembered per browser. */
+  preferredProvider: StreetImageryProviderKind | null;
+  setPreferredProvider: (kind: StreetImageryProviderKind) => void;
   isOpen: boolean;
   requestedPoint: StreetImageryPoint | null;
   context: StreetImageryContext | null;
@@ -27,6 +41,15 @@ interface StreetImageryState {
 }
 
 export const useStreetImageryStore = create<StreetImageryState>((set) => ({
+  preferredProvider: typeof window === "undefined" ? null : readStoredProvider(),
+  setPreferredProvider: (kind) => {
+    try {
+      window.localStorage.setItem(PROVIDER_STORAGE_KEY, kind);
+    } catch {
+      /* private mode: the choice just isn't remembered */
+    }
+    set({ preferredProvider: kind });
+  },
   isOpen: false,
   requestedPoint: null,
   context: null,

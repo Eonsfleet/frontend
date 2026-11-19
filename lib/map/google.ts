@@ -1,12 +1,11 @@
 import type { MapStyleKey } from "./mapboxStyles";
 
 /**
- * One Google Cloud key powers Map Tiles (live tracking + playback) and Street View.
- * `NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY` is still honoured so existing envs keep working.
+ * One Google Cloud key powers Map Tiles (live tracking + playback), Geocoding and Street View.
  * With no key, callers fall back to free OpenStreetMap/Esri tiles — nothing errors.
  */
 export function getGoogleMapsKey(): string | null {
-  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY || null;
+  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || null;
 }
 
 const sessions = new Map<string, Promise<string>>();
