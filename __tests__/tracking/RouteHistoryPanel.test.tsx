@@ -129,6 +129,10 @@ describe('formatDuration', () => {
 })
 
 describe('describePlace', () => {
+    it('treats the geocoder placeholder "Unknown" as no address and shows the coordinates', () => {
+        expect(describePlace({ latitude: 6.4592533, longitude: 3.3649116, address: 'Unknown' })).toBe('6.45925, 3.36491')
+    })
+
     it('prefers the resolved address', () => {
         expect(describePlace({ latitude: 6.5, longitude: 3.3, address: 'Ikeja, Lagos' })).toBe('Ikeja, Lagos')
     })

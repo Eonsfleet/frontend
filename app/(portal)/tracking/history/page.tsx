@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn, extractApiError } from '@/lib/utils'
 import * as vehicleApi from '@/lib/api/vehicles'
 import { getVehicleRouteHistory, ROUTE_HISTORY_MAX_WINDOW_DAYS, type RouteHistorySegment } from '@/lib/api/tracking'
-import { describePlace, formatDuration } from '../components/RouteHistoryPanel'
+import { formatDuration, PlaceText } from '../components/RouteHistoryPanel'
 import { HistoryMap, SEGMENT_COLORS } from './components/HistoryMap'
 
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
@@ -104,8 +104,8 @@ function JourneyCard({
           <span className="ml-auto text-[11px] font-black text-slate-700">{segment.distance_km} km</span>
         </div>
         <div className="mt-2 space-y-1.5 border-l-2 border-slate-100 pl-3 text-[11px] font-semibold text-slate-600">
-          <p className="truncate"><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500" />{describePlace(segment.start)}</p>
-          <p className="truncate"><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-rose-500" />{describePlace(segment.end)}</p>
+          <p className="truncate"><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500" /><PlaceText place={segment.start} /></p>
+          <p className="truncate"><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-rose-500" /><PlaceText place={segment.end} /></p>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-500">
           <Chip>{formatDuration(segment.duration_seconds)} total</Chip>
@@ -121,7 +121,7 @@ function JourneyCard({
           {segment.stop_points.map((s, i) => (
             <li key={i} className="flex items-start gap-2 text-[11px] text-slate-600">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white">{i + 1}</span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{describePlace(s)}</span>
+              <PlaceText place={s} className="min-w-0 flex-1 truncate font-semibold" />
               <span className="shrink-0 font-bold text-slate-400">{formatDuration(s.duration_seconds)}</span>
             </li>
           ))}

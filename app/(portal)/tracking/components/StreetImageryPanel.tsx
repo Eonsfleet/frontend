@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useStreetImageryStore } from "@/store/streetImageryStore";
-import { createStreetImageryProvider, resolveAvailableProviderKind } from "@/lib/streetImagery/StreetImageryProviderFactory";
+import { createStreetImageryProvider, getAvailableProviderKinds, resolveAvailableProviderKind } from "@/lib/streetImagery/StreetImageryProviderFactory";
 import { createRequestFence, resolveNearestImage } from "@/lib/streetImagery/cache";
 import { COINCIDENT_DISTANCE_METERS, SEARCH_RADII_METERS, SIGNIFICANT_MOVEMENT_METERS } from "@/lib/streetImagery/config";
 import { distanceMeters } from "@/lib/streetImagery/geo";
@@ -67,7 +67,7 @@ function PanelOverlay({ children, icon }: { children: React.ReactNode; icon?: Re
  * useMapInstance() when one is available in the surrounding tree.
  */
 export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
-  const { isOpen, requestedPoint, context, close } = useStreetImageryStore();
+  const { isOpen, requestedPoint, context, close, preferredProvider, setPreferredProvider } = useStreetImageryStore();
   const { provider: mapProvider, isReady: isMapReady } = useMapInstance();
   const isMobile = useMediaQuery("(max-width: 767px)");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -100,7 +100,7 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
     setProviderKind(null);
     setHasMoved(false);
 
-    const kind = resolveAvailableProviderKind();
+    const kind = resolveAvailableProviderKind(preferredProvider);
     if (!kind) {
       setStatus("not-configured");
       return;
@@ -144,7 +144,7 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, requestedPoint]);
+  }, [isOpen, requestedPoint, preferredProvider]);
 
   // Mount the viewer once metadata resolves; re-subscribe on image navigation.
   useEffect(() => {
@@ -311,6 +311,31 @@ export function StreetImageryPanel({ locations }: StreetImageryPanelProps) {
           </SheetTitle>
           {context?.subtitle && <SheetDescription>{context.subtitle}</SheetDescription>}
         </SheetHeader>
+
+        <div className="mx-4 flex items-center gap-2" role="group" aria-label="Imagery source">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Source</span>
+          {(["google", "mapillary"] as const).map((kind) => {
+            const available = getAvailableProviderKinds().includes(kind);
+            const active = (providerKind ?? resolveAvailableProviderKind(preferredProvider)) === kind;
+            return (
+              <button
+                key={kind}
+                type="button"
+                disabled={!available}
+                aria-pressed={active}
+                title={available ? undefined : kind === "google" ? "Set NEXT_PUBLIC_GOOGLE_MAPS_KEY to enable" : "Set NEXT_PUBLIC_MAPILLARY_TOKEN to enable"}
+                onClick={() => setPreferredProvider(kind)}
+                className={cn(
+                  "rounded-lg border px-3 py-1 text-xs font-bold capitalize transition-colors",
+                  active ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-200 text-slate-600 hover:bg-slate-50",
+                  !available && "cursor-not-allowed opacity-40 hover:bg-transparent",
+                )}
+              >
+                {kind === "google" ? "Google" : "Mapillary"}
+              </button>
+            );
+          })}
+        </div>
 
         {hasMoved && (
           <div className="mx-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

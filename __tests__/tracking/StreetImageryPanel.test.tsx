@@ -10,6 +10,7 @@ const createStreetImageryProvider = vi.fn();
 
 vi.mock("@/lib/streetImagery/StreetImageryProviderFactory", () => ({
   resolveAvailableProviderKind: (...args: unknown[]) => resolveAvailableProviderKind(...args),
+  getAvailableProviderKinds: () => ["google", "mapillary"],
   createStreetImageryProvider: (...args: unknown[]) => createStreetImageryProvider(...args),
 }));
 
@@ -166,5 +167,21 @@ describe("StreetImageryPanel", () => {
     await waitFor(() => expect(fake.unmount).toHaveBeenCalled());
     expect(mapProvider.removeMarker).toHaveBeenCalledWith("street-imagery-position");
     expect(mapProvider.removeOverlay).toHaveBeenCalledWith("street-imagery-connector");
+  });
+});
+
+describe("StreetImageryPanel source switch", () => {
+  it("passes the chosen source to the provider lookup and remembers it", async () => {
+    resolveAvailableProviderKind.mockReturnValue("google");
+    createStreetImageryProvider.mockResolvedValue(createFakeStreetImageryProvider({ metadata: null }));
+    render(<StreetImageryPanel />);
+    await act(async () => {
+      useStreetImageryStore.getState().open({ lat: 6.5244, lng: 3.3792 }, { label: "ABC-123" });
+    });
+    await act(async () => {
+      screen.getByRole("button", { name: "Mapillary" }).click();
+    });
+    expect(useStreetImageryStore.getState().preferredProvider).toBe("mapillary");
+    expect(resolveAvailableProviderKind).toHaveBeenLastCalledWith("mapillary");
   });
 });
