@@ -7,6 +7,7 @@ import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
 import { Geofence } from '@/types'
+import { FREE_TILE_URL, FREE_TILE_ATTRIBUTION } from '@/lib/map/freeTiles'
 
 // Fix Leaflet icons issues with Next.js SSR
 L.Icon.Default.mergeOptions({
@@ -148,8 +149,8 @@ export default function GeofenceMapEditor({ initialGeofence, vehicles, onChange,
                 <MapCenterer initialGeofence={initialGeofence} />
                 <MapPanner center={center} />
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">Carto</a>'
+                    url={FREE_TILE_URL}
+                    attribution={FREE_TILE_ATTRIBUTION}
                 />
                 <FeatureGroup>
                     <EditControl

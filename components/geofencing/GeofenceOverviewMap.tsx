@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Geofence } from '@/types'
+import { FREE_TILE_URL, FREE_TILE_ATTRIBUTION } from '@/lib/map/freeTiles'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -65,7 +66,7 @@ export default function GeofenceOverviewMap({ geofences, vehicles }: Props) {
                 scrollWheelZoom: true,
             })
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map)
+            L.tileLayer(FREE_TILE_URL, { attribution: FREE_TILE_ATTRIBUTION }).addTo(map)
             mapRef.current = map
 
             // Set initial view before adding layers so projection is ready
