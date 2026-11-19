@@ -1,3 +1,5 @@
+import { getGoogleMapsKey } from "../../map/google";
+import { MAX_SEARCH_RADIUS_METERS } from "../config";
 import type { StreetImageryError, StreetImageryErrorCode, StreetImageryMetadata, StreetImageryPoint, StreetImageryProvider } from "../types";
 
 /**
@@ -20,24 +22,38 @@ export class GoogleStreetViewProvider implements StreetImageryProvider {
   private errorCbs = new Set<(error: StreetImageryError) => void>();
 
   isConfigured(): boolean {
-    return !!process.env.NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY;
+    return !!getGoogleMapsKey();
   }
 
   async findNearestImage(point: StreetImageryPoint): Promise<StreetImageryMetadata | null> {
-    if (!this.isConfigured()) this.fail("provider-not-configured", "NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY is not set");
-    return {
-      imageId: `${point.lat},${point.lng}`,
-      provider: "google",
-      position: point,
-      capturedAt: null,
-      bearing: null,
-      distanceMeters: 0,
-    };
+    const key = getGoogleMapsKey();
+    if (!key) this.fail("provider-not-configured", "NEXT_PUBLIC_GOOGLE_MAPS_KEY is not set");
+    // The metadata endpoint is free and reports real coverage, so we can show "no imagery" honestly.
+    try {
+      const url = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${point.lat},${point.lng}&radius=${MAX_SEARCH_RADIUS_METERS}&source=outdoor&key=${key}`;
+      const res = await fetch(url);
+      const json = (await res.json()) as { status: string; location?: { lat: number; lng: number }; date?: string };
+      if (json.status === "ZERO_RESULTS") return null;
+      if (json.status === "OK" && json.location) {
+        return {
+          imageId: `${json.location.lat},${json.location.lng}`,
+          provider: "google",
+          position: json.location,
+          capturedAt: json.date ?? null,
+          bearing: null,
+          distanceMeters: 0,
+        };
+      }
+      if (json.status === "REQUEST_DENIED") this.fail("provider-not-configured", "Google key rejected (enable Street View Static API)");
+    } catch (e) {
+      if ((e as { code?: string })?.code) throw e;
+    }
+    return { imageId: `${point.lat},${point.lng}`, provider: "google", position: point, capturedAt: null, bearing: null, distanceMeters: 0 };
   }
 
   async mount(container: HTMLElement, image: StreetImageryMetadata): Promise<void> {
-    const key = process.env.NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY;
-    if (!key) this.fail("provider-not-configured", "NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY is not set");
+    const key = getGoogleMapsKey();
+    if (!key) this.fail("provider-not-configured", "NEXT_PUBLIC_GOOGLE_MAPS_KEY is not set");
 
     this.position = image.position;
     this.heading = image.bearing ?? 0;
@@ -65,7 +81,7 @@ export class GoogleStreetViewProvider implements StreetImageryProvider {
    * reload of the embed rather than a smooth in-place pan (unlike Mapillary).
    */
   rotate(deltaDegrees: number): void {
-    const key = process.env.NEXT_PUBLIC_GOOGLE_STREETVIEW_KEY;
+    const key = getGoogleMapsKey();
     if (!this.iframe || !this.position || !key) return;
     this.heading = ((this.heading + deltaDegrees) % 360 + 360) % 360;
     this.iframe.src = this.buildSrc(key);

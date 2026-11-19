@@ -25,6 +25,7 @@ import { PlaybackAdvancedFilters } from './components/PlaybackAdvancedFilters'
 import { PlaybackMap } from './components/PlaybackMap'
 import { PlaybackScrubber } from './components/PlaybackScrubber'
 import { PlaybackSummaryPanel } from './components/PlaybackSummaryPanel'
+import { PlaybackAssetCard } from './components/PlaybackAssetCard'
 import { PlaybackBottomPanel } from './components/PlaybackBottomPanel'
 import { StreetImageryPanel } from '../components/StreetImageryPanel'
 import { useStreetImageryStore } from '@/store/streetImageryStore'
@@ -274,6 +275,7 @@ export default function PlaybackPage() {
               movements={movements}
               speedSegments={speedSegments}
               stops={stops}
+              gaps={gaps}
               currentIndex={playbackIndex}
               preparedPoints={preparedPoints}
               currentFrame={playbackFrame}
@@ -332,7 +334,16 @@ export default function PlaybackPage() {
             />
           ) : (
             <>
-              <PlaybackSummaryPanel stats={stats} stopsCount={stops.length} events={filteredEvents} vehicleLabel={vehicleLabel} />
+              <div className="max-h-[55%] shrink-0 overflow-y-auto">
+              <div className="px-4 pt-4">
+                <PlaybackAssetCard
+                  vehicle={selectedVehicle}
+                  fallbackLabel={vehicleLabel}
+                  rangeLabel={tripId ? 'Single trip' : `${format(new Date(startTime), 'MMM d, hh:mm a')} – ${format(new Date(endTime), 'MMM d, hh:mm a')}`}
+                />
+              </div>
+              <PlaybackSummaryPanel stats={stats} stops={stops} events={filteredEvents} movements={movements} />
+              </div>
               <PlaybackBottomPanel
                 className="min-h-0 flex-1"
                 movements={movements}

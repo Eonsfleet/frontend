@@ -7,6 +7,7 @@ import {
   Car,
   Users,
   Route,
+  History,
   MapPin,
   Network,
   Wrench,
@@ -79,6 +80,14 @@ const NAV_GROUPS: NavGroup[] = [
         href: "/tracking",
         label: "Live Tracking",
         icon: MapPin,
+        permission: "tracking:read",
+        module: "geofence",
+        trialAllowed: false,
+      },
+      {
+        href: "/tracking/history",
+        label: "Route History",
+        icon: History,
         permission: "tracking:read",
         module: "geofence",
         trialAllowed: false,
@@ -344,6 +353,8 @@ export default function Sidebar() {
                         !isLocked &&
                         (href === "/settings"
                           ? pathname === href
+                          : href === "/tracking"
+                          ? pathname === href || (pathname.startsWith(href + "/") && !pathname.startsWith("/tracking/history"))
                           : pathname === href || pathname.startsWith(href + "/"));
                       const badgeCount = href === "/alerts" ? unreadAlertsCount : 0;
                       const itemContent = (
