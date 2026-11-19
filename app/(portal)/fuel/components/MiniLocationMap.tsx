@@ -3,6 +3,7 @@
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { FREE_TILE_URL, FREE_TILE_ATTRIBUTION } from '@/lib/map/freeTiles'
 
 function pin() {
     return L.divIcon({
@@ -26,7 +27,7 @@ export function MiniLocationMap({ lat, lng }: { lat: number; lng: number }) {
                 className="h-full w-full"
                 style={{ background: '#e5e7eb' }}
             >
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap" />
+                <TileLayer url={FREE_TILE_URL} attribution={FREE_TILE_ATTRIBUTION} />
                 <Marker position={[lat, lng]} icon={pin()} />
             </MapContainer>
         </div>

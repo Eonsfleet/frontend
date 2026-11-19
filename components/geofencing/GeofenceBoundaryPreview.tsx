@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Geofence } from '@/types'
+import { FREE_TILE_URL, FREE_TILE_ATTRIBUTION } from '@/lib/map/freeTiles'
 
 // Fix Leaflet default icon paths for Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -63,8 +64,8 @@ export default function GeofenceBoundaryPreview({ geofence, vehicles, height = '
                 scrollWheelZoom: false,
             })
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; Carto',
+            L.tileLayer(FREE_TILE_URL, {
+                attribution: FREE_TILE_ATTRIBUTION,
             }).addTo(map)
 
             mapRef.current = map
