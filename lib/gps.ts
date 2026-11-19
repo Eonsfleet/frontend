@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getGoogleMapsKey } from '@/lib/map/google'
 
 export interface GpsPacket {
     latitude: number
@@ -35,17 +36,52 @@ export const normalizeGpsPacket = (data: any): GpsPacket => {
     }
 }
 
-export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
-    try {
-        // Using Nominatim (OpenStreetMap) for free reverse geocoding
-        const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
-            headers: {
-                'User-Agent': 'Eonsfleet-Frontend/1.0'
+const geocodeCache = new Map<string, Promise<string>>()
+
+/** ~11 m: nearby fixes share one lookup instead of one request per GPS packet. */
+const geocodeKey = (lat: number, lng: number) => `${lat.toFixed(4)},${lng.toFixed(4)}`
+
+async function googleReverse(lat: number, lng: number, key: string): Promise<string | null> {
+    const res = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+        params: { latlng: `${lat},${lng}`, key, language: 'en', result_type: 'street_address|route|premise|neighborhood|locality' },
+    })
+    // OVER_QUERY_LIMIT / REQUEST_DENIED / ZERO_RESULTS: let the caller fall back to the free service.
+    if (res.data?.status !== 'OK') return null
+    return res.data.results?.[0]?.formatted_address ?? null
+}
+
+async function nominatimReverse(lat: number, lng: number): Promise<string> {
+    const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+    return response.data.display_name || 'Unknown Location'
+}
+
+/**
+ * Coordinates -> address. Google Geocoding when a key is configured, otherwise (or if Google
+ * refuses) the free Nominatim service. Results are cached per ~11 m cell for the session.
+ */
+export const reverseGeocode = (lat: number, lng: number): Promise<string> => {
+    const key = geocodeKey(lat, lng)
+    const cached = geocodeCache.get(key)
+    if (cached) return cached
+
+    const request = (async () => {
+        try {
+            const googleKey = getGoogleMapsKey()
+            if (googleKey) {
+                try {
+                    const address = await googleReverse(lat, lng, googleKey)
+                    if (address) return address
+                } catch {
+                    /* fall through to Nominatim */
+                }
             }
-        })
-        return response.data.display_name || 'Unknown Location'
-    } catch (error) {
-        console.error('Reverse geocoding error:', error)
-        return 'Location unavailable'
-    }
+            return await nominatimReverse(lat, lng)
+        } catch (error) {
+            console.error('Reverse geocoding error:', error)
+            geocodeCache.delete(key)
+            return 'Location unavailable'
+        }
+    })()
+    geocodeCache.set(key, request)
+    return request
 }
