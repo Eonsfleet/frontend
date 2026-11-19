@@ -10,6 +10,7 @@ import * as api from '@/lib/api/notifications'
 import { formatDistanceToNow } from 'date-fns'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { useNotificationAddress, withLocation } from '@/lib/notificationLocation'
 import { invalidateNotificationInbox } from '@/hooks/useRealtimeNotifications'
 
 function getNotificationTitle(notification: api.Notification) {
@@ -33,6 +34,11 @@ function getNotificationBody(notification: api.Notification) {
 function getActionUrl(notification: api.Notification) {
     const value = notification.attributes.data.action_url || notification.attributes.data.url
     return typeof value === 'string' ? value : null
+}
+
+function NotificationBody({ notification }: { notification: api.Notification }) {
+    const address = useNotificationAddress(notification.attributes.data)
+    return <>{withLocation(getNotificationBody(notification), address)}</>
 }
 
 type NotificationBellProps = {
@@ -130,7 +136,7 @@ export function NotificationBell({ showLabel = false }: NotificationBellProps = 
                                             <p className="line-clamp-1 font-bold leading-tight text-slate-800 capitalize">{getNotificationTitle(n)}</p>
                                             {getActionUrl(n) && <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-slate-300" />}
                                         </div>
-                                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{getNotificationBody(n)}</p>
+                                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500"><NotificationBody notification={n} /></p>
                                         <p className="text-[10px] text-slate-400 mt-2">{formatDistanceToNow(new Date(n.attributes.created_at))} ago</p>
                                     </div>
                                     {!n.attributes.is_read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
