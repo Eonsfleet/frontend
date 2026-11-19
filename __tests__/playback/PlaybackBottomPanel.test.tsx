@@ -34,7 +34,7 @@ describe('PlaybackBottomPanel', () => {
   it('switches to the Stops tab and shows stop duration', () => {
     render(<PlaybackBottomPanel movements={movements} events={events} stops={stops} stats={stats} vehicleLabel="ABC-123-XD" />)
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^stops$/i }))
-    expect(screen.getByText(/duration: 6m/i)).toBeInTheDocument()
+    expect(screen.getByText('6m')).toBeInTheDocument()
   })
 
   it('shows altitude entries when telemetry includes elevation', () => {

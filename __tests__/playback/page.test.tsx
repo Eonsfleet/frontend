@@ -54,7 +54,7 @@ describe('PlaybackPage', () => {
   it('renders the summary panel by default and swaps to advanced filters when More Filters is clicked', async () => {
     render(<PlaybackPage />, { wrapper: Wrapper })
     await screen.findAllByText('ABC-123-XD')
-    expect(screen.getByText(/top events/i)).toBeInTheDocument()
+    expect(screen.getByText(/driving behaviour/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /more filters/i }))
     expect(await screen.findByText(/vehicle status/i)).toBeInTheDocument()
   })

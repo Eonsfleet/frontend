@@ -11,6 +11,7 @@ import type {
   RasterTileSource,
 } from "../types";
 import { resolveLeafletAttribution, resolveLeafletTileUrl } from "../mapboxStyles";
+import { getGoogleMapsKey, getGoogleTileSession, googleTileUrl } from "../google";
 
 class LeafletMarkerHandle implements MapMarkerHandle {
   private popupEl: HTMLDivElement;
@@ -107,10 +108,15 @@ export class LeafletProvider implements MapProvider {
       zoomControl: false,
     });
     this.map = map;
+    // Official Google tiles need a key; without one, fall back to free OSM/Esri.
+    if (this.tileSource === "google" && !getGoogleMapsKey()) this.tileSource = "osm";
     this.tileLayer = L.tileLayer(resolveLeafletTileUrl(opts.styleKey, this.tileSource), {
       attribution: resolveLeafletAttribution(this.tileSource),
-      subdomains: this.tileSource === "google" ? ["mt0", "mt1", "mt2", "mt3"] : ["a", "b", "c"],
-    }).addTo(map);
+      subdomains: ["a", "b", "c"],
+      maxZoom: 21,
+    });
+    this.tileLayer.addTo(map);
+    void this.applyStyle(opts.styleKey);
 
     this.tileLayer.on("tileerror", (e) => {
       this.emitError({ code: "tile-error", message: "Leaflet tile failed to load", cause: e });
@@ -129,7 +135,26 @@ export class LeafletProvider implements MapProvider {
   setStyle(styleKey: string): void {
     if (!this.map || !this.tileLayer) return;
     this.styleKey = styleKey;
-    this.tileLayer.setUrl(resolveLeafletTileUrl(styleKey, this.tileSource));
+    void this.applyStyle(styleKey);
+  }
+
+  private async applyStyle(styleKey: string): Promise<void> {
+    const layer = this.tileLayer;
+    if (!layer) return;
+    const key = getGoogleMapsKey();
+    if (this.tileSource === "google" && key) {
+      try {
+        const session = await getGoogleTileSession(styleKey, key);
+        if (this.tileLayer === layer && this.styleKey === styleKey) layer.setUrl(googleTileUrl(session, key));
+        return;
+      } catch (cause) {
+        // Bad key / API not enabled / billing off: degrade to free tiles instead of a broken map.
+        this.tileSource = "osm";
+        layer.options.attribution = resolveLeafletAttribution("osm");
+        this.emitError({ code: "token-invalid", message: "Google Map Tiles unavailable; using OpenStreetMap", cause });
+      }
+    }
+    if (this.tileLayer === layer) layer.setUrl(resolveLeafletTileUrl(styleKey, this.tileSource));
   }
 
   getCenter(): LatLng {

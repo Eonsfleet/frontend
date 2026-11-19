@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
 import {
@@ -209,7 +210,10 @@ export function RouteHistoryPanel({
         <div>
           <h3 className="text-sm font-bold text-slate-900">Route History</h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            View historical routes and movements of this vehicle.
+            View historical routes and movements of this vehicle.{" "}
+            <Link href={`/tracking/history?vehicleId=${vehicleId}`} className="font-bold text-blue-600 hover:underline">
+              Open full page
+            </Link>
           </p>
         </div>
         <button
