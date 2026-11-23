@@ -75,16 +75,25 @@ export function useResolvedVehicleTelemetry(
     lastKnownExtV,
   });
 
-  const { data: geocodedAddress } = useQuery({
-    queryKey: ["reverse-geocode", resolved.lat, resolved.lng],
+  // Always derive the address from the coordinates we are actually showing. The backend's
+  // `address` can describe a previous position (a stale row), so it is only a fallback.
+  // Rounded to ~11 m so a moving vehicle does not trigger a lookup per packet.
+  const hasCoords = !!resolved.lat && !!resolved.lng;
+  const geoKey = hasCoords ? `${Number(resolved.lat).toFixed(4)},${Number(resolved.lng).toFixed(4)}` : null;
+  const { data: geocodedAddress, isPending: isGeocoding } = useQuery({
+    queryKey: ["reverse-geocode", geoKey],
     queryFn: () => reverseGeocode(resolved.lat, resolved.lng),
-    enabled: isActive && !resolved.address && !!resolved.lat && !!resolved.lng,
+    enabled: isActive && hasCoords,
     staleTime: 5 * 60_000,
   });
 
+  const geocodeFailed = geocodedAddress === "Location unavailable" || geocodedAddress === "Unknown Location";
+  // Show nothing rather than a possibly-wrong backend address while the real one is loading.
+  const address = geocodedAddress && !geocodeFailed ? geocodedAddress : isActive && hasCoords && isGeocoding ? null : (resolved.address ?? null);
+
   return {
     ...resolved,
-    address: resolved.address ?? geocodedAddress ?? null,
+    address,
     isLoadingSensors,
     isFuelLoading,
     // The raw per-vehicle WS packet (location.vehicle.{id}) that produced this

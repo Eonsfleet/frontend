@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo, useRef } from 'react'
 import type { RealtimeFuelVehicle } from '@/lib/api/fuelPage'
 import { LOW_FUEL_PERCENT } from './useFuelBoard'
+import { FREE_TILE_URL, FREE_TILE_ATTRIBUTION } from '@/lib/map/freeTiles'
 
 const LAGOS: [number, number] = [6.5244, 3.3792]
 
@@ -68,7 +69,7 @@ export function FuelLevelMap({ vehicles, activeId, onSelect }: { vehicles: Realt
     return (
         <div className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-white">
             <MapContainer center={LAGOS} zoom={11} scrollWheelZoom touchZoom zoomControl={false} className="h-full w-full" style={{ background: '#e5e7eb' }}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; OpenStreetMap" />
+                <TileLayer url={FREE_TILE_URL} attribution={FREE_TILE_ATTRIBUTION} />
                 {placed.map((v) => (
                     <Marker key={v.vehicle_id} position={[v.location!.latitude, v.location!.longitude]} icon={icon(v, v.vehicle_id === activeId)} eventHandlers={{ click: () => onSelect(v.vehicle_id) }} />
                 ))}

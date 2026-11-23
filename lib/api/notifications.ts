@@ -33,6 +33,9 @@ export interface RealtimeNotificationPayload {
     body: string
     action_url?: string | null
     icon?: string | null
+    data?: Record<string, unknown> | null
+    latitude?: number | string | null
+    longitude?: number | string | null
 }
 
 export interface NotificationInboxResponse {

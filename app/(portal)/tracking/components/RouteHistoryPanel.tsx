@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
 import {
@@ -41,6 +42,7 @@ import {
   type RouteHistoryPlace,
   type RouteHistorySegment,
 } from "@/lib/api/tracking";
+import { reverseGeocode } from "@/lib/gps";
 import { useTrackingUiStore } from "@/store/trackingUiStore";
 
 export type RouteHistoryPreset = "today" | "week" | "custom";
@@ -64,15 +66,39 @@ export function formatDuration(seconds: number): string {
   return `${Math.round(seconds)}s`;
 }
 
+const PLACEHOLDER_ADDRESSES = new Set(["unknown", "unknown location", "location unavailable", "n/a", "-", "—"]);
+
+/** The geocoder stores literals like "Unknown" when a lookup fails; those are not addresses. */
+export function isRealAddress(address: string | null | undefined): address is string {
+  return !!address && !PLACEHOLDER_ADDRESSES.has(address.trim().toLowerCase());
+}
+
 /**
- * The server leaves an endpoint's address null when it ran out of geocoding
- * budget, so coordinates stand in rather than an empty line.
+ * Synchronous label: a real address if the server gave one, otherwise the coordinates.
+ * Use <PlaceText> to also reverse-geocode the coordinates when there is no address.
  */
 export function describePlace(place: RouteHistoryPlace): string {
-  if (place.address) return place.address;
+  if (isRealAddress(place.address)) return place.address;
   if (place.latitude == null || place.longitude == null) return "Unknown";
 
-  return `${place.latitude.toFixed(5)}, ${place.longitude.toFixed(5)}`;
+  return `${Number(place.latitude).toFixed(5)}, ${Number(place.longitude).toFixed(5)}`;
+}
+
+/** Address text that fills itself in from the coordinates when the server could not name the place. */
+export function PlaceText({ place, className }: { place: RouteHistoryPlace; className?: string }) {
+  const needsLookup = !isRealAddress(place.address) && place.latitude != null && place.longitude != null;
+  const { data } = useQuery({
+    queryKey: ["place-label", Number(place.latitude).toFixed(4), Number(place.longitude).toFixed(4)],
+    queryFn: () => reverseGeocode(Number(place.latitude), Number(place.longitude)),
+    enabled: needsLookup,
+    staleTime: Infinity,
+  });
+  const text = data && isRealAddress(data) ? data : describePlace(place);
+  return (
+    <span className={className} title={text}>
+      {text}
+    </span>
+  );
 }
 
 /**
@@ -209,7 +235,10 @@ export function RouteHistoryPanel({
         <div>
           <h3 className="text-sm font-bold text-slate-900">Route History</h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            View historical routes and movements of this vehicle.
+            View historical routes and movements of this vehicle.{" "}
+            <Link href={`/tracking/history?vehicleId=${vehicleId}`} className="font-bold text-blue-600 hover:underline">
+              Open full page
+            </Link>
           </p>
         </div>
         <button
@@ -473,17 +502,13 @@ function SegmentRow({
               <span className="text-[9px] font-bold text-slate-400 uppercase block">
                 Start
               </span>
-              <span className="text-[10px] font-semibold text-slate-700 truncate block">
-                {describePlace(segment.start)}
-              </span>
+              <PlaceText place={segment.start} className="text-[10px] font-semibold text-slate-700 truncate block" />
             </div>
             <div className="min-w-0">
               <span className="text-[9px] font-bold text-slate-400 uppercase block">
                 End
               </span>
-              <span className="text-[10px] font-semibold text-slate-700 truncate block">
-                {describePlace(segment.end)}
-              </span>
+              <PlaceText place={segment.end} className="text-[10px] font-semibold text-slate-700 truncate block" />
             </div>
           </div>
         </div>

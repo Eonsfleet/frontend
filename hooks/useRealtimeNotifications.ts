@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getEcho } from '@/lib/echo'
 import { useAuthStore } from '@/store/authStore'
+import { resolveNotificationAddress, withLocation } from '@/lib/notificationLocation'
 import type { RealtimeNotificationPayload } from '@/lib/api/notifications'
 
 export const NOTIFICATION_INBOX_KEYS = [
@@ -35,8 +36,8 @@ export function useRealtimeNotifications() {
         const handleNotification = (payload: RealtimeNotificationPayload) => {
             invalidateNotificationInbox(queryClient)
 
-            toast(payload.title || 'New notification', {
-                description: payload.body,
+            const options = (description: string) => ({
+                description,
                 action: payload.action_url
                     ? {
                         label: 'Open',
@@ -46,6 +47,16 @@ export function useRealtimeNotifications() {
                     }
                     : undefined,
             })
+            const title = payload.title || 'New notification'
+            const toastId = toast(title, options(payload.body))
+
+            // Offline-device alerts (e.g. overspeed) carry the last known fix; resolve it to a street address.
+            const source = { ...(payload.data ?? {}), latitude: payload.latitude, longitude: payload.longitude, ...(payload.data ?? {}) }
+            resolveNotificationAddress(source)
+                .then((address) => {
+                    if (address) toast(title, { id: toastId, ...options(withLocation(payload.body ?? '', address)) })
+                })
+                .catch(() => undefined)
         }
 
         channel.listen('.InAppNotificationSent', handleNotification)

@@ -116,6 +116,8 @@ export function PlaybackMap({
     initialCenter: DEFAULT_CENTER,
     initialZoom: 12,
     styleKey: mapStyle,
+    preferredProviderKind: 'leaflet',
+    tileSource: 'google',
   })
 
   const currentMovement = currentFrame ?? movements[currentIndex]

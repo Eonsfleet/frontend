@@ -21,7 +21,7 @@ const MAPBOX_VECTOR_STYLES: Record<MapStyleKey, string> = {
 const OSM_RASTER_TILE_URLS: Record<MapStyleKey, string> = {
   standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  hybrid: "https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+  hybrid: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 };
 
 const GOOGLE_RASTER_TILE_URLS: Record<MapStyleKey, string> = {

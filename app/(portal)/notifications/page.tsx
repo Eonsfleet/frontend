@@ -19,6 +19,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import * as api from "@/lib/api/notifications";
+import { useNotificationAddress, withLocation } from "@/lib/notificationLocation";
 import { toast } from "sonner";
 import {
   Bell,
@@ -119,6 +120,11 @@ const getActionUrl = (notification: api.Notification) => {
     notification.attributes.data.action_url || notification.attributes.data.url;
   return typeof value === "string" ? value : null;
 };
+
+function NotificationBody({ notification }: { notification: api.Notification }) {
+  const address = useNotificationAddress(notification.attributes.data);
+  return <>{withLocation(getNotificationBody(notification), address)}</>;
+}
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -599,7 +605,7 @@ export default function NotificationsPage() {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                          {getNotificationBody(notification)}
+                          <NotificationBody notification={notification} />
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
