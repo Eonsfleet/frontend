@@ -94,7 +94,7 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/trips",
-        label: "Schedule Trips",
+        label: "Scheduled Trip",
         icon: Route,
         permission: "trips:read",
         module: "trips",
