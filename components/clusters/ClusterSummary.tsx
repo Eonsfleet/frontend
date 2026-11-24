@@ -16,7 +16,7 @@ export function ClusterSummary({
     online: number
     offline: number
     totalStaff: number
-    manager: string | null
+    manager: { name: string | null; email?: string | null; phone?: string | null }
     isCountPending?: boolean
 }) {
     const onlineRate = total > 0 ? (online / total) * 100 : 0
@@ -48,12 +48,17 @@ export function ClusterSummary({
                 <p className="text-xl font-black text-slate-900 tabular-nums">{totalStaff}</p>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Total Staff</p>
             </Card>
-            <Card className="border-slate-200 shadow-sm p-4 flex flex-col items-center text-center">
+            <Card className="border-slate-200 shadow-sm p-4 flex flex-col items-center text-center min-w-0">
                 <UserCircle className="h-4 w-4 text-slate-400 mb-1.5" />
-                <p className="text-sm font-bold text-slate-900 truncate max-w-full mt-1">
-                    {manager || <span className="text-slate-400 italic font-normal">Unassigned</span>}
+                <p className="text-sm font-bold text-slate-900 truncate max-w-full">
+                    {manager.name || <span className="text-slate-400 italic font-normal">Unassigned</span>}
                 </p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Manager</p>
+                {(manager.email || manager.phone) && (
+                    <p className="text-[10px] text-slate-400 truncate max-w-full mt-0.5">
+                        {manager.phone || manager.email}
+                    </p>
+                )}
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manager</p>
             </Card>
         </div>
     )

@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import { format } from 'date-fns'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -27,24 +28,24 @@ export default function ClusterDetailPage() {
 
     const { vehicles, isLoading: isVehiclesLoading } = useClusterVehicles(id)
 
-    const { data: usersResponse, isLoading: isStaffLoading } = useQuery({
-        queryKey: ['cluster-staff-pool'],
-        queryFn: () => settingsApi.getUsers({ per_page: 100 }),
-        staleTime: STALE_TIME_STATIC,
-    })
-
     const cluster = clusterResponse?.data?.cluster
     const attr = cluster?.attributes
 
-    const staff: UserProfile[] = (usersResponse?.data?.users || []).filter(
-        (u) => String(u.relationships?.cluster?.id) === String(id),
-    )
+    // GET /clusters/:id already embeds the cluster's users and vehicles.
+    const staff: UserProfile[] = cluster?.relationships?.users ?? []
+    const managerUser = staff.find((u) => String(u.id) === String(attr?.manager_id))
 
     // Active/inactive/total all come straight from the cluster record — the
     // backend already computes these, no need to walk the vehicle list.
     const total = attr?.total_vehicles ?? 0
     const online = attr?.active_vehicles ?? 0
     const offline = attr?.inactive_vehicles ?? 0
+
+    const createdAt = attr?.created_at ? new Date(attr.created_at.replace(' ', 'T')) : null
+    const createdLabel =
+        createdAt && !Number.isNaN(createdAt.getTime())
+            ? `Created ${format(createdAt, 'dd MMM yyyy')}${attr?.creator ? ` by ${attr.creator}` : ''}`
+            : null
 
     if (isClusterLoading) {
         return (
@@ -83,6 +84,7 @@ export default function ClusterDetailPage() {
                         {attr?.name}
                     </h1>
                     <p className="text-slate-500 text-sm mt-0.5">{attr?.description || 'No regional description'}</p>
+                    {createdLabel && <p className="text-slate-400 text-xs mt-0.5">{createdLabel}</p>}
                 </div>
             </div>
 
@@ -91,7 +93,11 @@ export default function ClusterDetailPage() {
                 online={online}
                 offline={offline}
                 totalStaff={attr?.total_users ?? staff.length}
-                manager={attr?.manager ?? null}
+                manager={{
+                    name: attr?.manager ?? null,
+                    email: managerUser?.attributes.email,
+                    phone: managerUser?.attributes.phone_number,
+                }}
             />
 
             <Tabs defaultValue="assets" className="w-full">
@@ -106,7 +112,7 @@ export default function ClusterDetailPage() {
                         value="staff"
                         className="rounded-full px-4 h-full text-slate-500 font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
                     >
-                        Staff ({staff.length})
+                        Staff ({attr?.total_users ?? staff.length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -115,13 +121,7 @@ export default function ClusterDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="staff" className="pt-6 outline-none">
-                    {isStaffLoading ? (
-                        <div className="py-16 flex justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                        </div>
-                    ) : (
-                        <ClusterStaffList staff={staff} managerName={attr?.manager ?? null} />
-                    )}
+                    <ClusterStaffList staff={staff} managerId={attr?.manager_id} />
                 </TabsContent>
             </Tabs>
         </div>

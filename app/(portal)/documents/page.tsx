@@ -18,6 +18,7 @@ import {
     Filter,
     Loader2,
 } from 'lucide-react'
+import { DocumentLightbox } from '@/components/documents/DocumentLightbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +40,14 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { getAllDocuments, downloadDocument, deleteDocument } from '@/lib/api/documents'
+import {
+    getAllDocuments,
+    downloadDocument,
+    deleteDocument,
+    getDocumentKind,
+    getDocumentOwner,
+    getDocumentOwnerKind,
+} from '@/lib/api/documents'
 import type { Document } from '@/lib/api/documents'
 import { QueryError } from '@/components/shared/QueryError'
 import { DocumentUploadDialog } from '@/components/documents/DocumentUploadDialog'
@@ -80,6 +88,7 @@ export default function DocumentsPage() {
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [uploadOpen, setUploadOpen] = useState(false)
     const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
+    const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
 
     const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['documents'],
@@ -103,8 +112,8 @@ export default function DocumentsPage() {
         return allDocs.filter((doc) => {
             const docStatus = getDocumentStatus(doc)
             const title = doc.attributes.title?.toLowerCase() ?? ''
-            const category = doc.attributes.category?.toLowerCase() ?? ''
-            const entityType = doc.attributes.type?.toLowerCase() ?? ''
+            const category = getDocumentKind(doc) ?? ''
+            const entityType = getDocumentOwnerKind(doc) ?? ''
 
             if (search && !title.includes(search.toLowerCase()) && !category.includes(search.toLowerCase())) return false
             if (typeFilter !== 'all' && entityType !== typeFilter) return false
@@ -258,10 +267,13 @@ export default function DocumentsPage() {
                             key={doc.id}
                             doc={doc}
                             onDelete={() => setDeleteTarget(doc)}
+                            onPreview={() => setPreviewDoc(doc)}
                         />
                     ))}
                 </div>
             )}
+
+            <DocumentLightbox doc={previewDoc} onClose={() => setPreviewDoc(null)} />
 
             {/* Upload Dialog */}
             <DocumentUploadDialog
@@ -338,10 +350,11 @@ function StatCard({
     )
 }
 
-function DocumentRow({ doc, onDelete }: { doc: Document; onDelete: () => void }) {
+function DocumentRow({ doc, onDelete, onPreview }: { doc: Document; onDelete: () => void; onPreview: () => void }) {
     const docStatus = getDocumentStatus(doc)
-    const isVehicle = doc.attributes.type === 'vehicle'
-    const category = doc.attributes.category ?? 'other'
+    const owner = getDocumentOwner(doc)
+    const ownerKind = getDocumentOwnerKind(doc)
+    const category = getDocumentKind(doc)
     const expiryDate = doc.attributes.expiry_at ? new Date(doc.attributes.expiry_at) : null
 
     const statusStyle = {
@@ -356,13 +369,17 @@ function DocumentRow({ doc, onDelete }: { doc: Document; onDelete: () => void })
         expired: 'Expired',
     }[docStatus]
 
-    const entityLabel = isVehicle
-        ? doc.relationships?.belong_to
-            ? `${doc.relationships.belong_to.make} ${doc.relationships.belong_to.model} · ${doc.relationships.belong_to.registration_number}`
-            : 'Vehicle'
-        : doc.relationships?.uploaded_by
-            ? `${doc.relationships.uploaded_by.f_name} ${doc.relationships.uploaded_by.l_name}`
-            : 'Driver'
+    // Only say what the data says: no owner info means no owner label.
+    const entityLabel =
+        ownerKind === 'vehicle'
+            ? owner?.registration_number
+                ? [owner.make, owner.model].filter(Boolean).join(' ') + ` · ${owner.registration_number}`
+                : 'Vehicle'
+            : ownerKind === 'driver'
+                ? owner?.f_name
+                    ? `${owner.f_name} ${owner.l_name ?? ''}`.trim()
+                    : 'Driver'
+                : null
 
     return (
         <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm transition-all group">
@@ -375,17 +392,21 @@ function DocumentRow({ doc, onDelete }: { doc: Document; onDelete: () => void })
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-bold text-slate-900 truncate">
-                        {doc.attributes.title || CATEGORY_LABELS[category] || 'Document'}
+                        {doc.attributes.title || (category && CATEGORY_LABELS[category]) || 'Document'}
                     </p>
-                    <Badge variant="outline" className={cn('text-[10px] font-bold uppercase h-4 px-1.5', CATEGORY_COLORS[category] ?? CATEGORY_COLORS.other)}>
-                        {CATEGORY_LABELS[category] ?? category}
-                    </Badge>
+                    {category && (
+                        <Badge variant="outline" className={cn('text-[10px] font-bold uppercase h-4 px-1.5', CATEGORY_COLORS[category] ?? CATEGORY_COLORS.other)}>
+                            {CATEGORY_LABELS[category] ?? category}
+                        </Badge>
+                    )}
                 </div>
                 <div className="flex items-center gap-3 mt-0.5">
-                    <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                        {isVehicle ? <Car className="h-3 w-3" /> : <Users className="h-3 w-3" />}
-                        {entityLabel}
-                    </span>
+                    {entityLabel && (
+                        <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                            {ownerKind === 'vehicle' ? <Car className="h-3 w-3" /> : <Users className="h-3 w-3" />}
+                            {entityLabel}
+                        </span>
+                    )}
                     {expiryDate && (
                         <span className="text-[11px] text-slate-400">
                             Expires {format(expiryDate, 'dd MMM yyyy')}
@@ -410,7 +431,7 @@ function DocumentRow({ doc, onDelete }: { doc: Document; onDelete: () => void })
                         variant="ghost"
                         className="h-8 w-8 text-slate-400 hover:text-blue-600"
                         title="View"
-                        onClick={() => doc.attributes.file_path && window.open(doc.attributes.file_path, '_blank')}
+                        onClick={onPreview}
                     >
                         <Eye className="h-4 w-4" />
                     </Button>

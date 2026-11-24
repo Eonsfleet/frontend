@@ -94,7 +94,7 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/trips",
-        label: "Trips",
+        label: "Schedule Trips",
         icon: Route,
         permission: "trips:read",
         module: "trips",
@@ -328,11 +328,13 @@ export default function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-none">
           <div className={cn("space-y-5", isSidebarCollapsed && "space-y-4")}>
             {NAV_GROUPS.map((group) => {
-              const visibleItems = group.items.filter(({ permission, trialAllowed }) => {
-                if (permission && !can(permission)) return false;
-                if (isExpiredTrial && !trialAllowed) return false;
-                return true;
-              });
+              const visibleItems = group.items.filter(
+                ({ permission, trialAllowed }) => {
+                  if (permission && !can(permission)) return false;
+                  if (isExpiredTrial && !trialAllowed) return false;
+                  return true;
+                },
+              );
 
               if (visibleItems.length === 0) return null;
 
@@ -354,9 +356,13 @@ export default function Sidebar() {
                         (href === "/settings"
                           ? pathname === href
                           : href === "/tracking"
-                          ? pathname === href || (pathname.startsWith(href + "/") && !pathname.startsWith("/tracking/history"))
-                          : pathname === href || pathname.startsWith(href + "/"));
-                      const badgeCount = href === "/alerts" ? unreadAlertsCount : 0;
+                            ? pathname === href ||
+                              (pathname.startsWith(href + "/") &&
+                                !pathname.startsWith("/tracking/history"))
+                            : pathname === href ||
+                              pathname.startsWith(href + "/"));
+                      const badgeCount =
+                        href === "/alerts" ? unreadAlertsCount : 0;
                       const itemContent = (
                         <Link
                           href={isLocked ? "/subscription" : href}
@@ -431,7 +437,9 @@ export default function Sidebar() {
                       if (isSidebarCollapsed) {
                         return (
                           <Tooltip key={href}>
-                            <TooltipTrigger asChild>{itemContent}</TooltipTrigger>
+                            <TooltipTrigger asChild>
+                              {itemContent}
+                            </TooltipTrigger>
                             <TooltipContent
                               side="right"
                               sideOffset={15}
@@ -443,7 +451,11 @@ export default function Sidebar() {
                         );
                       }
 
-                      return <React.Fragment key={href}>{itemContent}</React.Fragment>;
+                      return (
+                        <React.Fragment key={href}>
+                          {itemContent}
+                        </React.Fragment>
+                      );
                     })}
                   </div>
                 </section>

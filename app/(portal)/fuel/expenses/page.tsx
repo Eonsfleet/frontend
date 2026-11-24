@@ -55,6 +55,7 @@ import * as api from "@/lib/api/fuel";
 import { getVehicles } from "@/lib/api/vehicles";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import axios from "axios";
 import { FuelExpense } from "@/types";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -301,6 +302,95 @@ function RejectDialog({
             <Button type="submit" variant="destructive" disabled={isPending}>
               {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{" "}
               Reject
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Approve reason dialog ────────────────────────────────────────────────────
+// Shown when the backend refuses an approval because there is no device
+// evidence for the expense and a permanent reason is required.
+
+function ApproveDialog({
+  expenseId,
+  onClose,
+  onApproved,
+}: {
+  expenseId: string | number | null;
+  onClose: () => void;
+  onApproved: () => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<{ reason: string }>({
+    resolver: zodResolver(rejectSchema),
+  });
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: ({ reason }: { reason: string }) =>
+      api.approveFuelExpense(expenseId!, reason),
+    onSuccess: () => {
+      toast.success("Expense approved.");
+      onApproved();
+      reset();
+      onClose();
+    },
+    onError: (err) => toast.error(extractApiError(err)),
+  });
+
+  return (
+    <Dialog
+      open={!!expenseId}
+      onOpenChange={() => {
+        reset();
+        onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Approve Expense</DialogTitle>
+          <DialogDescription>
+            This expense has no device evidence. Your reason is kept with the
+            record permanently.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit((d) => mutate(d))} className="space-y-4">
+          <div>
+            <Label htmlFor="approve-reason">Approval Reason</Label>
+            <textarea
+              id="approve-reason"
+              {...register("reason")}
+              rows={3}
+              placeholder="e.g. Verified against the signed fuel receipt."
+              className="mt-1.5 w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm focus:outline-none"
+            />
+            {errors.reason && (
+              <p className="text-xs text-rose-500 mt-1">
+                {errors.reason.message}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-0 bg-slate-100 shadow-none"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{" "}
+              Approve
             </Button>
           </DialogFooter>
         </form>
@@ -702,6 +792,7 @@ export default function FuelExpensesPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rejectId, setRejectId] = useState<string | number | null>(null);
+  const [approveId, setApproveId] = useState<string | number | null>(null);
   const [deleteExpense, setDeleteExpense] = useState<FuelExpense | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -757,7 +848,19 @@ export default function FuelExpensesPage() {
       toast.success("Expense approved.");
       refreshFuelExpenses();
     },
-    onError: (err) => toast.error(extractApiError(err)),
+    onError: (err, id) => {
+      // No device evidence: the backend requires a reason, so ask for one.
+      const res = (err as any)?.response;
+      if (
+        res?.status === 422 &&
+        res?.data?.errors?.[0]?.code === "BUSINESS_RULE_VIOLATION" &&
+        /reason/i.test(res?.data?.message ?? "")
+      ) {
+        setApproveId(id);
+        return;
+      }
+      toast.error(extractApiError(err));
+    },
   });
 
   const { mutate: handleUnlink, isPending: isUnlinking } = useMutation({
@@ -782,10 +885,10 @@ export default function FuelExpensesPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: ({ file, reprocess }: { file: File; reprocess?: boolean }) => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.importFuelTransactions(formData);
+      return api.importFuelTransactions(formData, reprocess);
     },
     onSuccess: (response) => {
       const dataImportId =
@@ -807,9 +910,12 @@ export default function FuelExpensesPage() {
         });
       }
 
-      toast.success(
+      // The request only queued the file — reconciliation hasn't run yet, so
+      // this can't claim success. The progress widget (and email report) is
+      // what tells the user whether it actually succeeded.
+      toast.message(
         response.message ||
-          "Import received. You’ll get an email report when reconciliation completes.",
+          "Import queued. You’ll get an email report when reconciliation completes.",
       );
       queryClient.invalidateQueries({ queryKey: ["fuel-expenses"] });
       queryClient.invalidateQueries({ queryKey: ["fuel-expense-metrics"] });
@@ -818,10 +924,24 @@ export default function FuelExpensesPage() {
     // The request failed before any batch job could exist (e.g. the 422 file
     // validation error) — there is nothing to poll, so just surface the
     // error. No progress entry is ever created for a failed trigger request.
-    onError: (error) =>
+    onError: (error, variables) => {
+      // 409 means the backend recognizes this exact file as already imported.
+      // The message names the earlier import and explicitly invites a
+      // reprocess=true resend, so offer that instead of a dead-end error.
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.error(extractApiError(error, "This file was already imported."), {
+          action: {
+            label: "Import anyway",
+            onClick: () => importMutation.mutate({ file: variables.file, reprocess: true }),
+          },
+          duration: 15000,
+        });
+        return;
+      }
       toast.error(
         extractApiError(error, "Failed to import fuel transactions."),
-      ),
+      );
+    },
   });
 
   const exportMutation = useMutation({
@@ -1351,6 +1471,11 @@ export default function FuelExpensesPage() {
       </Sheet>
       <LogExpenseDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RejectDialog expenseId={rejectId} onClose={() => setRejectId(null)} />
+      <ApproveDialog
+        expenseId={approveId}
+        onClose={() => setApproveId(null)}
+        onApproved={refreshFuelExpenses}
+      />
       <DeleteExpenseDialog
         expense={deleteExpense}
         isPending={deleteMutation.isPending}
@@ -1363,7 +1488,7 @@ export default function FuelExpensesPage() {
         open={importOpen}
         isPending={importMutation.isPending}
         onClose={() => setImportOpen(false)}
-        onImport={(file) => importMutation.mutate(file)}
+        onImport={(file) => importMutation.mutate({ file })}
       />
     </div>
   );

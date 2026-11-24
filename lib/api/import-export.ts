@@ -84,10 +84,31 @@ export const importFile = async (
 
 export type RawBatchJobStatus = 'processing' | 'completed' | 'failed' | string
 
+// A "completed" status only means the job finished running -- it says nothing
+// about whether any row actually made it in. `outcome` folds the row counts in
+// so callers don't have to re-derive this everywhere a result gets displayed:
+//   - 'success': completed, every row succeeded
+//   - 'partial': completed, some rows succeeded and some were skipped/failed
+//   - 'empty':   completed, but nothing was created or updated (e.g. every row skipped)
+//   - 'failed':  the job itself failed
+export type BatchJobOutcome = 'success' | 'partial' | 'empty' | 'failed' | null
+
+export interface ImportRowCounts {
+    processedRows: number
+    successfulRows: number
+    failedRows: number
+    skippedRows: number
+    duplicateRows: number
+    createdCount: number
+    updatedCount: number
+}
+
 export interface BatchJobStatusResponse {
     status: RawBatchJobStatus
     progress: number
     message: string | null
+    outcome: BatchJobOutcome
+    counts: ImportRowCounts | null
 }
 
 // Generic batch job status poll (GET /batch/{id}) — used by the global
@@ -121,7 +142,7 @@ export const getBatchJobStatus = async (batchId: string): Promise<BatchJobStatus
     const message: string | null =
         d.error ?? d.error_message ?? d.failure_reason ?? d.message ?? null
 
-    return { status, progress, message }
+    return { status, progress, message, outcome: null, counts: null }
 }
 
 // An import's progress lives on the import record, not on the Bus batch it
@@ -140,19 +161,48 @@ export const getDataImportStatus = async (dataImportId: string): Promise<BatchJo
               ? 'failed'
               : 'processing'
 
-    // A finished import that could not write every row is not a success story,
-    // so the row count travels with it rather than being reported as "done".
-    const failedRows: number = d.failed_rows ?? 0
+    // The backend can report status: 'completed' while summary.created_count and
+    // summary.updated_count are both 0 -- e.g. every row was a duplicate or failed
+    // validation. That is not a success story, so row counts (not just `status`)
+    // decide what the user is told.
+    const summary = d.summary ?? {}
+    const counts: ImportRowCounts = {
+        processedRows: d.processed_rows ?? 0,
+        successfulRows: d.successful_rows ?? 0,
+        failedRows: d.failed_rows ?? summary.invalid_count ?? 0,
+        skippedRows: d.skipped_rows ?? summary.skipped_count ?? 0,
+        duplicateRows: d.duplicate_rows ?? 0,
+        createdCount: d.created_count ?? summary.created_count ?? 0,
+        updatedCount: d.updated_count ?? summary.updated_count ?? 0,
+    }
+    const importedCount = counts.createdCount + counts.updatedCount
+    const problemRows = counts.failedRows + counts.skippedRows + counts.duplicateRows
+
+    const outcome: BatchJobOutcome =
+        status === 'failed'
+            ? 'failed'
+            : status !== 'completed'
+              ? null
+              : importedCount === 0 && counts.processedRows > 0
+                ? 'empty'
+                : problemRows > 0
+                  ? 'partial'
+                  : 'success'
+
     const message: string | null =
         d.error_message ??
-        (status === 'completed' && failedRows > 0
-            ? `Completed with ${failedRows} failed row${failedRows === 1 ? '' : 's'}.`
-            : null)
+        (outcome === 'empty'
+            ? 'Nothing was imported -- every row was skipped or failed.'
+            : outcome === 'partial'
+              ? `Completed with ${problemRows} skipped/failed row${problemRows === 1 ? '' : 's'}.`
+              : null)
 
     return {
         status,
         progress: typeof d.progress_percent === 'number' ? d.progress_percent : 0,
         message,
+        outcome,
+        counts,
     }
 }
 
