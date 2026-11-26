@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/types";
 import {
+  formatDistance,
+  formatToday,
+  odometerHeadline,
+  sourceLabel,
+  statusLabel,
+} from "@/lib/odometer";
+import {
   Car,
   MapPin,
   History,
@@ -219,19 +226,11 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 />
                 <DetailItem
                   label="Lifetime Odometer"
-                  value={
-                    vehicle.attributes.odometer
-                      ? `${vehicle.attributes.odometer.lifetime_km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
-                      : 'N/A'
-                  }
+                  value={odometerHeadline(vehicle.attributes.odometer)}
                 />
                 <DetailItem
                   label="Today's Distance"
-                  value={
-                    vehicle.attributes.odometer?.today_km
-                      ? `${vehicle.attributes.odometer.today_km.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
-                      : '0 km'
-                  }
+                  value={formatToday(vehicle.attributes.odometer) ?? "Unavailable"}
                 />
                 <DetailItem
                   label="Body Type"
@@ -498,21 +497,28 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                   }
                 />
                 <DetailItem
-                  label="Odometer When Joined"
+                  label="Odometer Source"
+                  value={sourceLabel(vehicle.attributes.odometer?.source) ?? "N/A"}
+                />
+                <DetailItem
+                  label="Odometer Status"
+                  value={statusLabel(vehicle.attributes.odometer?.status) ?? "N/A"}
+                />
+                <DetailItem
+                  label="Odometer Effective"
                   value={
-                    vehicle.attributes.odometer?.at_join_km
-                      ? `${vehicle.attributes.odometer.at_join_km.toLocaleString()} km`
+                    vehicle.attributes.odometer?.effective_at
+                      ? new Date(vehicle.attributes.odometer.effective_at).toLocaleString()
                       : "N/A"
                   }
                 />
                 <DetailItem
-                  label="Odometer Source"
+                  label="Tracker Reading (raw)"
                   value={
-                    vehicle.attributes.odometer?.source === 'device_native'
-                      ? 'Device (GPS)'
-                      : vehicle.attributes.odometer?.source === 'haversine'
-                      ? 'Estimated (GPS position)'
-                      : 'N/A'
+                    formatDistance(
+                      vehicle.attributes.odometer?.last_tracker_reading?.value_km,
+                      "km",
+                    ) ?? "N/A"
                   }
                 />
                 <DetailItem
@@ -973,14 +979,6 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                       value={
                         loc.odometer != null
                           ? `${loc.odometer.toLocaleString()} km`
-                          : null
-                      }
-                    />
-                    <TelemetryRow
-                      label="Trip"
-                      value={
-                        loc.trip_odometer != null
-                          ? `${loc.trip_odometer.toLocaleString()} km`
                           : null
                       }
                     />

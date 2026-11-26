@@ -1,5 +1,6 @@
 "use client";
 
+import { formatToday } from "@/lib/odometer";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -390,7 +391,7 @@ export function AssetPanel({
           >
             <DetailsTab
               resolved={resolved}
-              todayKm={selectedVehicle.attributes?.odometer?.today_km ?? null}
+              todayText={formatToday(selectedVehicle.attributes?.odometer)}
             />
           </TabsContent>
           <TabsContent

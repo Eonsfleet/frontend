@@ -1,5 +1,6 @@
 'use client'
 
+import { summariseOdometer } from '@/lib/odometer'
 import Link from 'next/link'
 import { Car, Radio, Route as RouteIcon, User } from 'lucide-react'
 import type { Vehicle } from '@/types/vehicle'
@@ -31,7 +32,7 @@ export function PlaybackAssetCard({ vehicle, fallbackLabel, rangeLabel }: { vehi
   const cluster = vehicle.relationships?.cluster?.name
   const online = a.is_online ?? a.device_online
   const title = [a.make, a.model, a.year].filter(Boolean).join(' ')
-  const odo = a.odometer?.lifetime_km
+  const odo = summariseOdometer(a.odometer)
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -59,7 +60,7 @@ export function PlaybackAssetCard({ vehicle, fallbackLabel, rangeLabel }: { vehi
         <div className="flex items-center gap-1.5 text-slate-600"><User className="h-3 w-3 text-slate-400" /><dt className="sr-only">Driver</dt><dd className="truncate font-bold">{driver ?? 'No driver assigned'}</dd></div>
         <div className="truncate font-semibold text-slate-500"><dt className="inline">Cluster: </dt><dd className="inline font-bold text-slate-700">{cluster ?? '—'}</dd></div>
         <div className="truncate font-semibold text-slate-500"><dt className="inline">Fuel: </dt><dd className="inline font-bold text-slate-700">{a.fuel_type || '—'}</dd></div>
-        <div className="truncate font-semibold text-slate-500"><dt className="inline">Odometer: </dt><dd className="inline font-bold text-slate-700">{odo != null ? `${Math.round(odo).toLocaleString()} km` : '—'}</dd></div>
+        <div className="truncate font-semibold text-slate-500"><dt className="inline">Odometer: </dt><dd className="inline font-bold text-slate-700">{odo.required ? 'Reading required' : odo.lifetime ? `${odo.lifetime}${odo.badge ? ` (${odo.badge.toLowerCase()})` : ''}` : '—'}</dd></div>
       </dl>
 
       <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] font-bold text-slate-400">

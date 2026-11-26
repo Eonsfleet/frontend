@@ -4,6 +4,9 @@ import React from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Truck, Gauge, Droplet, Calendar, Hash, Palette, Wrench } from 'lucide-react'
 import { format } from 'date-fns'
+import type { VehicleOdometer } from '@/types/odometer'
+import { OdometerValue } from '@/components/odometer/OdometerBadge'
+import { summariseOdometer } from '@/lib/odometer'
 
 interface TripVehicleInfoProps {
     vehicle?: {
@@ -30,13 +33,7 @@ interface TripVehicleInfoProps {
             fuel_capacity?: number
             fuel_capacity_unit?: string
             fuel_sensor_conversion_factor?: number | null
-            odometer_when_join?: number
-            odometer?: {
-                at_join_km?: number
-                lifetime_km?: number
-                today_km?: number
-                source?: string | null
-            } | null
+            odometer?: VehicleOdometer | null
             tire_psi?: number | null
             gvm?: number | null
             created_at?: string
@@ -129,11 +126,7 @@ export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
                         <Gauge className="h-4 w-4" />
                         <span className="text-xs font-semibold uppercase tracking-wider">Odometer</span>
                     </div>
-                    <p className="text-sm text-slate-900 font-medium">
-                        {vehicle.attributes.odometer?.lifetime_km
-                            ? `${vehicle.attributes.odometer.lifetime_km.toLocaleString()} KM`
-                            : 'N/A'}
-                    </p>
+                    <OdometerValue odometer={vehicle.attributes.odometer} />
                 </div>
 
                 {/* Color */}
@@ -194,15 +187,13 @@ export function TripVehicleInfo({ vehicle }: TripVehicleInfoProps) {
                 </div>
 
                 {/* Lifetime Odometer */}
-                {(vehicle.attributes.odometer?.lifetime_km ?? 0) > 0 && (
+                {summariseOdometer(vehicle.attributes.odometer).lifetime && (
                     <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100">
                         <div className="flex items-center gap-2 text-slate-500">
                             <Gauge className="h-4 w-4" />
                             <span className="text-xs font-semibold uppercase tracking-wider">Lifetime Odometer</span>
                         </div>
-                        <p className="text-sm text-slate-900 font-medium">
-                            {vehicle.attributes.odometer!.lifetime_km!.toLocaleString()} KM
-                        </p>
+                        <OdometerValue odometer={vehicle.attributes.odometer} />
                     </div>
                 )}
             </div>

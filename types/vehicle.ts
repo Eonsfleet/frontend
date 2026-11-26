@@ -1,4 +1,5 @@
 import type { UserProfile } from './user'
+import type { VehicleOdometer } from './odometer'
 
 export interface Device {
     id: number
@@ -12,12 +13,8 @@ export interface VehicleAttributes {
     make: string
     model: string
     image: string | null
-    odometer: {
-        at_join_km: number
-        lifetime_km: number
-        today_km: number
-        source: 'device_native' | 'haversine' | null
-    } | null
+    /** Nullable throughout: see types/odometer.ts. Never substitute 0 for a null. */
+    odometer: VehicleOdometer | null
     chasis_number: string
     registration_number: string
     display_number: string
@@ -29,7 +26,6 @@ export interface VehicleAttributes {
     status: 'active' | 'inactive' | 'in_transit' | 'maintenance'
     year: string | number
     type?: string
-    odometer_when_join?: number
     gvm?: number
     fuel_capacity?: number
     fuel_capacity_unit?: string
@@ -293,7 +289,6 @@ export interface VehiclePayload {
     type?: string
     image?: string | null
     device_id?: string | null
-    odometer_when_join?: number
     gvm?: number
     fuel_capacity?: number
     fuel_capacity_unit?: string

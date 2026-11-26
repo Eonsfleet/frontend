@@ -169,7 +169,6 @@ describe('current_location telemetry reaches the Details tab', () => {
     ['oilLevel', 78],
     ['odometer', 128400],
     ['mileage', 128400],
-    ['tripOdo', 42],
     ['odoSource', 'can'],
     ['fuelRate', 2.4],
     ['fuelConsumed', 12.5],

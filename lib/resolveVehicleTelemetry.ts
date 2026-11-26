@@ -104,8 +104,9 @@ export function buildVehicleSnapshot(selectedVehicle: any, loc: any) {
     // device's own counter with an arbitrary base (one live unit reads
     // 4,121,010 km), so only its delta means anything. mileage_km is that
     // counter rebased onto the vehicle's real odometer — the one to show.
-    odometer:
-      loc?.mileage_km ?? loc?.odometer ?? selectedVehicle.attributes?.odometer?.lifetime_km,
+    // No fallback to the vehicle's accepted total (odometer.lifetime_km): that is a
+    // different quantity, and a missing live reading must stay missing, not look live.
+    odometer: loc?.mileage_km ?? loc?.odometer,
     gps_confidence: loc?.gps_confidence ?? null,
     lat: loc?.lat ?? rel?.latitude,
     lng: loc?.lng ?? rel?.longitude,
@@ -351,7 +352,6 @@ export function resolveVehicleTelemetry({
     raw.total_mileage ??
     raw.total_mileage_counted ??
     null;
-  const liveTripOdo = meta.trip_odometer ?? telemetry?.trip_odometer ?? raw.trip_odometer ?? null;
   // Distinct from the protocol `confidence` below — this is the ingest
   // pipeline's confidence in the GPS fix itself.
   const liveGpsConfidence =
@@ -442,7 +442,6 @@ export function resolveVehicleTelemetry({
     hdop: liveHdop,
     gsmOperator: liveGsmOperator,
     mileage: liveMileage,
-    tripOdo: liveTripOdo,
     odoSource: liveOdoSource,
     protocol: liveProtocol,
     confidence: liveConfidence,

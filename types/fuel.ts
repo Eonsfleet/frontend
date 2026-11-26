@@ -235,7 +235,7 @@ export interface FuelVehicle {
         fuel_capabilities?: FuelCapabilities | null
         fuel_widgets?: FuelWidgets | null
         coordinates?: { latitude?: number | string | null; longitude?: number | string | null } | null
-        odometer?: { lifetime_km?: number | string | null; today_km?: number | string | null } | null
+        odometer?: import('./odometer').VehicleOdometer | null
     }
     fuel_level: {
         fuel_level_liters: number

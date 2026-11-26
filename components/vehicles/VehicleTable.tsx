@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/types";
+import { OdometerBadge } from "@/components/odometer/OdometerBadge";
+import { ODOMETER_REQUIRED_LABEL, summariseOdometer } from "@/lib/odometer";
 import {
   MoreHorizontal,
   Eye,
@@ -63,6 +65,8 @@ interface VehicleTableProps {
   onAssignCluster?: (vehicle: Vehicle) => void;
   onAssignTracker?: (vehicle: Vehicle) => void;
   onEdit?: (vehicle: Vehicle) => void;
+  /** Opens the dashboard-reading dialog for a vehicle that has no accepted odometer. */
+  onEnterOdometer?: (vehicle: Vehicle) => void;
   pagination?: {
     current: number;
     lastPage: number;
@@ -110,6 +114,7 @@ export function VehicleTable({
   onAssignCluster,
   onAssignTracker,
   onEdit,
+  onEnterOdometer,
   pagination,
   onPageChange,
 }: VehicleTableProps) {
@@ -210,36 +215,37 @@ export function VehicleTable({
         cell: ({ row }) => {
           const odo = row.original.attributes.odometer;
           if (!odo) return <span className="text-xs text-slate-400">—</span>;
+          const summary = summariseOdometer(odo);
+          if (summary.required) {
+            return (
+              <div className="flex flex-col items-start gap-0.5">
+                <span className="text-xs font-semibold text-orange-700">
+                  {ODOMETER_REQUIRED_LABEL}
+                </span>
+                {onEnterOdometer && (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-blue-600 hover:underline"
+                    onClick={() => onEnterOdometer(row.original)}
+                  >
+                    Enter reading
+                  </button>
+                )}
+              </div>
+            );
+          }
           return (
             <div className="flex flex-col gap-0.5">
               <span className="text-sm text-slate-900 font-medium">
-                {odo.lifetime_km.toLocaleString(undefined, {
-                  maximumFractionDigits: 1,
-                })}{" "}
-                km
+                {summary.lifetime ?? "—"}
               </span>
               <div className="flex items-center gap-1.5">
-                {odo.today_km > 0 && (
+                {summary.today && odo.today_km !== 0 && (
                   <span className="text-[10px] text-slate-500">
-                    +
-                    {odo.today_km.toLocaleString(undefined, {
-                      maximumFractionDigits: 1,
-                    })}{" "}
-                    today
+                    +{summary.today} today
                   </span>
                 )}
-                {odo.source && (
-                  <span
-                    className={cn(
-                      "text-[9px] font-semibold px-1 py-0.5 rounded uppercase tracking-wide",
-                      odo.source === "device_native"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-slate-100 text-slate-500",
-                    )}
-                  >
-                    {odo.source === "device_native" ? "GPS" : "Est"}
-                  </span>
-                )}
+                <OdometerBadge odometer={odo} />
               </div>
             </div>
           );
@@ -340,7 +346,7 @@ export function VehicleTable({
         },
       },
     ],
-    [onAssign, onAssignCluster, onAssignTracker, onEdit],
+    [onAssign, onAssignCluster, onAssignTracker, onEdit, onEnterOdometer],
   );
 
   const table = useReactTable({

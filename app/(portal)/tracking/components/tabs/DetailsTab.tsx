@@ -11,6 +11,8 @@ import type { ResolvedVehicleTelemetry } from "@/lib/resolveVehicleTelemetry";
 interface DetailsTabProps {
   resolved: ResolvedVehicleTelemetry;
   todayKm?: number | null;
+  /** Today's distance already formatted in the organisation's unit; takes precedence over todayKm. */
+  todayText?: string | null;
 }
 
 function fmt(value: number | string | null | undefined, suffix = ""): string | null {
@@ -59,7 +61,7 @@ interface Row {
  * among real values: it is listed once at the end ("Not reported by this device"), so a vehicle that sends
  * little reads as a short, true panel and not as a long empty one.
  */
-export function DetailsTab({ resolved, todayKm }: DetailsTabProps) {
+export function DetailsTab({ resolved, todayKm, todayText }: DetailsTabProps) {
   const fuelLastUpdateRelative = useRelativeTime(resolved.fuelLastUpdate);
   const activeAlerts = ALERT_CHIPS.filter((chip) => isFlagActive(resolved[chip.key]));
 
@@ -90,9 +92,8 @@ export function DetailsTab({ resolved, todayKm }: DetailsTabProps) {
       rows: [
         { label: "Live Odometer", value: fmt(resolved.odometer, " km") },
         { label: "Total Mileage", value: fmt(resolved.mileage, " km") },
-        { label: "Trip Odometer", value: fmt(resolved.tripOdo, " km") },
         { label: "Odometer Source", value: resolved.odoSource ?? null },
-        { label: "Today's Distance", value: fmt(todayKm, " km") },
+        { label: "Today's Distance", value: todayText ?? fmt(todayKm, " km") },
       ],
     },
     {

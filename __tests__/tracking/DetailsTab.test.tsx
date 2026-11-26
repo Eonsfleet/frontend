@@ -11,7 +11,7 @@ const baseResolved = {
   ecoScore: null, idling: false, jamming: false, immobilizer: false, unplug: undefined,
   sleepMode: undefined, doorStatus: null, loadWeight: null, drivingState: null,
   batteryV: null, extV: null, batteryCurrent: null, engineTemp: 0, rssi: null, hdop: null,
-  mileage: null, tripOdo: null, odoSource: null, protocol: null, confidence: null,
+  mileage: null, odoSource: null, protocol: null, confidence: null,
   fuel: null, fuelLiters: null, fuelTankCap: null, fuelQuality: null, fuelLastUpdate: null,
   deviceHasFuel: null, isDeviceOnline: true, fuelColor: '', ecoColor: '', ecoRingColor: '',
   batteryWarn: false, tempWarn: false, weakGps: false, health: {},
@@ -94,7 +94,9 @@ describe('DetailsTab', () => {
     expect(screen.getByText('87%')).toBeInTheDocument()
     expect(screen.getByText('1.4')).toBeInTheDocument()
     expect(screen.getByText('4 of 5')).toBeInTheDocument()
-    expect(screen.getByText('12.5 km')).toBeInTheDocument()
+    // the tracker's own trip counter is dropped by decision: even if supplied, it is not shown
+    expect(screen.queryByText('12.5 km')).not.toBeInTheDocument()
+    expect(screen.queryByText('Trip Odometer')).not.toBeInTheDocument()
   })
 
   it('shows the fuel level as percentage and litres together', () => {
