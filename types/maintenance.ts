@@ -48,6 +48,8 @@ export interface MaintenanceSchedule {
         notes?: string | null
         schedule_date?: string | null
         expected_odometer?: number | null
+        /** Null for time-based schedules. See types/odometer.ts. */
+        mileage?: import('./odometer').ScheduleMileage | null
         status: 'upcoming' | 'pending' | 'active' | 'overdue' | 'completed' | 'cancelled' | string
         priority?: 'low' | 'normal' | 'medium' | 'high' | 'critical' | string
         turn_on_notification?: boolean

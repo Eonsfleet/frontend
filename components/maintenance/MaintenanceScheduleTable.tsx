@@ -49,6 +49,7 @@ import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { MaintenanceScheduleDrawer } from "./MaintenanceScheduleDrawer";
+import { MileageStateBadge, mileageIntervalText } from "./MileageStatus";
 import {
   Dialog,
   DialogContent,
@@ -365,9 +366,17 @@ export function MaintenanceScheduleTable({
                           className="text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-500 rounded-lg"
                         >
                           {attrs.schedule_type === "mileage"
-                            ? `${(attrs.interval_value || 0).toLocaleString()} KM`
+                            ? (mileageIntervalText(attrs.mileage) ??
+                              (attrs.interval_value != null
+                                ? `${attrs.interval_value.toLocaleString()} KM`
+                                : "Not set"))
                             : `${attrs.interval_value || 0} ${attrs.interval_unit || "months"}`}
                         </Badge>
+                        {attrs.mileage && (
+                          <div className="mt-1">
+                            <MileageStateBadge mileage={attrs.mileage} />
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="px-6 py-4">
                         <div className="flex flex-col">

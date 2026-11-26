@@ -37,6 +37,8 @@ import {
 import { getVendors } from '@/lib/api/vendors'
 import { cn, extractApiError } from '@/lib/utils'
 import type { MaintenanceSchedule, ScheduleChecklist } from '@/types'
+import { MileageConfigDialog, MileageStateBadge, mileageIntervalText } from './MileageStatus'
+import { formatDistance, kmToUnit, mileageStateLabel } from '@/lib/odometer'
 
 // ── Status / priority config ──────────────────────────────────────────────────
 
@@ -709,6 +711,7 @@ export function ScheduleDetailContent({
     isFullWidth = false, onExpandFull, onCollapse,
 }: ScheduleDetailContentProps) {
     const queryClient = useQueryClient()
+    const [mileageOpen, setMileageOpen] = React.useState(false)
 
     const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['schedule-detail', scheduleId],
@@ -921,6 +924,9 @@ export function ScheduleDetailContent({
     const assignedBy = schedule?.relationships?.assigned_by as any
     const serviceType = schedule?.attributes?.service_type ?? ''
     const scheduleType = schedule?.attributes?.schedule_type ?? ''
+    const mileage = schedule?.attributes?.mileage ?? null
+    // A mileage schedule with no baseline, no target or a disputed baseline has no trustworthy odometer figures to show.
+    const mileageActive = !mileage || mileage.state === 'active'
     const intervalValue = schedule?.attributes?.interval_value
     const intervalUnit = schedule?.attributes?.interval_unit
     const dueDate = schedule?.attributes?.due_date
@@ -936,6 +942,14 @@ export function ScheduleDetailContent({
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className={cn('flex flex-col h-full', mode === 'page' && 'min-h-screen bg-white')}>
+            {mileage && scheduleId != null && (
+                <MileageConfigDialog
+                    scheduleId={scheduleId}
+                    mileage={mileage}
+                    open={mileageOpen}
+                    onOpenChange={setMileageOpen}
+                />
+            )}
 
             {/* ── Header ───────────────────────────────────────────────── */}
             <div className={cn(
@@ -1358,8 +1372,37 @@ export function ScheduleDetailContent({
                                     </MetaItem>
                                 )}
 
+                                {/* Mileage trigger state and configuration */}
+                                {mileage && (
+                                    <MetaItem label="Mileage Trigger">
+                                        <span className="flex flex-col items-start gap-1">
+                                            {mileageStateLabel(mileage.state) ? (
+                                                <MileageStateBadge mileage={mileage} />
+                                            ) : (
+                                                <span>
+                                                    Every {mileageIntervalText(mileage) ?? '—'}
+                                                    {mileage.next_due_km != null && mileage.next_due_km !== undefined && (
+                                                        <span className="block text-[10px] font-medium text-slate-400">
+                                                            Next due at {formatDistance(mileage.interval_display?.unit === 'mi' ? kmToUnit(mileage.next_due_km, 'mi') : mileage.next_due_km, mileage.interval_display?.unit ?? 'km')}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            )}
+                                            {mileage.state !== 'inactive_no_baseline' && (
+                                                <button
+                                                    type="button"
+                                                    className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline"
+                                                    onClick={() => setMileageOpen(true)}
+                                                >
+                                                    {mileage.state === 'target_required' ? 'Set mileage target' : 'Change'}
+                                                </button>
+                                            )}
+                                        </span>
+                                    </MetaItem>
+                                )}
+
                                 {/* Current odometer */}
-                                {vehicle?.current_odometer != null && (
+                                {vehicle?.current_odometer != null && mileageActive && (
                                     <MetaItem label="Current Odometer">
                                         <span className="flex items-center gap-1">
                                             <Gauge className="h-3 w-3 text-slate-400" />
@@ -1369,7 +1412,7 @@ export function ScheduleDetailContent({
                                 )}
 
                                 {/* Target odometer (mileage-based schedules) */}
-                                {schedule.attributes.expected_odometer != null && (
+                                {schedule.attributes.expected_odometer != null && mileageActive && (
                                     <MetaItem label="Service Target">
                                         <span className="flex items-center gap-1">
                                             <Gauge className="h-3 w-3 text-slate-400" />
