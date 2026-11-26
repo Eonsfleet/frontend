@@ -12,9 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/types";
+import { OdometerReadingDialog } from "@/components/odometer/OdometerReadingDialog";
+import { OdometerCapacityDialog } from "@/components/odometer/OdometerCapacityDialog";
 import {
   formatDistance,
   formatToday,
+  needsOdometerReading,
+  capacityText,
   odometerHeadline,
   sourceLabel,
   statusLabel,
@@ -82,6 +86,8 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
   const [isAssignTrackerOpen, setIsAssignTrackerOpen] = React.useState(false);
   const [isUploadDocOpen, setIsUploadDocOpen] = React.useState(false);
   const [isAddScheduleOpen, setIsAddScheduleOpen] = React.useState(false);
+  const [isOdometerOpen, setIsOdometerOpen] = React.useState(false);
+  const [isCapacityOpen, setIsCapacityOpen] = React.useState(false);
 
   // Fresh telemetry snapshot from GET /vehicles/{uuid}/location, polled to
   // keep the Live Telemetry tab current rather than relying on the one-time
@@ -227,6 +233,19 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                 <DetailItem
                   label="Lifetime Odometer"
                   value={odometerHeadline(vehicle.attributes.odometer)}
+                  action={
+                    <PermissionGate permission="vehicles:write">
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-blue-600 hover:underline"
+                        onClick={() => setIsOdometerOpen(true)}
+                      >
+                        {needsOdometerReading(vehicle.attributes.odometer)
+                          ? "Enter reading"
+                          : "Update reading"}
+                      </button>
+                    </PermissionGate>
+                  }
                 />
                 <DetailItem
                   label="Today's Distance"
@@ -494,6 +513,21 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     vehicle.attributes.fuel_capacity
                       ? `${vehicle.attributes.fuel_capacity} ${vehicle.attributes.fuel_capacity_unit || "L"}`
                       : "N/A"
+                  }
+                />
+                <DetailItem
+                  label="Odometer Capacity"
+                  value={capacityText(vehicle.attributes.odometer?.capacity)}
+                  action={
+                    <PermissionGate permission="vehicles:write">
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-blue-600 hover:underline"
+                        onClick={() => setIsCapacityOpen(true)}
+                      >
+                        Change
+                      </button>
+                    </PermissionGate>
                   }
                 />
                 <DetailItem
@@ -1631,6 +1665,17 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         </TabsContent>
 
         {/* ── DIALOGS ───────────────────────────────────────────────── */}
+        <OdometerReadingDialog
+          vehicle={vehicle}
+          open={isOdometerOpen}
+          onOpenChange={setIsOdometerOpen}
+        />
+        <OdometerCapacityDialog
+          vehicle={vehicle}
+          open={isCapacityOpen}
+          onOpenChange={setIsCapacityOpen}
+        />
+
         <AssignDriverDialog
           vehicleId={vehicle.attributes.uuid}
           vehicleReg={vehicle.attributes.registration_number}

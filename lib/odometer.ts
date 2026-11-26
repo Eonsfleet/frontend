@@ -206,3 +206,12 @@ export function odometerHeadline(odo: OdoLike): string {
     const base = s.lifetime ?? 'N/A'
     return s.badge ? `${base} (${s.badge.toLowerCase()})` : base
 }
+
+/** The odometer's rollover capacity, with whether it is a guess ("assumed"), set by an admin, or absent. */
+export function capacityText(cap: VehicleOdometer['capacity'] | undefined): string {
+    if (!cap) return 'N/A'
+    if (cap.state === 'none') return 'No rollover (digital dashboard)'
+    const v = formatDistance(cap.km, 'km', 0)
+    if (!v) return 'N/A'
+    return cap.state === 'assumed_default' ? `${v} (assumed default)` : v
+}

@@ -11,6 +11,7 @@ import { AssignDriverDialog } from "@/components/vehicles/AssignDriverDialog";
 import { AssignClusterDialog } from "@/components/vehicles/AssignClusterDialog";
 import { AssignTrackerDialog } from "@/components/vehicles/AssignTrackerDialog";
 import { VehicleModal } from "@/components/vehicles/VehicleModal";
+import { OdometerReadingDialog } from "@/components/odometer/OdometerReadingDialog";
 import { Vehicle } from "@/types";
 import {
   VehicleFiltersComponent,
@@ -38,6 +39,7 @@ export default function VehiclesPage() {
   const [assignTrackerVehicle, setAssignTrackerVehicle] =
     React.useState<Vehicle | null>(null);
   const [isVehicleModalOpen, setIsVehicleModalOpen] = React.useState(false);
+  const [odometerVehicle, setOdometerVehicle] = React.useState<Vehicle | null>(null);
   const [editingVehicle, setEditingVehicle] = React.useState<Vehicle | null>(
     null,
   );
@@ -127,6 +129,7 @@ export default function VehiclesPage() {
         onAssignCluster={setAssignClusterVehicle}
         onAssignTracker={setAssignTrackerVehicle}
         onEdit={handleEdit}
+        onEnterOdometer={setOdometerVehicle}
         pagination={data?.pagination}
         onPageChange={setPage}
       />
@@ -157,6 +160,12 @@ export default function VehiclesPage() {
           onClose={() => setAssignTrackerVehicle(null)}
         />
       )}
+
+      <OdometerReadingDialog
+        vehicle={odometerVehicle}
+        open={!!odometerVehicle}
+        onOpenChange={(o) => !o && setOdometerVehicle(null)}
+      />
 
       <VehicleModal
         isOpen={isVehicleModalOpen}

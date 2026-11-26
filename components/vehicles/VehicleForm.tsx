@@ -34,6 +34,10 @@ import { Button } from '@/components/ui/button'
 import { Vehicle } from '@/types'
 import { Loader2, LayoutGrid, Cpu, Gauge, Thermometer, Droplet, ClipboardList } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { OdometerReadingFields } from '@/components/odometer/OdometerReadingFields'
+import { OdometerValue } from '@/components/odometer/OdometerBadge'
+import { buildReading, emptyDraft, type DraftErrors, type PendingReading, type ReadingDraft } from '@/lib/odometerDraft'
+import type { DistanceUnit } from '@/types/odometer'
 
 /** A rate typed as text: blank is allowed, anything else must be above 0 and within the limit. */
 const optionalRate = (max: number, label: string) =>
@@ -55,7 +59,6 @@ const vehicleSchema = z.object({
     type: z.string().optional(),
     status: z.enum(['active', 'inactive', 'in_transit', 'maintenance']),
     device_id: z.string().optional(),
-    odometer_when_join: z.coerce.number().optional(),
     gvm: z.coerce.number().optional(),
     fuel_capacity: z.coerce.number().optional(),
     fuel_capacity_unit: z.string().optional(),
@@ -74,16 +77,42 @@ const vehicleSchema = z.object({
 type VehicleFormValues = z.infer<typeof vehicleSchema>
 
 /** What the form hands on: the rates as numbers, and null where they were left blank. */
-export type VehicleSubmission = Omit<VehicleFormValues, keyof EstimationPayload> & EstimationPayload
+export type VehicleSubmission = Omit<VehicleFormValues, keyof EstimationPayload> & EstimationPayload & {
+    /**
+     * A dashboard reading, present only when the user typed one. It is never part of the vehicle
+     * create/update body (the server ignores odometer_when_join); the caller posts it to
+     * /vehicles/{id}/odometer-readings after the vehicle is saved.
+     */
+    odometer_reading?: PendingReading | null
+}
 
 interface VehicleFormProps {
     initialData?: Vehicle
     onSubmit: (data: VehicleSubmission) => void
     isLoading?: boolean
     onCancel?: () => void
+    /** The organisation's distance unit, the default for the reading's unit selector. */
+    defaultDistanceUnit?: DistanceUnit
 }
 
-export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: VehicleFormProps) {
+export function VehicleForm({ initialData, onSubmit, isLoading, onCancel, defaultDistanceUnit }: VehicleFormProps) {
+    const currentOdometer = initialData?.attributes.odometer ?? null
+    const [readingDraft, setReadingDraft] = React.useState<ReadingDraft>(() =>
+        emptyDraft(defaultDistanceUnit ?? currentOdometer?.unit ?? 'km'),
+    )
+    const [readingErrors, setReadingErrors] = React.useState<DraftErrors>({})
+
+    // A reading is sent only when the user entered one. An ordinary edit never submits an odometer value.
+    const submit = (values: VehicleFormValues) => {
+        const built = buildReading(readingDraft, currentOdometer?.lifetime_km ?? null)
+        if (!built.ok) {
+            setReadingErrors(built.errors)
+            return
+        }
+        setReadingErrors({})
+        onSubmit({ ...values, ...estimationPayload(values), odometer_reading: built.reading })
+    }
+
     const form = useForm<VehicleFormValues>({
         resolver: zodResolver(vehicleSchema) as any,
         defaultValues: initialData ? {
@@ -101,7 +130,6 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
                 : 'car',
             status: initialData.attributes.status,
             device_id: initialData.attributes.device_id || '',
-            odometer_when_join: initialData.attributes.odometer?.at_join_km || 0,
             gvm: initialData.attributes.gvm || 0,
             fuel_capacity: initialData.attributes.fuel_capacity || 0,
             fuel_capacity_unit: initialData.attributes.fuel_capacity_unit || 'L',
@@ -126,7 +154,6 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
             type: 'car',
             status: 'active',
             device_id: '',
-            odometer_when_join: 0,
             gvm: 0,
             fuel_capacity: 0,
             fuel_capacity_unit: 'L',
@@ -145,7 +172,7 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(values => onSubmit({ ...values, ...estimationPayload(values) }))} className="space-y-6">
+            <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
                 <Tabs defaultValue="general" className="w-full">
                     <TabsList className="grid grid-cols-3 mb-6">
                         <TabsTrigger value="general">General Info</TabsTrigger>
@@ -361,19 +388,24 @@ export function VehicleForm({ initialData, onSubmit, isLoading, onCancel }: Vehi
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="odometer_when_join"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Odometer When Joined (KM)</FormLabel>
-                                        <FormControl>
-                                            <Input type="number" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                            <div className="md:col-span-2 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-semibold text-slate-800">Odometer</p>
+                                    {initialData && <OdometerValue odometer={currentOdometer} className="text-xs" />}
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {initialData
+                                        ? 'Leave the reading blank to keep the current odometer. A reading is only recorded when you enter one.'
+                                        : 'Optional. Enter what the dashboard shows now, or add it later.'}
+                                </p>
+                                <OdometerReadingFields
+                                    draft={readingDraft}
+                                    onChange={setReadingDraft}
+                                    errors={readingErrors}
+                                    showKind={false}
+                                    idPrefix="vf-odo"
+                                />
+                            </div>
                             <FormField
                                 control={form.control}
                                 name="gvm"
