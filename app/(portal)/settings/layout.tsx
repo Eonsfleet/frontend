@@ -4,7 +4,7 @@ import React, { useEffect } from 'react'
 import { RoleGate } from '@/components/shared/RoleGate'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Building2, Users, Shield, UserCircle, ArrowLeft } from 'lucide-react'
+import { Building2, Users, Shield, UserCircle, ArrowLeft, Gauge } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAccessControl, TRIAL_EXPIRED_ALLOWED_PATHS } from '@/hooks/useAccessControl'
@@ -58,6 +58,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { name: 'My Profile', href: '/profile', icon: UserCircle, show: true, ownerAllowed: true },
         { name: 'Organization', href: '/settings', icon: Building2, show: true, ownerAllowed: false },
         { name: 'User Management', href: '/settings/users', icon: Users, show: true, ownerAllowed: false },
+        { name: 'Odometer', href: '/settings/odometer', icon: Gauge, show: true, ownerAllowed: false },
         { name: 'Role Configurations', href: '/settings/roles', icon: Shield, show: isAdmin, capability: 'custom_roles' as Capability, ownerAllowed: false },
     ].filter(item => {
         if (!item.show) return false

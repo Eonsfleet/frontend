@@ -25,6 +25,7 @@ import {
   HardDrive,
   Plug,
   CreditCard,
+  Gauge,
 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -112,6 +113,14 @@ const NAV_GROUPS: NavGroup[] = [
         permission: "vehicles:read",
         module: "vehicles",
         trialAllowed: true,
+      },
+      {
+        href: "/odometer/reviews",
+        label: "Odometer",
+        icon: Gauge,
+        permission: "vehicles:write",
+        module: "vehicles",
+        trialAllowed: false,
       },
       {
         href: "/drivers",

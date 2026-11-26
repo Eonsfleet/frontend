@@ -215,3 +215,20 @@ export function capacityText(cap: VehicleOdometer['capacity'] | undefined): stri
     if (!v) return 'N/A'
     return cap.state === 'assumed_default' ? `${v} (assumed default)` : v
 }
+
+/** Review rows carry km for accepted figures and the submitter's own value and unit for the reading. */
+export function reviewReadingText(r: { original_value: number | null; original_unit: DistanceUnit | null } | null | undefined): string {
+    if (!r) return '—'
+    return formatDistance(r.original_value, r.original_unit ?? 'km') ?? '—'
+}
+
+export function reviewStatusLabel(status: string, overdue: boolean): string {
+    if (status === 'pending' && overdue) return 'Overdue'
+    return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+export function responsibleLabel(r: { type: string; name: string } | null | undefined): string {
+    if (!r) return 'Unassigned'
+    if (r.type === 'support_queue') return 'EonsFleet support'
+    return r.name || 'Unassigned'
+}
