@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/types";
 import { OdometerReadingDialog } from "@/components/odometer/OdometerReadingDialog";
+import { ReadingHistory } from "@/components/odometer/ReadingHistory";
 import { OdometerCapacityDialog } from "@/components/odometer/OdometerCapacityDialog";
 import {
   formatDistance,
@@ -196,6 +197,12 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
               className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium"
             >
               Documents
+            </TabsTrigger>
+            <TabsTrigger
+              value="odometer"
+              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:shadow-none rounded-none px-1 h-full text-slate-600 font-medium"
+            >
+              Odometer
             </TabsTrigger>
             <TabsTrigger
               value="fuel"
@@ -1317,6 +1324,10 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
         </TabsContent>
 
         {/* ── FUEL TAB ──────────────────────────────────────────────── */}
+        <TabsContent value="odometer" className="outline-none">
+          <ReadingHistory vehicleId={vehicle.attributes.uuid} />
+        </TabsContent>
+
         <TabsContent value="fuel" className="outline-none">
           <UpgradeGate
             module="fuel"

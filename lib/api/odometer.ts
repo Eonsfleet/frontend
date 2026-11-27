@@ -5,6 +5,7 @@ import type {
     MileageConfigPayload,
     OdometerEvidence,
     OdometerReading,
+    OdometerSegment,
     OdometerReview,
     OdometerSettings,
     ReviewListStatus,
@@ -134,7 +135,7 @@ export const fetchEvidenceBlob = async (id: number | string): Promise<Blob> => {
 
 export const getVehicleOdometer = async (vehicleId: string | number) => {
     const res = await apiClient.get<{
-        data: { odometer: VehicleOdometer; segments: Record<string, unknown>[] }
+        data: { odometer: VehicleOdometer; segments: OdometerSegment[] }
     }>(`/vehicles/${vehicleId}/odometer`)
     return res.data.data
 }

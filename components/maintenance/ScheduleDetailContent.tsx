@@ -38,7 +38,8 @@ import { getVendors } from '@/lib/api/vendors'
 import { cn, extractApiError } from '@/lib/utils'
 import type { MaintenanceSchedule, ScheduleChecklist } from '@/types'
 import { MileageConfigDialog, MileageStateBadge, mileageIntervalText } from './MileageStatus'
-import { formatDistance, kmToUnit, mileageStateLabel } from '@/lib/odometer'
+import { formatDistance, kmToUnit, mileageStateLabel, odometerHeadline } from '@/lib/odometer'
+import type { VehicleOdometer } from '@/types/odometer'
 
 // ── Status / priority config ──────────────────────────────────────────────────
 
@@ -927,6 +928,8 @@ export function ScheduleDetailContent({
     const mileage = schedule?.attributes?.mileage ?? null
     // A mileage schedule with no baseline, no target or a disputed baseline has no trustworthy odometer figures to show.
     const mileageActive = !mileage || mileage.state === 'active'
+    // The vehicle relation carries the odometer block (as the resource, or directly).
+    const vehicleOdometer = (vehicle?.attributes?.odometer ?? vehicle?.odometer ?? null) as VehicleOdometer | null
     const intervalValue = schedule?.attributes?.interval_value
     const intervalUnit = schedule?.attributes?.interval_unit
     const dueDate = schedule?.attributes?.due_date
@@ -1401,12 +1404,12 @@ export function ScheduleDetailContent({
                                     </MetaItem>
                                 )}
 
-                                {/* Current odometer */}
-                                {vehicle?.current_odometer != null && mileageActive && (
+                                {/* Current odometer: the schedule's vehicle odometer block, never the legacy current_odometer */}
+                                {vehicleOdometer && (
                                     <MetaItem label="Current Odometer">
                                         <span className="flex items-center gap-1">
                                             <Gauge className="h-3 w-3 text-slate-400" />
-                                            {Number(vehicle.current_odometer).toLocaleString()} km
+                                            {odometerHeadline(vehicleOdometer)}
                                         </span>
                                     </MetaItem>
                                 )}

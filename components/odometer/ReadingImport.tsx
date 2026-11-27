@@ -117,10 +117,20 @@ export function ReadingImport() {
                 previewMutation.mutate(file)
             }}
         >
-            <p className="text-sm text-slate-600">
-                CSV with the header <code>registration_number,reading,unit,reading_date,note</code>. <code>unit</code> and <code>note</code> are optional;
-                a <code>vehicle_id</code> column may replace <code>registration_number</code>. Every row goes through the same checks as a reading entered by hand.
-            </p>
+            <div className="space-y-1 text-sm text-slate-600" data-testid="csv-help">
+                <p>
+                    CSV with the header <code>registration_number,reading,unit,reading_date,note,reason</code>.
+                </p>
+                <ul className="list-disc pl-5 text-xs">
+                    <li><code>unit</code> (km or mi), <code>reading_date</code>, <code>note</code> and <code>reason</code> are optional.</li>
+                    <li>A row whose reading is below the vehicle&apos;s accepted mileage needs a <code>reason</code>, as with a reading entered by hand.</li>
+                    <li>A <code>vehicle_id</code> column may replace <code>registration_number</code>, and <code>value</code> may replace <code>reading</code>.</li>
+                    <li>Every row goes through the same checks and approvals as a manual reading.</li>
+                </ul>
+                <p className="text-xs">
+                    Example: <code>ABC-123,52340,mi,2026-11-27 08:50,photographed at pickup,</code>
+                </p>
+            </div>
             <div className="space-y-1.5">
                 <Label htmlFor="csv-file">CSV file</Label>
                 <Input

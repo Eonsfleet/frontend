@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { saveMileageConfig } from '@/lib/api/odometer'
+import { apiErrorCode, saveMileageConfig } from '@/lib/api/odometer'
 import { extractApiError } from '@/lib/utils'
 import { formatDistance, kmToUnit, mileageStateLabel, unitToKm } from '@/lib/odometer'
 import type { DistanceUnit, ScheduleMileage } from '@/types/odometer'
@@ -50,15 +50,30 @@ interface DialogProps {
     onOpenChange: (open: boolean) => void
 }
 
-/** Mileage interval and an optional first-due override, with the two confirmations the API may ask for. */
+/** What the server's stable mileage-config error codes mean for the person. */
+export const MILEAGE_ERROR_TEXT: Record<string, string> = {
+    no_baseline: 'This vehicle has no accepted odometer reading yet. Enter a dashboard reading first.',
+    baseline_in_question: 'A reading for this vehicle is waiting for review, so the mileage target cannot change yet.',
+    invalid_interval: 'The interval is not valid.',
+    invalid_unit: 'The unit is not valid.',
+    above_maximum: 'The interval or first-due value is higher than the maximum allowed.',
+}
+
+type Confirmation = 'overdue' | 'postpone'
+
+/**
+ * Mileage interval and an optional first-due override. The server decides when a confirmation is needed
+ * (422 overdue_confirmation_required or postpone_confirmation_required); only the one it names is asked for.
+ */
 export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }: DialogProps) {
     const queryClient = useQueryClient()
     const startUnit: DistanceUnit = mileage.interval_display?.unit ?? 'km'
     const [interval, setIntervalValue] = React.useState('')
     const [unit, setUnit] = React.useState<DistanceUnit>(startUnit)
     const [firstDue, setFirstDue] = React.useState('')
-    const [confirmOverdue, setConfirmOverdue] = React.useState(false)
-    const [confirmPostpone, setConfirmPostpone] = React.useState(false)
+    const [confirm, setConfirm] = React.useState<{ overdue: boolean; postpone: boolean }>({ overdue: false, postpone: false })
+    const [needed, setNeeded] = React.useState<Confirmation | null>(null)
+    const [serverError, setServerError] = React.useState<string | null>(null)
     const [errors, setErrors] = React.useState<{ interval?: string; firstDue?: string }>({})
 
     React.useEffect(() => {
@@ -66,8 +81,9 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
             setIntervalValue(mileage.interval_display ? String(mileage.interval_display.value) : '')
             setUnit(startUnit)
             setFirstDue('')
-            setConfirmOverdue(false)
-            setConfirmPostpone(false)
+            setConfirm({ overdue: false, postpone: false })
+            setNeeded(null)
+            setServerError(null)
             setErrors({})
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,8 +98,8 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
                 interval: Number(interval),
                 unit,
                 first_due_km: firstDueKm,
-                confirm_overdue: firstDueKm !== null && confirmOverdue,
-                confirm_postpone: firstDueKm !== null && confirmPostpone,
+                confirm_overdue: firstDueKm !== null && confirm.overdue,
+                confirm_postpone: firstDueKm !== null && confirm.postpone,
             })
         },
         onSuccess: () => {
@@ -92,7 +108,17 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
             queryClient.invalidateQueries({ queryKey: ['maintenance-schedules'] })
             onOpenChange(false)
         },
-        onError: e => toast.error(extractApiError(e, 'Could not save the mileage target')),
+        onError: e => {
+            const code = apiErrorCode(e)
+            if (code === 'overdue_confirmation_required') {
+                setNeeded('overdue'); setServerError(null)
+            } else if (code === 'postpone_confirmation_required') {
+                setNeeded('postpone'); setServerError(null)
+            } else {
+                setNeeded(null)
+                setServerError((code && MILEAGE_ERROR_TEXT[code]) || extractApiError(e, 'Could not save the mileage target'))
+            }
+        },
     })
 
     const save = () => {
@@ -109,6 +135,7 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
 
     const unitLabel = unit === 'mi' ? 'miles' : 'km'
     const showHint = mileage.next_due_km !== null && mileage.next_due_km !== undefined
+    const confirmed = needed ? confirm[needed] : false
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,7 +168,7 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="mc-first">First due at ({unitLabel}, optional)</Label>
-                        <Input id="mc-first" type="number" min={0} step="any" value={firstDue} onChange={e => setFirstDue(e.target.value)} disabled={noBaseline} />
+                        <Input id="mc-first" type="number" min={0} step="any" value={firstDue} onChange={e => { setFirstDue(e.target.value); setNeeded(null) }} disabled={noBaseline} />
                         {errors.firstDue && <p role="alert" className="text-xs text-red-600">{errors.firstDue}</p>}
                         {showHint && (
                             <p className="text-xs text-slate-500">
@@ -149,22 +176,27 @@ export function MileageConfigDialog({ scheduleId, mileage, open, onOpenChange }:
                             </p>
                         )}
                     </div>
-                    {firstDue.trim() !== '' && (
-                        <div className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+                    {needed && (
+                        <div data-testid="mileage-confirm" className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                             <label className="flex items-start gap-2">
-                                <input type="checkbox" checked={confirmOverdue} onChange={e => setConfirmOverdue(e.target.checked)} />
-                                <span>The first due may be at or below the current odometer (service already overdue).</span>
-                            </label>
-                            <label className="flex items-start gap-2">
-                                <input type="checkbox" checked={confirmPostpone} onChange={e => setConfirmPostpone(e.target.checked)} />
-                                <span>The first due may be more than one interval beyond the default (postpones service).</span>
+                                <input
+                                    type="checkbox"
+                                    checked={confirmed}
+                                    onChange={e => setConfirm({ ...confirm, [needed]: e.target.checked })}
+                                />
+                                <span>
+                                    {needed === 'overdue'
+                                        ? 'That first due is at or below the current odometer, so the service is already overdue. Save it anyway.'
+                                        : 'That first due is more than one interval beyond the default, which postpones the service. Save it anyway.'}
+                                </span>
                             </label>
                         </div>
                     )}
+                    {serverError && <p role="alert" data-testid="mileage-error" className="text-xs text-red-600">{serverError}</p>}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-                    <Button onClick={save} disabled={mutation.isPending || noBaseline}>
+                    <Button onClick={save} disabled={mutation.isPending || noBaseline || (needed !== null && !confirmed)}>
                         {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Save
                     </Button>

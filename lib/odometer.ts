@@ -232,3 +232,51 @@ export function responsibleLabel(r: { type: string; name: string } | null | unde
     if (r.type === 'support_queue') return 'EonsFleet support'
     return r.name || 'Unassigned'
 }
+
+const READING_STATUS_LABELS: Record<string, string> = {
+    pending_sync: 'Waiting to sync',
+    accepted: 'Accepted',
+    pending_review: 'Pending review',
+    rejected: 'Rejected',
+    superseded: 'Superseded',
+}
+
+export function readingStatusLabel(status: string | null | undefined): string {
+    return status ? (READING_STATUS_LABELS[status] ?? status.replace(/_/g, ' ')) : '—'
+}
+
+const KIND_LABELS: Record<string, string> = {
+    reading: 'Reading',
+    correction: 'Correction',
+    dashboard_replacement: 'Dashboard replaced',
+    reset: 'Reset',
+    rollover_confirmation: 'Rollover confirmed',
+}
+
+export function readingKindLabel(kind: string | null | undefined): string {
+    return kind ? (KIND_LABELS[kind] ?? kind.replace(/_/g, ' ')) : '—'
+}
+
+const SOURCE_READING_LABELS: Record<string, string> = {
+    installer_supplied: 'Installer',
+    customer_supplied: 'Customer',
+    admin_supplied: 'Administrator',
+    import: 'CSV import',
+    legacy_client: 'Older app version',
+}
+
+export function readingSourceLabel(source: string | null | undefined): string {
+    return source ? (SOURCE_READING_LABELS[source] ?? source.replace(/_/g, ' ')) : '—'
+}
+
+/** The checks that did not simply pass, e.g. "discrepancy: flagged". Empty when everything passed or was not applicable. */
+export function validationSummary(
+    v: { checks?: { name: string; result: string }[]; reason?: string | null } | null | undefined,
+): string[] {
+    const out = (v?.checks ?? [])
+        .filter(c => !['pass', 'not_applicable', 'skipped'].includes(c.result))
+        .map(c => `${c.name}: ${c.result.replace(/_/g, ' ')}`)
+    const reason = reasonLabel(v?.reason)
+    if (reason) out.push(reason)
+    return out
+}

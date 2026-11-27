@@ -114,7 +114,19 @@ export interface OdometerReading {
     submitted_by?: { type: string; id: number; name: string } | null
     engine?: { acknowledged: boolean; acknowledged_at: string | null }
     evidence?: OdometerEvidence[]
+    /** Not in the contract's reading object; used for a link when the server includes it. */
+    review_id?: number | null
+    review?: { id: number } | null
     created_at: string
+}
+
+export interface OdometerSegment {
+    id: number | string
+    kind: string
+    tracker_device_id: string | number | null
+    opened_at: string | null
+    closed_at: string | null
+    offset_km: number | null
 }
 
 export interface SubmitReadingResult {
