@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 vi.setConfig({ testTimeout: 30000 })
 
 const saveMileageConfig = vi.fn()
-vi.mock('@/lib/api/odometer', () => ({ saveMileageConfig: (...a: unknown[]) => saveMileageConfig(...a) }))
+vi.mock('@/lib/api/odometer', async importOriginal => ({ ...(await importOriginal<typeof import('@/lib/api/odometer')>()), saveMileageConfig: (...a: unknown[]) => saveMileageConfig(...a) }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { MileageConfigDialog, MileageStateBadge, mileageIntervalText } from '@/components/maintenance/MileageStatus'
@@ -53,15 +53,42 @@ describe('mileage config dialog', () => {
         expect(saveMileageConfig).toHaveBeenCalledWith(9, { interval: 10000, unit: 'km', first_due_km: null, confirm_overdue: false, confirm_postpone: false })
     })
 
-    it('offers the two confirmations only with an override, and sends them only when ticked', async () => {
-        saveMileageConfig.mockResolvedValue({})
+    const reject = (code: string) => Object.assign(new Error(code), { isAxiosError: true, response: { status: 422, data: { code, message: code } } })
+
+    it('asks for no confirmation up front, and only for the one the server names', async () => {
+        saveMileageConfig.mockRejectedValueOnce(reject('overdue_confirmation_required')).mockResolvedValue({})
         wrap(<MileageConfigDialog scheduleId={9} mileage={m()} open onOpenChange={vi.fn()} />)
-        expect(screen.queryByText(/already overdue/)).not.toBeInTheDocument()
-        await userEvent.type(screen.getByLabelText(/First due at/), '90000')
-        await userEvent.click(screen.getByLabelText(/already overdue/))
+        await userEvent.type(screen.getByLabelText(/First due at/), '5000')
+        expect(screen.queryByTestId('mileage-confirm')).not.toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-        await waitFor(() => expect(saveMileageConfig).toHaveBeenCalledTimes(1))
-        expect(saveMileageConfig.mock.calls[0][1]).toEqual({ interval: 10000, unit: 'km', first_due_km: 90000, confirm_overdue: true, confirm_postpone: false })
+
+        const box = await screen.findByTestId('mileage-confirm')
+        expect(box).toHaveTextContent(/already overdue/)
+        expect(box).not.toHaveTextContent(/postpones/)
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+        await userEvent.click(screen.getByRole('checkbox'))
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await waitFor(() => expect(saveMileageConfig).toHaveBeenCalledTimes(2))
+        expect(saveMileageConfig.mock.calls[0][1]).toMatchObject({ confirm_overdue: false, confirm_postpone: false })
+        expect(saveMileageConfig.mock.calls[1][1]).toMatchObject({ first_due_km: 5000, confirm_overdue: true, confirm_postpone: false })
+    })
+
+    it('asks for the postpone confirmation when that is the code', async () => {
+        saveMileageConfig.mockRejectedValueOnce(reject('postpone_confirmation_required'))
+        wrap(<MileageConfigDialog scheduleId={9} mileage={m()} open onOpenChange={vi.fn()} />)
+        await userEvent.type(screen.getByLabelText(/First due at/), '900000')
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        expect(await screen.findByTestId('mileage-confirm')).toHaveTextContent(/postpones the service/)
+    })
+
+    it('maps other server codes to a message', async () => {
+        saveMileageConfig.mockRejectedValueOnce(reject('baseline_in_question'))
+        wrap(<MileageConfigDialog scheduleId={9} mileage={m()} open onOpenChange={vi.fn()} />)
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await userEvent.type(screen.getByLabelText('Service every'), '5')
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        expect(await screen.findByTestId('mileage-error')).toHaveTextContent(/waiting for review/)
     })
 
     it('converts a first-due override entered in miles to kilometres', async () => {

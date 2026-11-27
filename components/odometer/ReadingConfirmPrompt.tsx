@@ -25,8 +25,8 @@ export function ReadingConfirmPrompt({
             <p className="font-semibold">{c.title}</p>
             <p className="text-xs">{c.body}</p>
             <div className="flex gap-2">
-                <Button size="sm" onClick={onConfirm} disabled={busy}>{c.action}</Button>
-                <Button size="sm" variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button>
+                <Button type="button" size="sm" onClick={onConfirm} disabled={busy}>{c.action}</Button>
+                <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button>
             </div>
         </div>
     )
