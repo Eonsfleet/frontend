@@ -280,3 +280,37 @@ export function validationSummary(
     if (reason) out.push(reason)
     return out
 }
+
+export type SyncTone = 'waiting' | 'calm' | 'retry'
+
+export interface SyncNotice {
+    tone: SyncTone
+    /** Short wording, also used as a badge. */
+    label: string
+    /** The server's plain-text message, shown as is when present. */
+    message: string | null
+}
+
+type SyncLike = { pending?: number | null; blocked?: boolean | null; blocked_reason?: string | null; message?: string | null } | null | undefined
+
+/**
+ * How to describe readings waiting for the telemetry platform. `waiting` is the number of readings
+ * (omit for one reading). Returns null when nothing is waiting or blocked, so an older backend renders as before.
+ */
+export function syncNotice(sync: SyncLike, waiting?: number): SyncNotice | null {
+    if (!sync) return null
+    const message = sync.message?.trim() ? sync.message : null
+    if (sync.blocked && sync.blocked_reason === 'engine_feature_disabled') {
+        return { tone: 'calm', label: 'Saved, not sent yet: the telemetry platform is not switched on for your organisation', message }
+    }
+    if (sync.blocked && sync.blocked_reason === 'engine_unavailable') {
+        return { tone: 'retry', label: 'Will be retried automatically', message }
+    }
+    const n = waiting ?? sync.pending ?? 0
+    if (n > 0 || sync.blocked) return { tone: 'waiting', label: 'Waiting for the telemetry platform', message }
+    return null
+}
+
+export function waitingText(n: number): string {
+    return `${n} ${n === 1 ? 'reading is' : 'readings are'} waiting to be sent to the telemetry platform`
+}

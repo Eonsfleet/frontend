@@ -18,6 +18,7 @@ import { OdometerCapacityDialog } from "@/components/odometer/OdometerCapacityDi
 import {
   formatDistance,
   formatToday,
+  syncNotice,
   needsOdometerReading,
   capacityText,
   odometerHeadline,
@@ -254,6 +255,12 @@ export function VehicleDetails({ vehicle }: VehicleDetailsProps) {
                     </PermissionGate>
                   }
                 />
+                {(vehicle.attributes.odometer?.sync?.pending ?? 0) > 0 && (
+                  <DetailItem
+                    label="Readings waiting"
+                    value={`${vehicle.attributes.odometer?.sync?.pending} (${syncNotice(vehicle.attributes.odometer?.sync)?.label ?? "waiting"})`}
+                  />
+                )}
                 <DetailItem
                   label="Today's Distance"
                   value={formatToday(vehicle.attributes.odometer) ?? "Unavailable"}

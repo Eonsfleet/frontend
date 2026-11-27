@@ -30,6 +30,17 @@ export type OdometerSource =
 
 export type CapacityState = 'assumed_default' | 'set' | 'none'
 
+export type SyncBlockedReason = 'engine_feature_disabled' | 'engine_unavailable'
+
+/** Why readings are waiting for the telemetry platform. Absent on an older backend. */
+export interface OdometerSync {
+    pending?: number | null
+    attempts?: number | null
+    blocked?: boolean | null
+    blocked_reason?: SyncBlockedReason | (string & {}) | null
+    message?: string | null
+}
+
 export interface VehicleOdometer {
     /** Legacy, always null after cutover. Never a baseline: do not display. */
     at_join_km?: number | null
@@ -52,6 +63,7 @@ export interface VehicleOdometer {
     last_tracker_reading?: { value_km: number | null; at: string | null } | null
     review?: { pending: boolean; review_id: number | null; reason: string | null } | null
     capacity?: { km: number | null; state: CapacityState } | null
+    sync?: OdometerSync | null
 }
 
 export type ReadingStatus = 'pending_sync' | 'accepted' | 'pending_review' | 'rejected' | 'superseded'
@@ -116,6 +128,7 @@ export interface OdometerReading {
     evidence?: OdometerEvidence[]
     /** Not in the contract's reading object; used for a link when the server includes it. */
     review_id?: number | null
+    sync?: OdometerSync | null
     review?: { id: number } | null
     created_at: string
 }

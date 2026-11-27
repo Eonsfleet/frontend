@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { QueryError } from '@/components/shared/QueryError'
 import { EvidenceList } from '@/components/odometer/EvidenceList'
+import { SyncBadge, SyncNoticeBox } from '@/components/odometer/SyncNotice'
 import { OdometerBadge } from '@/components/odometer/OdometerBadge'
 import { getVehicleOdometer, listOdometerReadings } from '@/lib/api/odometer'
 import {
@@ -48,6 +49,7 @@ export function ReadingHistory({ vehicleId }: { vehicleId: string }) {
                 <h3 className="text-sm font-bold text-slate-900">Accepted odometer</h3>
                 {state.isLoading && <Skeleton className="h-16 w-full" />}
                 {state.isError && <QueryError message="Failed to load the odometer." onRetry={state.refetch} />}
+                <SyncNoticeBox sync={odo?.sync} />
                 {odo && (
                     <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4" data-testid="accepted-odometer">
                         <div>
@@ -139,7 +141,11 @@ export function ReadingHistory({ vehicleId }: { vehicleId: string }) {
                                     <TableCell>{readingSourceLabel(r.source)}</TableCell>
                                     <TableCell>{r.physically_inspected ? 'Yes' : 'No'}</TableCell>
                                     <TableCell>
-                                        <Badge variant={r.status === 'rejected' ? 'destructive' : 'secondary'}>{readingStatusLabel(r.status)}</Badge>
+                                        {r.status === 'pending_sync' ? (
+                                            <SyncBadge sync={r.sync} />
+                                        ) : (
+                                            <Badge variant={r.status === 'rejected' ? 'destructive' : 'secondary'}>{readingStatusLabel(r.status)}</Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-xs">{checks.length ? checks.join('; ') : 'All passed'}</TableCell>
                                     <TableCell><EvidenceList evidence={r.evidence} /></TableCell>

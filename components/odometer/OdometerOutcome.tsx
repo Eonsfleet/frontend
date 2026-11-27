@@ -2,6 +2,7 @@ import React from 'react'
 import { CheckCircle2, Clock, AlertTriangle, XCircle } from 'lucide-react'
 import { outcomeMessage } from '@/lib/odometer'
 import { cn } from '@/lib/utils'
+import { SyncNoticeBox } from './SyncNotice'
 import type { SubmitReadingResult } from '@/types/odometer'
 
 const TONE = {
@@ -15,6 +16,7 @@ const TONE = {
 export function OdometerOutcome({ result }: { result: Pick<SubmitReadingResult, 'outcome' | 'review' | 'reading'> }) {
     const reason = result.review?.reason ?? result.reading?.validation?.reason ?? null
     const m = outcomeMessage(result.outcome, reason)
+    const sync = result.outcome === 'pending_sync' && result.reading?.sync?.blocked ? result.reading.sync : null
     const { cls, Icon } = TONE[m.tone]
     return (
         <div role="status" data-testid="odometer-outcome" className={cn('flex gap-2 rounded-md border p-3 text-sm', cls)}>
@@ -22,6 +24,7 @@ export function OdometerOutcome({ result }: { result: Pick<SubmitReadingResult, 
             <div>
                 <p className="font-semibold">{m.title}</p>
                 <p className="text-xs">{m.detail}</p>
+                {sync && <SyncNoticeBox sync={sync} />}
             </div>
         </div>
     )
