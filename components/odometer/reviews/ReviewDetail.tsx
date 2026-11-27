@@ -13,7 +13,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { QueryError } from '@/components/shared/QueryError'
-import { decideOdometerReview, getOdometerReview } from '@/lib/api/odometer'
+import { apiErrorCode, decideOdometerReview, getOdometerReview, uploadReviewEvidence } from '@/lib/api/odometer'
+import { EvidenceList } from '@/components/odometer/EvidenceList'
+import { Input } from '@/components/ui/input'
 import { extractApiError } from '@/lib/utils'
 import { formatDistance, reasonLabel, responsibleLabel, reviewReadingText, reviewStatusLabel } from '@/lib/odometer'
 import type { OdometerReview } from '@/types/odometer'
@@ -39,6 +41,8 @@ export function ReviewDetail({ id }: { id: string }) {
     const [reason, setReason] = React.useState('')
     const [reasonError, setReasonError] = React.useState<string | null>(null)
     const [forbidden, setForbidden] = React.useState(false)
+    const [photo, setPhoto] = React.useState<File | null>(null)
+    const [serverCode, setServerCode] = React.useState<string | null>(null)
 
     const { data: review, isLoading, isError, refetch } = useQuery({
         queryKey: ['odometer-review', id],
@@ -55,12 +59,29 @@ export function ReviewDetail({ id }: { id: string }) {
             queryClient.invalidateQueries({ queryKey: ['vehicles'] })
         },
         onError: (e: unknown) => {
+            const code = apiErrorCode(e)
+            setServerCode(code)
             if (axios.isAxiosError(e) && e.response?.status === 403) {
                 setForbidden(true)
                 toast.error('You are not allowed to decide this review.')
             } else {
-                toast.error(extractApiError(e, 'The decision could not be saved'))
+                toast.error(`${extractApiError(e, 'The decision could not be saved')}${code ? ` (${code})` : ''}`)
             }
+        },
+    })
+
+    const attach = useMutation({
+        mutationFn: (file: File) => uploadReviewEvidence(id, file),
+        onSuccess: () => {
+            toast.success('Photo attached')
+            setPhoto(null)
+            setServerCode(null)
+            queryClient.invalidateQueries({ queryKey: ['odometer-review', id] })
+        },
+        onError: (e: unknown) => {
+            const code = apiErrorCode(e)
+            setServerCode(code)
+            toast.error(`${extractApiError(e, 'The photo could not be attached')}${code ? ` (${code})` : ''}`)
         },
     })
 
@@ -76,6 +97,9 @@ export function ReviewDetail({ id }: { id: string }) {
     if (isLoading) return <Skeleton className="h-64 w-full" />
     if (isError || !review) return <QueryError message="Failed to load this review." onRetry={refetch} />
 
+    const open = review.status === 'pending'
+    const photoBlocked = open && review.requires_photo && !review.has_photo
+    const canAttach = open && review.reading !== null && !forbidden && review.level !== 'support'
     const blocker = forbidden ? 'You are not allowed to decide this review.' : decisionBlocker(review)
 
     return (
@@ -96,20 +120,41 @@ export function ReviewDetail({ id }: { id: string }) {
                 <CardContent>
                     <dl>
                         <Row label="Reason flagged">{reasonLabel(review.reason)}</Row>
-                        <Row label="Submitted reading">{reviewReadingText(review.reading)}</Row>
-                        <Row label="Reading time">{new Date(review.reading.effective_at).toLocaleString()}</Row>
+                        {review.reading ? (
+                            <>
+                                <Row label="Submitted reading">{reviewReadingText(review.reading)}</Row>
+                                <Row label="Reading time">{new Date(review.reading.effective_at).toLocaleString()}</Row>
+                            </>
+                        ) : (
+                            <Row label="Raised by">The telemetry platform (no submitted reading)</Row>
+                        )}
                         <Row label="Current accepted odometer">{formatDistance(review.previous_accepted_km) ?? 'None'}</Row>
                         <Row label="Proposed odometer">{formatDistance(review.proposed_km) ?? '—'}</Row>
                         <Row label="Responsible">{responsibleLabel(review.responsible)}</Row>
                         <Row label="Dashboard photo">
                             {review.has_photo ? 'Attached' : review.requires_photo ? 'Required, none attached' : 'Not required'}
                         </Row>
+                        <Row label="Attachments"><EvidenceList evidence={review.evidence} /></Row>
                         <Row label="Approvals">{review.approvals.filter(a => a.decision === 'approved').length} of {review.approvals_required}</Row>
                     </dl>
-                    {review.requires_photo && !review.has_photo && (
+                    {review.source === 'engine' && review.detail && (
+                        <pre data-testid="engine-detail" className="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-700">{JSON.stringify(review.detail, null, 2)}</pre>
+                    )}
+                    {photoBlocked && (
                         <p className="mt-2 text-xs text-amber-700">
-                            Approval is refused until a dashboard photo is attached to the reading.
+                            Approval is blocked until a dashboard photo is attached to the reading.
                         </p>
+                    )}
+                    {canAttach && (
+                        <div className="mt-3 space-y-1.5">
+                            <Label htmlFor="review-photo">Attach a dashboard photo</Label>
+                            <div className="flex gap-2">
+                                <Input id="review-photo" type="file" accept="image/*,application/pdf" onChange={e => setPhoto(e.target.files?.[0] ?? null)} />
+                                <Button variant="outline" disabled={!photo || attach.isPending} onClick={() => photo && attach.mutate(photo)}>
+                                    {attach.isPending ? 'Uploading...' : 'Upload'}
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </CardContent>
             </Card>
@@ -141,8 +186,9 @@ export function ReviewDetail({ id }: { id: string }) {
                                 <Textarea id="review-reason" rows={3} value={reason} onChange={e => setReason(e.target.value)} />
                                 {reasonError && <p role="alert" className="text-xs text-red-600">{reasonError}</p>}
                             </div>
+                            {serverCode && <p role="alert" data-testid="server-code" className="text-xs text-red-600">Server code: {serverCode}</p>}
                             <div className="flex gap-2">
-                                <Button onClick={() => submit('approve')} disabled={decide.isPending}>
+                                <Button onClick={() => submit('approve')} disabled={decide.isPending || photoBlocked} title={photoBlocked ? 'Attach a dashboard photo first' : undefined}>
                                     {decide.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Approve
                                 </Button>

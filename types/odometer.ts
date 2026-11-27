@@ -80,6 +80,10 @@ export interface SubmitReadingPayload {
     reason?: string | null
     note?: string | null
     evidence_ids?: number[]
+    /** Needed when the server answers 422 `confirmation_required` (a reading far above what the tracker saw). */
+    confirm_large_jump?: boolean
+    /** Needed for a reading of 0 (server code `zero_requires_confirmation`). */
+    confirm_zero?: boolean
 }
 
 export interface OdometerEvidence {
@@ -123,13 +127,19 @@ export interface SubmitReadingResult {
 export interface OdometerReview {
     id: number
     vehicle: { id: number; registration_number: string }
+    /** Null for a review the telemetry engine raised (it has no submitted reading). */
     reading: {
         id: number
         value_km: number
         original_value: number
         original_unit: DistanceUnit
         effective_at: string
-    }
+    } | null
+    /** `engine` for engine-raised reviews. */
+    source?: string | null
+    /** The engine's finding for an engine-raised review. */
+    detail?: Record<string, unknown> | null
+    evidence?: OdometerEvidence[]
     level: 'organisation' | 'support'
     reason: ReviewReason | (string & {})
     status: 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -193,6 +203,15 @@ export interface ScheduleMileage {
     next_due_km: number | null
     remaining_km: number | null
 }
+
+export type MileageErrorCode =
+    | 'no_baseline'
+    | 'baseline_in_question'
+    | 'invalid_interval'
+    | 'invalid_unit'
+    | 'above_maximum'
+    | 'overdue_confirmation_required'
+    | 'postpone_confirmation_required'
 
 export interface MileageConfigPayload {
     interval: number

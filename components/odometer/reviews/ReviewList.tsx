@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { QueryError } from '@/components/shared/QueryError'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useVehiclesDropdown } from '@/hooks/useVehiclesDropdown'
 import { listOdometerReviews } from '@/lib/api/odometer'
 import { cn } from '@/lib/utils'
 import { formatDistance, reasonLabel, responsibleLabel, reviewReadingText, reviewStatusLabel } from '@/lib/odometer'
@@ -24,10 +26,20 @@ export const REVIEW_TABS: { value: ReviewListStatus; label: string }[] = [
 export function ReviewList() {
     const [status, setStatus] = React.useState<ReviewListStatus>('pending')
     const [page, setPage] = React.useState(1)
+    const [level, setLevel] = React.useState<'all' | 'organisation' | 'support'>('all')
+    const [vehicleId, setVehicleId] = React.useState<string>('all')
+    const vehicles = useVehiclesDropdown()
+    const vehicleOptions = (vehicles.data?.data ?? []) as { id: string | number; attributes: { registration_number: string } }[]
 
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['odometer-reviews', status, page],
-        queryFn: () => listOdometerReviews({ status, page }),
+        queryKey: ['odometer-reviews', status, page, level, vehicleId],
+        queryFn: () =>
+            listOdometerReviews({
+                status,
+                page,
+                ...(level !== 'all' ? { level } : {}),
+                ...(vehicleId !== 'all' ? { vehicle_id: vehicleId } : {}),
+            }),
     })
     const reviews = data?.reviews ?? []
     const pagination = data?.pagination
@@ -49,6 +61,26 @@ export function ReviewList() {
                         {t.label}
                     </button>
                 ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+                <Select value={level} onValueChange={v => { setLevel(v as typeof level); setPage(1) }}>
+                    <SelectTrigger aria-label="Level" className="w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All levels</SelectItem>
+                        <SelectItem value="organisation">Organisation</SelectItem>
+                        <SelectItem value="support">Support</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={vehicleId} onValueChange={v => { setVehicleId(v); setPage(1) }}>
+                    <SelectTrigger aria-label="Vehicle" className="w-52"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All vehicles</SelectItem>
+                        {vehicleOptions.map(v => (
+                            <SelectItem key={v.id} value={String(v.id)}>{v.attributes.registration_number}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {isError && <QueryError message="Failed to load odometer reviews." onRetry={refetch} />}

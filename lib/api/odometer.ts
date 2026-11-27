@@ -21,12 +21,42 @@ interface Pagination {
     perPage: number
 }
 
+/** The stable `code` of an odometer error body `{ message, code, status, errors? }`, or null. */
+export function apiErrorCode(e: unknown): string | null {
+    const data = (e as { response?: { data?: { code?: unknown } } })?.response?.data
+    return typeof data?.code === 'string' ? data.code : null
+}
+
+export function apiErrorStatus(e: unknown): number | null {
+    const s = (e as { response?: { status?: unknown } })?.response?.status
+    return typeof s === 'number' ? s : null
+}
+
+const newKey = () =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `odo-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+/**
+ * State carried across attempts at one reading: the idempotency key (reused on a retry of the same reading,
+ * dropped after a 4xx because that attempt created nothing) and the evidence already uploaded (never uploaded twice).
+ */
+export interface ReadingAttempt {
+    idempotencyKey?: string
+    evidenceIds?: number[]
+}
+
 /** Vehicle ids in these routes are the vehicle uuid, as for the rest of the vehicle API. */
 export const submitOdometerReading = async (
     vehicleId: string | number,
     payload: SubmitReadingPayload,
+    idempotencyKey?: string,
 ): Promise<SubmitReadingResult> => {
-    const res = await apiClient.post<{ data: SubmitReadingResult }>(`/vehicles/${vehicleId}/odometer-readings`, payload)
+    const res = await apiClient.post<{ data: SubmitReadingResult }>(
+        `/vehicles/${vehicleId}/odometer-readings`,
+        payload,
+        idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined,
+    )
     return res.data.data
 }
 
@@ -47,20 +77,59 @@ export const uploadOdometerEvidence = async (
 }
 
 /**
- * Uploads the dashboard photo first (if any), then submits the reading with the evidence id.
- * A failed upload stops before any reading is created.
+ * Uploads the dashboard photo first (if any, once), then submits the reading with the evidence id and an
+ * Idempotency-Key. A failed upload stops before any reading is created. Pass the same `attempt` object to retry.
  */
 export const submitReadingWithEvidence = async (
     vehicleId: string | number,
     payload: SubmitReadingPayload,
     photo?: File | null,
+    attempt: ReadingAttempt = {},
 ): Promise<SubmitReadingResult> => {
-    let evidence_ids = payload.evidence_ids
-    if (photo) {
+    if (photo && !attempt.evidenceIds) {
         const ev = await uploadOdometerEvidence(vehicleId, photo, 'dashboard_photo')
-        evidence_ids = [...(evidence_ids ?? []), ev.id]
+        attempt.evidenceIds = [ev.id]
     }
-    return submitOdometerReading(vehicleId, { ...payload, ...(evidence_ids ? { evidence_ids } : {}) })
+    const evidence_ids = [...(payload.evidence_ids ?? []), ...(attempt.evidenceIds ?? [])]
+    attempt.idempotencyKey ??= newKey()
+    try {
+        return await submitOdometerReading(
+            vehicleId,
+            { ...payload, ...(evidence_ids.length ? { evidence_ids } : {}) },
+            attempt.idempotencyKey,
+        )
+    } catch (e) {
+        // A 4xx created nothing, so the next attempt (possibly with a confirmation flag) is a new submission.
+        const st = apiErrorStatus(e)
+        if (st !== null && st >= 400 && st < 500) delete attempt.idempotencyKey
+        throw e
+    }
+}
+
+/** Attaches a photo to the reading under an open review (unblocks `photo_required`). */
+export const uploadReviewEvidence = async (
+    reviewId: number | string,
+    file: File,
+    kind: OdometerEvidence['kind'] = 'dashboard_photo',
+) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('kind', kind)
+    const res = await apiClient.post<{ data: { evidence?: OdometerEvidence; review?: OdometerReview } }>(
+        `/odometer-reviews/${reviewId}/evidence`,
+        body,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    return res.data.data
+}
+
+/**
+ * Fetches an attachment with the auth header (never a public URL) and returns it as a Blob.
+ * Organisation users use /odometer-evidence/{id}/download.
+ */
+export const fetchEvidenceBlob = async (id: number | string): Promise<Blob> => {
+    const res = await apiClient.get<Blob>(`/odometer-evidence/${id}/download`, { responseType: 'blob' })
+    return res.data
 }
 
 export const getVehicleOdometer = async (vehicleId: string | number) => {
@@ -97,41 +166,30 @@ export const listOdometerReviews = async (params: ListReviewsParams = {}) => {
 }
 
 export const getOdometerReview = async (id: number | string) => {
-    const res = await apiClient.get<{ data: { review: OdometerReview } | OdometerReview }>(`/odometer-reviews/${id}`)
-    const d = res.data.data as { review?: OdometerReview } & OdometerReview
-    // The contract does not say whether the review is wrapped; accept both.
-    return d.review ?? (d as OdometerReview)
+    const res = await apiClient.get<{ data: { review: OdometerReview } }>(`/odometer-reviews/${id}`)
+    return res.data.data.review
 }
 
 export const decideOdometerReview = async (id: number | string, decision: 'approve' | 'reject', reason: string) => {
-    const res = await apiClient.post<{ data: { review: OdometerReview } | OdometerReview }>(
-        `/odometer-reviews/${id}/${decision}`,
-        { reason },
-    )
-    const d = res.data.data as { review?: OdometerReview } & OdometerReview
-    return d.review ?? (d as OdometerReview)
+    const res = await apiClient.post<{ data: { review: OdometerReview } }>(`/odometer-reviews/${id}/${decision}`, { reason })
+    return res.data.data.review
 }
 
 export const getOdometerSettings = async (): Promise<OdometerSettings> => {
-    const res = await apiClient.get<{ data: { settings?: OdometerSettings } & OdometerSettings }>(
-        '/organization/odometer-settings',
-    )
-    return res.data.data.settings ?? res.data.data
+    const res = await apiClient.get<{ data: OdometerSettings }>('/organization/odometer-settings')
+    return res.data.data
 }
 
 export const updateOdometerSettings = async (payload: Partial<OdometerSettings>): Promise<OdometerSettings> => {
-    const res = await apiClient.put<{ data: { settings?: OdometerSettings } & OdometerSettings }>(
-        '/organization/odometer-settings',
-        payload,
-    )
-    return res.data.data.settings ?? res.data.data
+    const res = await apiClient.put<{ data: OdometerSettings }>('/organization/odometer-settings', payload)
+    return res.data.data
 }
 
 export const setOdometerCapacity = async (
     vehicleId: string | number,
-    payload: { capacity_km: number | null; state: Exclude<CapacityState, 'assumed_default'> },
+    payload: { state: 'set'; capacity_km: number } | { state: 'none' } | { state: 'assumed_default' },
 ) => {
-    const res = await apiClient.patch<{ data: unknown }>(`/vehicles/${vehicleId}/odometer-capacity`, payload)
+    const res = await apiClient.patch<{ data: { capacity: { km: number | null; state: CapacityState } } }>(`/vehicles/${vehicleId}/odometer-capacity`, payload)
     return res.data.data
 }
 

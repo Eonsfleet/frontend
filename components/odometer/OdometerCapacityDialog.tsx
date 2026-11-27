@@ -43,9 +43,9 @@ export function OdometerCapacityDialog({ vehicle, open, onOpenChange }: Props) {
 
     const mutation = useMutation({
         mutationFn: () => {
-            if (mode === 'none') return setOdometerCapacity(vehicle.attributes.uuid, { capacity_km: null, state: 'none' })
-            const n = Number(km)
-            return setOdometerCapacity(vehicle.attributes.uuid, { capacity_km: n, state: 'set' })
+            if (mode === 'none') return setOdometerCapacity(vehicle.attributes.uuid, { state: 'none' })
+            if (mode === 'assumed_default') return setOdometerCapacity(vehicle.attributes.uuid, { state: 'assumed_default' })
+            return setOdometerCapacity(vehicle.attributes.uuid, { state: 'set', capacity_km: Number(km) })
         },
         onSuccess: () => {
             toast.success('Odometer capacity updated')
@@ -57,15 +57,14 @@ export function OdometerCapacityDialog({ vehicle, open, onOpenChange }: Props) {
     })
 
     const save = () => {
-        if (mode === 'assumed_default') {
-            // The contract has no way to put a vehicle back to the assumed default.
+        if (mode === 'assumed_default' && cap?.state === 'assumed_default') {
             onOpenChange(false)
             return
         }
         if (mode === 'set') {
             const n = Number(km)
-            if (!km.trim() || !Number.isFinite(n) || n <= 0) {
-                setError('Enter the largest value the odometer shows (for example 99999 or 999999).')
+            if (!km.trim() || !Number.isFinite(n) || n < 1000 || n > 10_000_000) {
+                setError('Enter the largest value the odometer shows, between 1,000 and 10,000,000 (for example 99999 or 999999).')
                 return
             }
         }
@@ -79,7 +78,7 @@ export function OdometerCapacityDialog({ vehicle, open, onOpenChange }: Props) {
                 <DialogHeader>
                     <DialogTitle>Odometer capacity</DialogTitle>
                     <DialogDescription>
-                        {vehicle.attributes.registration_number}. Used to recognise when a dashboard has rolled over.
+                        {vehicle.attributes.registration_number}. Used to recognise when a dashboard has rolled over. The assumed default only ever suggests a rollover; an admin must confirm it.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
@@ -88,7 +87,7 @@ export function OdometerCapacityDialog({ vehicle, open, onOpenChange }: Props) {
                         <Select value={mode} onValueChange={v => setMode(v as Mode)}>
                             <SelectTrigger id="cap-mode" aria-label="Capacity"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="assumed_default" disabled={cap?.state !== 'assumed_default'}>
+                                <SelectItem value="assumed_default">
                                     Assumed default (999,999 km)
                                 </SelectItem>
                                 <SelectItem value="set">Set a value</SelectItem>

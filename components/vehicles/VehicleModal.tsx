@@ -11,9 +11,9 @@ import {
 import { VehicleForm, type VehicleSubmission } from './VehicleForm'
 import { Button } from '@/components/ui/button'
 import { OdometerOutcome } from '@/components/odometer/OdometerOutcome'
-import { submitReadingWithEvidence } from '@/lib/api/odometer'
+import { useReadingSubmit } from '@/hooks/useReadingSubmit'
+import { ReadingConfirmPrompt } from '@/components/odometer/ReadingConfirmPrompt'
 import { useDefaultDistanceUnit } from '@/hooks/useOdometerSettings'
-import type { SubmitReadingResult } from '@/types/odometer'
 import { Vehicle } from '@/types'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createVehicle, updateVehicle } from '@/lib/api/vehicles'
@@ -29,14 +29,26 @@ interface VehicleModalProps {
 export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps) {
     const queryClient = useQueryClient()
     const defaultUnit = useDefaultDistanceUnit(initialData?.attributes.odometer?.unit)
-    // Set once the vehicle is saved and a reading was entered: the modal then reports what happened to it.
-    const [readingOutcome, setReadingOutcome] = React.useState<
-        { result: SubmitReadingResult } | { error: string } | null
-    >(null)
+    const reading = useReadingSubmit()
+    const { reset } = reading
+    // Set once the vehicle is saved with a reading entered: the modal then drives and reports that reading.
+    const [savedWithReading, setSavedWithReading] = React.useState(false)
 
     React.useEffect(() => {
-        if (isOpen) setReadingOutcome(null)
-    }, [isOpen])
+        if (isOpen) {
+            setSavedWithReading(false)
+            reset()
+        }
+    }, [isOpen, reset])
+
+    React.useEffect(() => {
+        if (reading.result) {
+            queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+            queryClient.invalidateQueries({ queryKey: ['odometer-reviews'] })
+            if (initialData) queryClient.invalidateQueries({ queryKey: ['vehicle', initialData.attributes.uuid] })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reading.result])
 
     const { mutate: handleMutation, isPending } = useMutation({
         mutationFn: async (submission: VehicleSubmission) => {
@@ -45,28 +57,21 @@ export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps
             const response = initialData
                 ? await updateVehicle(initialData.attributes.uuid, vehicleData as never)
                 : await createVehicle(vehicleData as never)
-            let reading: { result: SubmitReadingResult } | { error: string } | null = null
-            if (odometer_reading) {
-                const uuid = response?.data?.attributes?.uuid ?? initialData?.attributes.uuid
-                try {
-                    reading = {
-                        result: await submitReadingWithEvidence(uuid, odometer_reading.payload, odometer_reading.photo),
-                    }
-                } catch (e) {
-                    reading = { error: extractApiError(e, 'The reading could not be submitted') }
-                }
-            }
-            return { response, reading }
+            return { response, odometer_reading }
         },
-        onSuccess: ({ reading }) => {
+        onSuccess: ({ response, odometer_reading }) => {
             toast.success(initialData ? 'Vehicle updated successfully' : 'Vehicle created successfully')
             queryClient.invalidateQueries({ queryKey: ['vehicles'] })
-            queryClient.invalidateQueries({ queryKey: ['odometer-reviews'] })
             if (initialData) {
                 queryClient.invalidateQueries({ queryKey: ['vehicle', initialData.attributes.uuid] })
             }
-            if (reading) setReadingOutcome(reading)
-            else onClose()
+            if (odometer_reading) {
+                const uuid = response?.data?.attributes?.uuid ?? initialData?.attributes.uuid
+                setSavedWithReading(true)
+                void reading.run(uuid as string, odometer_reading)
+            } else {
+                onClose()
+            }
         },
         onError: (error: any) => {
             toast.error(extractApiError(error, 'Something went wrong'))
@@ -86,19 +91,25 @@ export function VehicleModal({ isOpen, onClose, initialData }: VehicleModalProps
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
-                    {readingOutcome ? (
+                    {savedWithReading ? (
                         <div className="space-y-4">
                             <p className="text-sm text-slate-700">The vehicle was saved.</p>
-                            {'result' in readingOutcome ? (
-                                <OdometerOutcome result={readingOutcome.result} />
-                            ) : (
+                            {reading.isPending && <p className="text-sm text-slate-500">Submitting the dashboard reading...</p>}
+                            {reading.result && <OdometerOutcome result={reading.result} />}
+                            {reading.prompt && (
+                                <ReadingConfirmPrompt prompt={reading.prompt} onConfirm={reading.confirm} onCancel={reading.dismiss} busy={reading.isPending} />
+                            )}
+                            {reading.error && (
                                 <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                                    The dashboard reading was not recorded: {readingOutcome.error}. You can enter it again from the vehicle list.
+                                    The dashboard reading was not recorded: {reading.error.message}
+                                    {reading.error.code ? ` (${reading.error.code})` : ''}. You can enter it again from the vehicle list.
                                 </div>
                             )}
-                            <div className="flex justify-end">
-                                <Button onClick={onClose}>Done</Button>
-                            </div>
+                            {!reading.isPending && (
+                                <div className="flex justify-end">
+                                    <Button onClick={onClose}>{reading.prompt ? 'Skip the reading' : 'Done'}</Button>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <VehicleForm

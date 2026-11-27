@@ -8,11 +8,13 @@ vi.setConfig({ testTimeout: 30000 })
 const listOdometerReviews = vi.fn()
 const getOdometerReview = vi.fn()
 const decideOdometerReview = vi.fn()
-vi.mock('@/lib/api/odometer', () => ({
+vi.mock('@/lib/api/odometer', async importOriginal => ({
+    ...(await importOriginal<typeof import('@/lib/api/odometer')>()),
     listOdometerReviews: (...a: unknown[]) => listOdometerReviews(...a),
     getOdometerReview: (...a: unknown[]) => getOdometerReview(...a),
     decideOdometerReview: (...a: unknown[]) => decideOdometerReview(...a),
 }))
+vi.mock('@/hooks/useVehiclesDropdown', () => ({ useVehiclesDropdown: () => ({ data: { data: [{ id: 7, attributes: { registration_number: 'ABC-123' } }, { id: 8, attributes: { registration_number: 'XYZ-999' } }] } }) }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { ReviewList } from '@/components/odometer/reviews/ReviewList'

@@ -91,6 +91,7 @@ export function buildReading(draft: ReadingDraft, acceptedKm: number | null, now
         unit: draft.unit,
         ...(effectiveIso ? { effective_at: effectiveIso } : {}),
         kind: draft.kind,
+        ...(n === 0 && draft.confirmZero ? { confirm_zero: true } : {}),
         ...(draft.reason.trim() ? { reason: draft.reason.trim() } : {}),
         ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
     }

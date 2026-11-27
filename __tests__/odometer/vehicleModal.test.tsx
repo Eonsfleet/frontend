@@ -11,7 +11,8 @@ const createVehicle = vi.fn()
 const submitReadingWithEvidence = vi.fn()
 
 vi.mock('@/lib/api/vehicles', () => ({ updateVehicle: (...a: unknown[]) => updateVehicle(...a), createVehicle: (...a: unknown[]) => createVehicle(...a) }))
-vi.mock('@/lib/api/odometer', () => ({
+vi.mock('@/lib/api/odometer', async importOriginal => ({
+    ...(await importOriginal<typeof import('@/lib/api/odometer')>()),
     submitReadingWithEvidence: (...a: unknown[]) => submitReadingWithEvidence(...a),
     getOdometerSettings: vi.fn().mockRejectedValue({ response: { status: 403 } }),
 }))
